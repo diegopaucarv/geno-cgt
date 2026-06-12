@@ -1,8 +1,8 @@
 """Creacion inicial de tablas
 
-Revision ID: ceb097627058
+Revision ID: e31f7bb2235f
 Revises:
-Create Date: 2026-06-12 12:13:53.413848
+Create Date: 2026-06-12 13:57:55.359165
 
 """
 
@@ -14,7 +14,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "ceb097627058"
+revision: str = "e31f7bb2235f"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -106,7 +106,7 @@ def upgrade() -> None:
         sa.Column("es_central", sa.Boolean(), nullable=False),
         sa.Column(
             "embedding_centroide",
-            pgvector.sqlalchemy.vector.VECTOR(dim=1536),
+            pgvector.sqlalchemy.vector.VECTOR(dim=1024),
             nullable=True,
         ),
         sa.Column(
@@ -142,6 +142,26 @@ def upgrade() -> None:
             ["proyectos.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "lienzos",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("proyecto_id", sa.Uuid(), nullable=False),
+        sa.Column("version_lienzo", sa.Integer(), nullable=False),
+        sa.Column("esta_bloqueado", sa.Boolean(), nullable=False),
+        sa.Column(
+            "creado_en",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["proyecto_id"],
+            ["proyectos.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("proyecto_id"),
     )
     op.create_table(
         "memos",
@@ -194,6 +214,34 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("documento_id", "categoria_id"),
     )
     op.create_table(
+        "nodos_lienzo",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("lienzo_id", sa.Uuid(), nullable=False),
+        sa.Column("tipo", sa.String(length=50), nullable=False),
+        sa.Column("etiqueta", sa.String(length=200), nullable=False),
+        sa.Column("estado", sa.String(length=50), nullable=False),
+        sa.Column("pos_x", sa.Float(), nullable=False),
+        sa.Column("pos_y", sa.Float(), nullable=False),
+        sa.Column(
+            "parametros_configuracion",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
+        sa.Column("es_obligatorio", sa.Boolean(), nullable=False),
+        sa.Column(
+            "creado_en",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["lienzo_id"],
+            ["lienzos.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
         "segmentos",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("documento_id", sa.Uuid(), nullable=False),
@@ -203,7 +251,7 @@ def upgrade() -> None:
         sa.Column("conteo_tokens", sa.Integer(), nullable=False),
         sa.Column("es_anomalia", sa.Boolean(), nullable=False),
         sa.Column(
-            "embedding", pgvector.sqlalchemy.vector.VECTOR(dim=1536), nullable=True
+            "embedding", pgvector.sqlalchemy.vector.VECTOR(dim=1024), nullable=True
         ),
         sa.ForeignKeyConstraint(
             ["documento_id"],
@@ -211,15 +259,75 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_table(
+        "bordes_lienzo",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("lienzo_id", sa.Uuid(), nullable=False),
+        sa.Column("nodo_origen_id", sa.Uuid(), nullable=False),
+        sa.Column("nodo_destino_id", sa.Uuid(), nullable=False),
+        sa.Column("tipo_de_dato", sa.String(length=100), nullable=True),
+        sa.Column("es_condicional", sa.Boolean(), nullable=False),
+        sa.Column("expresion_condicional", sa.String(length=500), nullable=True),
+        sa.Column(
+            "creado_en",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["lienzo_id"],
+            ["lienzos.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["nodo_destino_id"],
+            ["nodos_lienzo.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["nodo_origen_id"],
+            ["nodos_lienzo.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "fases",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("proyecto_id", sa.Uuid(), nullable=False),
+        sa.Column("nodo_lienzo_id", sa.Uuid(), nullable=True),
+        sa.Column("numero", sa.String(length=20), nullable=False),
+        sa.Column("nombre", sa.String(length=200), nullable=False),
+        sa.Column("estado", sa.String(length=50), nullable=False),
+        sa.Column(
+            "creado_en",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["nodo_lienzo_id"],
+            ["nodos_lienzo.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["proyecto_id"],
+            ["proyectos.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
+    op.execute("DROP EXTENSION IF EXISTS vector;")
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table("fases")
+    op.drop_table("bordes_lienzo")
     op.drop_table("segmentos")
+    op.drop_table("nodos_lienzo")
     op.drop_table("doc_codes")
     op.drop_table("memos")
+    op.drop_table("lienzos")
     op.drop_table("documentos")
     op.drop_table("categorias")
     op.drop_table("proyectos")

@@ -21,7 +21,7 @@ class Segmento(Base):
     es_anomalia: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # ¡La magia de pgvector! Vector de 1536 dimensiones (estándar de OpenAI/BGE)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=True)
 
     # Relaciones
     documento = relationship("Documento", back_populates="segmentos")

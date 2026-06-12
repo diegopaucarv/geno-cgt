@@ -24,7 +24,7 @@ class Categoria(Base, TimestampMixin):
 
     # Vector para calcular la saturación de forma matemática (entropía de embeddings)
     embedding_centroide: Mapped[list[float]] = mapped_column(
-        Vector(1536), nullable=True
+        Vector(1024), nullable=True
     )
 
     # Relaciones
