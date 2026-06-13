@@ -1,18 +1,34 @@
+# --- Framework Principal ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.6.1
+
+# --- Base de Datos & ORM ---
 sqlalchemy==2.0.36
 alembic==1.14.1
 asyncpg==0.30.0
-psycopg2-binary==2.9.10
 pgvector==0.3.5
-redis==5.2.1
+# Mantenemos psycopg2-binary SOLO para las migraciones de Alembic (el truco de env.py)
+psycopg2-binary==2.9.10
+
+# --- Asincronía & Red ---
+# Añadido httpx para hablar con el servidor TEI (Voyage-4)
+httpx==0.28.1
+
+# --- Auth & Seguridad ---
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
 slowapi==0.1.9
+
+# --- Tareas Asíncronas ---
 celery==5.4.0
+redis==5.2.1
+
+# --- IA & Grafos ---
 langgraph==0.2.44
-psycopg_pool==3.2.2
-pydantic==2.10.4
-pydantic-settings==2.6.1
-dotenv==0.9.9
+
+# --- Utilidades ---
+# Corregido: python-dotenv es el paquete correcto
+python-dotenv==1.0.1

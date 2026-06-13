@@ -10,5 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
 
-# Exponemos el puerto 8080 y lanzamos Uvicorn
+RUN mkdir -p /app/.cache && chmod 777 /app/.cache
+ENV HF_HOME=/app/.cache
+
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -33,7 +33,11 @@ class TEIClient:
             try:
                 response = await client.post(
                     f"{self.base_url}/v1/embeddings",
-                    json={"input": prefixed_texts, "model": "voyageai/voyage-4-nano"},
+                    json={
+                        "input": prefixed_texts,
+                        "model": "voyageai/voyage-4-nano",
+                        "dimensions": 1024,
+                    },
                     timeout=120.0,  # El primer arranque tarda mientras carga los tensores a la RAM
                 )
                 response.raise_for_status()

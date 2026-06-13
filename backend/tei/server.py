@@ -6,25 +6,28 @@ from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
-# Leemos la variable de entorno o usamos el default
+# Voyage 4 Nano usa 1024 dimensiones por defecto (truncando desde 2048 gracias a Matryoshka)
 MODEL_NAME = os.environ.get("MODEL_ID", "voyageai/voyage-4-nano")
 
-print(f"⏳ Cargando modelo {MODEL_NAME} en RAM. Esto puede tardar la primera vez...")
-# trust_remote_code=True es el pase mágico para la arquitectura Qwen3
-model = SentenceTransformer(MODEL_NAME, trust_remote_code=True)
+print(
+    f"⏳ Cargando modelo {MODEL_NAME} en RAM. Esto descargará los pesos al disco externo la primera vez..."
+)
+# El truco: truncate_dim=1024 nos da el balance perfecto de peso/calidad
+model = SentenceTransformer(MODEL_NAME, trust_remote_code=True, truncate_dim=1024)
 print("✅ Modelo cargado y listo para incrustar.")
 
 
 class EmbedRequest(BaseModel):
     input: list[str]
+    model: str | None = None
 
 
 @app.post("/v1/embeddings")
 def get_embeddings(req: EmbedRequest):
-    # encode() genera los vectores matemáticos
+    # Generamos los vectores matemáticos
     embeddings = model.encode(req.input, convert_to_tensor=False).tolist()
 
-    # Formateamos la respuesta exactamente como OpenAI/Infinity para no romper tu cliente
+    # Imitamos la estructura de respuesta de OpenAI / Infinity
     data = [
         {"object": "embedding", "embedding": emb, "index": i}
         for i, emb in enumerate(embeddings)
