@@ -1,0 +1,4 @@
+celery==5.4.0
+redis==5.2.1
+requests==2.32.3
+# Podrías añadir transformers o sentence-transformers si no usas TEI, pero TEI es externo
