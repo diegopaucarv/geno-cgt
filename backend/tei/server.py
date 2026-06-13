@@ -13,7 +13,14 @@ print(
     f"⏳ Cargando modelo {MODEL_NAME} en RAM. Esto descargará los pesos al disco externo la primera vez..."
 )
 # El truco: truncate_dim=1024 nos da el balance perfecto de peso/calidad
-model = SentenceTransformer(MODEL_NAME, trust_remote_code=True, truncate_dim=1024)
+model = SentenceTransformer(
+    MODEL_NAME,
+    trust_remote_code=True,
+    truncate_dim=1024,
+    model_kwargs={
+        "attn_implementation": "sdpa"
+    },  # explicit CPU path, avoids flash_attention_2 fallback noise
+)
 print("✅ Modelo cargado y listo para incrustar.")
 
 

@@ -36,7 +36,6 @@ class TEIClient:
                     json={
                         "input": prefixed_texts,
                         "model": "voyageai/voyage-4-nano",
-                        "dimensions": 1024,
                     },
                     timeout=120.0,  # El primer arranque tarda mientras carga los tensores a la RAM
                 )
