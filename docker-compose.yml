@@ -1,4 +1,12 @@
 services:
+  backend:
+    build: ./backend
+    volumes:
+      # Montamos el caché de Hugging Face y Pip en tu disco externo
+      - tei_cache:/app/.cache
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -134,5 +142,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /run/media/diego/Barracuda/Python/HF_Cache
+      device: "/mnt/hdd/Program Files/Docker/gt/cache" # Ruta real en tu Arch Linux
       o: bind

@@ -1,25 +1,34 @@
 import os
 
+# --- compatibility shim: fixes naming mismatch between old voyage-4-nano
+#     model code (input_embeds) and current transformers (inputs_embeds)
+import transformers.masking_utils as _mu
+
+_orig_ccm = _mu.create_causal_mask
+
+
+def _compat_ccm(*args, input_embeds=None, **kwargs):
+    if input_embeds is not None and "inputs_embeds" not in kwargs:
+        kwargs["inputs_embeds"] = input_embeds
+    return _orig_ccm(*args, **kwargs)
+
+
+_mu.create_causal_mask = _compat_ccm
+# --- end shim
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
-# Voyage 4 Nano usa 1024 dimensiones por defecto (truncando desde 2048 gracias a Matryoshka)
 MODEL_NAME = os.environ.get("MODEL_ID", "voyageai/voyage-4-nano")
-
-print(
-    f"⏳ Cargando modelo {MODEL_NAME} en RAM. Esto descargará los pesos al disco externo la primera vez..."
-)
-# El truco: truncate_dim=1024 nos da el balance perfecto de peso/calidad
+print(f"⏳ Cargando modelo {MODEL_NAME}...")
 model = SentenceTransformer(
     MODEL_NAME,
     trust_remote_code=True,
     truncate_dim=1024,
-    model_kwargs={
-        "attn_implementation": "sdpa"
-    },  # explicit CPU path, avoids flash_attention_2 fallback noise
+    model_kwargs={"attn_implementation": "sdpa"},
 )
 print("✅ Modelo cargado y listo para incrustar.")
 
@@ -31,10 +40,7 @@ class EmbedRequest(BaseModel):
 
 @app.post("/v1/embeddings")
 def get_embeddings(req: EmbedRequest):
-    # Generamos los vectores matemáticos
     embeddings = model.encode(req.input, convert_to_tensor=False).tolist()
-
-    # Imitamos la estructura de respuesta de OpenAI / Infinity
     data = [
         {"object": "embedding", "embedding": emb, "index": i}
         for i, emb in enumerate(embeddings)
