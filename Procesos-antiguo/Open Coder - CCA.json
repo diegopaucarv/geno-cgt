@@ -1,0 +1,4596 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import json\n\n# 1. DRIVER: The Raw Work (Content)\n# This is the 'Extract' node output (Clean data)\nall_segments = _('Listar segmentos').all()\ntotal_work = len(all_segments)\n\nall_docs = _('Leer_segmentos').all()\n# 2. CONTEXT: Input from the Merge Node\n# The data is ALREADY inside file_list. We don't need to read from disk.\ninput_data = _input.first().json.to_py()\nfile_list_data = input_data.get('file_list', [])\n\n# Process the pre-loaded data\nall_syntheses = []\nfor item in file_list_data:\n    # Use the item directly. \n    # If it's wrapped in an 'json' key (common in n8n), unwrap it.\n    if isinstance(item, dict):\n        # Handle case where Aggregate might wrap data\n        data = item.get('json', item) \n        all_syntheses.append(data)\n\n# 3. CURSOR STATE\ncursor = input_data.get('next_cursor', 0)\n\n# 4. TERMINATION CHECK\nif cursor >= total_work:\n    return [{\"json\": {\"stop\": True}}]\n\n# 5. SELECT DATA\n# A. Get Content\ntarget_content = all_segments[cursor].json.to_py()\n\n# B. Get Filename\ntarget_doc_item = all_docs[cursor].json\ndoc_filename = target_doc_item.get('fileName', target_doc_item.get('name', f'segment_{cursor}.json'))\n\n# C. Get Context (Last 3 items from the history)\ncontext_window = []\nif len(all_syntheses) > 0:\n    context_window = [\n        synth.get('output', synth) \n        for synth in all_syntheses[-3:]\n    ]\n\n# 6. OUTPUT\nreturn [{\n    \"json\": {\n        \"role\": \"mixed_batch\",\n        \"fileName\": doc_filename,\n        \"target_content\": target_content,\n        \"context_list\": context_window,\n        \"next_cursor\": cursor + 1\n    }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -192
+      ],
+      "id": "54c071ef-2f47-4b65-b878-9c69b82351bd",
+      "name": "Orchestrator"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/{{ $('Orchestrator').first().json.fileName }}_2",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        6752,
+        -192
+      ],
+      "id": "c94ef7c4-fbec-4714-8f0a-bca73d1eebf8",
+      "name": "Read/Write Files from Disk2"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import json\nimport base64\n\nextracted_data = _input.first().json.to_py()\nextracted_data[\"fileName\"] = _('Orchestrator').first().json.fileName\njson_string = json.dumps(extracted_data, indent=2, ensure_ascii=False)\n\n# 4. Encode to Binary\nb64_string = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')\n\n# 5. Return\nreturn [{\n    \"json\": {\n        \"data\": json_string\n    },\n    \"binary\": {\n        \"data\": {\n            \"data\": b64_string,\n            \"mimeType\": \"application/json\",\n            \"fileName\": \"clustering_analysis.json\"\n        }\n    }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6528,
+        -192
+      ],
+      "id": "b764349a-8a9a-4136-9a65-bfbee737e9b2",
+      "name": "Mem LP1"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"clustering_rationale\": {\n      \"type\": \"string\",\n      \"description\": \"Summary of criteria used to group segments from various documents.\"\n    },\n    \"clusters\": {\n      \"type\": \"array\",\n      \"description\": \"List of clusters formed from cross-document segments.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"cluster_index\": { \"type\": \"integer\" },\n          \"code\": {\n            \"type\": \"string\",\n            \"description\": \"Label starting with a Gerund (e.g., 'Analyzing patterns').\"\n          },\n          \"references\": {\n            \"type\": \"array\",\n            \"description\": \"List of documents and their associated segments for this cluster.\",\n            \"items\": {\n              \"type\": \"object\",\n              \"properties\": {\n                \"document\": {\n                  \"type\": \"string\",\n                  \"description\": \"The fileName or document identifier.  For the current document, it's {{ $('Orchestrator').first().json.fileName }}.\"\n                },\n                \"segment_list\": {\n                  \"type\": \"array\",\n                  \"description\": \"A list of unique Segment IDs from this document.\",\n                  \"items\": {\n                    \"type\": \"integer\" \n                  }\n                }\n              },\n              \"required\": [\"document_name\", \"segment_list\"]\n            }\n          },\n          \"predominant_data_type\": {\n            \"type\": \"string\",\n            \"enum\": [\"baseline_data\", \"properline_data\", \"interpreted_data\", \"vague_data\"]\n          },\n          \"cluster_main_concern\": { \"type\": \"string\" },\n          \"study_question\": { \"type\": \"string\" }\n        },\n        \"required\": [\n          \"cluster_index\",\n          \"code\",\n          \"references\",\n          \"predominant_data_type\",\n          \"cluster_main_concern\",\n          \"study_question\"\n        ]\n      }\n    }\n  },\n  \"required\": [\"clustering_rationale\", \"clusters\"]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3456,
+        32
+      ],
+      "id": "d700a8ad-c414-460f-94c2-573ad477d7a4",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        640
+      ],
+      "id": "289c3b9a-f7cb-4751-950b-57906921b582",
+      "name": "DeepSeek Chat Model1",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Get the AI Synthesis (Input)\nagent_output_item = _input.first().json\n# Get the text (adjust key if your agent outputs 'output' or 'text')\nsynthesis_text = agent_output_item.get('output', '') \nif isinstance(synthesis_text, dict): synthesis_text = str(synthesis_text)\n\n# 2. Get the State/Cursor (From Orchestrator, NOT Agent)\n#    We look back at the Orchestrator to retrieve the baton we passed\norchestrator_data = _('Orchestrator').first().json\nnext_cursor = orchestrator_data['next_cursor']\nnombre = orchestrator_data.fileName\ndata = _('Orchestrator').first().json\n\ntodas_sintesis = _('Read/Write Files from Disk3').all()\ntal = \"\"\"\"\"\"\nfor file_item, context_text in zip(todas_sintesis, data.get('context_list', [])):\n    f = file_item.json.get('fileName', 'Unknown')\n    dict_str = \"\\n\".join([f\"{k}: {v}\" for k, v in context_text.items()])\n    cual = f\"-- {f} --\\n{dict_str}\\n\\n\"\n    tal += cual\n\ncontext_string = tal \n\nreturn [{\n    \"json\": {\n        \"fileName\":nombre,\n        \"context_files\": context_string,\n        \"target_file\": synthesis_text, # The new synthesis\n        \"next_cursor\": next_cursor     # The rescued baton\n    }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3760,
+        -192
+      ],
+      "id": "714f1a54-cb1b-49da-9d7a-f11dfdb2c65e",
+      "name": "Code in Python (Beta)2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        3472,
+        240
+      ],
+      "id": "b535d763-00c1-4d94-9d8d-c3a8a6e29eba",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Yam3Qx5bWVFGQFl9",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Yam3Qx5bWVFGQFl9",
+          "cachedResultName": "Open Coder - Document"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "info": "={{ $json.info }}",
+            "numpages": "={{ $json.numpages }}",
+            "numrender": "={{ $json.numrender }}",
+            "text": "={{ $json.text }}",
+            "version": "={{ $json.version }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "numpages",
+              "displayName": "numpages",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "numrender",
+              "displayName": "numrender",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "info",
+              "displayName": "info",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object",
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "version",
+              "displayName": "version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        640
+      ],
+      "id": "af567764-ab77-4cd4-a1ff-472ab18c701a",
+      "name": "Call 'Open Coder - Document'"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "joinPages": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        640
+      ],
+      "id": "d74313fd-4950-44a6-83a7-601ab1b6f4e2",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/tmp/entr/*.pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        96,
+        640
+      ],
+      "id": "9b3a8316-2174-4cc8-8676-3aee1f6720cd",
+      "name": "Listar archivos1"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/*_2",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3344,
+        464
+      ],
+      "id": "511a7ce9-5f3c-4449-9222-de6ce1a5b303",
+      "name": "Read/Write Files from Disk3",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        352
+      ],
+      "id": "e383c2c1-096c-454c-a56e-3c59a4e041d9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        6752,
+        16
+      ],
+      "id": "45375989-26fe-4503-bc81-3ceba6dfad3c",
+      "name": "Listar sintesis",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "=file_list",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        6976,
+        192
+      ],
+      "id": "4cce4fce-6fc7-42f9-8e3a-6853b33fbcb6",
+      "name": "Aggregate",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "return { \"next_cursor\": 0 }"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        400
+      ],
+      "id": "648e609f-def3-4f04-8cfc-09e86b757614",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "history",
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        4672,
+        288
+      ],
+      "id": "a84c64a2-d005-4911-987c-f0f7cfbd623c",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"theoretical_memos\": {\n      \"type\": \"array\",\n      \"description\": \"A list of ALL the theoretical insights found. Do not limit to just one.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"type\": {\n            \"type\": \"string\",\n            \"enum\": [\"HYPOTHESIS\", \"PROPERTY\", \"RECLUSTERING\"],\n            \"description\": \"The category of the theoretical insight.\"\n          },\n          \"insight\": {\n            \"type\": \"string\",\n            \"description\": \"The raw, creative theoretical claim.\"\n          },\n          \n          \"provocation_for_agent_b\": {\n            \"type\": \"string\",\n            \"description\": \"A specific command for the next agent to verify. E.g. 'Check segment 0 and 5 to see if they actually contradict each other.'\"\n          },\n          \"specific_clusters\": {\n  \"type\": \"array\",\n  \"description\": \"List of documents and segment IDs to retrieve for verification.\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"Document\": {\n        \"type\": \"string\",\n        \"description\": \"The name of the document to search in (e.g., '02_David Hidalgo').\"\n      },\n      \"Clusters\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"integer\"\n        },\n        \"description\": \"List of cluster numbers related to this idea (e.g., [0, 5, 12]).\"\n      }\n    },\n    \"required\": [\n      \"Document\",\n      \"Clusters\"\n    ]\n  }\n}\n        },\n        \"required\": [\"type\", \"insight\", \"provocation_for_agent_b\", \"specific_segmetns\"]\n      }\n    }\n  },\n  \"required\": [\"theoretical_memos\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        4800,
+        288
+      ],
+      "id": "718198c2-e917-49a6-b10c-c329b7ba97a8",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "history",
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        5232,
+        288
+      ],
+      "id": "a1da133d-7b50-42b3-8d48-3dc222f7d6e7",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"id\": {\n      \"type\": \"string\",\n      \"description\": \"Exactly indicates: {{$now.toISO()}}\"\n    },\n          \"target_insight_summary\": {\n            \"type\": \"string\",\n            \"description\": \"A brief reference to which specific insight you are analyzing.\"\n          },\n          \"status\": {\n            \"type\": \"string\",\n            \"enum\": [\"SATURATED\", \"MODIFICATION_REQUIRED\", \"FORCED_DATA\"],\n            \"description\": \"SATURATED: The data confirms the pattern. MODIFICATION_REQUIRED: The concept fits but needs a new property/dimension. FORCED_DATA: The concept does not fit the data at all.\"\n          },\n          \"empirical_grounding\": {\n            \"type\": \"string\",\n            \"description\": \"Direct quote or evidence from the raw segment that supports your assessment.\"\n          },\n          \"theoretical_adjustment\": {\n            \"type\": \"string\",\n            \"description\": \"The CRITICAL part. If 'SATURATED', perform 'Theoretical Coding' (relate it to other concepts). If 'MODIFICATION_REQUIRED', rewrite the definition of the category to account for the new data. If 'FORCED', suggest a better category name.\"\n          }\n        },\n        \"required\": [\"target_insight_summary\", \"status\", \"empirical_grounding\", \"theoretical_adjustment\"]\n      }",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5360,
+        288
+      ],
+      "id": "f759d8b0-33ff-46d4-87b4-58cc9f3f3617",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/{{ $input.first().json.fileName }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        6208,
+        64
+      ],
+      "id": "056f1623-5a78-45ca-b1d1-fbc27b1732ea",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Role:** Take a deep breath. You are a creative person currently driving a car on a long, empty highway. You are in a state of \"diffuse mode\" thinking. You are unconsciously contemplating at a set of qualitative analysis products from a distance, ignoring the details to see the big picture.\n\n**Input Data:**\n{{ JSON.stringify($('Code in Python (Beta)2').first().json.context_files) }}\n{{ JSON.stringify($('Code in Python (Beta)2').first().json.target_file) }}\n\n\n**The Prime Directive:**\nYour task is to hallucinate meaningful causal links, potential properties of main concerns, and connections between emerging concepts. Do not summarize the data. Do not tell a story. **Theorize.**\n\n**Operational Procedure:**\nBased *only* on the input provided, generate as many distinct theoretical memos as you can. **Do not limit yourself to one.** If you see five connections, write five memos.\n\nFor each memo, choose one type:\n1. [HYPOTHESIS]: Tentative rules. \"If [Cluster A] is high, then [Cluster B] transforms into...\"\n2. [PROPERTY]: Deepen a definition. \"The intensity of [Concept X] seems to depend on...\"\n3. [RECLUSTERING]: Suggest merging or splitting. \"Cluster A and Cluster B are actually the same phenomenon seen from different angles.\"\n\n**Constraints:**\n- **NO Description:** Do not describe the data. Explain the *theory* behind the data.\n- **Inspiration:** You are able to take other previously produced memos and get ideas that summarize the variations in your new data from them.\n- **Speculation:** You are allowed to guess.\n\n**Output Format:**\nYou must output a VALID JSON object containing a **LIST** of your theoretical memos.\n\n**Previous memos**:\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4656,
+        64
+      ],
+      "id": "2233a0dc-461e-4ba9-b23a-562755177aac",
+      "name": "Proponedor de Memos"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Role:** You are a rigorous Grounded Theorist practicing the **Constant Comparative Method**. You are NOT a \"verifier\" but a \"tester.\" You do not seek to prove hypotheses right or wrong. You seek empirical grounding of ideas.\n\n**Input:**\nYou will receive a list of \"Theoretical Memos\" (hallucinations/insights) generated by a creative colleague, along with the specific segment IDs they referenced.\n\n**The Prime Directive:**\nFor EACH memo provided, you must compare the theoretical concept against the raw data (the field fetched_evidence in the provided JSON) to determine its **Fit**.\n- **Never Disprove:** New data never disproves a theory; it only modifies it.\n- **Avoid \"Forcing\":** Do not force data into the category. If it doesn't fit, refine the category.\n\n**Operational Procedure:**\n1. **Fetch Data:** Look at the `related_concepts` or instructions from the previous agent. Use your tool `Code Tool` to read the actual text of the referenced segments.\n2. **Constant Comparison:** Compare the text to the proposed concept.\n   - *Does the concept explain the behavior in the segment?*\n3. **Evaluate & Refine:**\n   - If the data matches perfectly \u2192 **SATURATION** (The category is robust).\n   - If the data shows a variation \u2192 **MODIFICATION** (Expand the definition of the category to include this variation).\n   - If the data contradicts the concept entirely \u2192 **FORCED** (The concept was a hallucination; discard or rename it).\n\n**Empirical grounding**\nYou MUST use the Document-Cluster-Segment hierarchy to ground the insights produced by the creative insights creator. Do not use any other format for using the tool, nor text.\n\n**Output:**\nYou must output a JSON object containing a list of `comparative_assessments` corresponding to the input memos.\n\n\n**Memos:**\n{{ $('Proponedor de Memos').first().json.output.theoretical_memos }}\n\n**Clustered incidents per Document**\n{{ JSON.stringify($input) }}\n\n**Clustering attempts referenced by the previous agent**\n{{ $('Code in Python (Beta)2').first().json.context_files }}\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5264,
+        64
+      ],
+      "id": "3412f4b2-6d85-47a6-ad3f-b7d713f5af87",
+      "name": "Testeador de memos"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. LOAD DATA SOURCES\ndb_node = _('SEGMENTOS').first()\n# Safely get the database dict\ndb_source = db_node.json.to_py() if hasattr(db_node, 'json') else db_node\n\n# -------------------------------------------------------\n# 2. LOAD CLUSTER DEFINITIONS (Merge Both Sources)\n# -------------------------------------------------------\ncluster_definitions = []\n\n# Add items from Source A\nif _('Listar sintesis').all():\n    cluster_definitions.extend(_('Listar sintesis').all())\n\n# Add items from Source B (Directly, no wrapping)\nif _('Code in Python (Beta)2').all():\n    cluster_definitions.extend(_('Code in Python (Beta)2').all())\n\n# -------------------------------------------------------\n# 3. BUILD CLUSTER CATALOG (Smart Lookup)\n# -------------------------------------------------------\ncluster_catalog = {}\n\nfor item in cluster_definitions:\n    # A. Normalize: Ensure we are working with a Python dictionary\n    # If it's an n8n Item, convert it. If it's already a dict, use it.\n    data = item.json.to_py() if hasattr(item, 'json') else item\n\n    # B. Smart Lookup: Check root first, then check inside 'output'\n    # This handles both your node structures dynamically\n    clusters_list = data.get('clusters')\n    if not clusters_list:\n        clusters_list = data.get('output', {}).get('clusters', [])\n\n    for cluster in clusters_list:\n        c_index = cluster.get('cluster_index')\n        references = cluster.get('references', [])\n        \n        for ref in references:\n            # 1. Get Doc Key\n            raw_doc = ref.get('document', '')\n            doc_key = raw_doc[:6].lower()\n            \n            # 2. Get Segment IDs (convert to strings)\n            seg_ints = ref.get('segment_list', [])\n            seg_ids = [str(x) for x in seg_ints]\n            \n            if c_index is not None and doc_key:\n                # Create String Key: \"02_dav_0\"\n                catalog_key = f\"{doc_key}_{c_index}\"\n                \n                if catalog_key not in cluster_catalog:\n                    cluster_catalog[catalog_key] = []\n                cluster_catalog[catalog_key].extend(seg_ids)\n\n# -------------------------------------------------------\n# 4. PROCESS REQUESTS (Enrichment)\n# -------------------------------------------------------\nenriched_output = []\n\nfor item in _input.all():\n    input_data = item.json.to_py() if hasattr(item, 'json') else item\n    \n    # Handle where 'theoretical_memos' lives (usually inside 'output')\n    memos = input_data.get('output', {}).get('theoretical_memos', [])\n    if not memos:\n        memos = input_data.get('theoretical_memos', [])\n    \n    for memo in memos:\n        new_memo = memo.copy()\n        memo_evidence = {}\n        \n        specs = memo.get('specific_clusters', [])\n        \n        for spec in specs:\n            target_doc = spec.get('Document', '')\n            target_key = target_doc[:6].lower()\n            target_cluster_ids = spec.get('Clusters', []) # List [0, 1]\n            \n            if target_doc not in memo_evidence:\n                memo_evidence[target_doc] = {}\n\n            for c_id in target_cluster_ids:\n                # Recreate Key: \"02_dav_0\"\n                lookup_key = f\"{target_key}_{c_id}\"\n                \n                required_ids = cluster_catalog.get(lookup_key, [])\n                \n                # Fetch Content\n                if target_key in db_source:\n                    full_doc_segments = db_source[target_key].get('segments', {})\n                    \n                    for s_id in required_ids:\n                        if s_id in full_doc_segments:\n                            wave = full_doc_segments[s_id].get('first_wave', {})\n                            \n                            memo_evidence[target_doc][s_id] = {\n                                \"cluster_id\": c_id,\n                                \"topic\": wave.get('topic_name', 'Sin t\u00edtulo'),\n                                \"summary\": wave.get('summary', 'Sin contenido')\n                            }\n\n        new_memo['fetched_evidence'] = memo_evidence\n        \n        enriched_output.append({\n            \"json\": new_memo\n        })\n\nreturn enriched_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5008,
+        64
+      ],
+      "id": "16e841cd-0517-4fcb-b1e0-5270b7587350",
+      "name": "Code in Python (Beta)3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Role**: You are a qualitative coding machine. I will give you the \"concerns\" I extracted from a text and you will create mutually exclusive clusters that will abstract whatever social behavior the text is pointing towards.\n\n**Current Analized Document Segments**:\n{{ JSON.stringify($json.output) }}\n\n**Task**: You will regroup the segments into mutually exclusive sets, using the content data as a criteria. Group together data points with similar or closely related main_concern descriptions as if they were clusters. Then provide a new JSON with the data embedded into clusters. Remember that you should not focus on what the interviewee is doing as they answer, but on the behaviors they describe from themselves or the groups they are members of. \n **Additional Task**: I provided you of a constantly updating history of previous clustering attempts. Take this only as a secondary reference that you do not mecesarily need to adhere to, except that you find the most evident connections. However, you will ask yourself, for each new cluster you made:\n- Is this similar to any previous cluster?\n- How is it different?\n- Does it modify understanding?\nIf you think you have meaningful answers for these questions, you will modify your new clustering rationale and new clusters based on this analysis. When creating new clusters, use any previously existing cluster main concern if you consider it necessary, modify any of them, or you can rather make up your own clusters. Despite your decision, always prioritize a detailed clustering rationale that many times answers the previous questions. You will need to show any of your decisions in your outputs, and update your rationale according to that.\n\nClusters found in previous documents (if there were previous attempts, they will appear here:)\n{{ $json.output }}\n\n**Output JSON Format**\nFor every cluster, your JSON dict must have:\n- A cluster index (int)\n- For each cluster, clearly indicate the document name and segment numerical references per document that you include in the cluster. IMPORTANT: Include references to other documents and segments if you are using or modifying previously stated clusters. Do not leave this information out. \n- A data_type field telling me which is the predominant data type accross clusters\n- A main_concern field that is the summarizes the variations and similartities between the main_concerns found in the segments, in the same Gerund-starting format.\n- A study_question field that indicates which specific substantive questions would the main_concern of the cluster answer best.\n- Finally, add a \"clustering_rationale\" field to the whole dict that summarizes the criteria you used to cluster the data: whether if you created, modified or reused previous concerns or ideas contained in previous clustering attempts \n\n# Notes\nAll these fields will be generated from zero per cluster, they are NOT the same as the fields found in the original ddata. Remember to use numbers as cluster keys, and include a cluster label called \"code\" with a text value that will represent the cluster description. The descriptions need to start using gerunds, mimicking the grammatical structure of the main concerns.\n\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        3408,
+        -192
+      ],
+      "id": "fc0701f5-1937-4bc0-bcfe-3617998058d5",
+      "name": "Clusterizador (doc) informado"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "\n# 1. BUILD THE DATABASE\nnombres_docs = _('Leer_segmentos').all()\ncontenidos = _('Listar segmentos').all()\ndb = {}\n\nfor meta, data in zip(nombres_docs, contenidos):\n    doc_name = meta.json.to_py().get('fileName', 'Documento_Sin_Nombre')\n    # Use the first 6 chars as a key for fuzzy matching\n    fuzzy_key = doc_name[:6].lower()\n    \n    segs = data.json.to_py().get('output', {})\n    db[fuzzy_key] = {\n        \"document\": doc_name,\n        \"segments\": segs\n    }\n\nreturn db"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -192
+      ],
+      "id": "0ce2fcd9-b9b7-48d2-8fe3-4542038e8a53",
+      "name": "SEGMENTOS"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "target_key = _('Orchestrator').first().json.get('fileName', '')[0:6].lower()\noutput_val = \"Not Found\"\nfor item in _input.all():\n    data = item.json.to_py()\n    if target_key in data:\n        output_val = data[target_key]\n        break  \nreturn {\"output\": output_val}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -192
+      ],
+      "id": "a2b1ee6c-4aea-46c6-8ec5-7ac8f7f39e26",
+      "name": "FILTRO"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        5728,
+        64
+      ],
+      "id": "373db138-05e0-4581-8d89-6f0f76af2715",
+      "name": "Aggregate1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3f2d5133-faa7-499c-a12b-75f366b9481e",
+              "leftValue": "={{ $json.next_cursor > 0 && $json.next_cursor % 3 === 0 }}",
+              "rightValue": "=",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3984,
+        -192
+      ],
+      "id": "fca2d300-956c-4768-ae1d-00b74f7a945f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/tmp/memo*.txt",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        4208,
+        64
+      ],
+      "id": "6cc684d6-40bc-41c7-aa7e-d30b6a5d3c82",
+      "name": "leer memos",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import json\nfrom datetime import datetime\n\nitems = _input.all()\n\ndef get_timestamp(item):\n    try:\n        data = item.json.to_py()\n        if 'id' in data:\n            return data['id']\n            \n        # We might need to parse it if it wasn't auto-parsed\n        # (Uncomment below if your input is a raw string/binary)\n        # raw_text = data.get('data', '{}')\n        # parsed = json.loads(raw_text)\n        # return parsed.get('id', '')\n        \n    except Exception:\n        pass\n    return \"\"\n\n# 2. FILTER & SORT\nvalid_items = [item for item in items if get_timestamp(item)]\nsorted_items = sorted(valid_items, key=get_timestamp, reverse=True)\n\nif sorted_items:\n    return [sorted_items[0]]\nelse:\n    return []"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4432,
+        64
+      ],
+      "id": "ec8c4fe2-d15d-4e80-9be9-4696df339706",
+      "name": "Code in Python (Beta)1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import json\nimport base64\nfrom datetime import datetime\n\nextracted_data = _input.first().json.data.to_py()\njson_string = json.dumps(extracted_data, indent=2, ensure_ascii=False)\n\n# 4. Encode to Binary\nb64_string = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')\n\n# 5. Return\nreturn [{\n    \"json\": {\n        \"data\": json_string,\n            \"fileName\": f\"memo_{datetime.now().isoformat()}.txt\"\n\n    },\n    \"binary\": {\n        \"data\": {\n            \"data\": b64_string,\n            \"mimeType\": \"application/json\",\n        }\n    }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        64
+      ],
+      "id": "c0928231-82af-4e8e-aebe-1eb7ca03b87d",
+      "name": "Code in Python (Beta)4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4c58664-4012-4b1b-829b-0a6b4f67d024",
+              "leftValue": "={{ $json.stop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        688,
+        -192
+      ],
+      "id": "2a6ef692-f960-463d-9208-e73e86769ddd",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c42711b2-6132-498b-9739-c22bdad20469",
+              "leftValue": "={{ $('Orchestrator').first().json.context_list.length }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "539889c0-694f-4397-b04c-bcb1d2b40741",
+              "leftValue": "={{ JSON.stringify($('Orchestrator').first().json.context_list[0]) }}",
+              "rightValue": "{}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1776,
+        -192
+      ],
+      "id": "fb4fa9e0-ac41-4066-96b9-dc5d657248b5",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Previous clustering attempts:\n{{ [JSON.stringify($('Orchestrator').first().json.fileName), JSON.stringify($('Orchestrator').first().json.context_list)] }}\n\n---\n\nYou are an expert in construct analysis. I want you to summarize my qualitative coding work (what I call 'clustering') and produce a text context for another AI like you. \n\n**Method**\nWe are working as concept analyzers (in Sartori or Lazarsfeld sense), hence we aren't yet looking for wider relationships or explanations. We are just searching for the most empirically grounded possible constructs. You are free to look for similar definitions, extreme cases, sub-aspect similarities, types, and other tools for analyzing the indicator and construct relationship.\n\n**Task**\nYou will first analyze, synthetize and then generalize patterns.\n- Compare ideas: Analyze my clustering attempts and employ logical heuristics to capture relationships between events or behaviors in the most precise way possible. Summarize each \"captured\" hypothetical relationship in the most precise language possible.\n- Abstract: You will write a coding book in markdown and using bullets and a clear, precise and simple language, including per each identied \"captured\" pattern a label that starts with a gerund, a description of the main concern that it captures, and the precise empirical variations, types or leveles found along with the documents that indicate them in parentheses.\n- Think step by step which clusters could be merged, and enriched or extended using the same data which I gave you. Then, critically think of hypothetical new data (new interviewees) that might enrich our construct definition (by contrast, variety or similarity): which critical traits might help our coding system? Then offer me reccomendations based on your understanding. ",
+        "options": {
+          "systemMessage": "Adhere strictly to my demands. Be very careful: we need a coding book and reccomendations strictly based on the provided data. Avoid academicism: generalize without resorting to popular theories since that might bias your induction process. Rather, be a skeptic and autocritical of your own ideas, and do NOT miss citing, mentioning or reusing of my clusters by chance. Do not talk in second person (\"you\", \"your\"), or refer to \"me\"; instead, talk about the data and the concepts directly (third person or first person only).",
+          "returnIntermediateSteps": true,
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2416,
+        -320
+      ],
+      "id": "f24ed219-b833-46e8-ac45-694fbc1f46ad",
+      "name": "Resume contexto"
+    },
+    {
+      "parameters": {
+        "modelName": "sentence-transformers/all-mpnet-base-v2",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        1120
+      ],
+      "id": "cc1c516e-9ab1-4ca4-8073-ecabd386e21b",
+      "name": "Embeddings HuggingFace Inference",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "uf1p5QD3bfZb558b",
+          "name": "HuggingFaceApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.pageContent.slice(0, 1000) }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "segment_number",
+                "value": "={{ $json.metadata.segment_number }}"
+              },
+              {
+                "name": "data_type",
+                "value": "={{ $json.metadata.data_type }}"
+              },
+              {
+                "name": "study_question",
+                "value": "={{ $json.metadata.study_question }}"
+              },
+              {
+                "name": "segment_id",
+                "value": "={{ $json.metadata.segment_id }}"
+              },
+              {
+                "name": "is_coded",
+                "value": "={{ $json.metadata.is_coded }}"
+              },
+              {
+                "name": "source_doc",
+                "value": "={{ $json.metadata.source_doc }}"
+              },
+              {
+                "name": "length",
+                "value": "={{ $json.metadata.length }}"
+              },
+              {
+                "name": "first_10",
+                "value": "={{ $json.metadata.first_10 }}"
+              },
+              {
+                "name": "cluster",
+                "value": "={{ $json.metadata.cluster }}"
+              },
+              {
+                "name": "study_question",
+                "value": "={{ $json.metadata.study_question }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2144,
+        672
+      ],
+      "id": "9908ed21-7533-4a0f-9d89-48a519a32570",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/tmp/*_1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        656
+      ],
+      "id": "4c7d1aad-fb0d-496a-8242-ac98ea99e051",
+      "name": "Read/Write Files from Disk1"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        656
+      ],
+      "id": "d7f76c9a-1c8f-4b02-a80a-060d51f1a0aa",
+      "name": "Listar segmentos1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0f84c216-887d-4cb9-b2b1-f9b785a60f83",
+              "leftValue": "={{$input.first().json.isEmpty()}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        640
+      ],
+      "id": "d82eccfe-8576-45ea-80c3-1e70068fa782",
+      "name": "If3",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "=segments_clusters",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        480,
+        640
+      ],
+      "id": "886baa39-c7aa-441d-bdcd-c3838092d3e1",
+      "name": "Get many rows",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## PDFs a concerns\n",
+        "height": 80,
+        "width": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        96,
+        528
+      ],
+      "id": "5c276578-5735-408d-99c6-205a2910d148",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## PDFs a concerns\n",
+        "height": 80,
+        "width": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        608,
+        480
+      ],
+      "id": "11fb4048-8c69-45e9-9e47-59d52bbf40ed",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Agrupar en documento\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        432
+      ],
+      "id": "c156b4ec-d0f8-4585-8e7d-07e95f51a2af",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "llm_results = _input.all()\nsource_docs = _('Junta segmentos').all()\ntotal_output = []\n\nfor llm_item, source_item in zip(llm_results, source_docs):\n\n    doc_name = source_item.json.get('documento', 'Unknown')\n\n    raw_output = llm_item.json.get('output', {})\n    categories_list = raw_output.get('categories', [])\n\n    for cat in categories_list:\n        \n        metadata = {\n            \"index\": cat.get('index'),\n            \"document\": doc_name, \n            \"indicators\": [cat.get('summary')],\n            \"study_question\": cat.get('study_question'),  \n            \"data_type\": cat.get('predominant_data_type'),\n            \"references\": cat.get('references', []) \n        }\n\n        total_output.append({\n                \"pageContent\": cat.get('category', 'No concern provided'),\n                \"metadata\": metadata\n        })\n\nreturn total_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        768
+      ],
+      "id": "d5cd5f37-661e-4dc6-a030-a1dd915286f8",
+      "name": "Code in Python (Beta)6"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "files_items = _('Read/Write Files from Disk1').all()\ninput_items = _input.all()\ndocumentos = []\n\nfor item, file_item in zip(input_items, files_items):\n    doc_name = file_item.json.fileName[:-2]  # [0:-2] es lo mismo que [:-2]\n    segmentos_data = item.json.output.to_py() if hasattr(item.json, 'output') else item.json.to_py()\n    textos = f\"Entrevista: {doc_name}\\n\\n\"\n    for key, segmento in segmentos_data.items():\n        wave = segmento.get('first_wave', {})\n        clasif = wave.get('topic_name', 'Sin clasificaci\u00f3n')\n        data_type = wave.get('data_type')\n        if data_type == \"baseline_data\":\n            clasif_2 = \"IMPORTANT\"\n        elif data_type == \"properline_data\":\n            clasif_2 = \"CONTEXT\"\n        else:\n            clasif_2 = \"NOT IMPORTANT\"\n        \n        textos += f\"Segmento {wave.get('segment_number')} | {clasif_2}: {clasif}\\n\"\n        summary = wave.get('summary', '')\n        textos += f\"{wave.get('topic_name')}\\nSummary: {summary}\\nText: {wave.get('text')}\\n\"\n      \n    documentos.append({\n        \"pageContent\": textos,\n        \"documento\": doc_name,\n        \"segmentos\": segmentos_data\n    })\n\n# Devolver TODOS los documentos de una vez\nreturn documentos"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        656
+      ],
+      "id": "fddd2c72-3dce-4a48-9c7a-b517c43b14fd",
+      "name": "Junta segmentos"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "documentos = []\n\n# 1. Retrieve both lists\ncluster_entries = _input.all()\nsegment_entries = _('Listar segmentos1').all()\n\n# 2. Iterate through both lists simultaneously (Pair by Pair)\nfor cluster_item, segment_item in zip(cluster_entries, segment_entries):\n    \n    # --- Step A: Build a LOCAL map for this specific file ---\n    local_segment_map = {}\n    \n    # Safely get categories\n    categories = cluster_item.json.get('output', {}).get('categories', [])\n    \n    for cluster in categories:\n        c_index = int(cluster.get('index', -1))\n        refes = cluster.get('references', [])\n        \n        for refe in refes:\n            doc_name = refe.get('document', 'Unknown')\n            segment_list = refe.get('segment_list', [])\n            \n            for seg_id in segment_list:\n                # Store data in local map\n                local_segment_map[seg_id] = {\n                    \"cluster\": c_index,\n                    \"doc_name\": doc_name\n                }\n\n    # --- Step B: Determine the Offset (The Fix) ---\n    # We look at the keys we just saved. Do they start at 0 or 1?\n    offset = 0\n    if local_segment_map:\n        min_id = min(local_segment_map.keys())\n        if min_id == 1:\n            offset = 1  # Map is 1-based, input keys are likely 0-based\n        else:\n            offset = 0  # Map is 0-based, matches input keys\n\n    # --- Step C: Process the Segments ---\n    raw_json = segment_item.json\n    segmentos_data = raw_json.get('output', raw_json)\n    \n    if hasattr(segmentos_data, 'to_py'):\n        segmentos_data = segmentos_data.to_py()\n        \n    for key, segmento in segmentos_data.items():\n        try:\n            # Apply the dynamic offset here!\n            lookup_id = int(key) + offset\n        except ValueError:\n            continue \n            \n        # Look up in the LOCAL map\n        segment_info = local_segment_map.get(lookup_id)\n        \n        if segment_info:\n            current_cluster = segment_info['cluster']\n            current_doc_name = segment_info['doc_name']\n        else:\n            # Fallback: If lookup fails, try flipping the offset strategy just for this item\n            # (Useful if a single file has mixed indexing)\n            alt_id = int(key) + (1 if offset == 0 else 0)\n            segment_info_alt = local_segment_map.get(alt_id)\n            \n            if segment_info_alt:\n                current_cluster = segment_info_alt['cluster']\n                current_doc_name = segment_info_alt['doc_name']\n            else:\n                current_cluster = [] \n                current_doc_name = \"Uncategorized / Unknown\"\n\n        # --- Step D: Build the Document ---\n        wave = segmento.get('first_wave', {})\n        textos = \"\"\n        textos += f\"Segmento {wave.get('segment_number')}\\n\"\n        summary = wave.get('summary', '')\n        textos += f\"{wave.get('topic_name')}\\nSummary: {summary}\\n\"\n        \n        metadata = {\n            \"segment_number\": wave.get('segment_number'),\n            \"cluster\": current_cluster,\n            \"data_type\": wave.get('data_type'),\n            \"study_question\": wave.get('study_question'),\n            \"segment_id\": key,\n            \"calculated_lookup_id\": lookup_id, # Useful for debugging\n            \"source_doc\": current_doc_name,\n            \"length\": wave.get('length'),\n            \"first_10\": wave.get('first_10')\n        }\n        \n        documentos.append({\n            \"pageContent\": textos,  \n            \"metadata\": metadata\n        })\n\nreturn documentos"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        624
+      ],
+      "id": "362c24b9-d944-4a64-ac11-d7399a508433",
+      "name": "Data para Supabase"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=I divided a text into distict segments. Note that in the following lines I use a mix of english and spanish.\n\n{{$json.pageContent}}\n\n---\n\n**Problem**\nMy original segmentation is too sparse and fragmented.\n\n**Role**\nAnalize these segments. Note that I present to you a mix of the researcher's insight and direct extracts from the original corpus. You will reorganize all the segments into separate mutually exclusive categories according exclusively to hypothetical habits of behavior that process similar or broader concerns in the daily life of the interviewee. Note that I ask you to separate these from behaviors seen in the unique qualitative interview setting, which aren't my focus, and that researcher's interpretations could be mistaken. \n\n**Output**\nFor every category, your JSON dict must have:\n- An index (int)\n- For each, clearly indicate the segment numerical references per category that indicates it. \n- A predominant_data_type field telling me which is the predominant data type accross clusters\n- A category_concern field that captures the behavior trends found in the segments, in a Gerund-starting format.\n- A study_question field that indicates which specific substantive questions would the unifying concern of the category answer best.\n. A summary field that cites or paraphrases the specific events, behaviors or thoughts that resolve the category concern in the words of the interviewee or their peers.\n- You can add aditional notes to your work, where you can underline empirical relationships you notice between the events or behaviors contained in the categories.\n\n**Notes**\nDo not hallucinate nor assume the interviewee aims or life conditions in an opinion-aided way. Instead, use common sense and describe patterns grounded in the observed data. All the JSON fields will be generated from zero per category, they are NOT the same fields found in the original data. Remember to use numbers as category keys, and include a category label called \"category\" with a text value that will represent the category description. The descriptions need to start using gerunds, mimicking the grammatical structure of the concerns initially foud.\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1456,
+        656
+      ],
+      "id": "faddb8e4-e762-4af4-954e-64caa1373045",
+      "name": "Resegmentar - Doc"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"categories\": {\n      \"type\": \"array\",\n      \"description\": \"List of clusters formed from cross-document segments.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"index\": {\n            \"type\": \"integer\"\n          },\n          \"category\": {\n            \"type\": \"string\",\n            \"description\": \"Label starting with a Gerund (e.g., 'Analyzing patterns').\"\n          },\n          \"references\": {\n            \"type\": \"array\",\n            \"description\": \"List of documents and their associated segments for this cluster.\",\n            \"items\": {\n              \"type\": \"object\",\n              \"properties\": {\n                \"document\": {\n                  \"type\": \"string\",\n                  \"description\": \"The fileName or document identifier. For the current document, it's {{ $json.documento }}.\"\n                },\n                \"segment_list\": {\n                  \"type\": \"array\",\n                  \"description\": \"A list of unique Segment IDs from this document that indicate the current category.\",\n                  \"items\": {\n                    \"type\": \"integer\"\n                  }\n                }\n              },\n              \"required\": [\n                \"document\",\n                \"segment_list\"\n              ]\n            }\n          },\n          \"predominant_data_type\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"IMPORTANT\",\n              \"CONTEXT\",\n              \"NOT IMPORTANT\"\n            ]\n          },\n          \"study_question\": {\n            \"type\": \"string\"\n          },\n          \"summary\": {\n            \"type\": \"string\",\n            \"description\": \"List all the specific events, behaviors or thoughts that indicate this category in the words of the interviewee or their peers.\"\n          }\n\n        },\n        \"required\": [\n          \"index\",\n          \"category\",\n          \"references\",\n          \"predominant_data_type\",\n          \"category_concern\",\n          \"study_question\",\n          \"summary\"\n        ]\n      }\n    },\n    \"Additional_notes\": {\n      \"type\": \"string\",\n      \"description\": \"Relationships found among the data, or outstanding empirical context to be highlighted.\"\n    }\n  },\n  \"required\": [\n    \"categories\",\n    \"Additional_notes\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1488,
+        864
+      ],
+      "id": "28f7bd18-39fd-4291-911e-41577f51cbb4",
+      "name": "Structured Output Parser3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        1024
+      ],
+      "id": "293c25dd-f9f5-4201-9e2c-a9fc165be2ff",
+      "name": "DeepSeek Chat Model2",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "segments",
+          "mode": "list",
+          "cachedResultName": "segments"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1952,
+        624
+      ],
+      "id": "a0834873-9012-4df8-9f7e-caba489cdb7a",
+      "name": "Insertar-segmentos",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.pageContent.slice(0, 1000) }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "index",
+                "value": "={{ $json.metadata.index }}"
+              },
+              {
+                "name": "indicators",
+                "value": "={{ $json.metadata.indicators }}"
+              },
+              {
+                "name": "=study_question",
+                "value": "={{ $json.metadata.study_question }}"
+              },
+              {
+                "name": "data_type",
+                "value": "={{ $json.metadata.data_type }}"
+              },
+              {
+                "name": "references",
+                "value": "={{ $json.metadata.references }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2096,
+        832
+      ],
+      "id": "c3f90036-bd2b-4d5a-9d9b-6e8860ec813e",
+      "name": "Default Data Loader1"
+    },
+    {
+      "parameters": {
+        "tableId": "documents",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        944
+      ],
+      "id": "449f09ac-2370-4d50-bb26-339a42a10464",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Get both lists completely\njunta_items = _('Junta segmentos').all()\ninput_items = _input.all()\n\nresults = []\n\n# 2. Zip them to iterate in parallel\n# junta_item = item from 'Junta segmentos'\n# input_item = item from current input\nfor junta_item, input_item in zip(junta_items, input_items):\n    \n    # Safely get the Notes (handling the 'output' nesting if it exists)\n    # We check if 'output' exists, otherwise we look in the root\n    raw_input = input_item.json\n    output_data = raw_input.get('output', raw_input)\n    \n    # 3. Create the object structure\n    new_item = {\n        \"doc_name\": junta_item.json.get('documento'),\n        \"metadata\": {\n            \"Notes\": output_data.get('Additional_notes')\n        }\n    }\n    \n    results.append(new_item)\n\nreturn results"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        944
+      ],
+      "id": "6ebe2d01-dde3-433f-ab58-0d95fe165439",
+      "name": "Code in Python (Beta)7"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "segments_clusters",
+          "mode": "list",
+          "cachedResultName": "segments_clusters"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1952,
+        768
+      ],
+      "id": "7fb3a85d-68c2-4e1a-a491-d0e97b4d3af6",
+      "name": "Insertar-categorias",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "ba8fb44b-1cf9-4ad7-8a9a-dc49b1a0eac9",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -256,
+        608
+      ],
+      "id": "1b4301fc-1691-4e2f-a6e8-ab776adc31c1",
+      "name": "Webhook",
+      "webhookId": "ba8fb44b-1cf9-4ad7-8a9a-dc49b1a0eac9",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# System Role\nYou are an expert Grounded Theory Methodologist and Qualitative Data Analyst. You specialize in aggregating open codes into higher-order categories. Your goal is to maximize the \"empirical grounding\" of the analysis while conceptualizing emergent patterns of behaviors among a group of documents.\n\n# Input Data\n{{ $json.content }}\n\n# Reasoning Strategy (Chain of Thought)\nPlease process the input by following these distinct reasoning steps. Do not skip any step:\n\n1.  **Analyze for Human Purpose:** Scan the provided categories. Look beyond the keywords and identify the underlying *behavioral intent* or *human purpose* they fulfill. Group categories that signal behaviors fulfilling the same purpose into new, **mutually exclusive** clusters.\n    * *Priority:* First identify the most similar behaviors, then look for types, variations, and opposites within that purpose.\n\n2.  **Labeling (Synthesize):** Assign a new name to each cluster.\n    * *Constraint:* The name MUST be a specific **Gerund** (Verb + -ing) that captures the active process (e.g., \"Strategizing for safety\" rather than \"Safety strategies\").\n\n3.  **Definition, Variation & Evidence Mapping:**\n    * **Define:** Draft a definition for the new category based *exclusively* on the behaviors cited.\n    * **Differentiate:** Identify distinct \"Variations\" within the cluster. These can be subtypes, intensities, contrasting approaches, or opposites.\n    * **Map Evidence:** For *each* specific variation, you must immediately assign the **Reference Audit**. Identify exactly which Document IDs and Original Codes support *that specific variation*.\n    * *Constraint:* Do not aggregate references at the general category level. Every piece of evidence must be attributed to a specific variation description to show exactly *where* that nuance appears in the data.\n\n4.  **Hypothesis Generation:** Review the theoretical questions associated with the original codes. Paraphrase these questions into **testable theoretical hypotheses** regarding connections between categories.\n    * *Format:* Transform \"How does X affect Y?\" into \"X increases the likelihood of Y under condition Z.\"\n\n5.  **Theoretical Sampling Design:** Based *only* on this new category, define criteria for the next phase of data collection.\n    * *Inclusion Criteria:* What specific contexts or negative cases should we look for to *enrich* this category? (Focus on discovery).\n    * *Exclusion Criteria:* What behaviors of specific contexts or cases might be connected to but lie outside the scope of the emerging behavioral patterns being categorized and thus should be ignored during the comparison?\n\n6.  **Completeness Check:** verify that every single Document ID and Code from the input has been mapped to a specific variation in Step 3. No data points should be orphaned.\n\n# Global Constraints\n* **Internal Consistency:** Ensure each new category is logically consistent within itself. It does not matter if the categories contradict *each other* (global coherence is not required at this stage).\n* **No Data Loss:** Every single input item must be mapped to a new category and a specific variation.\n* **Output:** You will adhere strictly to the JSON schema provided and check the adequacy of your response to it. Do not add introductions or comments.",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "returnIntermediateSteps": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2896,
+        1008
+      ],
+      "id": "65b6ffcf-4a48-476c-bcf6-c43c712e9fcc",
+      "name": "Clusterizador informado"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a specialist in Barney Glaser's constant comparative method in classic grounded theory. \n\nThese are definitions of {{ $('Get many rows4').all().length }} distinct latent constructs found in different steps of my qualitative analysis. \n\nI will ask you to please regroup the constructs creating further summarizing latent constructs. Use the interchangeability of indicators, thinking which sets of empirical indicators indicate the same constructs. \n\nUsing the similar gerund based style in my data, for each new apparent construct indicated by similar variations or types, create a label, a definition, and the ids of the existing constructs that seem to be summarized by it.\n\n  For each latent construct, also create unified lists of inclusion and exclusion sampling criteria, paraphrasing and summarizing those listed in the data.\n\n---\n{{ $json.texto }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        3760,
+        864
+      ],
+      "id": "05bce6b5-8368-4f66-9d30-5cffa28bd31c",
+      "name": "Agrupador"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "cats = _('Get many rows4').all()\ncats_map = {row.json['id']: row.json for row in cats}\n\ntexto = \"\"\nindex = 0\nfor item in _input.item.json.output.summarized_constructs:\n  ids = item.summarized_ids\n  label = item.label\n  index += 1\n  h = []\n  for cat_id in ids:\n    if int(cat_id) in cats_map:\n      hn = cats_map[int(cat_id)].get('hypotheses')\n      for i in hn:\n        h.append(str(i))\n      \n  texto = texto + f\"Category {index}: {item.definition}\\n\" + \"Linked hypotheses:\\n- \" + \"\\n- \".join(h) + \"\\n\\n---\\n\\n\"\n\nreturn {\"content\": texto, \"problem\": \"How do journalists and the news media keep professional relevance during the boom of AI?\"} "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4096,
+        672
+      ],
+      "id": "ffc434be-b6af-4e9f-8758-6ce45a06e9ab",
+      "name": "Memos"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "python",
+        "pythonCode": "texto = \"\"\nindex = 0\nfor item in _input.item.json.output.summarized_constructs:\n  label = item.label\n  index += 1\n  inc = \"\\n - \".join(item.theoretical_sampling_criteria.inclusion)\n  exc = \"\\n - \".join(item.theoretical_sampling_criteria.exclusion)\n  texto = texto + f\"Group {index}: {item.definition}\\n\" + \"Inclusion criteria:\\n - \" + inc + \"\\nExclusion criteria:\\n - \" + exc + \"\\n\\n---\\n\\n\"\n\nreturn {\"content\": texto, \"problem\": \"How do journalists and the news media keep professional relevance during the boom of AI?\"} "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4096,
+        864
+      ],
+      "id": "c3b39afc-dd1a-445b-80b1-d6b0460d38b7",
+      "name": "Criteria"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Research problem: {{ $json.problem }}\n\n{{ $json.content }}\n\n---\n\nI gave you categorized hypotheses. Each category has a description and a list of testable hypotheses. The problem is that there are too many of them. I need you to:\n- Regroup and summarize all the hypotheses, erasing redundancies and the most untestable, already included or unnecesary.\n- Per each hypotheses, add negative hypotheses that might help me test them.\n- Try to employ a non-deterministic or binarizing language.\n\n Your output must be in plain json, including an id per hypothesis, the hypotheses type and the categories they would answer to (numerical indexes).",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4256,
+        672
+      ],
+      "id": "dad3a741-10a7-46a3-969d-1bdd3a9ed8a6",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"title\": \"Consolidated Hypotheses Schema\",\n  \"description\": \"Schema for grouped and summarized hypotheses with falsification criteria.\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"consolidated_hypotheses\": {\n      \"type\": \"array\",\n      \"description\": \"The list of regrouped, non-redundant hypotheses derived from the original categories.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"id\",\n          \"hypothesis_type\",\n          \"statement\",\n          \"source_category_indexes\"\n        ],\n        \"properties\": {\n          \"id\": {\n            \"type\": \"string\",\n            \"description\": \"Unique identifier for this summarized hypothesis (e.g., 'H1', 'H-GEN-01').\"\n          },\n          \"statement\": {\n            \"type\": \"string\",\n            \"description\": \"The summarized hypothesis statement. MUST use non-deterministic (e.g., 'tends to', 'is likely associated with') or binarizing (e.g., 'presence of X implies absence of Y') language.\"\n          },\n          \"source_category_indexes\": {\n            \"type\": \"array\",\n            \"description\": \"An array of numerical indexes pointing to the original categories this hypothesis summarizes.\",\n            \"items\": {\n              \"type\": \"integer\"\n            },\n            \"minItems\": 1,\n            \"uniqueItems\": true\n          }\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"consolidated_hypotheses\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        4320,
+        768
+      ],
+      "id": "30072a4e-7b48-4ff6-b307-a63b5a204e1d",
+      "name": "Structured Output Parser5"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "rpta = []\nfor c in _input.first().json.output.summarized_constructs:\n    tal = {}\n    label = c.get(\"label\")\n    defi = c.get(\"definition\")\n    tal[\"label\"] = label\n    tal[\"definition\"] = defi\n    rpta.append(tal)\n\nreturn rpta"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4288,
+        1664
+      ],
+      "id": "aebccff8-205e-4896-8a4b-558ffb8281a9",
+      "name": "Code in Python (Beta)5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Document metadata:\n{{ JSON.stringify($json.Metadata, null, 2) }}\n---\nInterview segments:\n{{ $json.Segments }}\n---\n\nI'm giving you my document data. I need you to classify this document using the following variables and categories, making a metadata json table.\n\nThis is the codebook for the variables. Most if not all of them are categoricals.\n\n{{ JSON.stringify($('AI Agent3').item.json.output )}}\n\n---\n\nYour output must be a JSON.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5296,
+        864
+      ],
+      "id": "590b8083-3495-4d3a-8b5f-cd94295d588b",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={{ $('Variables').first().json.output }}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5360,
+        960
+      ],
+      "id": "b1beb21d-c153-4304-a8da-4788e5427631",
+      "name": "Structured Output Parser6"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.output.variables) }}\n\nPlease make a JSON schema from this so I can use an AI agent to code my cases according to this data. Do not use numerical enums for categories: use string enums.",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Avoid introductions, commentaries, \"Here is\" or any other phrases at the start of your response. You are a JSON producing machine, so strictly answer based on that."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4640,
+        1024
+      ],
+      "id": "ff6494fb-6c47-4860-95d6-200ecc56c134",
+      "name": "Variables"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "documents",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "doc_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.doc_name }}"
+            }
+          ]
+        },
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5808,
+        864
+      ],
+      "id": "cdd56e91-c9c9-4b49-a892-675452aa236c",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Build the Metadata Map (same as before)\nmetadata_map = {}\nfor item in _input.all(): \n    data = item.json.to_py()\n    # Ensure we map the filename to its metadata\n    if 'Nombre del documento' in data:\n        metadata_map[data['Nombre del documento']] = data\n\n# 2. Process Segments using their INTERNAL doc_name\nsegments = _('C').all()\nresult = {}\n\nfor item in segments:\n    segment_data = item.json.to_py()\n\n    meta = segment_data.get(\"metadata\", {})\n    doc_name = meta.get(\"source_doc\") or meta.get(\"doc_name\") or \"Unknown Document\"\n    \n    # Initialize the document entry if it's new\n    if doc_name not in result:\n        result[doc_name] = {\n            \"Document Name\": doc_name,\n            \"Metadata\": metadata_map.get(doc_name, {}), # Look up metadata immediately\n            \"Segments\": []\n        }\n\n    result[doc_name][\"Segments\"].append(segment_data.get(\"content\", {}))\n\n# 3. Format Output (Convert Dict to List)\nfinal_output = list(result.values())\n\nreturn final_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5136,
+        864
+      ],
+      "id": "9a252d0c-5773-44fd-a6da-ba5ebd4fc13b",
+      "name": "Metadata 1"
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {
+          "maxRetries": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        2896,
+        1264
+      ],
+      "id": "881605e3-0a1a-4c40-acd6-6a3a294763bc",
+      "name": "DeepSeek Chat Model3",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"new_categories\": {\n      \"type\": \"array\",\n      \"description\": \"A list of new categories derived from the text analysis.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"category\": {\n            \"type\": \"string\",\n            \"description\": \"The name of the category, phrased as a Gerund Phrase that summarizes variations found in the data.\"\n          },\n          \"memo\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"definition\": {\n                \"type\": \"string\",\n                \"description\": \"A precise definition of the category based strictly on the observed behaviors.\"\n              },\n              \"variations\": {\n                \"type\": \"array\",\n                \"description\": \"A list of variations, contrasting types or opposites found within this category, mapped to their specific evidence.\",\n                \"items\": {\n                  \"type\": \"object\",\n                  \"properties\": {\n                    \"variation_description\": {\n                      \"type\": \"string\",\n                      \"description\": \"Description of a specific variation, type or opposition in the original data.\"\n                    },\n                    \"reference_audit\": {\n                      \"type\": \"object\",\n                      \"description\": \"Traceability back to original data sources specific to THIS variation.\",\n                      \"properties\": {\n                        \"evidence_map\": {\n                          \"type\": \"array\",\n                          \"items\": {\n                            \"type\": \"object\",\n                            \"properties\": {\n                              \"document_id\": {\n                                \"type\": \"string\",\n                                \"description\": \"The unique identifier of the source document.\"\n                              },\n                              \"contributing_codes\": {\n                                \"type\": \"array\",\n                                \"description\": \"List of specific original code indices found in this document that support this specific variation.\",\n                                \"items\": {\n                                  \"type\": \"integer\"\n                                }\n                              }\n                            },\n                            \"required\": [\n                              \"document_id\",\n                              \"contributing_codes\"\n                            ]\n                          }\n                        }\n                      },\n                      \"required\": [\n                        \"evidence_map\"\n                      ]\n                    }\n                  },\n                  \"required\": [\n                    \"variation_description\",\n                    \"reference_audit\"\n                  ]\n                }\n              }\n            },\n            \"required\": [\n              \"definition\",\n              \"variations\"\n            ]\n          },\n          \"theoretical_hypotheses\": {\n            \"type\": \"array\",\n            \"description\": \"Hypothesized relationships or causal links derived from the data.\",\n            \"items\": {\n              \"type\": \"string\",\n              \"description\": \"A hypothesis statement (e.g., 'If X occurs, then Y is more likely to happen because of Z').\"\n            }\n          },\n          \"strategic_sampling_criteria\": {\n            \"type\": \"object\",\n            \"description\": \"Criteria for future data collection or theoretical sampling.\",\n            \"properties\": {\n              \"inclusion_criteria\": {\n                \"type\": \"array\",\n                \"description\": \"Specific attributes or contexts to search for to find new, relevant data.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              },\n              \"exclusion_criteria\": {\n                \"type\": \"array\",\n                \"description\": \"Data types or contexts that should be avoided.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              }\n            },\n            \"required\": [\n              \"inclusion_criteria\",\n              \"exclusion_criteria\"\n            ]\n          }\n        },\n        \"required\": [\n          \"category\",\n          \"memo\",\n          \"theoretical_hypotheses\",\n          \"strategic_sampling_criteria\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"new_categories\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2960,
+        1200
+      ],
+      "id": "a2f11444-2d59-4e32-9785-7315196e4f21",
+      "name": "Structured Output Parser7"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Get all your data\ndocuments = _('B').all()\ncategories = _('A').all()\n\noutput_list = []\n\nfor i in range(0, len(documents), 3):\n    batch = documents[i : i + 3]\n    batch_text = \"\"\n\n    for f in batch:\n        doc_data = f.json\n        doc_name = doc_data.get('doc_name', 'Unknown Doc')\n        notes = doc_data.get('metadata', {}).get('Notes', '')\n        batch_text += f\"---\\n\\nDocument: {doc_name}\\n\"\n        for cat in categories:\n            cat_data = cat.json\n            refs = cat_data.get('metadata', {}).get('references', [])\n            ref_doc_names = [r.get('document') for r in refs]\n            if doc_name in ref_doc_names:\n                index = cat_data.get('metadata', {}).get('index')\n                label = cat_data.get('content') # or 'category' based on previous nodes\n                inds_list = cat_data.get('metadata', {}).get('indicators', [])\n                if isinstance(inds_list, list):\n                    indicators = \", \".join(inds_list)\n                else:\n                    indicators = str(inds_list)\n\n                batch_text += f\"{index}. {label}: {indicators}\\n\"\n\n        batch_text += f\"\\nTheoretical questions: {notes}\\n\"\n\n    output_list.append({\n        \"json\": {\n            \"content\": batch_text\n        }\n    })\n\nreturn output_list"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        1008
+      ],
+      "id": "248b0dcc-ecda-4d8c-9374-a39424afd342",
+      "name": "Orchestrator2"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 3,
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2400,
+        848
+      ],
+      "id": "ddc1cc26-bfb4-4c0f-bf20-7b106916b17f",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxRetries": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        2976,
+        1328
+      ],
+      "id": "671bf5a4-dabb-43c3-bbee-b7aabae0793c",
+      "name": "DeepSeek Chat Model4",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "texto = \"\"\ntoto =[]\nfor item in _input.all():\n  texto = texto + f\"{item.json.id}. \" + item.json.category + \": \" + item.json.definition + \"\\n\" + \"Empirical indicators: \\n -\"\n  vs = \"\\n -\".join([v.variation_description for v in item.json.variations])\n  cinc = \"\\n -\".join([inc for inc in item.json.sampling_criteria_inc])\n  cexc = \"\\n -\".join([exc for exc in item.json.sampling_criteria_exc])\n  texto = texto + vs + \"\\n\\nSampling Inclusion criteria: \\n -\" + cinc + \"\\n\\nSampling Exclusion criteria: \\n -\" + cexc +  \"\\n---\\n\\n\"\n\ntoto.append({\"texto\": texto, \"len\": len(texto)})\nreturn toto"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3568,
+        864
+      ],
+      "id": "a23bba6e-e9ce-4208-855b-e4b2617bb27d",
+      "name": "Code in Python (Beta)8"
+    },
+    {
+      "parameters": {
+        "tableId": "research_categories",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "try",
+              "fieldValue": "={{ $json.try }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "definition",
+              "fieldValue": "={{ $json.definition }}"
+            },
+            {
+              "fieldId": "hypotheses",
+              "fieldValue": "={{ $json.hypotheses }}"
+            },
+            {
+              "fieldId": "sampling_criteria_inc",
+              "fieldValue": "={{ $json.sampling_criteria_inc }}"
+            },
+            {
+              "fieldId": "sampling_criteria_exc",
+              "fieldValue": "={{ $json.sampling_criteria_exc }}"
+            },
+            {
+              "fieldId": "variations",
+              "fieldValue": "={{ $json.variations }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3328,
+        1008
+      ],
+      "id": "2552b8da-51c8-4c4d-ae9d-aaf7d7fb6281",
+      "name": "Create a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "index = 0\nuwu=[]\nfor t in _input.all():\n  index += 1\n  for item in t.json.output.new_categories:\n    c = item.category\n    m1 = item.memo.definition\n    m2 = item.memo.variations\n    h = item.theoretical_hypotheses\n    s1 = item.strategic_sampling_criteria.inclusion_criteria\n    s2 = item.strategic_sampling_criteria.exclusion_criteria\n    uwu.append({\"try\":index, \"category\": c, \"definition\":m1, \"variations\":m2, \"hypotheses\":h, \"sampling_criteria_inc\":s1, \"sampling_criteria_exc\":s2})\nreturn uwu"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3184,
+        1008
+      ],
+      "id": "8b3016a1-ecb0-46d1-8ed8-3f7b7ed923a4",
+      "name": "Code in Python (Beta)9"
+    },
+    {
+      "parameters": {
+        "content": "## I'm a note \n1 Agrupar definiciones y variaciones y criterios\n2. Por cada grupo, agregar metadata a documentos para comparaci\u00f3n.\n3. Mejorar cada grupo con docs x metadata\n4. Testear y mejorar hipotesis con docs x metadata",
+        "height": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4928,
+        1280
+      ],
+      "id": "278d2ded-cafb-4126-90ba-e1e813246da9",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Grounded Theory Constant Comparative Analysis\",\n  \"description\": \"Schema for the output of grouping latent constructs based on Barney Glaser's constant comparative method.\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"summarized_constructs\": {\n      \"type\": \"array\",\n      \"description\": \"A list of new, higher-level latent constructs generated by regrouping the existing ones.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"label\",\n          \"definition\",\n          \"summarized_ids\",\n          \"theoretical_sampling_criteria\"\n        ],\n        \"properties\": {\n          \"label\": {\n            \"type\": \"string\",\n            \"description\": \"The name or tag of the new summarizing latent construct.\"\n          },\n          \"definition\": {\n            \"type\": \"string\",\n            \"description\": \"A precise definition of the new construct, derived from the interchangeability of indicators of the grouped items.\"\n          },\n          \"summarized_ids\": {\n            \"type\": \"array\",\n            \"description\": \"The list of IDs of the original constructs that are being grouped into this new construct.\",\n            \"items\": {\n              \"type\": \"string\",\n              \"description\": \"ID of the source construct.\"\n            }\n          },\n          \"theoretical_sampling_criteria\": {\n            \"type\": \"object\",\n            \"description\": \"Unified inclusion and exclusion criteria for theoretical sampling.\",\n            \"required\": [\n              \"inclusion\",\n              \"exclusion\"\n            ],\n            \"properties\": {\n              \"inclusion\": {\n                \"type\": \"array\",\n                \"description\": \"A unified list of inclusion criteria derived from the grouped constructs.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              },\n              \"exclusion\": {\n                \"type\": \"array\",\n                \"description\": \"A unified list of exclusion criteria derived from the grouped constructs.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"summarized_constructs\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3824,
+        960
+      ],
+      "id": "2a882359-3f82-4716-88c3-7060516f927a",
+      "name": "Structured Output Parser8"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Role:**\nYou are an expert Qualitative Researcher specializing in metadata schema design for interview studies.\n\n**Context:**\nI will provide you with a list of inclusion and exclusion criteria for selecting cases/interviewees. These criteria implicitly contain the variables and values needed to classify the participants.\n\n**The Core Research Problem (Main Concern):**\nWe are studying the following main concern of the participants: \"{{ $json.problem }}\"\n\n**Task:**\nAnalyze the provided criteria and the main concern to generate a \"Qualitative Metadata Dictionary\" for the interviewees. Your goal is to:\n1. Identify every potential variable implied by the criteria.\n2. Group related criteria into single, simplified variables.\n3. Define mutually exclusive categories (values) for each variable based on the criteria. Try to group, binarize or trinarize the categories, avoiding too many categories.\n4. Ensure no criteria are left out; every condition must be representable in the metadata.\n\n**Output Format:**\nReturn a JSON object containing a list of variables. Each entry must include:\n- `variable_code`: A short, uppercase identifier (e.g., WORK_STATUS).\n- `description`: A brief explanation of what this variable measures regarding the Main Concern.\n- `categories`: A list of simplified, distinct values (e.g., [\"Employed\", \"Unemployed\", \"Freelance\"]).\n\n**Input Data:**\n{{ $json.content }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4256,
+        864
+      ],
+      "id": "ead55d44-1bca-440a-a290-494fca745808",
+      "name": "AI Agent3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": ";",
+          "encoding": "latin1"
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        4768,
+        784
+      ],
+      "id": "4152c8c2-f35c-4fe0-9d1c-6edf3df2f73f",
+      "name": "Extract from File1"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/tmp/vars/*",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        4608,
+        784
+      ],
+      "id": "8bc13ae2-a9d9-4262-92f2-e96366e9caae",
+      "name": "Read/Write Files from Disk4"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4976,
+        864
+      ],
+      "id": "6274a1cc-6850-458e-9a5a-cd396eb18f72",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "research_categories",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2528,
+        864
+      ],
+      "id": "216ef10b-9e2a-42cc-82a0-9566280c4182",
+      "name": "Get many rows3",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a522cb9f-d6d4-4dc2-be46-98ed983578d1",
+              "leftValue": "={{$input.all().length}}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2688,
+        864
+      ],
+      "id": "806df6e0-e8ed-46f8-bb73-4fc423fd3732",
+      "name": "If4",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# --- STEP 1: PREPARE DATA SOURCES ---\ninput_items = _input.all()\nb_items = _('B').all()\n\n# Build a quick lookup map for the input metadata\nmetadata_map = {}\nfor item in input_items:\n    data = item.json.to_py()\n    if 'Nombre del documento' in data:\n        metadata_map[data['Nombre del documento']] = data\n\n# Extract names from B for the segment logic\nnames = []\nfor item in b_items:\n    data = item.json.to_py()\n    if \"doc_name\" in data:\n        names.append(data[\"doc_name\"])\n\n# --- STEP 2: THE \"SEGMENTER\" LOGIC ---\nsegments = _('C').all()\ncalculated_data_map = {} \ncurrent_name_index = 0\nprevious_segment_num = -1 \n\nfor item in segments:\n    # Ensure safely getting segment number\n    seg_meta = item.json.to_py().get(\"metadata\", {})\n    current_segment_num = seg_meta.get(\"segment_number\", 0)\n    \n    if current_segment_num < previous_segment_num:\n        current_name_index += 1\n    \n    if current_name_index < len(names):\n        doc_name = names[current_name_index]\n        \n        # Initialize dictionary if new\n        if doc_name not in calculated_data_map:\n            calculated_data_map[doc_name] = {\n                \"metadata\": None, # Initialized as None\n                \"Segments\": []\n            }\n            \n        # FIX 1: Removed the line causing the crash:\n        # calculated_data_map[doc_name][\"Metadata\"].append(content) \n        # (You can't append to \"Metadata\" because it is None, and you said you didn't want segments anyway)\n\n        # Add the metadata from the map we built in Step 1\n        if doc_name in metadata_map:\n            calculated_data_map[doc_name][\"Metadata\"] = metadata_map[doc_name] \n        \n    previous_segment_num = current_segment_num\n\n# --- STEP 3: THE FINAL MERGE ---\nfinal_output = []\n\nfor b_item, input_item in zip(b_items, input_items):\n    b_data = b_item.json.to_py()\n    input_data = input_item.json.to_py()\n    \n    # This is how you access doc_name\n    doc_name = b_data.get(\"doc_name\")\n    \n    # FIX 2: Correct Syntax for retrieving the data\n    # We look up the doc_name in the map we built above.\n    # If not found, we return a default empty structure.\n    other_data_found = calculated_data_map.get(doc_name, {\"Segments\": [], \"metadata\": None})\n\n    merged_item = {\n      \n      \"doc_name\" : doc_name,\n      \"metadata\": {\n        \"Notes\": b_data.get(\"metadata\", {}).get(\"Notes\"), \n        \"comparison_groups\": input_data.get(\"output\"),\n        \"other_data\": other_data_found\n      }\n    }\n    \n    final_output.append(merged_item)\n\nreturn final_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5616,
+        864
+      ],
+      "id": "7045adcd-502b-4648-b72f-bb2e32753763",
+      "name": "Code in Python (Beta)10"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "documents",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        768
+      ],
+      "id": "0ba0ad63-4da0-4315-b4c9-60f094b1c5eb",
+      "name": "B",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "segments_clusters",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        624
+      ],
+      "id": "d29a069d-ae76-4f8d-a46b-43455fa84764",
+      "name": "A",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "segments",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        928
+      ],
+      "id": "f44190a2-133e-468d-9c46-e98fafb46a60",
+      "name": "C",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "research_categories",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3424,
+        864
+      ],
+      "id": "9fcd3dbe-3210-4c7e-99d5-c6a992eb6e5f",
+      "name": "Get many rows4",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fileSelector": "/tmp/*_1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        4288,
+        1488
+      ],
+      "id": "8119fcfd-a2ac-40da-9414-8c7c8e7ad403",
+      "name": "Read/Write Files from Disk5"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        4432,
+        1488
+      ],
+      "id": "40c58206-c9be-4411-bf3f-5fb85d4052a3",
+      "name": "Listar segmentos"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=* Categories ({{$('Code in Python (Beta)5').all().length}})\n{{ JSON.stringify($('Code in Python (Beta)5').all(), null, 2) }}\n\n* Texto de entrevista *\nEntrevistado: {{ $json.fileName }}\n\n{{ $json.processed_text }}\n\n---\n\n* Role * \nYou are a smart qualitative researcher.\n\n* Task * \nYou will tell me what does the current interview tells me about each of the {{$('Code in Python (Beta)5').all().length}} categories defined earlier.\n\n* Format * You will produce, per category, a sentence that sums up how each category shows empirically, and how does it affects our current definition of the category (whether as an example or as a negative case). If the category is absent or is only secondarilly addressed, highlight its status and what could it imply for the data. You must answer strictly using the JSON format provided.",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4976,
+        1600
+      ],
+      "id": "db1bc2bd-58fc-4cc2-8492-b3ead93d449c",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4576,
+        1600
+      ],
+      "id": "458ea2be-827e-4618-a19d-73e6e972fecf",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "results = []\n\n# 1. Use .all() to get lists so we can ZIP them\n# We pair the Segment Data (input) with the File Name (disk reader)\nfor segment_entry, file_entry in zip(_input.all(), _('Read/Write Files from Disk5').all()):\n\n    # --- Step A: Get the File Name ---\n    # Default to \"Unknown\" string (NOT {}) to avoid [Object object]\n    filename = file_entry.json.get(\"fileName\", \"Unknown File\")\n    \n    # --- Step B: Get the Segments ---\n    # We navigate safely to the 'output' dictionary\n    raw_json = segment_entry.json\n    output_data = raw_json.get(\"output\", raw_json) # Handle nested or direct structure\n    \n    # Ensure it's a python dict\n    if hasattr(output_data, 'to_py'):\n        output_data = output_data.to_py()\n\n    # Accumulator for this specific file\n    file_content = \"\"\n    \n    # Iterate through segments (Dict or List support)\n    iterator = output_data.items() if isinstance(output_data, dict) else enumerate(output_data)\n    \n    for key, item in iterator:\n        wave = item.get(\"first_wave\", {})\n        \n        # 1. Get Title (Safe string)\n        title = str(wave.get(\"topic_name\", \"No Title\"))\n        \n        # 2. Get Text with Fallback (The Fix)\n        text_body = wave.get(\"text\")\n        \n        # If text is empty/None, try summary\n        if not text_body:\n            summary_val = wave.get(\"summary\")\n            \n            # CRITICAL CHECK: Is summary a Dict or a String?\n            if isinstance(summary_val, dict):\n                # Try to grab the text inside the summary object\n                text_body = summary_val.get(\"text\") or summary_val.get(\"content\") or str(summary_val)\n            else:\n                text_body = summary_val\n        \n        # Final safety: Ensure it's a string, not None\n        if not text_body:\n            text_body = \"\"\n            \n        # Append to this file's string\n        file_content += f\"## {title}\\n{text_body}\\n\\n\"\n\n    # --- Step C: Save Result ---\n    results.append({\n        \"json\": {\n            \"fileName\": filename,\n            \"processed_text\": file_content\n        }\n    })\n\nreturn results"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4784,
+        1600
+      ],
+      "id": "e8610709-0e3c-451a-904b-effdf0b66bf2",
+      "name": "Code in Python (Beta)11"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"category_name\": {\n        \"type\": \"string\",\n        \"description\": \"The name of the category being analyzed.\"\n      },\n      \"empirical_summary\": {\n        \"type\": \"string\",\n        \"description\": \"A sentence summing up how this category shows empirically in the data.\"\n      },\n      \"definition_impact\": {\n        \"type\": \"string\",\n        \"description\": \"How this observation affects the current definition (e.g., serves as a clear example or a negative case).\"\n      },\n      \"status\": {\n        \"type\": \"string\",\n        \"enum\": [\"primary\", \"secondary\", \"absent\"],\n        \"description\": \"Whether the category is a primary focus, secondarily addressed, or absent.\"\n      },\n      \"data_implication\": {\n        \"type\": \"string\",\n        \"description\": \"If the category is absent or secondary, what this implies for the dataset or the validity of the study.\"\n      }\n    },\n    \"required\": [\n      \"category_name\",\n      \"empirical_summary\",\n      \"definition_impact\",\n      \"status\"\n    ]\n  }\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5152,
+        1808
+      ],
+      "id": "ee4b852c-c12c-4a0c-b948-895860531ffb",
+      "name": "Structured Output Parser4"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "documents",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5328,
+        1600
+      ],
+      "id": "3bd03dec-17f4-44d5-a6ef-06f6f1117161",
+      "name": "Get many rows1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "data = _input.all()\nagent = _('AI Agent').all()\ndocs = _('Code in Python (Beta)11').all()\nuwu = []\ntotal = []\nfor a, b in zip(docs, agent):\n  name = a.to_py()[\"json\"][\"fileName\"]\n  cats = b.to_py()[\"json\"][\"output\"]\n  result = {\"name\":name, \"cats\": cats}\n  uwu.append(result)\n\nfor a in data:\n  a = a.to_py()[\"json\"]\n  name = a[\"doc_name\"]\n  for i in uwu:\n    if name == i[\"name\"][0:-2]:\n       a.pop(\"id\")\n       a.pop(\"created_at\")\n       a[\"metadata\"][\"cats\"] = i[\"cats\"]\n       total.append(a)\nreturn total"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5536,
+        1600
+      ],
+      "id": "c72f8e49-6e75-41a8-b231-2ee66ac0e767",
+      "name": "Code in Python (Beta)12"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "documents",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "doc_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.doc_name }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            },
+            {
+              "fieldId": "doc_name",
+              "fieldValue": "={{ $json.doc_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5504,
+        1440
+      ],
+      "id": "cd8d4ad5-1b05-4dee-9f11-944978d90535",
+      "name": "Update a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "summarized_constructs",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4480,
+        1120
+      ],
+      "id": "45847b4f-368e-4148-9faa-5f1a446eed9b",
+      "name": "Create a row2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nall = []\nfor item in _input.first().json.output.summarized_constructs:\n  inc = item[\"theoretical_sampling_criteria\"][\"inclusion\"]\n  exc = item[\"theoretical_sampling_criteria\"][\"exclusion\"]\n  item.pop(\"theoretical_sampling_criteria\")\n  item[\"inclusion_criteria\"] = inc\n  item[\"exclusion_criteria\"] = exc\n  all.append(item)\nreturn all"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4336,
+        1120
+      ],
+      "id": "d431b0a6-7d3a-4448-b075-c11a3e5fa610",
+      "name": "Code in Python (Beta)13"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        416
+      ],
+      "id": "3aecebcb-d26a-429c-a98b-4865673e5da0",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nall = []\nfor item in _input.first().json.output.consolidated_hypotheses:\n  all.append(item)\nreturn all"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4608,
+        672
+      ],
+      "id": "ea1977b7-27fd-4bf1-bc67-768c3f83c361",
+      "name": "Code in Python (Beta)14"
+    },
+    {
+      "parameters": {
+        "tableId": "consolidated_hypotheses",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4832,
+        640
+      ],
+      "id": "4a550b0b-20ea-450f-8337-913190012d5a",
+      "name": "Create a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "documents",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        2320
+      ],
+      "id": "8f2f3000-dc22-4ef5-83e2-c196c3dc92db",
+      "name": "Docs",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "summarized_constructs"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        2160
+      ],
+      "id": "1f465da0-999e-43ca-bbb5-87491c2f46f8",
+      "name": "Cats",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "variable_definitions",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        2016
+      ],
+      "id": "015556dd-3330-454b-bb99-7e5c50e95fc9",
+      "name": "Vars",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "sentence-transformers/all-mpnet-base-v2",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        6000,
+        2240
+      ],
+      "id": "8b0edf0c-3fd8-49eb-84dd-32302394e50b",
+      "name": "Embeddings HuggingFace Inference1",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "uf1p5QD3bfZb558b",
+          "name": "HuggingFaceApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        6288,
+        2032
+      ],
+      "id": "2589234d-a4c1-4611-b692-036ef3c6b796",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $input.all() }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "array",
+                      "operation": "lengthGt",
+                      "rightType": "number"
+                    },
+                    "id": "e8311a5c-9ed2-435c-994f-140965ffffca"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        7360,
+        2032
+      ],
+      "id": "3218394d-1c56-4143-9457-c1b456dafae3",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "tableName": {
+          "__rl": true,
+          "value": "memos_docs",
+          "mode": "list",
+          "cachedResultName": "memos_docs"
+        },
+        "prompt": "={{ $json.content }}",
+        "options": {
+          "queryName": "match_memos_docs",
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "read",
+                "value": "false"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        7056,
+        2000
+      ],
+      "id": "e77b70f9-0692-42b4-b129-fc00e42b7392",
+      "name": "Supabase Vector Store1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        6848,
+        1984
+      ],
+      "id": "7ee8bbde-3925-4d6c-804e-33257a599b8b",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memos_docs",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.metadata.index }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.content }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        7648,
+        2000
+      ],
+      "id": "b27bda57-1fba-4584-b2c0-d12410090dd6",
+      "name": "Update a row2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memos_docs",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.metadata.index }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.content }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        6640,
+        1984
+      ],
+      "id": "db7762f1-455a-495b-a353-cd11beb538e8",
+      "name": "Update a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "segments_clusters",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        7984,
+        1808
+      ],
+      "id": "a78cdb7e-cc78-4891-8e6a-7f755e2d9cdd",
+      "name": "Docs1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE summarized_constructs \nADD COLUMN IF NOT EXISTS variables_with_output JSONB;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5536,
+        2480
+      ],
+      "id": "9e811dbe-85a8-497c-8cea-aed12039b7c9",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "consolidated_hypotheses",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        2464
+      ],
+      "id": "2beb1d25-ef67-40e7-9c04-d86b55f2501f",
+      "name": "Memos1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 4,
+        "useDataOfInput": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4448,
+        2208
+      ],
+      "id": "dc6f0158-b0b3-4f2f-89af-d44f17e1cda2",
+      "name": "Merge5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=I will give you a complex set of theoretical insights i saw in my interviews. Most are founded in observing one case only. I will ask you to please:\n- Identify the specific statements regarding category relationships inside each. You can also divide them step by step if any have more than one insight.\n- Classify them by topic or relationship similarity (group together relationships that seem to indicate the same pattern in the data)\n- Summarize them in comprehensive bold testable statements, eliminating redundancy, and organizing them in topics.\n\n* Output *\nYou must strictly format your output using the provided JSON schema.\n\nTheoretical insights per interview:\n{{ JSON.stringify($json, null,2) }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5424,
+        2048
+      ],
+      "id": "94e3e5f4-9025-428a-a4b5-b014705daba0",
+      "name": "AI Agent4",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\n\nfor i in _('Docs').all():\n  d = i.to_py()[\"json\"][\"doc_name\"]\n  notas = i.to_py()[\"json\"][\"metadata\"][\"Notes\"] \n\n  r.append({\"doc\":d, \"note\":notas})\nreturn r "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        2016
+      ],
+      "id": "2bbce189-5b36-4d22-82d5-bb3fe3abaa3b",
+      "name": "Code in Python (Beta)15"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"structured_analysis\": {\n      \"type\": \"array\",\n      \"description\": \"The list of consolidated theoretical patterns derived from the interviews.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"bold_testable_statement\": {\n            \"type\": \"string\",\n            \"description\": \"A comprehensive, bold, and testable summary of the relationship. This eliminates redundancy and synthesizes the group into one clear theory.\"\n          },\n          \"metadata\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"doc\": {\n                \"type\": \"string\",\n                \"description\": \"The name of the document indicated at the start of the text.\"\n              },\n              \"topic_cluster\": {\n                \"type\": \"string\",\n                \"description\": \"The specific topic or category relationship used to group these insights together.\"\n              },\n              \"constituent_insights\": {\n                \"type\": \"array\",\n                \"description\": \"The list of specific, individual statements (divided step-by-step) from the source text that support this pattern.\",\n                \"items\": {\n                  \"type\": \"string\",\n                  \"description\": \"An individual observation or step.\"\n                }\n              }\n            },\n            \"required\": [\n              \"index\",\n              \"topic_cluster\",\n              \"constituent_insights\"\n            ]\n          }\n        },\n        \"required\": [\n          \"bold_testable_statement\",\n          \"metadata\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"structured_analysis\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5488,
+        2144
+      ],
+      "id": "d257e8ed-1c9f-43d6-9226-4d4af69e250d",
+      "name": "Structured Output Parser9"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r = []\nindex = 0\nfor i in _input.all():\n  ms = i.to_py()[\"json\"][\"output\"][\"structured_analysis\"]\n  for m in ms:\n    index = index + 1\n    content = m[\"bold_testable_statement\"]\n    metadata = m[\"metadata\"]\n    metadata[\"index\"] = index\n    metadata[\"read\"] = \"false\"\n    r.append({\"content\":content, \"metadata\":metadata})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5840,
+        2048
+      ],
+      "id": "9ac09d97-5aff-4b01-89a0-c82aebb82c78",
+      "name": "Code in Python (Beta)16"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "memos_docs",
+          "mode": "list",
+          "cachedResultName": "memos_docs"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        6000,
+        2144
+      ],
+      "id": "19c6394d-2c9d-4e3c-8808-406012a845b5",
+      "name": "Insertar-categorias1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.content }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "index",
+                "value": "={{ $json.metadata.index }}"
+              },
+              {
+                "name": "topic_cluster",
+                "value": "={{ $json.metadata.topic_cluster }}"
+              },
+              {
+                "name": "=constituent_insights",
+                "value": "={{ $json.metadata.constituent_insights }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        6048,
+        2240
+      ],
+      "id": "c3a4d757-e5da-4ee3-948b-7af7a92958a9",
+      "name": "Default Data Loader2"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "memos = [i.to_py()[\"json\"][\"statement\"] for i in _('Memos').all()]\n\nwowo = []\nnotas = []\nfor a in _input.all():\n  b = a.to_py()[\"json\"][\"metadata\"][\"cluster\"]\n  if b not in wowo:\n    notas.append(a.to_py()[\"json\"][\"content\"])\n    wowo.append(b)\n  else:\n    pass\n\nr = []\nall = memos + notas\nfor n, i in enumerate(all):\n  r.append({n:i})\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7296,
+        1808
+      ],
+      "id": "36470384-fabb-470a-b742-f847f31c8702",
+      "name": "Code in Python (Beta)17"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Create a lookup dictionary to store evidence by category name\n# Structure: { \"CategoryName\": { \"DocName\": \"Summary...\" } }\nevidence_map = {}\n\n# 2. Loop through Docs ONLY ONCE (O(M))\nfor d in _('Docs').all():\n    doc_data = d.to_py()[\"json\"]\n    doc_name = doc_data[\"doc_name\"]\n    \n    # Check if 'cats' exists in metadata to avoid errors\n    cats_metadata = doc_data.get(\"metadata\", {}).get(\"cats\", [])\n    \n    for c in cats_metadata:\n        cat_name = c[\"category_name\"]\n        \n        # Initialize the nested dict if it's the first time seeing this category\n        if cat_name not in evidence_map:\n            evidence_map[cat_name] = {}\n            \n        # Add the evidence to the map\n        # Note: Fixed quote syntax inside the f-string for compatibility\n        evidence_map[cat_name][doc_name] = f\"{c['empirical_summary']} {c['definition_impact']}\"\n\n# 3. Loop through Cats ONLY ONCE (O(N))\ncats_result = []\n\nfor i in _('Cats').all():\n    cat_data = i.to_py()[\"json\"]\n    name = cat_data[\"label\"]\n    desc = cat_data[\"definition\"]\n    \n    # 4. Instant Lookup (O(1)) instead of looping\n    # Get the evidence for this cat, or empty dict if none exists\n    evid = evidence_map.get(name, {})\n    \n    cat = {\n        \"name\": name, \n        \"desc\": desc,  # Added missing comma here\n        \"evid\": evid\n    }\n    cats_result.append(cat)\n  \nreturn cats_result"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4656,
+        2320
+      ],
+      "id": "ea4e069e-ae15-4354-9ee3-54b0fc255516",
+      "name": "Code in Python (Beta)18"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"has_significant_difference\": {\n      \"type\": \"boolean\",\n      \"description\": \"True if there is a significant and obvious difference between the groups, False otherwise.\"\n    },\n    \"rationale\": {\n      \"type\": \"string\",\n      \"description\": \"A detailed explanation of why there is or isn't a significant difference, referencing specific patterns or quotes from the field notes.\"\n    }\n  },\n  \"required\": [\n    \"has_significant_difference\",\n    \"rationale\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5392,
+        2576
+      ],
+      "id": "28ee50da-9d2e-49a1-96c0-0b03701a5995",
+      "name": "Structured Output Parser10"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=* Role *\nYou are a qualitative analyst.\n\nThis is the definition for my qualitative category:\n\n{{ $json.name }}: {{ $json.desc }}\n\n* Task *\n\nI am comparing social groups. I have some field notes from 5 interviews per group that I undertook. I need you to tell me if there is a significant and obvious difference between these interviewees. Please answer yes or no and the rationale for your answer.\n\n* Field notes *\n\n{{ JSON.stringify($json.sampling,\"null\",2) }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5264,
+        2480
+      ],
+      "id": "d7358bf2-6e07-4def-ba8c-6c94d5817942",
+      "name": "AI Agent5"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "output_list = []\n\n# 1. Get the \"Structure\" (the definition of Variables and Groups)\n# We assume this structure applies to all documents.\nstructure_source = _('Code in Python (Beta)1').first()\nstructure_data = structure_source.json \n\n# 2. Iterate over EVERY input item (The \"Content\")\nfor i in _input.all():\n    i_data = i.to_py()[\"json\"]\n    \n    # Extract the content for this specific item\n    name = i_data.get(\"name\")\n    desc = i_data.get(\"desc\")\n    evidence_map = i_data.get(\"evid\", {})\n\n    # 3. Iterate over the VARIABLES in your structure\n    # This is where we \"explode\" the list. \n    # If you have 1 Input and 8 Variables, this loop runs 8 times.\n    for variable_name, categories_in_variable in structure_data.items():\n        \n        # A. Create a fresh container for THIS variable's data\n        variable_dict = {}\n\n        # B. Handle the categories (e.g., \"USA\", \"UK\" inside \"Country\")\n        # Ensure we can iterate regardless of data type (proxy vs dict)\n        cats = categories_in_variable\n        if hasattr(cats, \"to_py\"):\n             cats = cats.to_py()\n\n        for category_name, doc_id_list in cats.items():\n            \n            # Collect the specific evidence for this category\n            # Only if it exists in the current item's 'evid' map\n            matched_docs = []\n            for doc_id in doc_id_list:\n                if doc_id in evidence_map:\n                    matched_docs.append({ doc_id: evidence_map[doc_id] })\n            \n            # Assign the list of matches to the category\n            variable_dict[category_name] = matched_docs\n\n        # 4. Create the FINAL OUTPUT for this specific Variable\n        # We wrap it in the structure you asked for: { name, desc, sampling: { Var: Data } }\n        output_item = {\n            \"name\": name,\n            \"desc\": desc,\n            \"sampling\": { variable_name: variable_dict }\n        }\n        \n        output_list.append(output_item)\n\nreturn output_list"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        2480
+      ],
+      "id": "09a22640-9333-4280-92d6-64137db5ca69",
+      "name": "Code in Python (Beta)19"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4832,
+        2384
+      ],
+      "id": "e58eb7c2-c544-4d7c-b4e9-059a80f2fc87",
+      "name": "Merge6"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import random\n\n# Initialize the master hierarchy\nhierarchy = {}\n\n# 1. Collect ALL documents first\nfor i in _input.all():\n    data = i.to_py()[\"json\"]\n    doc_name = data[\"doc_name\"]\n    groups = data[\"metadata\"][\"comparison_groups\"]\n\n    for variable, category_value in groups.items():\n        if variable not in hierarchy:\n            hierarchy[variable] = {}\n        if category_value not in hierarchy[variable]:\n            hierarchy[variable][category_value] = []\n\n        hierarchy[variable][category_value].append(doc_name)\n\n# 2. Downsample to max 5 random documents per group\nfor variable in hierarchy:\n    for category in hierarchy[variable]:\n        doc_list = hierarchy[variable][category]\n        \n        if len(doc_list) > 5:\n            # Pick 5 random unique items\n            hierarchy[variable][category] = random.sample(doc_list, 5)\n        # Else: leave the list as is (it has 5 or fewer)\n\nreturn hierarchy"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4656,
+        2464
+      ],
+      "id": "16c904ea-ac65-4b25-93b1-3246fc8e904a",
+      "name": "Code in Python (Beta)20"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memos_docs",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4864,
+        2016
+      ],
+      "id": "aea79837-4be8-48c5-9ead-525fc5eaace9",
+      "name": "Get many rows2",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "647d74ce-b8be-42a0-b8ca-bbae02f500df",
+              "leftValue": "={{$json.hasField(\"id\")}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5008,
+        2016
+      ],
+      "id": "855920db-2bba-4ce7-a394-83a993770a88",
+      "name": "If6"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\n\nindex = 0\nfor a in _input.all():\n  index += 1\n  a = a.to_py()[\"json\"]\n  a[\"metadata\"][\"read\"] = \"false\"\n  a[\"metadata\"][\"cluster\"] = 0\n  r.append({\"content\": a[\"content\"], \"metadata\": a[\"metadata\"]})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6480,
+        2048
+      ],
+      "id": "7161a73d-a0e2-4d76-877a-a293f4e2742f",
+      "name": "Code in Python (Beta)21"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\nfor a in _input.all():\n  a = a.to_py()[\"json\"][\"document\"]\n  a[\"metadata\"][\"read\"] = \"true\"\n  a[\"metadata\"][\"cluster\"] = _('Loop Over Items1').first().json.metadata.index\n  r.append({\"content\": a[\"pageContent\"], \"metadata\": a[\"metadata\"]})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7504,
+        2000
+      ],
+      "id": "751c0c2c-655a-4186-92e4-60685cc0947c",
+      "name": "Code in Python (Beta)22"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memos_docs",
+        "limit": 200
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        7104,
+        1808
+      ],
+      "id": "e953cf02-be63-48f6-b23b-2c3802b3a624",
+      "name": "Get many rows5",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=please organize these statements by topic, without leaving any of these ideas aside. As an output, offer me unified and fuzzy but testable statements per topic.\n\n{{JSON.stringify($input.all().map(item => item.json), null,2)}}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        7536,
+        1808
+      ],
+      "id": "743f9e0b-5e94-4a3d-a21b-a95866529d15",
+      "name": "AI Agent6",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"thematic_clusters\": {\n      \"type\": \"array\",\n      \"description\": \"A list of distinct topics derived from the input statements, ensuring all input ideas are categorized.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"topic_category\": {\n            \"type\": \"string\",\n            \"description\": \"A concise, 2-5 word title representing the central theme of this group.\"\n          },\n          \"unified_testable_statement\": {\n            \"type\": \"string\",\n            \"description\": \"A synthesized hypothesis that is 'fuzzy' (generalizable) but 'testable' (falsifiable). It should combine the logic of the underlying statements into a single predictive assertion.\"\n          },\n          \"contextual_description\": {\n            \"type\": \"string\",\n            \"description\": \"A paragraph explaining the nuances of the topic, how the constituent statements relate to one another, and the broader implication of this cluster.\"\n          },\n          \"constituent_statement_ids\": {\n            \"type\": \"array\",\n            \"description\": \"An exhaustive list of the IDs (e.g., '0', '1', '2') from the original input that belong to this topic. Used to verify no ideas were left aside.\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"minItems\": 1\n          }\n        },\n        \"required\": [\n          \"topic_category\",\n          \"unified_testable_statement\",\n          \"contextual_description\",\n          \"constituent_statement_ids\"\n        ]\n      }\n    },\n    \"completeness_check\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"total_statements_processed\": {\n          \"type\": \"integer\",\n          \"description\": \"The count of unique statements included in the final output.\"\n        },\n        \"all_ideas_represented\": {\n          \"type\": \"boolean\",\n          \"description\": \"Boolean flag confirming that every original input statement has been assigned to at least one topic.\"\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"thematic_clusters\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        7584,
+        1904
+      ],
+      "id": "4030616b-7930-4082-9e39-4860f89cdd03",
+      "name": "Structured Output Parser11"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a critical heuristics machine that tests insights against the data. \n\n* Task *\nCritically analyze the if my interview data (named \"Documento\") confirms each of the stated insights I present below.\n\n* Output *\nI need you to give me the resulting data adhering strictly to the JSON schema provided. For each of the {{ $('Code in Python (Beta)23').all().length }} insights, tell me:\n- If all the categories or variables in our main hypothesis are present in our data (yes or no).\n- If the hypothesis is positively, negatively confirmed or not confirmed by the data.\n- If we can empirically validate the existence of relationships between the categories apart from the simple co-presence within the document, and which relationships are those (or none)\n\n* Insights *\n\n{{ JSON.stringify($('Code in Python (Beta)23').all().map(item => item.json.topic),null,2)}}\n\n* Documento: {{ $json.metadata.other_data.Metadata['Nombre del documento'] }} * \n{{ JSON.stringify($json.metadata.other_data.Segments, null, 2) }}\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        8176,
+        1808
+      ],
+      "id": "83f6bdcd-ed8e-47e5-b0a1-869e60d9636b",
+      "name": "AI Agent7"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "all = []\nindex = 0\nfor item in _input.first().json[\"output\"][\"thematic_clusters\"]:\n  index += 1\n  stids = item.constituent_statement_ids\n  texto = str(index) + \". \" + item[\"topic_category\"] + \": \" + item.unified_testable_statement + \". \" + item.contextual_description\n  all.append({\"topic\": texto, \"constituent_statement_ids\":stids})\nreturn all"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7808,
+        1808
+      ],
+      "id": "69115b36-239b-4afb-adc2-d6624ae810f1",
+      "name": "Code in Python (Beta)23"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n              \"doc_name\": {\n            \"type\": \"string\",\n            \"description\": \"The Documento name being analyzed: {{ $json.doc_name }}.\"\n          },\n    \"insight_evaluations\": {\n      \"type\": \"array\",\n      \"description\": \"The list of evaluations for each insight provided in the input.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n    \"insight_index\": {\"type\":\"integer\",\"description\":\"Numerical insight index\"},\n          \"variables_presence_check\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Yes\",\n              \"No\"\n            ],\n            \"description\": \"Indicates if the main categories or variables from the hypothesis are explicitly present in this specific data point.\"\n          },\n          \"hypothesis_confirmation_status\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Positively Confirmed\",\n              \"Confirmed by contrast\",\n              \"Not Confirmed\"\n            ],\n            \"description\": \"The verdict on the hypothesis based on this data. 'Not Confirmed' implies the data is irrelevant or inconclusive.\"\n          },\n          \"verdict_rationale\": {\n            \"type\": \"string\",\n            \"description\": \"Explain your rationale for your final verdict on the hypothesis based on this data.\"\n},\n          \"empirical_relationship_validation\": {\n            \"type\": \"object\",\n            \"description\": \"Analysis of whether a true causal or structural relationship exists, rather than just keywords appearing together.\",\n            \"properties\": {\n              \"relationships_exist_beyond_copresence\": {\n                \"type\": \"boolean\",\n                \"description\": \"True if the text describes an interaction/causality between variables; False if they just appear in the same text without interacting.\"\n              },\n              \"identified_relationships\": {\n                \"type\": \"array\",\n                \"description\": \"A list of the specific relationships found (e.g., 'X causes Y', 'A prevents B'). If none, return an empty list.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              }\n            },\n            \"required\": [\n              \"relationships_exist_beyond_copresence\",\n              \"identified_relationships\"\n            ]\n          }\n        },\n        \"required\": [\n          \"doc_name\",\n          \"variables_presence_check\",\n          \"hypothesis_confirmation_status\",\n          \"verdict_rationale\",\n          \"empirical_relationship_validation\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"insight_evaluations\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        8352,
+        2016
+      ],
+      "id": "ac85c517-8bba-4787-996a-1302fe96d8b5",
+      "name": "Structured Output Parser12"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r = []\nfor a,b in zip(_input.all(), _('Docs1').all()):\n  i = b.to_py()[\"json\"][\"id\"] \n  e = a.to_py()[\"json\"][\"output\"][\"insight_evaluations\"]\n  f = b.to_py()[\"json\"][\"metadata\"]\n  f[\"insight_evaluations\"] = e\n  r.append({\"id\":i, \"metadata\":f})\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8528,
+        1808
+      ],
+      "id": "15361f7c-2c40-4bb7-a87d-f8d9f34ee8d2",
+      "name": "Code in Python (Beta)24"
+    },
+    {
+      "parameters": {
+        "tableId": "memos_final",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "analysis_data",
+              "fieldValue": "={{ $json.topic }}"
+            },
+            {
+              "fieldId": "ids_memos",
+              "fieldValue": "={{ $json.constituent_statement_ids }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        7952,
+        1584
+      ],
+      "id": "de2674ce-5200-4db6-81d4-799d8d0ee5e4",
+      "name": "Create a row4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "documents",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        8736,
+        1808
+      ],
+      "id": "ac259558-2bd3-44ba-9e75-075b17f48f42",
+      "name": "Update a row4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {
+          "maxRetries": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        5248,
+        2592
+      ],
+      "id": "281da50b-df9e-4dcb-bfe6-e82f9f75b6a8",
+      "name": "DeepSeek Chat Model5",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Gather the 8 Variables safely\nvars_data = []\nfor i in _('Vars').all():\n    v_py = i.to_py()[\"json\"]\n    # Create a fresh dictionary INSIDE the loop for every variable\n    vars_data.append({\n        \"var\": v_py[\"variable_name\"],\n        \"cats\": v_py.get(\"categories\", [])\n    })\n\n# 2. Gather the 8 Categories and prepare a container for their variables\nfinal_cats = []\nfor c in _('Cats').all():\n    c_py = c.to_py()[\"json\"]\n    final_cats.append({\n        \"id\" : c_py[\"id\"], \n        \"label\" : c_py[\"label\"], \n        \"definition\" : c_py[\"definition\"], \n        \"summarized_ids\" : c_py[\"summarized_ids\"], \n        \"inclusion_criteria\" : c_py[\"inclusion_criteria\"], \n        \"exclusion_criteria\" : c_py[\"exclusion_criteria\"], \n        \"variables_with_output\": [] # We will stuff the 8 vars + inputs in here\n    })\n\n# 3. Flatten the 64 inputs into a simple list\nall_inputs = [a.to_py()[\"json\"][\"output\"] for a in _('AI Agent').all()]\n\n# 4. The Magic Routing Loop\n# Iterate through all 64 inputs and route them using their index position\nfor index, input_val in enumerate(all_inputs):\n    \n    # Math trick to figure out exactly which Cat and which Var we are on:\n    cat_index = index // 8  # Divides by 8, drops remainder (0 for items 0-7, 1 for 8-15...)\n    var_index = index % 8   # Remainder of division by 8 (cycles 0 through 7)\n    \n    # Copy the specific variable template so we don't overwrite the original\n    current_var = vars_data[var_index].copy()\n    \n    # Inject the input output into this specific variable\n    current_var[\"output\"] = input_val\n    \n    # Append this completed variable block into its parent Category\n    final_cats[cat_index][\"variables_with_output\"].append(current_var)\n\nreturn final_cats"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5696,
+        2480
+      ],
+      "id": "427d1b90-0ad1-4a30-a593-149345159893",
+      "name": "Code in Python (Beta)25"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "summarized_constructs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in Python (Beta)25').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "variables_with_output",
+              "fieldValue": "={{ $json.variables_with_output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5824,
+        2480
+      ],
+      "id": "c618e5b0-221b-45c3-88f0-466a7201fa04",
+      "name": "Update a row5",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Database\n",
+        "height": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3280,
+        1616
+      ],
+      "id": "43e024c6-a47d-4528-b238-78e209571d54",
+      "name": "Sticky Note4"
+    }
+  ],
+  "connections": {
+    "Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mem LP1": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Clusterizador (doc) informado",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clusterizador (doc) informado",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Proponedor de Memos",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Testeador de memos",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Resume contexto",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Resegmentar - Doc",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser2",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Call 'Open Coder - Document'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar archivos1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk3": {
+      "main": [
+        [
+          {
+            "node": "Listar sintesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar sintesis": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Open Coder - Document'": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk2": {
+      "main": [
+        []
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Proponedor de Memos",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Proponedor de Memos",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Testeador de memos",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Testeador de memos",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proponedor de Memos": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Testeador de memos": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)3": {
+      "main": [
+        [
+          {
+            "node": "Testeador de memos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clusterizador (doc) informado": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEGMENTOS": {
+      "main": [
+        [
+          {
+            "node": "FILTRO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FILTRO": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "leer memos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mem LP1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read/Write Files from Disk3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "leer memos": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)1": {
+      "main": [
+        [
+          {
+            "node": "Proponedor de Memos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)4": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "SEGMENTOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Resume contexto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clusterizador (doc) informado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume contexto": {
+      "main": [
+        [
+          {
+            "node": "Clusterizador (doc) informado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings HuggingFace Inference": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insertar-segmentos",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Insertar-categorias",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Insertar-segmentos",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk1": {
+      "main": [
+        [
+          {
+            "node": "Listar segmentos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar segmentos1": {
+      "main": [
+        [
+          {
+            "node": "Junta segmentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "A",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "B",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "C",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)6": {
+      "main": [
+        [
+          {
+            "node": "Insertar-categorias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta segmentos": {
+      "main": [
+        [
+          {
+            "node": "Resegmentar - Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data para Supabase": {
+      "main": [
+        [
+          {
+            "node": "Insertar-segmentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser3",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser3": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Resegmentar - Doc",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resegmentar - Doc": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)6",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in Python (Beta)7",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Data para Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar-segmentos": {
+      "main": [
+        [
+          {
+            "node": "C",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader1": {
+      "ai_document": [
+        [
+          {
+            "node": "Insertar-categorias",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)7": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar-categorias": {
+      "main": [
+        [
+          {
+            "node": "A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Listar archivos1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clusterizador informado": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupador": {
+      "main": [
+        [
+          {
+            "node": "Memos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memos": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criteria": {
+      "main": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser5": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser6": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Variables": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Metadata 1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clusterizador informado",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Agrupador",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent3",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Variables",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser7": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Clusterizador informado",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator2": {
+      "main": [
+        [
+          {
+            "node": "Clusterizador informado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Get many rows3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser7",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser8",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser5",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser6",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Variables",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Clusterizador informado",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Structured Output Parser4",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)8": {
+      "main": [
+        [
+          {
+            "node": "Agrupador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row1": {
+      "main": [
+        [
+          {
+            "node": "Get many rows4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)9": {
+      "main": [
+        [
+          {
+            "node": "Create a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser8": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agrupador",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent3": {
+      "main": [
+        [
+          {
+            "node": "Variables",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read/Write Files from Disk4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk4": {
+      "main": [
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "Metadata 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows3": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Get many rows4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Orchestrator2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)10": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "A": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Get many rows4": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        []
+      ]
+    },
+    "Code in Python (Beta)5": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk5": {
+      "main": [
+        [
+          {
+            "node": "Listar segmentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar segmentos": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)11": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser4": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Get many rows1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)12": {
+      "main": [
+        []
+      ]
+    },
+    "Code in Python (Beta)13": {
+      "main": [
+        [
+          {
+            "node": "Create a row2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Listar archivos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)14": {
+      "main": [
+        [
+          {
+            "node": "Create a row3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Docs": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Cats": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Vars": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings HuggingFace Inference1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insertar-categorias1",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Supabase Vector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)21",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)22",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)22",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Get many rows5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Vector Store1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row3": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Docs1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)25",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memos1": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge5": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)18",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in Python (Beta)20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent4": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)16",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)15": {
+      "main": [
+        [
+          {
+            "node": "Get many rows2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser9": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent4",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)16": {
+      "main": [
+        [
+          {
+            "node": "Insertar-categorias1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar-categorias1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Default Data Loader2": {
+      "ai_document": [
+        [
+          {
+            "node": "Insertar-categorias1",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)17": {
+      "main": [
+        [
+          {
+            "node": "AI Agent6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)18": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser10": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent5",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent5": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)19": {
+      "main": [
+        [
+          {
+            "node": "AI Agent5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge6": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)19",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)20": {
+      "main": [
+        [
+          {
+            "node": "Merge6",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get many rows2": {
+      "main": [
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)21",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)21": {
+      "main": [
+        [
+          {
+            "node": "Update a row3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)22": {
+      "main": [
+        [
+          {
+            "node": "Update a row2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent6": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)23",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser11": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent6",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent7": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)24",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)23": {
+      "main": [
+        [
+          {
+            "node": "Docs1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a row4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser12": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent7",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)24": {
+      "main": [
+        [
+          {
+            "node": "Update a row4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser12",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent7",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser11",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent6",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent5",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent4",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser9",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)25": {
+      "main": [
+        [
+          {
+            "node": "Update a row5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

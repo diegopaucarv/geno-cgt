@@ -1,4 +1,11 @@
 services:
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    image: gt-base:latest
+    command: ["echo", "base image ready"]
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -201,6 +208,16 @@ services:
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
     depends_on:
       - pgbouncer
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install && npm run dev"
 
 volumes:
   pgdata:

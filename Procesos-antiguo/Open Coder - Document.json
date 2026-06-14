@@ -1,0 +1,440 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nimport base64\ntext = _input.first().json.text\ncleaned_text = text.replace('\\n', ' ').replace('\\r', ' ')\n_input.first().json.text = cleaned_text\n_input.first().json.text_binary = base64.b64encode(cleaned_text.encode('utf-8')).decode('utf-8')\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        -144
+      ],
+      "id": "a4a9fe42-3c5d-48dc-ab36-201bfd2a1c1d",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        64,
+        224
+      ],
+      "id": "bb16e955-1edc-42fa-985d-c933646a2c7f",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# Role\nYou are an expert Grounded Theory Analyst. Your cognitive process is unified: you read, question, and code in a single flow, mimicking a human researcher. You do NOT summarize data; you fracture it to find underlying social processes.\n\n# The Data\nThis is an interview extract in spanish: {{ $json.text }}. This is the topic and main idea: \n{{ $json.topic_name }}\n{{ $json.summary }}\n\n# The Process\nA.  **Explication de Texte (Fracturing):** Read the segment text word-by-word and identify the specific actors, actions, and consequences. Do NOT tag or label yet. Just understand *exactly* what is happening.\nB.  **Topic alignment:** For each segment, indicate a descriptive social research study question that this data could be an answer to.\nC. **Segment classification**: For each segment, you ask: \"What is actually happening in the data?\". You decide, for each segment, what is the predominant type of data that it contains (there are four types, **baseline data**: \"best description a participant can offer\" regarding their area and action, where the participant is \"honestly describing what is,\" or \"telling it as it is\" without filtering or professional spin, **properline data**: What the participant thinks is proper to tell the researcher or what they are \"supposed\" to say, and **interpreted data**: the forcing of an opinion or what \"must be done\" regarding what we consider as data, and **vague data**: When a participant conceals information or gives vagueries because they have no stake in telling the researcher the truth). \nD. **Main concern**: For each segment, ask yourself \"what are the participant's and the organization's main concern?\" This question aims to discover the \"prime mover\" of behavior. It seeks the central issue or problem that the participants are grappling with and trying to resolve.\n\n\n## Requirements for the Ending Response\nThe final response must adhere to the following constraints:\n*   **Output Modality:** You will provide a JSON  dict containing the \"topic\", \"data_type\" and \"main_concern\" found in each segment.\n*   **Format:** A structured JSON listing headers and exact matching refereces to the interview transcript.\n*   **Thinking Process:** You must think implicitly. Do NOT include your internal reasoning or \"thinking aloud\" in the final output.\n*   **Accuracy:** Every header must be a direct or closely paraphrased main idea in the interviewee's specific claims in the transcript.\n",
+        "hasOutputParser": true,
+        "options": {
+          "batching": {
+            "batchSize": 1
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        528,
+        -128
+      ],
+      "id": "d16c6f91-5b5e-4a76-a673-ddbee217f0d6",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Transcript to analyze:**\n{{ $('Code in Python (Beta)').item.json.text }}\n\n## Role\nYou are a machine that divides unstructured conversations and structured text into semantically related segments.\n\n## Task Definition\nAnalyze the provided transcript, identify a small set of main ideas it brings about and divide the text into segments. Summarize the core ida for each segment based on that. Remember not to necesarily consider interview questions or the interviewer intervention as a meaningful criteria to divide the text. Instead consider topic changes and punctuation as demarcation criteria.\n\n## Capabilities Usage\nTo complete this task, you will leverage your **Main Idea finding** capability to add headers and breaks to cut the information into chunks. Do not paraphrase or modify the text. Ensure all extracted statements are grounded directly in the provided transcript. \n\n## Requirements for the Ending Response\nThe final response must adhere to the following constraints:\n*   **Output Modality:** You will provide a JSON that enumerates a list of a) numbered segments (keys) along with a b) a dict containing the \"topic name\" (a header or subject-only phrase for each core idea), \"summary\" \n(a descriptive sentence summarizing the core idea), \"length\" which is the count of complete sentences you would include per each segment, the \"first_10\" words in each segment, and the immediate \"context\", that is, the previous last sentence before that segment in the original text (leave empty if it is the first segment). This will be used by an AI agent to navigate the original Interview Transcript.\n*   **Format:** A structured JSON listing headers and exact matching refereces to the interview transcript.\n*   **Content:** Only include the said information. Do not include introductory text, conclusions, or meta-commentary about the process. The text must be in spanish.\n*   **Thinking Process:** You must think implicitly. Do NOT include your internal reasoning or \"thinking aloud\" in the final output.\n*   **Accuracy:** Every header must be a direct or closely paraphrased main idea in the interviewee's specific claims in the transcript.\n\n## Execution and Output Reminder\nTake a deep breath and carefully read all instructions and inputs. Think step-by-step about how to solve this task. Use your built-in capabilities as needed to gather information and create the required outputs. Ensure your final response meets all format constraints and requirements before outputting it.\n\nSystem: You are working as part of an AI system, so no chit-chat and no explaining what you're doing and why. You are a JSON expert, so stick to JSON conventions and grammar.\nDO NOT start with \"Okay\", or \"Alright\" or any preambles. Just the output, please.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        64,
+        -128
+      ],
+      "id": "711f43ea-0138-44a3-a09f-01b4171ba0a2",
+      "name": "Segmenter-UnstInterviews"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"segments\": {\n      \"type\": \"array\",\n      \"description\": \"A list of semantically related segments from the transcript.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"segment_number\": {\n            \"type\": \"integer\",\n            \"description\": \"The sequential number of the segment (1, 2, 3...).\"\n          },\n          \"topic_name\": {\n            \"type\": \"string\",\n            \"description\": \"The main idea or header of the segment (in Spanish).\"\n          },\n          \"summary\":{\n            \"type\": \"string\",\n            \"description\": \"A summary of the whole segment core idea.\"\n          },\n          \"length\": {\n            \"type\": \"integer\",\n            \"description\": \"The exact number of sentences in the segment\"\n          },\n          \"first_10\": {\n            \"type\": \"string\",\n            \"description\": \"The exact first 10 words of the segment text.\"\n          },\n          \"context\": {\n            \"type\": \"string\",\n            \"description\": \"The immediate context (the last sentence immediately preceding this segment).\"\n          }\n        },\n        \"required\": [\n          \"segment_number\",\n          \"topic_name\",\n          \"summary\",\n          \"length\",\n          \"first_10\",\n          \"context\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"segments\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        128,
+        80
+      ],
+      "id": "5c642d1a-39eb-4fce-a8cb-7d51455529c1",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n\"type\": \"object\",\n  \"description\": \"The Grounded Theory analysis of this specific segment.\",\n  \"properties\": {\n    \"study_question\": {\n      \"type\": \"string\",\n      \"description\": \"Topic Alignment: The specific social research question that this data segment answers.\"\n    },\n    \"data_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"baseline_data\",\n        \"properline_data\",\n        \"interpreted_data\",\n        \"vague_data\"\n      ],\n      \"description\": \"Segment Classification: The predominant type of data. 'baseline_data' (honest description), 'properline_data' (what they are supposed to say), 'interpreted_data' (forcing an opinion), or 'vague_data' (concealing info).\"\n    },\n    \"main_concern\": {\n      \"type\": \"string\",\n      \"description\": \"The 'prime mover' or central issue/problem the participant is grappling with in this segment.\"\n    }\n  },\n  \"required\": [\n    \"study_question\",\n    \"data_type\",\n    \"main_concern\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        128
+      ],
+      "id": "7572f2ef-1e8d-40ed-b4ca-0716add89a4a",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\n\ninput_data = _input.first().json.to_py()\n\ntext = _('Code in Python (Beta)').item.json['text']\n\nfor item in input_data['output']['segments']:\n    \n    start = item['first_10']\n    \n    # --- YOUR LOGIC ---\n    index = text.lower().find(start.lower()) # Added .lower() for safety\n    \n    if index == -1:\n        item['full_context'] = \"ERROR: Segment not found in text\"\n        continue\n\n    # Logic: Dots Before\n    all_dots_before = [i for i, char in enumerate(text[:index]) if char == \".\"]\n    valid_dots_before = []\n    for dot_idx in all_dots_before:\n        preceding_chars = text[dot_idx-2 : dot_idx]\n        has_two_letters = len(preceding_chars) == 2 and preceding_chars.isalpha()\n        is_far_enough = (index - dot_idx) >= 10\n        if has_two_letters and is_far_enough:\n            valid_dots_before.append(dot_idx)\n    \n    if len(valid_dots_before) >= 2:\n        start_bound = valid_dots_before[-2] + 1\n    else:\n        start_bound = 0\n    \n    # Logic: Dots After\n    all_dots_after = [i for i, char in enumerate(text) if char == \".\" and i >= index]\n    valid_dots_after = []\n    for dot_idx in all_dots_after:\n        preceding_chars = text[dot_idx-2 : dot_idx]\n        if len(preceding_chars) == 2 and preceding_chars.isalpha():\n            valid_dots_after.append(dot_idx)\n    \n    target_len = item.get('length', 1) \n    \n    target_index = target_len - 1\n    \n    if len(valid_dots_after) > target_index:\n        end_bound = valid_dots_after[target_index] + 1\n    elif len(valid_dots_after) > 0:\n        end_bound = valid_dots_after[-1] + 1\n    else:\n        end_bound = len(text)\n    \n    final_output = text[start_bound:end_bound].strip()\n    \n\n    item['text'] = final_output\n\n# 5. Return the modified data in n8n format\nreturn input_data[\"output\"][\"segments\"]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        -128
+      ],
+      "id": "540cc872-0244-442a-be4e-929f3c6e66f4",
+      "name": "Hacedor de texto"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "35e2460a-4ede-47ff-8c5b-95e8c75b6dac",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "263bb8e2-973b-406d-8f85-1eafc908eb49",
+              "leftValue": "={{ parseFloat($json.fileSize) }}",
+              "rightValue": "=0 ",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        -144
+      ],
+      "id": "4b53e237-8794-492d-aea5-fad54d7b5040",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/{{ $('When Executed by Another Workflow').first().json.info.Title }}_1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -352,
+        -144
+      ],
+      "id": "7b50b36b-9efe-4552-a76b-2d4c62f1203a",
+      "name": "Read/Write Files from Disk1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/{{ $('When Executed by Another Workflow').first().json.info.Title }}_1",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -128
+      ],
+      "id": "3a611671-c2b7-4e2a-886c-4fd41cb5c0ad",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import json\nimport base64\n\n# 1. Get your data (Your existing logic)\nbase_items = [item.json.to_py() for item in _('Hacedor de texto').all()]\nnew_data_items = _input.all()\n\n# 2. Merge the data (Your existing logic)\nfor index, base_item in enumerate(base_items):\n    if index < len(new_data_items):\n        q = new_data_items[index].json.output.study_question\n        base_item['study_question'] = q\n        d = new_data_items[index].json.output.data_type\n        base_item['data_type'] = d\n        m = new_data_items[index].json.output.main_concern\n        base_item['main_concern'] = m\n\n# 3. Prepare the final output with BINARY data\nfinal_output = []\n\nfor item in base_items:\n        # A. Convert the dictionary to a JSON string\n    json_string = json.dumps(item, indent=2, ensure_ascii=False)\n    \n    # 2. Then encode to binary as usual\n    b64_string = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')\n        \n    # C. Create a filename (optional: use a field from your data if available)\n    #    If 'topic_name' exists in your data, we use it. Otherwise 'output.json'\n    file_name = f\"{item.get('topic_name', 'output')}.json\"\n\n    # D. Append the structure n8n expects\n    final_output.append({\n        \"json\": item,   # This keeps the data visible in the UI\n        \"binary\": {\n            \"data\": {   # The key 'data' is what the Write Node usually looks for\n                \"data\": b64_string,\n                \"mimeType\": \"application/json\",\n                \"fileName\": file_name\n            }\n        }\n    })\n\nreturn final_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        -128
+      ],
+      "id": "bd4eb764-3d25-45b6-81f7-8b4c6392eb93",
+      "name": "Mem CP"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import base64\nimport json\n# 1. Create a single dictionary with all items (Your existing logic)\ncombined_data = {\n    index: {'first_wave':item.json.to_py()} \n    for index, item in enumerate(_input.all())\n}\n\n# 2. Convert the dictionary to a JSON string\njson_string = json.dumps(combined_data, indent=2, ensure_ascii=False)\n\n# 2. Then encode to binary as usual\nb64_string = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')\n# 4. Return the item with the \"binary\" structure\nreturn [{\n    \"json\": {\n        \"data\": json_string  # Keeps the data visible in the UI (optional)\n    },\n    \"binary\": {\n        \"data\": {  # <--- The Write to Disk node looks for this key 'data'\n            \"data\": b64_string,\n            \"mimeType\": \"application/json\",\n            \"fileName\": \"combined_output.json\"\n        }\n    }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -128
+      ],
+      "id": "34f04542-5a8c-4cde-9776-b03249c17214",
+      "name": "Mem LP"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "\n  {\n    \"numpages\": 9,\n    \"numrender\": 9,\n    \"info\": {\n      \"PDFFormatVersion\": \"1.4\",\n      \"Language\": null,\n      \"EncryptFilterName\": null,\n      \"IsLinearized\": false,\n      \"IsAcroFormPresent\": false,\n      \"IsXFAPresent\": false,\n      \"IsCollectionPresent\": false,\n      \"IsSignaturesPresent\": false,\n      \"Title\": \"02_David Hidalgo\",\n      \"Creator\": \"\",\n      \"Producer\": \"Qt 6.2.9\",\n      \"CreationDate\": \"D:20260122203026-05'00'\"\n    },\n    \"text\": \"1/9\\n00:01\\nHola Paola, perdona \",\n    \"version\": \"5.3.31\"\n  }\n"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        -144
+      ],
+      "id": "f0f54823-023d-4444-9da4-4570ee475774",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "options": {
+          "allowFileUploads": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1168,
+        -160
+      ],
+      "id": "251f03cf-eb65-4806-b102-6e39dbad7a25",
+      "name": "When chat message received",
+      "webhookId": "adbc1698-bb9a-40fb-a363-6cce8885bc46",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data0",
+        "options": {
+          "joinPages": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -992,
+        -160
+      ],
+      "id": "78521ab0-9495-4400-9b4b-5d0a53576177",
+      "name": "Extract from File"
+    }
+  ],
+  "connections": {
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Segmenter-UnstInterviews",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segmenter-UnstInterviews": {
+      "main": [
+        [
+          {
+            "node": "Hacedor de texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Segmenter-UnstInterviews",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Mem CP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacedor de texto": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Segmenter-UnstInterviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mem CP": {
+      "main": [
+        [
+          {
+            "node": "Mem LP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mem LP": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        []
+      ]
+    }
+  }
+}

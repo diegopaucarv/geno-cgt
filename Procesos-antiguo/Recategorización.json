@@ -1,0 +1,887 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "research_categories",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        -80
+      ],
+      "id": "5665af4c-089a-4ac7-98fd-f1c8f7bfad3d",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "python",
+        "pythonCode": "grouped_data = {}\n\n# 1. Group the data efficiently in a single pass\nfor item in _input.all():\n    data = item.to_py()[\"json\"]\n    construct_id = data.get(\"construct\")\n    \n    if not construct_id:\n        continue\n        \n    grouped_data.setdefault(construct_id, [])\n    \n    for variation in data.get(\"variations\", []):\n        desc = variation.get(\"variation_description\", \"\")\n        \n        evidence_map = variation.get(\"reference_audit\", {}).get(\"evidence_map\", [])\n        docs = [ev.get(\"document_id\", \"\") for ev in evidence_map]\n        \n        evidence_str = \", \".join(docs)\n        \n        # Added a space before the parenthesis for slightly cleaner formatting\n        texto = f\"{desc} ({evidence_str})\" \n        \n        grouped_data[construct_id].append(texto)\n\n# 2. Convert the grouped dictionary into a list of dicts for n8n\noutput = [\n    {\n        \"id\": construct, \n        \"evidences\": evidences_list\n    } \n    for construct, evidences_list in grouped_data.items()\n]\n\nreturn output",
+        "notice": ""
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        -80
+      ],
+      "id": "d8ab85ef-dea4-474a-ba9e-1db9df878928",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "update",
+        "tableId": "summarized_constructs",
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id?.toNumber() || -1 }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "evidences",
+              "fieldValue": "={{ $json.evidences }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -80
+      ],
+      "id": "fe171000-638a-45eb-9113-c265c67327ef",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "ALTER TABLE summarized_constructs \nADD COLUMN IF NOT EXISTS evidences TEXT[];",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        -208
+      ],
+      "id": "415d78d1-7c74-44b7-a9d7-66680f741c2c",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "8 Constructos con sus variaciones.",
+        "height": 80,
+        "width": 150,
+        "color": 1
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        368,
+        -176
+      ],
+      "id": "67e261ab-6358-41c0-babd-6e8c333b8b71",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "aiAgentStarterCallout": "",
+        "promptType": "define",
+        "text": "=Act like a specialist in qualitative research. Remember essential concepts of latent construct analysis, factor analysis and the interchangeability of indicators (Glaser)\n\nI will name and define a latent pattern of behavior that I think I am observing in my data. Then I will give you various references to evidence that you must read, classify and summarize and compare against the main construct. I will then also give you information of how this construct varies according to different groups of people. This will allow you to think about this construct in a multidimensional way.\n\nI need you to tell me which empirical variations seem to be explained by my new construct differently than others that I created previously, which ones explain it, which are totally unrelated, and how should I modify my construct in order to capture the empirical patterns. I can ENRICH the current definition with additional properties, SUBDIVIDE into subconstructs, gradients or typologies, and DIVIDE the construct into different patterns (if widely unrelated patterns are spotted).\n\n\n---\n\nName: {{ $json.label }}\n\nDefinition: {{ $json.definition }}\n\nEvidence base:\n{{ JSON.stringify($json.evidences,null,2) }}\n\nMultivaried correlations (sampling groups):\n{{ JSON.stringify($json.variables_with_output,null,2) }}\n\n---\nPlease let your output adhere strictly to the provided JSON schema.\n",
+        "hasOutputParser": true,
+        "notice": "",
+        "needsFallback": true,
+        "fallbackNotice": "",
+        "options": {
+          "systemMessage": "Please adhere strictly to the provided JSON schema."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1168,
+        -80
+      ],
+      "id": "5de9ff6b-63c7-4015-96cf-68acc7eb0e23",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "notice": "",
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"id\": {\n      \"type\": \"string\",\n      \"description\": \"The unique identifier for the construct or analysis run:  {{ $json.id }}\"\n    },\n    \"empirical_relationships\": {\n      \"type\": \"object\",\n      \"description\": \"Categorization of how the empirical variations relate to the main latent construct.\",\n      \"properties\": {\n        \"explained_by_construct\": {\n          \"type\": \"array\",\n          \"description\": \"Variations that act as manifestations or consequences of the construct (reflective indicators).\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"variation_name\": { \"type\": \"string\" },\n              \"rationale\": { \"type\": \"string\", \"description\": \"Why this variation is a downstream effect or manifestation of the latent construct.\" }\n            },\n            \"required\": [\"variation_name\", \"rationale\"],\n            \"additionalProperties\": false\n          }\n        },\n        \"explaining_construct\": {\n          \"type\": \"array\",\n          \"description\": \"Variations that act as antecedents, causes, or formative indicators that build the construct.\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"variation_name\": { \"type\": \"string\" },\n              \"rationale\": { \"type\": \"string\", \"description\": \"Why this variation helps produce or explain the presence of the latent construct.\" }\n            },\n            \"required\": [\"variation_name\", \"rationale\"],\n            \"additionalProperties\": false\n          }\n        },\n        \"unrelated_variations\": {\n          \"type\": \"array\",\n          \"description\": \"Patterns or variations that are totally unrelated, orthogonal, or belong to a different theoretical family.\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"variation_name\": { \"type\": \"string\" },\n              \"rationale\": { \"type\": \"string\" }\n            },\n            \"required\": [\"variation_name\", \"rationale\"],\n            \"additionalProperties\": false\n          }\n        }\n      },\n      \"required\": [\n        \"explained_by_construct\",\n        \"explaining_construct\",\n        \"unrelated_variations\"\n      ],\n      \"additionalProperties\": false\n    },\n    \"construct_modification\": {\n      \"type\": \"object\",\n      \"description\": \"Actionable theoretical adjustments to the construct based on the empirical evidence.\",\n      \"properties\": {\n        \"recommended_actions\": {\n          \"type\": \"array\",\n          \"description\": \"Actionable theoretical adjustments. Can include multiple actions simultaneously (e.g., both ENRICH and SUBDIVIDE).\",\n          \"items\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"ENRICH\",\n              \"SUBDIVIDE\",\n              \"DIVIDE\",\n              \"RETAIN\"\n            ]\n          },\n          \"minItems\": 1\n        },\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Theoretical and empirical justification for the chosen modification action.\"\n        },\n        \"updated_construct_definition\": {\n          \"type\": \"string\",\n          \"description\": \"The newly formulated definition of the construct, incorporating the modifications.\"\n        },\n        \"new_dimensions_or_typologies\": {\n          \"type\": \"array\",\n          \"description\": \"If SUBDIVIDE or DIVIDE was chosen, list the new sub-constructs, gradients, or separate patterns here. If RETAIN is chosen, return an empty array.\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"name\": { \"type\": \"string\" },\n              \"definition\": { \"type\": \"string\" }\n            },\n            \"required\": [\"name\", \"definition\"],\n            \"additionalProperties\": false\n          }\n        }\n      },\n      \"required\": [\n        \"recommended_actions\",\n        \"justification\",\n        \"updated_construct_definition\",\n        \"new_dimensions_or_typologies\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  \"required\": [\n    \"id\",\n    \"empirical_relationships\",\n    \"construct_modification\"\n  ],\n  \"additionalProperties\": false\n}\n",
+        "autoFix": true,
+        "customizeRetryPrompt": false
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        32
+      ],
+      "id": "a94f5197-a1b1-4de9-9b55-d2a07bd99079",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "python",
+        "pythonCode": "# 1. Parse the item to a Python dictionary EXACTLY ONCE\ndata = _input.item.to_py()[\"json\"]\n\ndata[\"variables_with_output\"] = [\n    var for var in data.get(\"variables_with_output\", [])\n    if var[\"output\"].get(\"has_significant_difference\") \n    # Note: If n8n parsed this as a native boolean instead of a string, change \"true\" to True\n]\n\n# 3. Return the properly formatted n8n item structure\nreturn {\"json\": data}",
+        "notice": ""
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -96
+      ],
+      "id": "24e95706-f051-47e2-81a9-fa290b3cc7e5",
+      "name": "Code in Python (Beta)2"
+    },
+    {
+      "parameters": {
+        "aiAgentStarterCallout": "",
+        "promptType": "define",
+        "text": "=* This is my initial category label and definition \nOriginal Name: {{ $json.label }}\nDefinition: {{ $json.definition }}\n\n* This is my analysis results\n{{ JSON.stringify($json.analysis,null,2) }}\n\n---\nROLE\nYou are an expert Qualitative Researcher and Methodologist specializing in Grounded Theory Methodology (GTM). Your task is to analyze a provided JSON containing the results of a \"construct analysis\" and generate a comprehensive, analytical MEMO. \n\nIn GTM, a memo is not just a summary; it is an active theoretical workspace. It documents the evolution of a category, its properties, dimensions, relationships to other categories, and directions for theoretical sampling.\n\nTASK\nYou will receive an input JSON detailing a recent construct analysis. Based on this input, you must execute the following analytical steps internally before generating your final output:\n1. Evaluate the Category Name: Assess if the original category name still accurately captures the essence of the data, or if it needs to be elevated/modified for better conceptual fit. Remember that, in GTM, all category names start with a gerund to abstract the process that summarizes the data.\n2. Synthesize the Definition: Integrate the new modifications from the input to create a rich, amplified definition of the category.\n3. Break Down Subcategories: Identify the distinct subcategories, define them, and explicitly state the empirical variations (real-world manifestations) they point toward.\n4. Abstract Properties & Dimensions: Determine the overarching properties of this category. Look for structural elements like hierarchy, temporality, intensity, or metaphors that connect the subcategories.\n5. Map Relational Patterns: Identify hypotheses or theoretical links connecting this main category to other potential categories. \n6. Direct Theoretical Sampling: Define actionable next steps for data collection and constant comparison to further saturate the category.\n\nCRITICAL INSTRUCTION:\nYour final output must be formatted STRICTLY as a valid JSON object adhering to the provided schema. Do not include markdown formatting like ```json or any conversational filler outside of the JSON object. The text within the JSON fields should be written in a formal, analytical, and reflexive academic tone\u2014it should read exactly like a researcher's qualitative memo.",
+        "hasOutputParser": true,
+        "notice": "",
+        "needsFallback": true,
+        "fallbackNotice": "",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1712,
+        -64
+      ],
+      "id": "7e98f30b-3914-490e-bf83-05b3c1625674",
+      "name": "Category redefinition"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "python",
+        "pythonCode": "r = []\n\nfor a,b in zip(_('Code in Python (Beta)2').all(), _('AI Agent').all()):\n  label = a.to_py()[\"json\"][\"label\"]\n  definition = a.to_py()[\"json\"][\"definition\"]\n  json = b.to_py()[\"json\"][\"output\"]\n  r.append({\"label\": label, \"definition\": definition, \"analysis\":json})\n\nreturn r",
+        "notice": ""
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -80
+      ],
+      "id": "24d23bed-ad3b-47d5-a393-3b8aabb1c3b6",
+      "name": "Code in Python (Beta)3"
+    },
+    {
+      "parameters": {
+        "notice": "",
+        "model": "deepseek-reasoner",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        48
+      ],
+      "id": "4c09b2f4-d041-4ad7-bd57-73852e3eb5d6",
+      "name": "DeepSeek Chat Model1",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "notice": "",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"description\": \"A Grounded Theory analytical memo detailing category development, properties, hypotheses, and next steps.\",\n  \"properties\": {\n    \"category_evolution\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"original_name\": {\n          \"type\": \"string\",\n          \"description\": \"The original name of the category before this analysis.\"\n        },\n        \"updated_name\": {\n          \"type\": \"string\",\n          \"description\": \"The revised or retained name of the category based on the new construct analysis.\"\n        },\n        \"naming_rationale\": {\n          \"type\": \"string\",\n          \"description\": \"Justification for keeping or changing the name. Why is this conceptually stronger?\"\n        }\n      },\n      \"required\": [\"original_name\", \"updated_name\", \"naming_rationale\"]\n    },\n    \"amplified_definition\": {\n      \"type\": \"string\",\n      \"description\": \"A rich, comprehensive definition of the category, incorporating insights and modifications from the input construct analysis.\"\n    },\n    \"subcategories\": {\n      \"type\": \"array\",\n      \"description\": \"The distinct sub-elements that make up the main category.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"definition\": {\n            \"type\": \"string\",\n            \"description\": \"Clear definition of the subcategory.\"\n          },\n          \"empirical_variations\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"description\": \"Specific real-world variations, instances, or ranges (dimensions) this subcategory points towards in the data.\"\n          }\n        },\n        \"required\": [\"name\", \"definition\", \"empirical_variations\"]\n      }\n    },\n    \"overall_properties\": {\n      \"type\": \"array\",\n      \"description\": \"The conceptual glues binding the subcategories together (e.g., hierarchies, temporal stages, overarching metaphors, causal conditions).\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"connected_patterns_and_hypotheses\": {\n      \"type\": \"array\",\n      \"description\": \"Emerging hypotheses about how this category relates to other concepts or categories in the grounded theory.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"related_category_or_pattern\": {\n            \"type\": \"string\"\n          },\n          \"nature_of_relationship\": {\n            \"type\": \"string\",\n            \"description\": \"Explanation of the theoretical link (e.g., 'Category A is a strategy to mitigate the effects of Category B').\"\n          }\n        },\n        \"required\": [\"related_category_or_pattern\", \"nature_of_relationship\"]\n      }\n    },\n    \"next_steps_theoretical_sampling\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"data_collection_focus\": {\n          \"type\": \"string\",\n          \"description\": \"Specific questions, populations, or scenarios to target in the next round of data gathering to saturate this category.\"\n        },\n        \"constant_comparison_targets\": {\n          \"type\": \"string\",\n          \"description\": \"Specific incidents, codes, or categories that need to be compared against each other in the existing dataset.\"\n        }\n      },\n      \"required\": [\"data_collection_focus\", \"constant_comparison_targets\"]\n    }\n  },\n  \"required\": [\n    \"category_evolution\",\n    \"amplified_definition\",\n    \"subcategories\",\n    \"overall_properties\",\n    \"connected_patterns_and_hypotheses\",\n    \"next_steps_theoretical_sampling\"\n  ]\n}",
+        "autoFix": true,
+        "customizeRetryPrompt": false
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1920,
+        32
+      ],
+      "id": "e6721a56-7c33-4206-b711-d9ccfd8a0507",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "update",
+        "tableId": "summarized_constructs",
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "label",
+              "condition": "eq",
+              "keyValue": "={{ $json.label }}"
+            }
+          ]
+        },
+        "dataToSend": "autoMapInputData",
+        "inputsToIgnore": ""
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        -240
+      ],
+      "id": "b1575992-5e87-4038-93f3-59513c369057",
+      "name": "Update a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b583988f-3088-4219-84be-c21438394680",
+              "leftValue": "={{ $json.variations }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -288,
+        -80
+      ],
+      "id": "f53ce9ec-862a-4bd0-9f9c-26853ae5aa0f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "notice": "",
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Code in Python (Beta)2').item.json }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        128
+      ],
+      "id": "99a267ad-89f1-439c-a458-f8deeb120d94",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "notice": "",
+        "model": "deepseek-chat",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        144
+      ],
+      "id": "a2710a13-da15-4048-87f5-d384e74bb317",
+      "name": "DeepSeek Chat Model4",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "ALTER TABLE summarized_constructs \nADD COLUMN IF NOT EXISTS empirical_relationships JSONB,\nADD COLUMN IF NOT EXISTS construct_modification JSONB;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1568,
+        -384
+      ],
+      "id": "834c8e7e-8fb8-4ad1-9fb0-35d47e98fedd",
+      "name": "Execute a SQL query2",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "update",
+        "tableId": "summarized_constructs",
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.output.id }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "empirical_relationships",
+              "fieldValue": "={{ $json.output.empirical_relationships }}"
+            },
+            {
+              "fieldId": "construct_modification",
+              "fieldValue": "={{ $json.output.construct_modification }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -240
+      ],
+      "id": "136b3926-140b-4393-951b-12231f6c6e20",
+      "name": "Update a row4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "ALTER TABLE summarized_constructs\nADD COLUMN IF NOT EXISTS label TEXT,\nADD COLUMN IF NOT EXISTS label_new TEXT,\nADD COLUMN IF NOT EXISTS definition_new TEXT,\nADD COLUMN IF NOT EXISTS subcategories JSONB,\nADD COLUMN IF NOT EXISTS properties JSONB,\nADD COLUMN IF NOT EXISTS connections JSONB,\nADD COLUMN IF NOT EXISTS theoretical_coding_new JSONB;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2112,
+        -384
+      ],
+      "id": "1a51ba25-5d03-4ab4-afbe-ce3658ddfd3d",
+      "name": "Execute a SQL query3",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "python",
+        "pythonCode": "r = _input.item.to_py()[\"json\"][\"output\"]\nlabel = r[\"category_evolution\"][\"original_name\"]\nlabeln = r[\"category_evolution\"][\"updated_name\"]\ndefint = r[\"amplified_definition\"]\nsubcat = r[\"subcategories\"]\nprop = r[\"overall_properties\"]\nconn = r[\"connected_patterns_and_hypotheses\"]\ntcod = r[\"next_steps_theoretical_sampling\"]\nreturn {\"label\":label, \"label_new\":labeln, \"definition_new\":defint, \"subcategories\":subcat,\"properties\":prop,\"connections\":conn, \"theoretical_coding_new\":tcod}",
+        "notice": ""
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        -256
+      ],
+      "id": "29050925-585a-44a5-a1ce-b0e3469654ab",
+      "name": "Code in Python (Beta)8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "398c6762-11a9-44a3-839e-4f0a891d66ae",
+              "leftValue": "={{ $json.label_new }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        -16
+      ],
+      "id": "629c25ae-c9fe-4cbd-991b-78e5873ec98d",
+      "name": "If1",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "summarized_constructs",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        -80
+      ],
+      "id": "f924fdb4-3be8-43fe-9766-a9997b2445ad",
+      "name": "Get many rows5",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "useCustomSchema": false,
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "summarized_constructs",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "anyFilter",
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        592,
+        -80
+      ],
+      "id": "00d5113a-06b4-4d79-bce9-75eecec0980a",
+      "name": "Get many rows1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "id": "523d25f5-a64d-4b28-87a4-930f67111451",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -704,
+        -80
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    }
+  ],
+  "connections": {
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "Get many rows1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update a row4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)3": {
+      "main": [
+        [
+          {
+            "node": "Category redefinition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Category redefinition",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Category redefinition",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Structured Output Parser2",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Core Concern Finder",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Selective Structure",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Selective Structure",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Structured Output Parser3",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Selective Structure1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser4",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Listar categorias",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Category redefinition",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category redefinition": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)8",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get many rows5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get many rows1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Listar categorias",
+            "type": "ai_languageModel",
+            "index": 1
+          },
+          {
+            "node": "Structured Output Parser7",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        []
+      ]
+    },
+    "Execute a SQL query3": {
+      "main": [
+        []
+      ]
+    },
+    "Code in Python (Beta)8": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update a row3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many rows5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

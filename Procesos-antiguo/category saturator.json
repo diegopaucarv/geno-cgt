@@ -1,0 +1,617 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"extracted_incidents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n\n    \"cat_id\":{\"type\":\"text\", \"description\": \"the current cat_id: {{$json.cat.node_id}}\"},\n    \"doc_id\":{\"type\":\"text\", \"description\": \"the current doc filename: {{$json.doc.fileName}}\"},\n    \n\"exact_quote\": { \"type\": \"string\" },\n          \"proposed_property\": { \"type\": \"string\" },\n          \"paradigm_element\": {\n            \"type\": \"string\",\n            \"enum\": [\"dimension\", \"condition\", \"consequence\", \"strategy\"]\n          }\n        },\n        \"required\": [\"cat_id\", \"doc_id\", \"exact_quote\", \"proposed_property\", \"paradigm_element\"]\n      }\n    }\n  },\n  \"required\": [\"extracted_incidents\"]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        4784,
+        192
+      ],
+      "id": "c2c23751-9c6c-4160-a054-486ff740bd96",
+      "name": "Structured Output Parser5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Category of interest: {{$json.cat.node_id}}\n{{ JSON.stringify($json.cat,null,2) }}\n\nDocument: {{$json.doc.fileName}}\n{{ JSON.stringify($json.doc,null,2) }}\n\n---\nRole:\nYou are a qualitative research assistant executing Grounded Theory coding. \n\nInputs provided:\n1. Target Interview Text.\n2. Target Category: The ID, Name, and Definition of the SINGLE category you are hunting for.\n\nTask:\nRead the interview meticulously. You are ONLY looking for incidents that manifest the provided Target Category. Ignore all other themes. \nIf the text manifests this category, extract the incidents. For each incident:\n1. Provide the exact quote.\n2. Identify the specific property (empirical detail) it reveals about the category.\n3. Categorize it into one of four paradigm elements:\n   - Dimension: Does it show a scale, range, or intensity?\n   - Condition: Does it show a cause, context, or prerequisite?\n   - Consequence: Does it show an outcome or result?\n   - Strategy: Does it show an action taken or behavioral variation?\n\nIf the category does not appear in the text, output an empty array. Output strictly as JSON.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4720,
+        32
+      ],
+      "id": "4eab1de8-ae4f-4d16-8cf7-3897a27674af",
+      "name": "Category Saturator"
+    },
+    {
+      "parameters": {
+        "tableId": "extracted_incidents",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "exact_quote",
+              "fieldValue": "={{ $json.exact_quote }}"
+            },
+            {
+              "fieldId": "interview_id",
+              "fieldValue": "={{ $json.doc_id }}"
+            },
+            {
+              "fieldId": "category_id",
+              "fieldValue": "={{ $json.cat_id }}"
+            },
+            {
+              "fieldId": "identified_property",
+              "fieldValue": "={{ $json.identified_property }}"
+            },
+            {
+              "fieldId": "paradigm_element",
+              "fieldValue": "={{ $json.paradigm_element }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5184,
+        -80
+      ],
+      "id": "c4cacfc0-faa1-40ee-a5d3-a25228622708",
+      "name": "Create a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3327aeb3-3ab9-42ae-b88c-ee26a108c331",
+              "name": "chatInput",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6176,
+        48
+      ],
+      "id": "0bbdc3df-99fe-4205-bbc9-6a776e1bc9fc",
+      "name": "Return"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        4800,
+        400
+      ],
+      "id": "745f686d-a6f5-4695-8c73-5f43a370aa97",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        4640,
+        288
+      ],
+      "id": "40018f1a-28e0-496a-8aeb-0c87eaae192d",
+      "name": "DeepSeek Chat Model1",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "420acaba-3873-4a88-96cc-13e7fdc53d3e",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        4384,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r = []\nfor i in _input.first().json.output.extracted_incidents:\n  r.append(i)\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4992,
+        32
+      ],
+      "id": "03bc0858-c4b2-43ca-99fa-7a4037a1d105",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Category of interest: {{ $('Start').cat.node_id}}\n{{ JSON.stringify( $('Start').cat,null,2) }}\n\nNew incident mapped from interview:\n{{ $json }}\n\n---\nRole:\nYou are a Senior Methodologist maintaining a Grounded Theory codebook. \n\nInputs provided:\n1. Current Paradigm State: The consolidated dictionary of all known dimensions, conditions, consequences, and strategies for this category.\n2. New Incidents: The raw quotes and proposed properties just extracted.\n\nTask:\nIntegrate the New Incidents into the Current Paradigm State.\n1. Check if each new incident maps cleanly onto an existing item in the dictionary. \n2. If it is just a new example of a known property, do not change the state.\n3. If it reveals a genuinely novel variation, add it to the state dictionary. \n\nOutput the updated dictionary and indicate if the state expanded. Output strictly as JSON.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5184,
+        96
+      ],
+      "id": "e57cbad8-72a9-4383-a9b9-e3d6ccddf794",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"updated_paradigm_state\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"dimensions\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"conditions\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"consequences\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"strategies\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } }\n      }\n    },\n    \"did_state_expand\": {\n      \"type\": \"boolean\",\n      \"description\": \"TRUE if new items were added. FALSE if all incidents matched existing items.\"\n    },\n    \"integration_memo\": { \"type\": \"string\" }\n  },\n  \"required\": [\"updated_paradigm_state\", \"did_state_expand\", \"integration_memo\"]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5264,
+        240
+      ],
+      "id": "78b52a03-e834-42a5-9d78-9a9c212daf4d",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "categories",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "node_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Start').cat.node_id}}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "current_paradigm_state",
+              "fieldValue": "={{$json.updated_paradigm_state}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5536,
+        96
+      ],
+      "id": "99a3983b-0b7d-4791-ba39-066155b0d8f5",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH LastFiveInterviews AS (\n    SELECT did_state_expand\n    FROM incident_evaluations\n    WHERE category_id = '{{$json.category_id}}' \n      AND metadata_group = '{{$json.metadata_group}}'::jsonb\n    ORDER BY evaluation_timestamp DESC\n    LIMIT 5\n)\nSELECT \n    CASE \n        WHEN COUNT(*) = 5 AND bool_and(did_state_expand = FALSE) THEN TRUE\n        ELSE FALSE\n    END as is_group_saturated\nFROM LastFiveInterviews;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5936,
+        64
+      ],
+      "id": "b55f26ca-582e-4214-af1c-4fb8ec41da11",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\n\n# 1. Safely extract memos from the previous node\nmemos_iniciales = []\nfor item in _('Get many rows3').all():\n    # Adding a safe .get() in case the previous node outputs empty items\n    data = item.to_py().get(\"json\", {})\n    text = data.get(\"analysis_data\", \"\")\n    \n    # Extract text before the colon safely\n    match = re.search(r'^[^:]+', text)\n    if match:\n        memos_iniciales.append(text)\n\n# 2. Build a mapping dictionary to prevent overwriting documents\nresults_map = {m: {} for m in memos_iniciales}\n\n# 3. Process the current input exactly once\nfor item in _input.all():\n    data = item.to_py().get(\"json\", {})\n    doc_name = data.get(\"doc_name\")\n    tests_per_doc = data.get(\"metadata\", {}).get(\"insight_evaluations\", [])\n    \n    # Iterate through evaluations and match them by index to the memos\n    for nn, test in enumerate(tests_per_doc):\n        if nn < len(memos_iniciales):\n            memo_name = memos_iniciales[nn]\n            conf_status = test.get(\"hypothesis_confirmation_status\")\n            verdict = test.get(\"verdict_rationale\")\n\n            # Store the status for this specific document\n            if doc_name and conf_status:\n                results_map[memo_name][doc_name] = conf_status +  \" [\" + verdict + \"]\"\n\n# 4. Format into a clean list of dicts AND calculate the summary counts\nfinal_output = []\nfor memo_name, doc_evaluations in results_map.items():\n    \n    # Initialize our counters for this specific memo\n    counts = {\n        \"Confirmed by contrast\": 0,\n        \"Positively Confirmed\": 0,\n        \"Not Confirmed\": 0\n    }\n    \n    # Tally up the statuses across all documents for this memo\n    for status in doc_evaluations.values():\n      for i in counts.keys(): \n        if i in status[0:25]:\n            counts[i] += 1\n            \n    # Append the memo, the raw document mapping, and the aggregated counts\n    final_output.append({\n        \"memo\": memo_name,\n        \"document_statuses\": doc_evaluations,\n      \n        \"counts\": {\n          \"Positively Confirmed\": counts[\"Positively Confirmed\"],\n          \"Confirmed by Contrast\": counts[\"Confirmed by contrast\"],\n          \"Not Confirmed\": counts[\"Not Confirmed\"]\n        }\n    })\n\nreturn final_output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5136,
+        576
+      ],
+      "id": "f7a93021-a441-4d0d-b808-2184525e3ea6",
+      "name": "Code in Python (Beta)1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Insight: {{ JSON.stringify($json.memo,null,2) }}\n\nQualitative Test results:\n{{ JSON.stringify($json.counts,null,2) }}\n\nQualitative Test per interview:\n{{ JSON.stringify($json.document_statuses,null,2) }}\n\n---\n\nYou are a qualitative researcher. I gave you my theoretical notes (that I also called \"clusters\") and how many interviews confirm (positively or negatively) or do not confirm them. I also gave you how do each interview relate to it indepentently.\n\nYour tasks will be to:\n- Rewrite the theoretical insigh. Identify and classify variations, summarizing them into typologies.\n- Identify the core issues or tensions that the interviewees process or manage behind the data provided.\n- Identify empirically backed multidimensional causal mechanisms or patterns, separating them from those insights that are not based on data.\n- Identify which data I should gather next to solve the not confirmed cases. \n\nOutput:\nAdhere strictly to the JSON schema provided to sftructure your output.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5376,
+        544
+      ],
+      "id": "d8e0c411-ad59-4637-8e37-4a7df403fbde",
+      "name": "Memo rewriter"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memos_final",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.output.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "reformulation_tested",
+              "fieldValue": "={{ $json.output.theoretical_insight_summary }}"
+            },
+            {
+              "fieldId": "issues_tensions",
+              "fieldValue": "={{ $json.output.core_issues_and_tensions }}"
+            },
+            {
+              "fieldId": "causal_mechanisms",
+              "fieldValue": "={{ $json.output.causal_mechanisms_and_patterns }}"
+            },
+            {
+              "fieldId": "next_data_needed",
+              "fieldValue": "={{ $json.output.next_data_gathering_steps }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5760,
+        512
+      ],
+      "id": "0955890a-dc5f-4b55-a295-a62f53777449",
+      "name": "Update a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"id\": {\"type\":\"integer\", \"description\": \"the memo id, which is {{ $json.memo.slice(0,1) }}\"},\n    \"theoretical_insight_summary\": {\n      \"type\": \"string\",\n      \"description\": \"Rewrite the theoretical insight. Identify and classify variations, summarizing them into typologies.\"\n    },\n    \"core_issues_and_tensions\": {\n      \"type\": \"array\",\n      \"description\": \"A list of the core issues or tensions that the interviewees process or manage behind the data provided.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"issue_or_tension\": {\n            \"type\": \"string\",\n            \"description\": \"The specific issue or tension identified.\"\n          },\n          \"management_context\": {\n            \"type\": \"string\",\n            \"description\": \"How the interviewees process or manage this issue behind the data.\"\n          }\n        },\n        \"required\": [\n          \"issue_or_tension\",\n          \"management_context\"\n        ]\n      }\n    },\n    \"causal_mechanisms_and_patterns\": {\n      \"type\": \"array\",\n      \"description\": \"A list of multidimensional causal mechanisms or patterns.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"mechanism_or_pattern\": {\n            \"type\": \"string\",\n            \"description\": \"The identified mechanism or pattern.\"\n          },\n          \"is_empirically_backed\": {\n            \"type\": \"boolean\",\n            \"description\": \"Set to true if backed by data, or false if it is an insight not strictly based on data.\"\n          },\n          \"explanation\": {\n            \"type\": \"string\",\n            \"description\": \"Brief explanation of the mechanism and its evidence (or lack thereof).\"\n          }\n        },\n        \"required\": [\n          \"mechanism_or_pattern\",\n          \"is_empirically_backed\",\n          \"explanation\"\n        ]\n      }\n    },\n    \"next_data_gathering_steps\": {\n      \"type\": \"string\",\n      \"description\": \"Identify which data should be gathered next to solve the not confirmed cases.\"\n    }\n  },\n  \"required\": [\n    \"theoretical_insight_summary\",\n    \"core_issues_and_tensions\",\n    \"causal_mechanisms_and_patterns\",\n    \"next_data_gathering_steps\"\n  ],\n  \"additionalProperties\": false\n} "
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        5520,
+        640
+      ],
+      "id": "dcfc42bd-f657-4118-a3ec-02f1189c73d9",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        5728,
+        64
+      ],
+      "id": "7754a17e-92b5-4284-8c38-291fbdeb5b9a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memos_final",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4992,
+        560
+      ],
+      "id": "ddd711e4-3be0-45cb-a386-17f9ef069dee",
+      "name": "Get many rows3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "category_incident_evaluations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "did_state_expand",
+              "fieldValue": "={{ $json.did_state_expand }}"
+            },
+            {
+              "fieldId": "category_id",
+              "fieldValue": "={{ $('Start').cat.node_id}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5520,
+        -32
+      ],
+      "id": "f0362098-c713-4f32-9c93-3493df453cad",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Structured Output Parser5": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Category Saturator",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Saturator": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row3": {
+      "main": [
+        []
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser5",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Category Saturator",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Category Saturator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Create a row3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)1": {
+      "main": [
+        [
+          {
+            "node": "Memo rewriter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memo rewriter": {
+      "main": [
+        [
+          {
+            "node": "Update a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Memo rewriter",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows3": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

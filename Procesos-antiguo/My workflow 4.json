@@ -1,0 +1,1463 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "consolidated_hypotheses",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        304
+      ],
+      "id": "8ee7bdec-9a70-46c9-ade0-6699659826c3",
+      "name": "Memos",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "documents",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        160
+      ],
+      "id": "fb3f1e44-f2b3-4980-a5be-e9ad10251cc6",
+      "name": "Docs",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "summarized_constructs"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "fb52c263-80be-4e2f-b618-c6094f6a2a9d",
+      "name": "Cats",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "variable_definitions",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -144
+      ],
+      "id": "4124c382-2c15-4428-a98f-d946d46812a3",
+      "name": "Vars",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 4,
+        "useDataOfInput": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        384,
+        48
+      ],
+      "id": "4cfd3eab-aeba-455a-b223-ca9f1eef88db",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=I will give you a complex set of theoretical insights i saw in my interviews. Most are founded in observing one case only. I will ask you to please:\n- Identify the specific statements regarding category relationships inside each. You can also divide them step by step if any have more than one insight.\n- Classify them by topic or relationship similarity (group together relationships that seem to indicate the same pattern in the data)\n- Summarize them in comprehensive bold testable statements, eliminating redundancy, and organizing them in topics.\n\n* Output *\nYou must strictly format your output using the provided JSON schema.\n\nTheoretical insights per interview:\n{{ JSON.stringify($json, null,2) }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        -112
+      ],
+      "id": "18cdc121-343c-49d8-994e-519630654b32",
+      "name": "AI Agent1",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\n\nfor i in _('Docs').all():\n  d = i.to_py()[\"json\"][\"doc_name\"]\n  notas = i.to_py()[\"json\"][\"metadata\"][\"Notes\"] \n\n  r.append({\"doc\":d, \"note\":notas})\nreturn r "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -144
+      ],
+      "id": "28f36030-2f99-4953-a884-654e9e602ab8",
+      "name": "Code in Python (Beta)4"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"structured_analysis\": {\n      \"type\": \"array\",\n      \"description\": \"The list of consolidated theoretical patterns derived from the interviews.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"bold_testable_statement\": {\n            \"type\": \"string\",\n            \"description\": \"A comprehensive, bold, and testable summary of the relationship. This eliminates redundancy and synthesizes the group into one clear theory.\"\n          },\n          \"metadata\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"doc\": {\n                \"type\": \"string\",\n                \"description\": \"The name of the document indicated at the start of the text.\"\n              },\n              \"topic_cluster\": {\n                \"type\": \"string\",\n                \"description\": \"The specific topic or category relationship used to group these insights together.\"\n              },\n              \"constituent_insights\": {\n                \"type\": \"array\",\n                \"description\": \"The list of specific, individual statements (divided step-by-step) from the source text that support this pattern.\",\n                \"items\": {\n                  \"type\": \"string\",\n                  \"description\": \"An individual observation or step.\"\n                }\n              }\n            },\n            \"required\": [\n              \"index\",\n              \"topic_cluster\",\n              \"constituent_insights\"\n            ]\n          }\n        },\n        \"required\": [\n          \"bold_testable_statement\",\n          \"metadata\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"structured_analysis\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1424,
+        -16
+      ],
+      "id": "52bd414a-17d9-4077-b3b8-f2377ef4e489",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r = []\nindex = 0\nfor i in _input.all():\n  ms = i.to_py()[\"json\"][\"output\"][\"structured_analysis\"]\n  for m in ms:\n    index = index + 1\n    content = m[\"bold_testable_statement\"]\n    metadata = m[\"metadata\"]\n    metadata[\"index\"] = index\n    metadata[\"read\"] = \"false\"\n    r.append({\"content\":content, \"metadata\":metadata})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -144
+      ],
+      "id": "5e8f4c5e-1d40-4a2c-b2c7-b99ec5424882",
+      "name": "Code in Python (Beta)5"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "memos_docs",
+          "mode": "list",
+          "cachedResultName": "memos_docs"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1936,
+        -16
+      ],
+      "id": "9315a390-fff8-4625-a2aa-dfce4cb096f5",
+      "name": "Insertar-categorias",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "sentence-transformers/all-mpnet-base-v2",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        80
+      ],
+      "id": "291b1f40-ccf0-4e7f-80f8-ca809ba3a3d5",
+      "name": "Embeddings HuggingFace Inference1",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "uf1p5QD3bfZb558b",
+          "name": "HuggingFaceApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.content }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "index",
+                "value": "={{ $json.metadata.index }}"
+              },
+              {
+                "name": "topic_cluster",
+                "value": "={{ $json.metadata.topic_cluster }}"
+              },
+              {
+                "name": "=constituent_insights",
+                "value": "={{ $json.metadata.constituent_insights }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        80
+      ],
+      "id": "7f7a8829-9a33-408a-abc3-eaa78634393b",
+      "name": "Default Data Loader1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "memos = [i.to_py()[\"json\"][\"statement\"] for i in _('Memos').all()]\n\nwowo = []\nnotas = []\nfor a in _input.all():\n  b = a.to_py()[\"json\"][\"metadata\"][\"cluster\"]\n  if b not in wowo:\n    notas.append(a.to_py()[\"json\"][\"content\"])\n    wowo.append(b)\n  else:\n    pass\n\nr = []\nall = memos + notas\nfor n, i in enumerate(all):\n  r.append({n:i})\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3232,
+        -352
+      ],
+      "id": "a64607ad-878d-4f3b-a4e3-4db72b77121d",
+      "name": "Code in Python (Beta)3"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Create a lookup dictionary to store evidence by category name\n# Structure: { \"CategoryName\": { \"DocName\": \"Summary...\" } }\nevidence_map = {}\n\n# 2. Loop through Docs ONLY ONCE (O(M))\nfor d in _('Docs').all():\n    doc_data = d.to_py()[\"json\"]\n    doc_name = doc_data[\"doc_name\"]\n    \n    # Check if 'cats' exists in metadata to avoid errors\n    cats_metadata = doc_data.get(\"metadata\", {}).get(\"cats\", [])\n    \n    for c in cats_metadata:\n        cat_name = c[\"category_name\"]\n        \n        # Initialize the nested dict if it's the first time seeing this category\n        if cat_name not in evidence_map:\n            evidence_map[cat_name] = {}\n            \n        # Add the evidence to the map\n        # Note: Fixed quote syntax inside the f-string for compatibility\n        evidence_map[cat_name][doc_name] = f\"{c['empirical_summary']} {c['definition_impact']}\"\n\n# 3. Loop through Cats ONLY ONCE (O(N))\ncats_result = []\n\nfor i in _('Cats').all():\n    cat_data = i.to_py()[\"json\"]\n    name = cat_data[\"label\"]\n    desc = cat_data[\"definition\"]\n    \n    # 4. Instant Lookup (O(1)) instead of looping\n    # Get the evidence for this cat, or empty dict if none exists\n    evid = evidence_map.get(name, {})\n    \n    cat = {\n        \"name\": name, \n        \"desc\": desc,  # Added missing comma here\n        \"evid\": evid\n    }\n    cats_result.append(cat)\n  \nreturn cats_result"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        160
+      ],
+      "id": "d990b92f-9616-43c8-bbb0-33a030daef14",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"has_significant_difference\": {\n      \"type\": \"boolean\",\n      \"description\": \"True if there is a significant and obvious difference between the groups, False otherwise.\"\n    },\n    \"rationale\": {\n      \"type\": \"string\",\n      \"description\": \"A detailed explanation of why there is or isn't a significant difference, referencing specific patterns or quotes from the field notes.\"\n    }\n  },\n  \"required\": [\n    \"has_significant_difference\",\n    \"rationale\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1328,
+        416
+      ],
+      "id": "3971b046-00cd-45a2-92fe-3acbcf31b1b1",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=* Role *\nYou are a qualitative analyst.\n\nThis is the definition for my qualitative category:\n\n{{ $json.name }}: {{ $json.desc }}\n\n* Task *\n\nI am comparing social groups. I have some field notes from 5 interviews per group that I undertook. I need you to tell me if there is a significant and obvious difference between these interviewees. Please answer yes or no and the rationale for your answer.\n\n* Field notes *\n\n{{ JSON.stringify($json.sampling,\"null\",2) }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1200,
+        320
+      ],
+      "id": "95d1e2f7-66e4-4cee-84b4-31e8aa09f5df",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "output_list = []\n\n# 1. Get the \"Structure\" (the definition of Variables and Groups)\n# We assume this structure applies to all documents.\nstructure_source = _('Code in Python (Beta)1').first()\nstructure_data = structure_source.json \n\n# 2. Iterate over EVERY input item (The \"Content\")\nfor i in _input.all():\n    i_data = i.to_py()[\"json\"]\n    \n    # Extract the content for this specific item\n    name = i_data.get(\"name\")\n    desc = i_data.get(\"desc\")\n    evidence_map = i_data.get(\"evid\", {})\n\n    # 3. Iterate over the VARIABLES in your structure\n    # This is where we \"explode\" the list. \n    # If you have 1 Input and 8 Variables, this loop runs 8 times.\n    for variable_name, categories_in_variable in structure_data.items():\n        \n        # A. Create a fresh container for THIS variable's data\n        variable_dict = {}\n\n        # B. Handle the categories (e.g., \"USA\", \"UK\" inside \"Country\")\n        # Ensure we can iterate regardless of data type (proxy vs dict)\n        cats = categories_in_variable\n        if hasattr(cats, \"to_py\"):\n             cats = cats.to_py()\n\n        for category_name, doc_id_list in cats.items():\n            \n            # Collect the specific evidence for this category\n            # Only if it exists in the current item's 'evid' map\n            matched_docs = []\n            for doc_id in doc_id_list:\n                if doc_id in evidence_map:\n                    matched_docs.append({ doc_id: evidence_map[doc_id] })\n            \n            # Assign the list of matches to the category\n            variable_dict[category_name] = matched_docs\n\n        # 4. Create the FINAL OUTPUT for this specific Variable\n        # We wrap it in the structure you asked for: { name, desc, sampling: { Var: Data } }\n        output_item = {\n            \"name\": name,\n            \"desc\": desc,\n            \"sampling\": { variable_name: variable_dict }\n        }\n        \n        output_list.append(output_item)\n\nreturn output_list"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        320
+      ],
+      "id": "d4f08c95-6a0b-4c5e-a24f-a33af38fab9f",
+      "name": "Code in Python (Beta)2"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        768,
+        224
+      ],
+      "id": "daec8a57-c691-421e-99e9-cded7ebdb195",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import random\n\n# Initialize the master hierarchy\nhierarchy = {}\n\n# 1. Collect ALL documents first\nfor i in _input.all():\n    data = i.to_py()[\"json\"]\n    doc_name = data[\"doc_name\"]\n    groups = data[\"metadata\"][\"comparison_groups\"]\n\n    for variable, category_value in groups.items():\n        if variable not in hierarchy:\n            hierarchy[variable] = {}\n        if category_value not in hierarchy[variable]:\n            hierarchy[variable][category_value] = []\n\n        hierarchy[variable][category_value].append(doc_name)\n\n# 2. Downsample to max 5 random documents per group\nfor variable in hierarchy:\n    for category in hierarchy[variable]:\n        doc_list = hierarchy[variable][category]\n        \n        if len(doc_list) > 5:\n            # Pick 5 random unique items\n            hierarchy[variable][category] = random.sample(doc_list, 5)\n        # Else: leave the list as is (it has 5 or fewer)\n\nreturn hierarchy"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        304
+      ],
+      "id": "f197303b-b2d4-4ca6-a4c4-d562404a2486",
+      "name": "Code in Python (Beta)1"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2224,
+        -128
+      ],
+      "id": "f643b17a-2685-457f-9ee4-e1544b6e7019",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memos_docs",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -144
+      ],
+      "id": "460f363d-9a8d-4072-8c2c-db7bfe00cf5a",
+      "name": "Get many rows",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "647d74ce-b8be-42a0-b8ca-bbae02f500df",
+              "leftValue": "={{$json.hasField(\"id\")}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        -144
+      ],
+      "id": "23ccad14-c316-45ee-9671-d19880fdd689",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\n\nindex = 0\nfor a in _input.all():\n  index += 1\n  a = a.to_py()[\"json\"]\n  a[\"metadata\"][\"read\"] = \"false\"\n  a[\"metadata\"][\"cluster\"] = 0\n  r.append({\"content\": a[\"content\"], \"metadata\": a[\"metadata\"]})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -112
+      ],
+      "id": "ef7b0949-b30f-413d-b404-a7232d6b9db7",
+      "name": "Code in Python (Beta)7"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $input.all() }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "array",
+                      "operation": "lengthGt",
+                      "rightType": "number"
+                    },
+                    "id": "e8311a5c-9ed2-435c-994f-140965ffffca"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        3296,
+        -128
+      ],
+      "id": "ac5684ef-6ef4-43b7-85b7-5135d8063ba2",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "tableName": {
+          "__rl": true,
+          "value": "memos_docs",
+          "mode": "list",
+          "cachedResultName": "memos_docs"
+        },
+        "prompt": "={{ $json.content }}",
+        "options": {
+          "queryName": "match_memos_docs",
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "read",
+                "value": "false"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        2992,
+        -160
+      ],
+      "id": "e75a60ea-e432-4aed-821d-fd7228fcc2ae",
+      "name": "Supabase Vector Store1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2784,
+        -176
+      ],
+      "id": "b981c464-4b0f-4dfb-a7f8-aef31f22739c",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memos_docs",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.metadata.index }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.content }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3584,
+        -160
+      ],
+      "id": "90d73faa-bd24-4390-9f9d-b3247b06c91a",
+      "name": "Update a row2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r=[]\nfor a in _input.all():\n  a = a.to_py()[\"json\"][\"document\"]\n  a[\"metadata\"][\"read\"] = \"true\"\n  a[\"metadata\"][\"cluster\"] = _('Loop Over Items1').first().json.metadata.index\n  r.append({\"content\": a[\"pageContent\"], \"metadata\": a[\"metadata\"]})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3440,
+        -160
+      ],
+      "id": "74249011-075d-44a2-91c7-ec8d035afa56",
+      "name": "Code in Python (Beta)9"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memos_docs",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.metadata.index }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.content }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        -176
+      ],
+      "id": "e4828f61-fe0a-4889-8dd7-eb272d07e2de",
+      "name": "Update a row3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memos_docs",
+        "limit": 200
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        -352
+      ],
+      "id": "d93a9939-49e3-425d-b1db-788e1fc84080",
+      "name": "Get many rows1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=please organize these statements by topic, without leaving any of these ideas aside. As an output, offer me unified and fuzzy but testable statements per topic.\n\n{{JSON.stringify($input.all().map(item => item.json), null,2)}}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        3472,
+        -352
+      ],
+      "id": "888c3e93-0188-4cdc-9f91-6de6d491abf0",
+      "name": "AI Agent2",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"thematic_clusters\": {\n      \"type\": \"array\",\n      \"description\": \"A list of distinct topics derived from the input statements, ensuring all input ideas are categorized.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"topic_category\": {\n            \"type\": \"string\",\n            \"description\": \"A concise, 2-5 word title representing the central theme of this group.\"\n          },\n          \"unified_testable_statement\": {\n            \"type\": \"string\",\n            \"description\": \"A synthesized hypothesis that is 'fuzzy' (generalizable) but 'testable' (falsifiable). It should combine the logic of the underlying statements into a single predictive assertion.\"\n          },\n          \"contextual_description\": {\n            \"type\": \"string\",\n            \"description\": \"A paragraph explaining the nuances of the topic, how the constituent statements relate to one another, and the broader implication of this cluster.\"\n          },\n          \"constituent_statement_ids\": {\n            \"type\": \"array\",\n            \"description\": \"An exhaustive list of the IDs (e.g., '0', '1', '2') from the original input that belong to this topic. Used to verify no ideas were left aside.\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"minItems\": 1\n          }\n        },\n        \"required\": [\n          \"topic_category\",\n          \"unified_testable_statement\",\n          \"contextual_description\",\n          \"constituent_statement_ids\"\n        ]\n      }\n    },\n    \"completeness_check\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"total_statements_processed\": {\n          \"type\": \"integer\",\n          \"description\": \"The count of unique statements included in the final output.\"\n        },\n        \"all_ideas_represented\": {\n          \"type\": \"boolean\",\n          \"description\": \"Boolean flag confirming that every original input statement has been assigned to at least one topic.\"\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"thematic_clusters\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3520,
+        -256
+      ],
+      "id": "15c334c4-4893-4f1b-8e06-ccea25fc4bba",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a critical heuristics machine that tests insights against the data. \n\n* Task *\nCritically analyze the if my interview data (named \"Documento\") confirms each of the stated insights I present below.\n\n* Output *\nI need you to give me the resulting data adhering strictly to the JSON schema provided. For each of the {{ $('Code in Python (Beta)6').all().length }} insights, tell me:\n- If all the categories or variables in our main hypothesis are present in our data (yes or no).\n- If the hypothesis is positively, negatively confirmed or not confirmed by the data.\n- If we can empirically validate the existence of relationships between the categories apart from the simple co-presence within the document, and which relationships are those (or none)\n\n* Insights *\n\n{{ JSON.stringify($('Code in Python (Beta)6').all().map(item => item.json.topic),null,2)}}\n\n* Documento: {{ $json.metadata.other_data.Metadata['Nombre del documento'] }} * \n{{ JSON.stringify($json.metadata.other_data.Segments, null, 2) }}\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        4112,
+        -352
+      ],
+      "id": "6c030b95-0bf7-413d-ae82-86d33ca6951f",
+      "name": "AI Agent3"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "all = []\nindex = 0\nfor item in _input.first().json[\"output\"][\"thematic_clusters\"]:\n  index += 1\n  stids = item.constituent_statement_ids\n  texto = str(index) + \". \" + item[\"topic_category\"] + \": \" + item.unified_testable_statement + \". \" + item.contextual_description\n  all.append({\"topic\": texto, \"constituent_statement_ids\":stids})\nreturn all"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3744,
+        -352
+      ],
+      "id": "4d852dc5-d42f-4afa-be1a-4b14d2bc2368",
+      "name": "Code in Python (Beta)6"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "segments_clusters",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3920,
+        -352
+      ],
+      "id": "63ad83f4-6217-4e3f-86b3-e19c64732300",
+      "name": "Docs1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n              \"doc_name\": {\n            \"type\": \"string\",\n            \"description\": \"The Documento name being analyzed: {{ $json.doc_name }}.\"\n          },\n    \"insight_evaluations\": {\n      \"type\": \"array\",\n      \"description\": \"The list of evaluations for each insight provided in the input.\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n    \"insight_index\": {\"type\":\"integer\",\"description\":\"Numerical insight index\"},\n          \"variables_presence_check\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Yes\",\n              \"No\"\n            ],\n            \"description\": \"Indicates if the main categories or variables from the hypothesis are explicitly present in this specific data point.\"\n          },\n          \"hypothesis_confirmation_status\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Positively Confirmed\",\n              \"Confirmed by contrast\",\n              \"Not Confirmed\"\n            ],\n            \"description\": \"The verdict on the hypothesis based on this data. 'Not Confirmed' implies the data is irrelevant or inconclusive.\"\n          },\n          \"verdict_rationale\": {\n            \"type\": \"string\",\n            \"description\": \"Explain your rationale for your final verdict on the hypothesis based on this data.\"\n},\n          \"empirical_relationship_validation\": {\n            \"type\": \"object\",\n            \"description\": \"Analysis of whether a true causal or structural relationship exists, rather than just keywords appearing together.\",\n            \"properties\": {\n              \"relationships_exist_beyond_copresence\": {\n                \"type\": \"boolean\",\n                \"description\": \"True if the text describes an interaction/causality between variables; False if they just appear in the same text without interacting.\"\n              },\n              \"identified_relationships\": {\n                \"type\": \"array\",\n                \"description\": \"A list of the specific relationships found (e.g., 'X causes Y', 'A prevents B'). If none, return an empty list.\",\n                \"items\": {\n                  \"type\": \"string\"\n                }\n              }\n            },\n            \"required\": [\n              \"relationships_exist_beyond_copresence\",\n              \"identified_relationships\"\n            ]\n          }\n        },\n        \"required\": [\n          \"doc_name\",\n          \"variables_presence_check\",\n          \"hypothesis_confirmation_status\",\n          \"verdict_rationale\",\n          \"empirical_relationship_validation\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"insight_evaluations\"\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        4288,
+        -144
+      ],
+      "id": "27f22a62-ef29-43e3-afdd-06b6daa737d9",
+      "name": "Structured Output Parser3"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "r = []\nfor a,b in zip(_input.all(), _('Docs1').all()):\n  i = b.to_py()[\"json\"][\"id\"] \n  e = a.to_py()[\"json\"][\"output\"][\"insight_evaluations\"]\n  f = b.to_py()[\"json\"][\"metadata\"]\n  f[\"insight_evaluations\"] = e\n  r.append({\"id\":i, \"metadata\":f})\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4464,
+        -352
+      ],
+      "id": "76761db1-48dc-48fc-a8a9-80fb7f718072",
+      "name": "Code in Python (Beta)8"
+    },
+    {
+      "parameters": {
+        "tableId": "memos_final",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "analysis_data",
+              "fieldValue": "={{ $json.topic }}"
+            },
+            {
+              "fieldId": "ids_memos",
+              "fieldValue": "={{ $json.constituent_statement_ids }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3888,
+        -576
+      ],
+      "id": "dc927635-6324-479e-b561-97deaa7ad421",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "documents",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $json.metadata }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4672,
+        -352
+      ],
+      "id": "c491d775-7656-4339-8bbc-e44c4810cdbb",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "deepseek-reasoner",
+        "options": {
+          "maxRetries": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        432
+      ],
+      "id": "40d78495-4907-4add-8551-833828853599",
+      "name": "DeepSeek Chat Model3",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "f11bd926-2545-45eb-864e-a196570d4a92",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# 1. Gather the 8 Variables safely\nvars_data = []\nfor i in _('Vars').all():\n    v_py = i.to_py()[\"json\"]\n    # Create a fresh dictionary INSIDE the loop for every variable\n    vars_data.append({\n        \"var\": v_py[\"variable_name\"],\n        \"cats\": v_py.get(\"categories\", [])\n    })\n\n# 2. Gather the 8 Categories and prepare a container for their variables\nfinal_cats = []\nfor c in _('Cats').all():\n    c_py = c.to_py()[\"json\"]\n    final_cats.append({\n        \"id\" : c_py[\"id\"], \n        \"label\" : c_py[\"label\"], \n        \"definition\" : c_py[\"definition\"], \n        \"summarized_ids\" : c_py[\"summarized_ids\"], \n        \"inclusion_criteria\" : c_py[\"inclusion_criteria\"], \n        \"exclusion_criteria\" : c_py[\"exclusion_criteria\"], \n        \"variables_with_output\": [] # We will stuff the 8 vars + inputs in here\n    })\n\n# 3. Flatten the 64 inputs into a simple list\nall_inputs = [a.to_py()[\"json\"][\"output\"] for a in _('AI Agent').all()]\n\n# 4. The Magic Routing Loop\n# Iterate through all 64 inputs and route them using their index position\nfor index, input_val in enumerate(all_inputs):\n    \n    # Math trick to figure out exactly which Cat and which Var we are on:\n    cat_index = index // 8  # Divides by 8, drops remainder (0 for items 0-7, 1 for 8-15...)\n    var_index = index % 8   # Remainder of division by 8 (cycles 0 through 7)\n    \n    # Copy the specific variable template so we don't overwrite the original\n    current_var = vars_data[var_index].copy()\n    \n    # Inject the input output into this specific variable\n    current_var[\"output\"] = input_val\n    \n    # Append this completed variable block into its parent Category\n    final_cats[cat_index][\"variables_with_output\"].append(current_var)\n\nreturn final_cats"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        320
+      ],
+      "id": "a72e17d1-e48c-4159-81f7-241945a9fdc9",
+      "name": "Code in Python (Beta)10"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "summarized_constructs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in Python (Beta)10').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "variables_with_output",
+              "fieldValue": "={{ $json.variables_with_output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        320
+      ],
+      "id": "b0ac80f9-a60c-4d9f-b8ce-6b7dc101936d",
+      "name": "Update a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7PZgJ14uN3a4g0QW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE summarized_constructs \nADD COLUMN IF NOT EXISTS variables_with_output JSONB;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1472,
+        320
+      ],
+      "id": "2bcd8a13-c609-4485-853d-7400e51ebfbf",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Vars": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cats": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Docs": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Memos": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in Python (Beta)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)4": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)5": {
+      "main": [
+        [
+          {
+            "node": "Insertar-categorias",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings HuggingFace Inference1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insertar-categorias",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Supabase Vector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader1": {
+      "ai_document": [
+        [
+          {
+            "node": "Insertar-categorias",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar-categorias": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)1": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)7": {
+      "main": [
+        [
+          {
+            "node": "Update a row3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)9",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Get many rows1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Vector Store1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)9": {
+      "main": [
+        [
+          {
+            "node": "Update a row2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row3": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)3": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows1": {
+      "main": [
+        []
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)6": {
+      "main": [
+        [
+          {
+            "node": "Docs1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Docs1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser3": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent3": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)8": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser3",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent3",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser2",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Vars",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Docs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Memos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)10": {
+      "main": [
+        [
+          {
+            "node": "Update a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

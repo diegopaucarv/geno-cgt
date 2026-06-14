@@ -7,3 +7,5 @@ __pycache__/
 *.pid
 data/
 cache/
+frontend/node_modules/
+frontend/package-lock.json

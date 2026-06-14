@@ -1,0 +1,110 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -48
+      ],
+      "id": "eb5cb715-8f9c-4cad-9464-df1aec357eb4",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        208,
+        -48
+      ],
+      "id": "58fe8ee6-0dc9-45f8-89a9-ec5cb5564699",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "json = {\n    \"output\": {\n      \"metadata_targets\": [\n        {\n          \"target_metadata_key\": \"COLLABORATION_STYLE\",\n          \"target_values_to_fetch\": [\n            \"Independent worker\"\n          ],\n          \"justification\": \"Testing the boundary condition where individuals with strong independent work styles may resist, undermine, or alternatively find unique ways to engage with formal interdisciplinary team structures. This challenges the property 'structured collaboration' and may reveal tensions between individual autonomy and team integration.\"\n        },\n        {\n          \"target_metadata_key\": \"AI_INTEGRATION_LEVEL\",\n          \"target_values_to_fetch\": [\n            \"Non-user/resister\"\n          ],\n          \"justification\": \"Testing the negative case where organizations or individuals resisting AI adoption altogether likely do not engage in building interdisciplinary AI teams. This probes the category's assumption that team-building is a strategic approach to integration, revealing contexts where integration is rejected rather than strategically pursued.\"\n        },\n        {\n          \"target_metadata_key\": \"Tama\u00f1o del medio\",\n          \"target_values_to_fetch\": [\n            \"Peque\u00f1o\"\n          ],\n          \"justification\": \"Testing the boundary condition of resource scarcity and structural constraints. Small organizations may lack the personnel, budget, or formal hierarchy to create dedicated interdisciplinary teams, potentially forcing reliance on informal networks or individual multifunctional roles, thus testing the property 'varies in structural complexity and organizational commitment levels'.\"\n        },\n        {\n          \"target_metadata_key\": \"ORGANIZATIONAL_PERSPECTIVE\",\n          \"target_values_to_fetch\": [\n            \"Operational implementer\"\n          ],\n          \"justification\": \"Testing the dimension of organizational vantage point. Operational implementers experience team dynamics at the ground level, potentially revealing friction points, role ambiguity, and practical obstacles to 'clear roles, shared objectives' that strategic decision-makers may not see. This tests the implementation optimization purpose.\"\n        },\n        {\n          \"target_metadata_key\": \"team_formality_continuum\",\n          \"target_values_to_fetch\": [\n            \"Informal emergent network\",\n            \"Highly formalized matrix structure\"\n          ],\n          \"justification\": \"A proposed theoretical variable capturing the degree of institutionalization. Sampling extreme ends tests the category's middle-position claim on the formality continuum. Highly formal structures may reveal bureaucratic rigidity, while informal networks may show fluid collaboration but lack deliberate creation\u2014challenging the definition's core.\"\n        },\n        {\n          \"target_metadata_key\": \"interdisciplinary_power_dynamics\",\n          \"target_values_to_fetch\": [\n            \"Journalistic domain dominance\",\n            \"Technical domain dominance\",\n            \"Balanced power sharing\"\n          ],\n          \"justification\": \"A proposed theoretical variable capturing authority and influence distribution between domains. The category assumes integration, but power imbalances (e.g., technologists dictating tools vs journalists dictating needs) could fundamentally alter team function, decision-making, and outcome, testing the 'cross-domain integration of expertise' property.\"\n        },\n        {\n          \"target_metadata_key\": \"resource_allocation_mechanism\",\n          \"target_values_to_fetch\": [\n            \"Centralized strategic budget\",\n            \"Decentralized project-based\",\n            \"Ad-hoc/no dedicated resources\"\n          ],\n          \"justification\": \"A proposed theoretical variable for funding and resource provision. Mechanism determines team sustainability, scope, and authority. Ad-hoc or decentralized models may produce temporary, unstable teams, challenging the 'deliberate creation of formal teams' and testing the developmental trajectory property.\"\n        }\n      ]\n    }\n  }\n\n\nr = []\nfor i in json[\"output\"][\"metadata_targets\"]:\n  key = i[\"target_metadata_key\"]\n  vals = i[\"target_values_to_fetch\"]\n  jus = i[\"justification\"]\n  r.append({\"cat\":\"Building Interdisciplinary Teams\",\"key\":key,\"vals\":vals,\"jus\":jus})\n\nreturn r"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -48
+      ],
+      "id": "bb8f58c4-ddf1-4818-8578-44958027dbf6",
+      "name": "Code in Python (Beta)14"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH target_values AS (\n    -- 1. Split the n8n comma-separated text list into individual rows\n    SELECT trim(unnest(string_to_array('{{ $json.vals }}', ','))) AS val\n),\navailable_docs AS (\n    -- 2. Find matching documents and EXCLUDE the negative list\n    SELECT \n        d.id,\n        d.doc_name,\n        d.metadata,\n        tv.val AS matched_category\n    FROM documents d\n    -- FIX: Pointing directly to the column instead of inside the metadata JSON\n    JOIN target_values tv ON d.\"{{ $json.key }}\" = tv.val\n    WHERE NOT EXISTS (\n        SELECT 1 \n        FROM categories c \n        WHERE c.category_name = '{{ $json.key }}' \n          -- The Anti-Join: Excludes docs already in the negative list\n          AND d.doc_name = ANY(COALESCE(c.saturation_docs, ARRAY[]::text[]))\n    )\n),\nranked_docs AS (\n    -- 3. Group and assign a random number\n    SELECT \n        id, doc_name, metadata, matched_category,\n        ROW_NUMBER() OVER (\n            PARTITION BY matched_category \n            ORDER BY RANDOM()\n        ) as rn\n    FROM available_docs\n)\n-- 4. Grab exactly 1 random document per category\nSELECT id, doc_name, metadata, matched_category\nFROM ranked_docs\nWHERE rn = 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        -32
+      ],
+      "id": "129fd149-c6ab-482b-9c67-3a6cc3f7da0f",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "fV9s7P9ecOgob4s2",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)14": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

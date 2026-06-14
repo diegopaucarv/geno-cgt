@@ -1,0 +1,253 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -32
+      ],
+      "id": "237eb2c2-e72f-42c2-88a5-76dc79af399f",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -32
+      ],
+      "id": "11a44af6-a826-4f9b-ac6e-1c5533a15281",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -80,
+        -32
+      ],
+      "id": "42d1761d-f587-40bd-976f-3c3029be7f2f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        144,
+        -192
+      ],
+      "id": "8f1e107f-9450-4633-bde3-89db4d092e3d",
+      "name": "Cats vs incidentes"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        144,
+        -16
+      ],
+      "id": "562c91e5-9947-4224-8859-4260fd5c7cbe",
+      "name": "Cats vs props"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        144,
+        144
+      ],
+      "id": "97add831-5d91-4ef8-a8b4-350b07baa494",
+      "name": "Cats vs cats"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output || \"I'm a 17-year-old student and I'm totally overwhelmed by my future career choices. I don't know where to start.\" }}",
+        "options": {
+          "systemMessage": "# Role\nYou are an articulate but stressed 17-year-old student.\n\n# Objective\nRespond naturally to your coach. If they ask a question, answer it based on your persona. Be honest and slightly informal.\n\n# Constraints\n- Limit response to 2 sentences.\n- Stay in character: you are anxious but willing to talk."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        928,
+        -64
+      ],
+      "id": "38906fce-3170-498c-9467-7b6f8479ee55",
+      "name": "Teen Persona",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "# Role\nYou are a professional Life Coach.\n\n# Task\nListen to the student. Provide one sentence of empathy and one specific, open-ended question to help them narrow down their interests.\n\n# Style\n- Tone: Grounded and supportive.\n- Max Length: 60 words."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1328,
+        -64
+      ],
+      "id": "c29e3f10-8353-4e7b-8b48-7ae743cc203b",
+      "name": "Life Coach",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        272
+      ],
+      "id": "336b22d9-9d75-4975-819e-32d83f1e2bc0",
+      "name": "DeepSeek Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "f3Tv3GNnvLErFuuY",
+          "name": "DeepSeek account 2"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $execution.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        272
+      ],
+      "id": "c52db796-0eef-40cd-843c-49a3e5e71437",
+      "name": "Unified Memory",
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Cats vs incidentes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cats vs props",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cats vs cats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Teen Persona": {
+      "main": [
+        [
+          {
+            "node": "Life Coach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Life Coach": {
+      "main": [
+        [
+          {
+            "node": "Teen Persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Teen Persona",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Life Coach",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unified Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Teen Persona",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Life Coach",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

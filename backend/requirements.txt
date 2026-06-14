@@ -36,3 +36,5 @@ python-dotenv==1.0.1
 boto3>=1.26.0
 aioboto3>=10.0.0  # versión asíncrona
 python-magic>=0.4.27  # para detectar tipos MIME
+
+spacy>=3.7
