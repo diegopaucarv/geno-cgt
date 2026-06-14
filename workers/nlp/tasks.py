@@ -9,6 +9,11 @@ TEI_URL = os.getenv("TEI_URL", "http://tei:8080")
 
 @app.task
 def generar_embedding(texto: str):
-    response = requests.post(f"{TEI_URL}/embed", json={"inputs": texto})
+    response = requests.post(
+        f"{TEI_URL}/v1/embeddings",
+        json={"input": [texto], "model": "voyageai/voyage-4-nano"},
+        timeout=120.0,
+    )
     response.raise_for_status()
-    return response.json()  # devuelve el vector
+    data = response.json()["data"]
+    return {"embedding": data[0]["embedding"]}
