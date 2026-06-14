@@ -54,6 +54,7 @@ export interface Document {
   mime_type: string;
   size_bytes: number;
   creado_en: string;
+  texto_extraido?: string;
 }
 
 export interface Category {
@@ -98,7 +99,10 @@ export async function listProjects() {
   return request<Project[]>("/projects");
 }
 
-export async function createProject(body: { nombre: string; ruta_de_codificacion?: string }) {
+export async function createProject(body: {
+  nombre: string;
+  ruta_de_codificacion?: string;
+}) {
   return request<Project>("/projects", {
     method: "POST",
     body: JSON.stringify(body),
@@ -117,6 +121,23 @@ export async function listDocuments(proyecto_id: string) {
 
 export async function getPresignedUrl(document_id: string) {
   return request<{ url: string }>(`/documents/presigned/${document_id}`);
+}
+
+export async function uploadDocument(projectId: string, file: File) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/documents/upload/${projectId}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 // ── Categories ──────────────────────────────────────────────────────
@@ -140,4 +161,33 @@ export async function createCategory(body: {
 
 export async function listSegments(document_id: string) {
   return request<Segment[]>(`/documents/${document_id}/segments`);
+}
+
+export async function segmentDocument(documentId: string) {
+  return request<{ status: string; num_segmentos?: number; task_id?: string }>(
+    `/documents/${documentId}/segment`,
+    { method: "POST" },
+  );
+}
+
+export async function getTaskStatus(taskId: string) {
+  return request<{ task_id: string; status: string; result: any }>(
+    `/documents/tasks/${taskId}`,
+  );
+}
+
+export async function saveTaskSegments(documentId: string, taskId: string) {
+  return request<{ num_segmentos: number }>(
+    `/documents/${documentId}/segments-from-task?task_id=${taskId}`,
+    { method: "POST" },
+  );
+}
+
+export async function deleteDocument(documentId: string) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/documents/${documentId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

@@ -5,6 +5,11 @@ import {
   listDocuments,
   listCategories,
   listSegments,
+  uploadDocument,
+  segmentDocument,
+  deleteDocument,
+  getTaskStatus,
+  saveTaskSegments,
   Project,
   Document,
   Category,
@@ -18,6 +23,7 @@ export default function ProjectDetail() {
   const [cats, setCats] = useState<Category[]>([]);
   const [segments, setSegments] = useState<Record<string, Segment[]>>({});
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
+  const [segmenting, setSegmenting] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -46,11 +52,28 @@ export default function ProjectDetail() {
       <p>
         Estado: {project.estado} · Ruta: {project.ruta_de_codificacion}
         {project.num_documentos != null && (
-          <> · Docs: {project.num_documentos} · Cats: {project.num_categorias}</>
+          <>
+            {" "}
+            · Docs: {project.num_documentos} · Cats: {project.num_categorias}
+          </>
         )}
       </p>
 
-      <hr />
+      <input
+        type="file"
+        accept=".pdf,.txt,.docx"
+        style={{ marginBottom: 20 }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file || !id) return;
+          try {
+            await uploadDocument(id, file);
+            listDocuments(id).then(setDocs);
+          } catch (err: any) {
+            alert(err.message);
+          }
+        }}
+      />
 
       <h3>Documentos ({docs.length})</h3>
       {docs.length === 0 && <p>Sin documentos.</p>}
@@ -62,16 +85,88 @@ export default function ProjectDetail() {
               onClick={() => toggleSegments(d.id)}
               style={{ marginLeft: 12, fontSize: 12 }}
             >
-              {expandedDoc === d.id ? "Ocultar" : "Segmentos"}
+              {expandedDoc === d.id ? "Ocultar texto" : "Ver texto"}
+            </button>
+            <button
+              onClick={async () => {
+                setSegmenting(d.id);
+                try {
+                  const res = await segmentDocument(d.id);
+                  if (res.status === "dispatched" && res.task_id) {
+                    let done = false;
+                    while (!done) {
+                      await new Promise((r) => setTimeout(r, 2000));
+                      const status = await getTaskStatus(res.task_id);
+                      console.log("Poll:", status.status, status.result);
+                      if (
+                        status.status === "SUCCESS" ||
+                        status.status === "success"
+                      ) {
+                        await saveTaskSegments(d.id, res.task_id);
+                        done = true;
+                      } else if (
+                        status.status === "FAILURE" ||
+                        status.status === "failure"
+                      ) {
+                        throw new Error(
+                          "Segmentación falló: " +
+                            JSON.stringify(status.result),
+                        );
+                      }
+                    }
+                  }
+                  const segs = await listSegments(d.id);
+                  setSegments((prev) => ({ ...prev, [d.id]: segs }));
+                  setExpandedDoc(d.id);
+                } catch (err: any) {
+                  alert(err.message);
+                } finally {
+                  setSegmenting(null);
+                }
+              }}
+              disabled={segmenting === d.id}
+              style={{ marginLeft: 6, fontSize: 12 }}
+            >
+              {segmenting === d.id ? "⏳" : "Segmentar"}
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm(`¿Eliminar "${d.original_filename}"?`)) return;
+                try {
+                  await deleteDocument(d.id);
+                  setSegments((prev) => {
+                    const next = { ...prev };
+                    delete next[d.id];
+                    return next;
+                  });
+                  setExpandedDoc(null);
+                  listDocuments(id!).then(setDocs);
+                } catch (err: any) {
+                  alert(err.message);
+                }
+              }}
+              style={{ marginLeft: 6, fontSize: 12, color: "red" }}
+            >
+              ✕
             </button>
             {expandedDoc === d.id && (
-              <ul style={{ marginTop: 6 }}>
-                {segments[d.id]?.map((s) => (
-                  <li key={s.id} style={{ fontSize: 13, color: "#555" }}>
-                    [{s.posicion}] {s.texto.slice(0, 120)}…
-                  </li>
-                ))}
-              </ul>
+              <textarea
+                readOnly
+                style={{
+                  width: "100%",
+                  marginTop: 8,
+                  minHeight: 150,
+                  fontFamily: "monospace",
+                  fontSize: 13,
+                }}
+                value={
+                  segments[d.id]?.length
+                    ? segments[d.id]!.map(
+                        (s) => `[${s.posicion}] ${s.texto}`,
+                      ).join("\n\n")
+                    : d.texto_extraido || "(sin texto disponible)"
+                }
+              />
             )}
           </li>
         ))}
