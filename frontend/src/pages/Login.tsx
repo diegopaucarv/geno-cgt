@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { login } from "../api/client";
 
 export default function Login() {
@@ -44,6 +44,9 @@ export default function Login() {
           Ingresar
         </button>
       </form>
+      <p style={{ marginTop: 16, textAlign: "center" }}>
+        ¿Sin cuenta? <Link to="/register">Regístrate</Link>
+      </p>
     </div>
   );
 }
