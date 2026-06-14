@@ -71,7 +71,7 @@ services:
     build: ./backend/tei
     environment:
       - HF_HOME=/app/.cache
-      - MODEL_ID=voyageai/voyage-4-nano
+      - MODEL_ID=thomasht86/voyage-4-nano-ONNX
     ports:
       - "8080:8080"
     volumes:
