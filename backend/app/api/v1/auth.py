@@ -1,9 +1,18 @@
 import uuid
+from datetime import datetime, timezone
 
-from app.core.security import create_access_token, create_refresh_token, verify_password
+from app.core.security import (
+    add_token_to_blacklist,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    verify_password,
+)
 from app.db.database import get_db
-from app.models.domain.user import User
+from app.models.domain.user import Usuario
+from app.services.auth import get_current_user, security
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -11,8 +20,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 @router.post("/login")
 async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
-    # Buscar usuario por email
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(Usuario).where(Usuario.correo == email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -31,7 +39,8 @@ async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/logout")
 async def logout(
-    current_user: User = Depends(get_current_user), token: str = Depends(security)
+    current_user: Usuario = Depends(get_current_user),
+    token: str = Depends(security),
 ):
     payload = decode_token(token.credentials)
     jti = payload.get("jti")

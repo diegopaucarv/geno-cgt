@@ -25,3 +25,6 @@ class Segmento(Base):
 
     # Relaciones
     documento = relationship("Documento", back_populates="segmentos")
+    codigos = relationship(
+        "CodigoSegmento", back_populates="segmento", cascade="all, delete-orphan"
+    )

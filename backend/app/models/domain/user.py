@@ -13,6 +13,7 @@ class Usuario(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(100))
     correo: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
     rol: Mapped[RolDeUsuario] = mapped_column(
         Enum(RolDeUsuario, name="rol_usuario_enum"),
         default=RolDeUsuario.INVESTIGADOR_PRINCIPAL,

@@ -1,12 +1,4 @@
 services:
-  backend:
-    build: ./backend
-    volumes:
-      # Montamos el caché de Hugging Face y Pip en tu disco externo
-      - tei_cache:/app/.cache
-    environment:
-      - HF_HOME=/app/.cache/huggingface
-
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -16,10 +8,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app_user -d gt-db"]
       interval: 5s
+      timeout: 5s
+      retries: 5
 
   pgbouncer:
     image: edoburu/pgbouncer:latest
@@ -41,6 +35,11 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -68,10 +67,14 @@ services:
     command: sh -c "echo 'Hocuspocus stub running' && tail -f /dev/null"
 
   tei:
-    build: ./backend/tei
+    build:
+      context: ./backend/tei
+      args:
+        USE_GPU: ${USE_GPU:-false}
     environment:
       - HF_HOME=/app/.cache
       - MODEL_ID=thomasht86/voyage-4-nano-ONNX
+      - USE_GPU=${USE_GPU:-false}
     ports:
       - "8080:8080"
     volumes:
@@ -85,7 +88,7 @@ services:
   fastapi:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/myapp
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -109,7 +112,7 @@ services:
   worker-fast:
     build: ./workers/fast
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/myapp
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       REDIS_URL: redis://redis:6379
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
@@ -120,18 +123,30 @@ services:
 
   worker-nlp:
     build: ./workers/nlp
+    volumes:
+      - ./uploads:/app/uploads
+    command: celery -A tasks worker --queues=nlp --loglevel=info
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/myapp
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
+      REDIS_URL: redis://redis:6379/0
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      UPLOAD_DIR: /app/uploads
+      USE_GPU: ${USE_GPU:-false}
     depends_on:
-      - pgbouncer
-      - tei
+      pgbouncer:
+        condition: service_started
+      tei:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker-heavy:
     build: ./workers/heavy
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/myapp
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
     depends_on:
       - pgbouncer

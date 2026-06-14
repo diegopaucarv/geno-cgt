@@ -1,8 +1,8 @@
-"""Creacion inicial de tablas
+"""initial_schema
 
-Revision ID: e31f7bb2235f
+Revision ID: f67d172dd775
 Revises:
-Create Date: 2026-06-12 13:57:55.359165
+Create Date: 2026-06-13 23:20:08.246042
 
 """
 
@@ -14,7 +14,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "e31f7bb2235f"
+revision: str = "f67d172dd775"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -56,12 +56,35 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("thread_id", "checkpoint_id"),
     )
     op.create_table(
+        "processing_states",
+        sa.Column("entity_type", sa.String(length=50), nullable=False),
+        sa.Column("entity_id", sa.Uuid(), nullable=False),
+        sa.Column("step", sa.String(length=50), nullable=False),
+        sa.PrimaryKeyConstraint("entity_type", "entity_id", "step"),
+    )
+    op.create_table(
         "usuarios",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("nombre", sa.String(length=100), nullable=False),
         sa.Column("correo", sa.String(length=255), nullable=False),
-        sa.Column("rol", sa.String(length=50), nullable=False),
-        sa.Column("plan", sa.String(length=50), nullable=False),
+        sa.Column("hashed_password", sa.String(length=255), nullable=False),
+        sa.Column(
+            "rol",
+            sa.Enum(
+                "INVESTIGADOR_PRINCIPAL",
+                "COLABORADOR",
+                "ESTUDIANTE",
+                "AUDITOR",
+                "VISUALIZADOR",
+                name="rol_usuario_enum",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "plan",
+            sa.Enum("BASICO", "PROFESIONAL", name="plan_suscripcion_enum"),
+            nullable=False,
+        ),
         sa.Column("tokens_mensuales_usados", sa.Integer(), nullable=False),
         sa.Column(
             "creado_en",
@@ -126,9 +149,12 @@ def upgrade() -> None:
         "documentos",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("proyecto_id", sa.Uuid(), nullable=False),
-        sa.Column("titulo", sa.String(length=255), nullable=False),
+        sa.Column("original_filename", sa.String(length=255), nullable=False),
         sa.Column("tipo_de_fuente", sa.String(length=50), nullable=False),
         sa.Column("ruta_s3", sa.String(length=1000), nullable=True),
+        sa.Column("storage_key", sa.String(length=500), nullable=False),
+        sa.Column("mime_type", sa.String(length=100), nullable=False),
+        sa.Column("size_bytes", sa.Integer(), nullable=False),
         sa.Column("metadatos", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "creado_en",
@@ -139,6 +165,20 @@ def upgrade() -> None:
         sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["proyecto_id"],
+            ["proyectos.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("storage_key"),
+    )
+    op.create_table(
+        "graph_entities",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("project_id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("type", sa.String(length=100), nullable=False),
+        sa.Column("frequency", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["project_id"],
             ["proyectos.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
@@ -191,6 +231,46 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
+        "code_document_summaries",
+        sa.Column("code_id", sa.Uuid(), nullable=False),
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("summary", sa.Text(), nullable=False),
+        sa.Column("updated_at", sa.String(length=100), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["code_id"],
+            ["categorias.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["documentos.id"],
+        ),
+        sa.PrimaryKeyConstraint("code_id", "document_id"),
+    )
+    op.create_table(
+        "code_global_summaries",
+        sa.Column("code_id", sa.Uuid(), nullable=False),
+        sa.Column("summary", sa.Text(), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["code_id"],
+            ["categorias.id"],
+        ),
+        sa.PrimaryKeyConstraint("code_id"),
+    )
+    op.create_table(
+        "code_prototypes",
+        sa.Column("code_id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "segment_ids", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
+        sa.Column("updated_at", sa.String(length=100), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["code_id"],
+            ["categorias.id"],
+        ),
+        sa.PrimaryKeyConstraint("code_id"),
+    )
+    op.create_table(
         "doc_codes",
         sa.Column("documento_id", sa.Uuid(), nullable=False),
         sa.Column("categoria_id", sa.Uuid(), nullable=False),
@@ -212,6 +292,46 @@ def upgrade() -> None:
             ["documentos.id"],
         ),
         sa.PrimaryKeyConstraint("documento_id", "categoria_id"),
+    )
+    op.create_table(
+        "graph_relations",
+        sa.Column("source_id", sa.Uuid(), nullable=False),
+        sa.Column("target_id", sa.Uuid(), nullable=False),
+        sa.Column("relation_type", sa.String(length=100), nullable=False),
+        sa.Column("strength", sa.Float(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["source_id"],
+            ["graph_entities.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_id"],
+            ["graph_entities.id"],
+        ),
+        sa.PrimaryKeyConstraint("source_id", "target_id", "relation_type"),
+    )
+    op.create_table(
+        "hypotheses",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("project_id", sa.Uuid(), nullable=False),
+        sa.Column("code_id", sa.Uuid(), nullable=True),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("level", sa.String(length=50), nullable=False),
+        sa.Column("confidence", sa.Float(), nullable=False),
+        sa.Column("status", sa.String(length=50), nullable=False),
+        sa.Column("parent_hypothesis_id", sa.Uuid(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["code_id"],
+            ["categorias.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["parent_hypothesis_id"],
+            ["hypotheses.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["project_id"],
+            ["proyectos.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
         "nodos_lienzo",
@@ -240,6 +360,21 @@ def upgrade() -> None:
             ["lienzos.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "saturation_metrics",
+        sa.Column("code_id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "centroid", pgvector.sqlalchemy.vector.VECTOR(dim=1024), nullable=False
+        ),
+        sa.Column("rolling_std", sa.Float(), nullable=False),
+        sa.Column("saturation_status", sa.String(length=50), nullable=False),
+        sa.Column("documents_since_change", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["code_id"],
+            ["categorias.id"],
+        ),
+        sa.PrimaryKeyConstraint("code_id"),
     )
     op.create_table(
         "segmentos",
@@ -318,21 +453,28 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP EXTENSION IF EXISTS vector;")
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table("fases")
     op.drop_table("bordes_lienzo")
     op.drop_table("segmentos")
+    op.drop_table("saturation_metrics")
     op.drop_table("nodos_lienzo")
+    op.drop_table("hypotheses")
+    op.drop_table("graph_relations")
     op.drop_table("doc_codes")
+    op.drop_table("code_prototypes")
+    op.drop_table("code_global_summaries")
+    op.drop_table("code_document_summaries")
     op.drop_table("memos")
     op.drop_table("lienzos")
+    op.drop_table("graph_entities")
     op.drop_table("documentos")
     op.drop_table("categorias")
     op.drop_table("proyectos")
     op.drop_index(op.f("ix_usuarios_correo"), table_name="usuarios")
     op.drop_table("usuarios")
+    op.drop_table("processing_states")
     op.drop_table("langgraph_checkpoints")
     op.drop_table("ejecuciones_agentes")
     # ### end Alembic commands ###

@@ -36,11 +36,21 @@ from app.models.domain.canvas import (
     LienzoDelPlanDeAnalisis,
     NodoDeLienzo,
 )
-from app.models.domain.category import Categoria, DocCode
+from app.models.domain.category import Categoria, CodigoSegmento, DocCode
 from app.models.domain.document import Documento
 from app.models.domain.memo import Memo
 from app.models.domain.project import Proyecto
 from app.models.domain.segment import Segmento
+from app.models.domain.synthesis import (
+    CodeDocumentSummary,
+    CodeGlobalSummary,
+    CodePrototype,
+    GraphEntity,
+    GraphRelation,
+    Hypothesis,
+    ProcessingState,
+    SaturationMetrics,
+)
 from app.models.domain.user import Usuario
 from app.models.domain.workflow import Fase
 from app.models.exec_log import RegistroEjecucionAgente

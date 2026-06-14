@@ -3,7 +3,7 @@ import uuid
 
 from app.models.base import Base, TimestampMixin
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -31,6 +31,9 @@ class Categoria(Base, TimestampMixin):
     doc_codes = relationship(
         "DocCode", back_populates="categoria", cascade="all, delete-orphan"
     )
+    codigos_segmento = relationship(
+        "CodigoSegmento", back_populates="categoria", cascade="all, delete-orphan"
+    )
 
 
 class DocCode(Base, TimestampMixin):
@@ -54,3 +57,30 @@ class DocCode(Base, TimestampMixin):
 
     # Relaciones
     categoria = relationship("Categoria", back_populates="doc_codes")
+
+
+class CodigoSegmento(Base, TimestampMixin):
+    """Tabla pivote que vincula Segmentos con Categorías (codificación a nivel segmento)."""
+
+    __tablename__ = "codigos_segmento"
+
+    segmento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("segmentos.id"), primary_key=True
+    )
+    categoria_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("categorias.id"), primary_key=True
+    )
+
+    estado: Mapped[str] = mapped_column(
+        String(50), default="asignado"
+    )  # 'asignado', 'confirmado', 'descartado'
+    confianza: Mapped[float] = mapped_column(
+        Float, default=1.0
+    )  # 0.0 - 1.0 (útil para recomendaciones automáticas)
+    origen: Mapped[str] = mapped_column(
+        String(50), default="manual"
+    )  # 'manual', 'ia', 'recomendacion'
+
+    # Relaciones
+    segmento = relationship("Segmento", back_populates="codigos")
+    categoria = relationship("Categoria", back_populates="codigos_segmento")
