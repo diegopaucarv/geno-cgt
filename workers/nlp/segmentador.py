@@ -5,7 +5,6 @@ import re
 import unicodedata
 from typing import Optional
 
-import hnswlib
 import numpy as np
 import spacy
 import stanza
@@ -227,18 +226,12 @@ class ProgressiveSegmenter:
         similarity_threshold: float = 0.6,
         max_depth: int = 3,
         window_size: int = 3,
-        hnsw_ef: int = 200,
-        hnsw_m: int = 16,
         tei_url: str | None = None,
         debug_coref: bool = True,
     ):
         self.similarity_threshold = similarity_threshold
         self.max_depth = max_depth
-        self.index = None
-        self.embeddings = None
         self.window_size = window_size
-        self.hnsw_ef = hnsw_ef
-        self.hnsw_m = hnsw_m
         self.stanza_lang = stanza_lang
         self.stanza_use_gpu = _stanza_gpu
         self.debug_coref = debug_coref
@@ -515,9 +508,6 @@ class ProgressiveSegmenter:
             return segments
 
         merged_segments = [segments[0]]
-        merge_count = 0
-        rebuild_interval = 10
-        prev_len = 1
 
         for i in range(1, len(segments)):
             last_segment = merged_segments[-1]
@@ -525,23 +515,6 @@ class ProgressiveSegmenter:
 
             if not self.detect_topic_shift(last_segment, current_segment, last_n=3):
                 merged_segments[-1] += " " + current_segment
-                merge_count += 1
-
-                if merge_count >= rebuild_interval and len(merged_segments) != prev_len:
-                    prev_len = len(merged_segments)
-                    self.embeddings = self.generate_embeddings(merged_segments)
-                    if len(self.embeddings) > 0:
-                        self.index = hnswlib.Index(
-                            space="cosine", dim=self.embeddings.shape[1]
-                        )
-                        self.index.init_index(
-                            max_elements=len(self.embeddings),
-                            ef_construction=self.hnsw_ef,
-                            M=self.hnsw_m,
-                        )
-                        self.index.add_items(self.embeddings)
-                        self.index.set_ef(self.hnsw_ef)
-                    merge_count = 0
             else:
                 merged_segments.append(current_segment)
 
@@ -875,17 +848,6 @@ class ProgressiveSegmenter:
 
         clustered_segments = self.final_clustering(all_segments)
         print(f"[SegText] {len(clustered_segments)} segmentos tras clustering final.")
-
-        self.embeddings = self.generate_embeddings(clustered_segments)
-        if len(self.embeddings) > 0:
-            self.index = hnswlib.Index(space="cosine", dim=self.embeddings.shape[1])
-            self.index.init_index(
-                max_elements=len(self.embeddings),
-                ef_construction=self.hnsw_ef,
-                M=self.hnsw_m,
-            )
-            self.index.add_items(self.embeddings)
-            self.index.set_ef(self.hnsw_ef)
 
         print(f"[SegText] Iniciando resolución de correferencias...")
         clustered_segments = self.resolve_coreferences(clustered_segments)

@@ -71,6 +71,15 @@ services:
       context: ./backend/tei
       args:
         USE_GPU: ${USE_GPU:-false}
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/tei/server.py
+          target: /app/server.py
+        - action: rebuild
+          path: ./backend/tei/requirements.txt
+        - action: rebuild
+          path: ./backend/tei/Dockerfile
     environment:
       - HF_HOME=/app/.cache
       - MODEL_ID=thomasht86/voyage-4-nano-ONNX
@@ -87,6 +96,15 @@ services:
 
   fastapi:
     build: ./backend
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/app
+          target: /app/app
+        - action: rebuild
+          path: ./backend/requirements.txt
+        - action: rebuild
+          path: ./backend/Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       REDIS_URL: redis://redis:6379
@@ -111,6 +129,15 @@ services:
 
   worker-fast:
     build: ./workers/fast
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./workers/fast/tasks.py
+          target: /app/tasks.py
+        - action: rebuild
+          path: ./workers/fast/requirements.txt
+        - action: rebuild
+          path: ./workers/fast/Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       REDIS_URL: redis://redis:6379
@@ -123,6 +150,21 @@ services:
 
   worker-nlp:
     build: ./workers/nlp
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./workers/nlp/tasks.py
+          target: /app/tasks.py
+        - action: sync+restart
+          path: ./workers/nlp/segmentador.py
+          target: /app/segmentador.py
+        - action: sync+restart
+          path: ./workers/nlp/embedding_client.py
+          target: /app/embedding_client.py
+        - action: rebuild
+          path: ./workers/nlp/requirements.txt
+        - action: rebuild
+          path: ./workers/nlp/Dockerfile
     volumes:
       - ./uploads:/app/uploads
     command: celery -A tasks worker --queues=nlp --loglevel=info
@@ -145,6 +187,15 @@ services:
 
   worker-heavy:
     build: ./workers/heavy
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./workers/heavy/tasks.py
+          target: /app/tasks.py
+        - action: rebuild
+          path: ./workers/heavy/requirements.txt
+        - action: rebuild
+          path: ./workers/heavy/Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}

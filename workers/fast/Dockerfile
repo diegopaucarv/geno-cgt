@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM gt-base:latest
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt

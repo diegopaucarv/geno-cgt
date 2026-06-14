@@ -1,15 +1,9 @@
-FROM python:3.13-slim
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+FROM gt-base:latest
+
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-RUN pip install spacy && python -m spacy download es_core_news_lg
 
 COPY . .
 
