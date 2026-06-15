@@ -3,7 +3,7 @@ import uuid
 
 from app.models.base import Base
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -20,8 +20,8 @@ class Segmento(Base):
 
     es_anomalia: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # ¡La magia de pgvector! Vector de 1536 dimensiones (estándar de OpenAI/BGE)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=True)
+    # Vector de 1024 dimensiones para búsqueda semántica (TEI — voyage-4-nano)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     # Relaciones
     documento = relationship("Documento", back_populates="segmentos")

@@ -30,3 +30,7 @@ class Documento(Base, TimestampMixin):
     segmentos = relationship(
         "Segmento", back_populates="documento", cascade="all, delete-orphan"
     )
+
+    @property
+    def texto_extraido(self) -> str:
+        return self.metadatos.get("texto_extraido", "") if self.metadatos else ""

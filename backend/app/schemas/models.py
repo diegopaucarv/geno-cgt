@@ -20,16 +20,16 @@ from app.schemas.factory import create_input_schema, response_schema
 
 CategoryResponse = response_schema(
     Categoria,
-    exclude={"embedding_centroide"},  # no exponer vectores al cliente
+    exclude={"embedding_centroide"},
 )
 
 CategoryCreate = create_input_schema(
     Categoria,
     exclude={
-        "embedding_centroide",  # no se crea manualmente
-        "estado_saturacion",  # usa default
-        "puntaje_relevancia",  # usa default
-        "version",  # usa default
+        "embedding_centroide",
+        "estado_saturacion",
+        "puntaje_relevancia",
+        "version",
     },
 )
 
@@ -37,7 +37,7 @@ CategoryCreate = create_input_schema(
 
 SegmentResponse = response_schema(
     Segmento,
-    exclude={"embedding"},  # no exponer el vector de 1024 floats
+    exclude={"embedding"},
 )
 
 # ── Code Assignment ───────────────────────────────────────────────────
@@ -45,8 +45,8 @@ SegmentResponse = response_schema(
 CodeAssignRequest = create_input_schema(
     CodigoSegmento,
     exclude={
-        "estado",  # usa default
-        "confianza",  # usa default
+        "estado",
+        "confianza",
         "creado_en",
         "actualizado_en",
     },
@@ -60,7 +60,8 @@ CodeAssignResponse = response_schema(CodigoSegmento)
 
 class RecommendationItem(BaseModel):
     categoria: CategoryResponse
-    frecuencia: int
+    score: float
+    definicion: str = ""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,7 +72,7 @@ ProjectResponse = response_schema(Proyecto)
 
 ProjectCreate = create_input_schema(
     Proyecto,
-    exclude={"estado"},  # usa default "ACTIVO"
+    exclude={"estado"},
 )
 
 # ── Document ──────────────────────────────────────────────────────────

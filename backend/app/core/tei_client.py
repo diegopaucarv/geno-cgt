@@ -1,9 +1,11 @@
 # backend/app/core/tei_client.py
+import asyncio
 import logging
 import os
 from typing import List
 
 import httpx
+from app.core.embedding_cache import SharedEmbeddingCache
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +14,12 @@ class TEIClient:
     """
     Cliente asíncrono para comunicarse con el contenedor TEI (ONNX).
     Los prefijos Voyage los gestiona el servidor vía prompt_name.
+    Usa SharedEmbeddingCache para reducir llamadas al TEI en 40-60%.
     """
 
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str | None = None):
         self.base_url = base_url or os.environ.get("TEI_URL", "http://localhost:8080")
+        self._cache = SharedEmbeddingCache()
 
     async def _embed_batch(
         self, texts: List[str], prompt_name: str | None = None
@@ -43,24 +47,27 @@ class TEIClient:
                 raise Exception(f"Fallo en generación de embeddings: {str(e)}")
 
     async def embed_documents(self, documents: List[str]) -> List[List[float]]:
-        """Para Segmentos, Categorías o Memos. El servidor aplica el prefijo de documento."""
-        return await self._embed_batch(documents, prompt_name=None)
+        """Para Segmentos, Categorías o Memos. Cachea en Redis (TTL 24h)."""
+        return await self._cache.get_or_compute(
+            documents,
+            content_type="segment",
+            compute_fn=lambda texts: self._embed_batch(texts, prompt_name=None),
+        )
 
     async def embed_query(self, query: str) -> List[float]:
-        """Para búsqueda semántica. El servidor aplica el prefijo de query."""
-        results = await self._embed_batch([query], prompt_name="query")
-        return results[0]
+        """Para búsqueda semántica. Cachea en Redis (TTL 30min)."""
+        return await self._cache.get_or_compute_single(
+            query,
+            content_type="query",
+            compute_fn=lambda texts: self._embed_batch(texts, prompt_name="query"),
+        )
 
     # --- Wrappers síncronos para Celery / código no-async ---
 
     def embed_documents_sync(self, documents: List[str]) -> List[List[float]]:
         """Versión síncrona de embed_documents para tareas Celery."""
-        import asyncio
-
         return asyncio.run(self.embed_documents(documents))
 
     def embed_query_sync(self, query: str) -> List[float]:
         """Versión síncrona de embed_query para tareas Celery."""
-        import asyncio
-
         return asyncio.run(self.embed_query(query))

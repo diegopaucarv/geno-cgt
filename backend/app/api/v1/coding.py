@@ -1,6 +1,6 @@
-from collections import Counter
 from uuid import UUID
 
+from app.core.tei_client import TEIClient
 from app.db.database import get_db
 from app.models.domain.category import Categoria, CodigoSegmento
 from app.models.domain.document import Documento
@@ -15,11 +15,13 @@ from app.schemas import (
     SegmentResponse,
 )
 from app.services.auth import get_current_user
+from app.services.rag import RAGService
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1", tags=["coding"])
+tei = TEIClient()
 
 
 # ── GET /documents/{document_id}/segments ────────────────────────────
@@ -124,55 +126,48 @@ async def recommend_codes(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    """
+    Recomienda códigos existentes para un segmento.
+
+    Usa RAGService.search_similar_codes() que compara el embedding del
+    segmento contra los centroides de las categorías (índice HNSW).
+    Más rápido y semánticamente preciso que la versión anterior basada
+    en frecuencia de co-ocurrencia en segmentos vecinos.
+    """
     segmento = await db.get(Segmento, segment_id)
     if not segmento:
         raise HTTPException(404, "Segmento no encontrado")
 
     if segmento.embedding is None:
-        raise HTTPException(400, "El segmento no tiene embedding")
+        return []
 
     doc = await db.get(Documento, segmento.documento_id)
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
 
-    # Buscar segmentos similares dentro del mismo proyecto
-    similar_stmt = (
-        select(Segmento.id)
-        .join(Documento, Segmento.documento_id == Documento.id)
-        .where(Documento.proyecto_id == doc.proyecto_id)
-        .where(Segmento.id != segment_id)
-        .where(Segmento.embedding.is_not(None))
-        .order_by(func.cosine_distance(Segmento.embedding, segmento.embedding))
-        .limit(20)
+    # ── Buscar códigos similares vía RAG ──────────────────
+    rag = RAGService(db, tei)
+    candidates = await rag.search_similar_codes(
+        segment_embedding=segmento.embedding,
+        proyecto_id=doc.proyecto_id,
+        top_k=limit,
     )
-    result = await db.execute(similar_stmt)
-    similares = result.all()
 
-    if not similares:
+    if not candidates:
         return []
 
-    # Categorías asignadas a esos segmentos similares
-    seg_ids = [s.id for s in similares]
-    assignments_stmt = select(CodigoSegmento.categoria_id).where(
-        CodigoSegmento.segmento_id.in_(seg_ids)
-    )
-    result = await db.execute(assignments_stmt)
-    cat_ids = [row[0] for row in result.all()]
-
-    if not cat_ids:
-        return []
-
-    # Top N por frecuencia
-    freq = Counter(cat_ids)
-    top_cat_ids = [cid for cid, _ in freq.most_common(limit)]
-
-    cats_stmt = select(Categoria).where(Categoria.id.in_(top_cat_ids))
+    # ── Resolver las categorías completas ─────────────────
+    cat_ids = [UUID(c.id) for c in candidates]
+    cats_stmt = select(Categoria).where(Categoria.id.in_(cat_ids))
     result = await db.execute(cats_stmt)
-    categorias = result.scalars().all()
-
-    cat_map = {c.id: c for c in categorias}
-    ordered = [cat_map[cid] for cid in top_cat_ids if cid in cat_map]
+    categorias = {c.id: c for c in result.scalars().all()}
 
     return [
-        RecommendationItem(categoria=cat, frecuencia=freq[cat.id]) for cat in ordered
+        RecommendationItem(
+            categoria=categorias.get(UUID(c.id)),
+            score=c.score,
+            definicion=c.definicion[:200] if c.definicion else "",
+        )
+        for c in candidates
+        if UUID(c.id) in categorias
     ]

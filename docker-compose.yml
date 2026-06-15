@@ -21,19 +21,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - gt_network
+      - default
 
   pgbouncer:
     image: edoburu/pgbouncer:latest
     environment:
       DATABASE_URL: postgres://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
+      AUTH_TYPE: scram-sha-256
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 25
     ports:
-      - "6432:6432"
+      - "6432:5432"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - gt_network
+      - default
 
   redis:
     image: redis:7-alpine
@@ -47,6 +54,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - gt_network
+      - default
 
   minio:
     image: minio/minio:latest
@@ -69,7 +79,6 @@ services:
       - "3310:3310"
 
   hocuspocus-stub:
-    # Stub simple para desarrollo
     image: alpine:latest
     command: sh -c "echo 'Hocuspocus stub running' && tail -f /dev/null"
 
@@ -113,7 +122,7 @@ services:
         - action: rebuild
           path: ./backend/Dockerfile
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -122,6 +131,7 @@ services:
       ENVIRONMENT: dev
       JWT_SECRET_KEY: ${JWT_SECRET:-changeme}
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      SEGMENTATION_MODE: ${SEGMENTATION_MODE:-spacy}
     depends_on:
       pgbouncer:
         condition: service_started
@@ -133,6 +143,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    networks:
+      - gt_network
 
   worker-fast:
     build: ./workers/fast
@@ -146,7 +158,7 @@ services:
         - action: rebuild
           path: ./workers/fast/Dockerfile
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
@@ -176,12 +188,13 @@ services:
       - ./uploads:/app/uploads
     command: celery -A tasks worker --queues=nlp --loglevel=info
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379/0
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
       UPLOAD_DIR: /app/uploads
       USE_GPU: ${USE_GPU:-false}
+      SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-true}
     depends_on:
       pgbouncer:
         condition: service_started
@@ -199,13 +212,25 @@ services:
         - action: sync+restart
           path: ./workers/heavy/tasks.py
           target: /app/tasks.py
+        - action: sync+restart
+          path: ./workers/heavy/llm_client.py
+          target: /app/llm_client.py
+        - action: sync+restart
+          path: ./workers/heavy/database.py
+          target: /app/database.py
+        - action: sync
+          path: ./backend/app/models
+          target: /app/models
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
           path: ./workers/heavy/Dockerfile
+    volumes:
+      - ./backend/app/models:/app/models:ro
     environment:
-      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@pgbouncer:6432/gt-db
+      DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
     depends_on:
       - pgbouncer
 
@@ -214,21 +239,24 @@ services:
     working_dir: /app
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_modules:/app/node_modules
     ports:
       - "3000:3000"
+    networks:
+      - gt_network
+      - default
     command: sh -c "npm install && npm run dev"
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
-  # Definimos el volumen apuntando a tu ruta externa
+  frontend_modules:
   tei_cache:
     driver: local
     driver_opts:
       type: none
-      device: "/mnt/hdd/Program Files/Docker/gt/cache" # Ruta real en tu Arch Linux
+      device: "/mnt/hdd/Program Files/Docker/gt/cache"
       o: bind
 
 networks:

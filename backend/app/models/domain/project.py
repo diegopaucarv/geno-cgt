@@ -30,3 +30,7 @@ class Proyecto(Base, TimestampMixin):
         uselist=False,
         cascade="all, delete-orphan",
     )
+
+
+# Importar aquí para que SQLAlchemy registre la clase antes de resolver relaciones
+from app.models.domain.canvas import LienzoDelPlanDeAnalisis  # noqa: E402,F401

@@ -7,5 +7,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 RUN python -m spacy download es_core_news_lg
+# Pre-descargar Stanza para evitar fallos de red en runtime
+RUN python3 -c "import stanza; stanza.download('es', processors='tokenize,pos,lemma,depparse,constituency,coref')"
+# Pre-descargar modelo transformer del coref (necesita network)
+RUN python3 -c "import stanza; p = stanza.Pipeline('es', processors='tokenize,pos,lemma,depparse,constituency,coref'); print('Coref ready')" 2>/dev/null; true
 COPY . .
 CMD ["celery", "-A", "tasks", "worker", "--loglevel=info", "-Q", "nlp"]

@@ -228,6 +228,7 @@ class ProgressiveSegmenter:
         window_size: int = 3,
         tei_url: str | None = None,
         debug_coref: bool = True,
+        reinert_micro: bool = True,
     ):
         self.similarity_threshold = similarity_threshold
         self.max_depth = max_depth
@@ -235,6 +236,7 @@ class ProgressiveSegmenter:
         self.stanza_lang = stanza_lang
         self.stanza_use_gpu = _stanza_gpu
         self.debug_coref = debug_coref
+        self.reinert_micro = reinert_micro
 
         # Embedding client → TEI (Voyage-4 ONNX, 1024-dim)
         self.embedding_client = EmbeddingClient(base_url=tei_url)
@@ -263,27 +265,21 @@ class ProgressiveSegmenter:
     # ── Stanza lazy-load ──────────────────────────────────────────────────────
     def get_stanza(self) -> Optional[stanza.Pipeline]:
         if self._stanza_pipeline is None:
-            print("[COREF] Stanza pipeline not loaded — iniciando carga...")
             try:
-                stanza.download(
-                    self.stanza_lang,
-                    processors="tokenize,pos,lemma,depparse,constituency,coref",
-                    verbose=False,
-                )
+                # Stanza pre-descargado en Dockerfile — no llamar download() en runtime
                 self._stanza_pipeline = stanza.Pipeline(
                     self.stanza_lang,
                     processors="tokenize,pos,lemma,depparse,constituency,coref",
                     use_gpu=self.stanza_use_gpu,
                     verbose=False,
+                    download_method=None,  # no descargar, usar modelos locales
                 )
-                print("[COREF] ✓ Stanza coref pipeline cargado correctamente.")
+                print("[COREF] ✓ Stanza coref pipeline cargado.")
             except Exception as e:
                 print(
                     f"[COREF] ✗ Error cargando Stanza: {e}. Correferencias deshabilitadas."
                 )
                 self._stanza_pipeline = None
-        else:
-            self._dprint("Pipeline ya en memoria — reutilizando.")
         return self._stanza_pipeline
 
     # ── Preprocessing ─────────────────────────────────────────────────────────
@@ -834,6 +830,49 @@ class ProgressiveSegmenter:
             return self.classicseg.segment_text(text)
         return [text]
 
+    # ── Micro-segmentation (ALCESTE / Reinert) ──────────────────────────────────
+    def _segmentar_alceste_micro(self, texto: str, target_size: int = 40) -> list[str]:
+        """Subdivide un segmento en UCEs de ~40 palabras con corte por puntuación."""
+        doc = self.nlp(texto)
+        if len(doc) <= target_size:
+            return [texto]
+
+        weights = np.array(
+            [
+                6.0
+                if t.text.strip() in ".?!…"
+                else 5.0
+                if t.text.strip() == ":"
+                else 4.0
+                if t.text.strip() == ";"
+                else 1.0
+                if t.text.strip() == ","
+                else 0.01
+                for t in doc
+            ]
+        )
+
+        window = int(target_size * 0.4)
+        total = len(doc)
+        uces, cursor = [], 0
+
+        while cursor < total:
+            remaining = total - cursor
+            if remaining <= target_size + window:
+                uces.append(doc[cursor:].text.strip())
+                break
+
+            lo = max(0, target_size - window)
+            hi = min(target_size + window, remaining)
+            w_slice = weights[cursor + lo : cursor + hi]
+            dist = np.abs(np.arange(lo, hi) - target_size)
+            best = lo + np.argmax(w_slice / (dist + 1))
+
+            uces.append(doc[cursor : cursor + best + 1].text.strip())
+            cursor += best + 1
+
+        return uces
+
     # ── Main entry point ───────────────────────────────────────────────────────
     def segment_text(self, text: str, max_tokens: int = 1024) -> list[str]:
         print(f"\n[SegText] Iniciando segmentación. Texto: {len(text)} chars.")
@@ -875,8 +914,18 @@ class ProgressiveSegmenter:
             else:
                 segmentos.append(seg)
 
+        # Micro-segmentation ALCESTE: subdividir cada macro-segmento en UCEs
+        if self.reinert_micro:
+            micro_uces = []
+            for seg in segmentos:
+                micro_uces.extend(self._segmentar_alceste_micro(seg))
+            final = micro_uces
+        else:
+            final = segmentos
+
         print(
-            f"[SegText] Segmentación completada: {len(segmentos)} UCEs finales "
-            f"({overflow_count} desbordamientos resueltos con cortes quirúrgicos)."
+            f"[SegText] Segmentación completada: {len(segmentos)} macro-segmentos, "
+            f"{len(final)} UCEs finales (Reinert={'ON' if self.reinert_micro else 'OFF'}) "
+            f"({overflow_count} desbordamientos)."
         )
-        return segmentos
+        return final
