@@ -24,7 +24,7 @@ TEI_URL = os.getenv("TEI_URL", "http://tei:8080")
 CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")
 
 # ── Segmentation ─────────────────────────────────────────────────────
-SEGMENTATION_REINERT = os.getenv("SEGMENTATION_REINERT", "true").lower() in (
+SEGMENTATION_REINERT = os.getenv("SEGMENTATION_REINERT", "false").lower() in (
     "1",
     "true",
     "yes",

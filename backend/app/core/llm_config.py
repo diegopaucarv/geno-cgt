@@ -29,13 +29,13 @@ class ModelEndpoint:
 # ── Together.ai Model Registry ──────────────────────────────────────────
 
 MODEL_REGISTRY: dict[str, ModelEndpoint] = {
-    # ── PRO tier: DeepSeek Pro via Together.ai ─────────────────────────
+    # ── PRO tier: DeepSeek V4 Pro via Together.ai ──────────────────
     "deepseek-pro": ModelEndpoint(
-        model_id="deepseek-ai/DeepSeek-R1",
-        display_name="DeepSeek Pro (R1)",
+        model_id=os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro"),
+        display_name="DeepSeek Pro (V4)",
         tier="pro",
-        max_tokens_default=8192,
-        temperature_default=0.3,
+        max_tokens_default=int(os.getenv("MODEL_PRO_MAX_TOKENS", "8192")),
+        temperature_default=float(os.getenv("MODEL_PRO_TEMPERATURE", "0.3")),
         supports_json_schema=True,
         notes=(
             "Reasoning model. Do NOT use 'think step by step' in prompts — "
@@ -44,19 +44,18 @@ MODEL_REGISTRY: dict[str, ModelEndpoint] = {
             "Demand evidence: 'Usa solo la información proporcionada.'"
         ),
     ),
-    # ── FLASH tier: DeepSeek Flash via Together.ai ─────────────────────
+    # ── FLASH tier: Gemma 4 via Together.ai ───────────────────────
     "deepseek-flash": ModelEndpoint(
-        model_id="deepseek-ai/DeepSeek-V3",
-        display_name="DeepSeek Flash (V3)",
+        model_id=os.getenv("MODEL_FLASH", "google/gemma-4-31B-it"),
+        display_name="Gemma 4 Flash (31B)",
         tier="flash",
-        max_tokens_default=4096,
-        temperature_default=0.1,
+        max_tokens_default=int(os.getenv("MODEL_FLASH_MAX_TOKENS", "4096")),
+        temperature_default=float(os.getenv("MODEL_FLASH_TEMPERATURE", "0.1")),
         supports_json_schema=True,
         notes=(
             "Fast model for volume tasks. Add explicit guardrails: "
             "'NO intentes usar herramientas externas.' "
-            "Divide complex tasks into chained prompts. "
-            "Prompt prefix should approach multiples of 256 tokens for cache alignment."
+            "Divide complex tasks into chained prompts."
         ),
     ),
 }

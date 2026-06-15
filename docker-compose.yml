@@ -111,6 +111,7 @@ services:
       retries: 5
     networks:
       - gt_network
+      - default
 
   fastapi:
     build: ./backend
@@ -150,6 +151,9 @@ services:
 
   worker-fast:
     build: ./workers/fast
+    networks:
+      - gt_network
+      - default
     develop:
       watch:
         - action: sync+restart
@@ -164,6 +168,9 @@ services:
       REDIS_URL: redis://redis:6379
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+    volumes:
+      - ./backend/app/prompts:/app/prompts:ro
     depends_on:
       - pgbouncer
       - redis
@@ -171,6 +178,9 @@ services:
 
   worker-nlp:
     build: ./workers/nlp
+    networks:
+      - gt_network
+      - default
     develop:
       watch:
         - action: sync+restart
@@ -196,7 +206,7 @@ services:
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
       UPLOAD_DIR: /app/uploads
       USE_GPU: ${USE_GPU:-false}
-      SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-true}
+      SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
     depends_on:
       pgbouncer:
         condition: service_started
@@ -209,6 +219,9 @@ services:
 
   worker-heavy:
     build: ./workers/heavy
+    networks:
+      - gt_network
+      - default
     develop:
       watch:
         - action: sync+restart

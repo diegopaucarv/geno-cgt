@@ -183,6 +183,15 @@ export async function saveTaskSegments(documentId: string, taskId: string) {
   );
 }
 
+export async function punctuateDocument(documentId: string) {
+  return request<{
+    status: string;
+    task_id?: string;
+    punctuation_fix: boolean;
+    message?: string;
+  }>(`/documents/${documentId}/punctuate`, { method: "POST" });
+}
+
 export async function deleteDocument(documentId: string) {
   const token = getToken();
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {
@@ -291,7 +300,12 @@ export interface Recommendation {
   category: string;
   title: string;
   description: string;
-  action_type: "connect" | "absorb_ghost" | "rename" | "sample" | "resolve_tension";
+  action_type:
+    | "connect"
+    | "absorb_ghost"
+    | "rename"
+    | "sample"
+    | "resolve_tension";
   category_ids: string[];
   suggested_code: string;
   impact_score: number;
@@ -309,7 +323,10 @@ export async function getTheoreticalCodes(projectId: string) {
   return request<TheoreticalCode[]>(`/projects/${projectId}/theoretical/codes`);
 }
 
-export async function createTheoreticalCode(projectId: string, body: Record<string, any>) {
+export async function createTheoreticalCode(
+  projectId: string,
+  body: Record<string, any>,
+) {
   return request<void>(`/projects/${projectId}/theoretical/codes`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -319,10 +336,15 @@ export async function createTheoreticalCode(projectId: string, body: Record<stri
 // ── Ecosystem ─────────────────────────────────────────────────────────
 
 export async function getEcosystem(projectId: string) {
-  return request<EcosystemState>(`/projects/${projectId}/elaboration/ecosystem`);
+  return request<EcosystemState>(
+    `/projects/${projectId}/elaboration/ecosystem`,
+  );
 }
 
-export async function saveEcosystemLayout(projectId: string, layout: Partial<EcosystemLayout>) {
+export async function saveEcosystemLayout(
+  projectId: string,
+  layout: Partial<EcosystemLayout>,
+) {
   return request<void>(`/projects/${projectId}/elaboration/ecosystem/layout`, {
     method: "PUT",
     body: JSON.stringify(layout),
@@ -333,7 +355,11 @@ export async function saveEcosystemLayout(projectId: string, layout: Partial<Eco
 
 export async function elaborateRelationship(
   projectId: string,
-  body: { category_ids: string[]; theoretical_code_id: string; researcher_question: string },
+  body: {
+    category_ids: string[];
+    theoretical_code_id: string;
+    researcher_question: string;
+  },
 ) {
   return request<{ status: string; task_id: string }>(
     `/projects/${projectId}/elaboration/relationships`,
@@ -342,11 +368,15 @@ export async function elaborateRelationship(
 }
 
 export async function getRelationships(projectId: string) {
-  return request<Relationship[]>(`/projects/${projectId}/elaboration/relationships`);
+  return request<Relationship[]>(
+    `/projects/${projectId}/elaboration/relationships`,
+  );
 }
 
 export async function getRelationship(projectId: string, relId: string) {
-  return request<Relationship>(`/projects/${projectId}/elaboration/relationships/${relId}`);
+  return request<Relationship>(
+    `/projects/${projectId}/elaboration/relationships/${relId}`,
+  );
 }
 
 export async function resolveDivergence(
@@ -354,10 +384,13 @@ export async function resolveDivergence(
   relId: string,
   body: { divergence_resolution: string },
 ) {
-  return request<void>(`/projects/${projectId}/elaboration/relationships/${relId}/diverge`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
+  return request<void>(
+    `/projects/${projectId}/elaboration/relationships/${relId}/diverge`,
+    {
+      method: "PUT",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 // ── Ghosts ────────────────────────────────────────────────────────────
@@ -371,15 +404,21 @@ export async function absorbGhost(
   memoId: string,
   targetCategoryId: string,
 ) {
-  return request<void>(`/projects/${projectId}/elaboration/ghosts/${memoId}/absorb`, {
-    method: "POST",
-    body: JSON.stringify({ target_category_id: targetCategoryId }),
-  });
+  return request<void>(
+    `/projects/${projectId}/elaboration/ghosts/${memoId}/absorb`,
+    {
+      method: "POST",
+      body: JSON.stringify({ target_category_id: targetCategoryId }),
+    },
+  );
 }
 
 // ── Renames ───────────────────────────────────────────────────────────
 
-export async function getRenameSuggestions(projectId: string, categoryId: string) {
+export async function getRenameSuggestions(
+  projectId: string,
+  categoryId: string,
+) {
   return request<RenameSuggestions>(
     `/projects/${projectId}/elaboration/rename-suggestions/${categoryId}`,
   );
@@ -395,7 +434,10 @@ export async function applyRename(
   });
 }
 
-export async function getDefinitionHistory(projectId: string, categoryId: string) {
+export async function getDefinitionHistory(
+  projectId: string,
+  categoryId: string,
+) {
   return request<DefinitionVersion[]>(
     `/projects/${projectId}/elaboration/categories/${categoryId}/definition-history`,
   );
@@ -404,7 +446,9 @@ export async function getDefinitionHistory(projectId: string, categoryId: string
 // ── Recommendations ───────────────────────────────────────────────────
 
 export async function getRecommendations(projectId: string) {
-  return request<Recommendation[]>(`/projects/${projectId}/elaboration/recommendations`);
+  return request<Recommendation[]>(
+    `/projects/${projectId}/elaboration/recommendations`,
+  );
 }
 
 export async function getTheoreticalModel(projectId: string) {
@@ -418,13 +462,21 @@ export async function getSaturationGaps(projectId: string) {
     project_id: string;
     generated_at: string;
     critical: { severity: string; description: string; action: string }[];
-    warnings: { severity: string; source: string; description: string; action: string }[];
+    warnings: {
+      severity: string;
+      source: string;
+      description: string;
+      action: string;
+    }[];
     saturated: string[];
   }>(`/projects/${projectId}/analysis/saturation-gaps`);
 }
 
 export async function refreshSaturationGaps(projectId: string) {
-  return request<void>(`/projects/${projectId}/analysis/saturation-gaps/refresh`, {
-    method: "POST",
-  });
+  return request<void>(
+    `/projects/${projectId}/analysis/saturation-gaps/refresh`,
+    {
+      method: "POST",
+    },
+  );
 }

@@ -25,15 +25,34 @@ ALLOWED_MIME_TYPES = [
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
-def _needs_punctuation(text: str) -> bool:
-    """Heurística: +60% de oraciones empiezan con minúscula → necesita puntuación."""
+def _needs_punctuation(text: str, max_sample: int = 2000) -> bool:
+    """Heurística sin LLM: caracteres extraños + ratio de puntuación.
+
+    Detecta texto que necesita mejora de formato si:
+    - Tiene caracteres no imprimibles o artefactos de encoding
+    - El ratio de signos de puntuación por token es demasiado bajo
+      (menos de 1 signo cada ~15 tokens)
+    """
     import re
 
-    sentences = re.split(r"[.!?]+", text)
-    if len(sentences) < 3:
+    sample = text[:max_sample]
+    if len(sample) < 50:
         return False
-    lower_starts = sum(1 for s in sentences if s.strip() and s.strip()[0].islower())
-    return lower_starts / max(len(sentences), 1) > 0.6
+
+    # ── Caracteres extraños: non-printable, null bytes, BOM ────
+    weird = re.findall(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ufffd]", sample)
+    if len(weird) > 0:
+        return True
+
+    # ── Ratio de puntuación ────────────────────────────────────
+    punct_marks = re.findall(r"[.!?]", sample)
+    tokens = sample.split()
+    if len(tokens) < 10:
+        return False
+
+    ratio = len(punct_marks) / max(len(tokens), 1)
+    # Menos de 1 signo de puntuación cada ~15 tokens → probablemente mal formateado
+    return ratio < (1 / 15)
 
 
 @router.post("/upload/{project_id}")
@@ -90,16 +109,10 @@ async def upload_document(
         print(f"[Upload] Error extrayendo texto: {e}")
 
     # 5.5 Opcional: mejorar puntuación si el texto lo necesita
-    if texto_extraido and _needs_punctuation(texto_extraido):
-        from app.core.celery_app import celery_app
+    # Se dispara después de guardar para tener el doc_id
+    needs_punct = texto_extraido and _needs_punctuation(texto_extraido)
 
-        celery_app.send_task(
-            "punctuate_text",
-            args=[texto_extraido[:50000], 3000, str(new_doc.id)],
-            queue="fast",
-        )
-
-    # 6. Guardar metadatos en DB (texto_extraido en metadatos)
+    # 6. Guardar metadatos en DB
     new_doc = Documento(
         proyecto_id=project_id,
         original_filename=file.filename,
@@ -108,16 +121,33 @@ async def upload_document(
         size_bytes=file_size,
         tipo_de_fuente="TEXTO",
         estado="crudo",
-        metadatos={"texto_extraido": texto_extraido[:10000]} if texto_extraido else {},
+        metadatos={
+            "texto_extraido": texto_extraido[:10000],
+            "needs_punctuation": needs_punct,
+        }
+        if texto_extraido
+        else {},
     )
     db.add(new_doc)
     await db.commit()
     await db.refresh(new_doc)
 
-    # 7. Disparar pipeline CGT asíncrono
+    # 7. Disparar pipeline CGT asíncrono (todo en un solo flujo)
     from app.core.celery_app import celery_app
 
-    # Paso 0: segmentar en worker-nlp (tiene spaCy)
+    # Paso 0 (opcional): mejorar puntuación con LLM (FLASH)
+    if needs_punct:
+        celery_app.send_task(
+            "punctuate_text",
+            kwargs={
+                "texto": texto_extraido[:50000],
+                "max_chars": 3000,
+                "documento_id": str(new_doc.id),
+            },
+            queue="fast",
+        )
+
+    # Paso 1: segmentar en worker-nlp
     celery_app.send_task(
         "segmentar_documento",
         args=[
@@ -131,27 +161,20 @@ async def upload_document(
         queue="nlp",
     )
 
-    # Paso 1: pipeline de agentes en worker-heavy
-    if ORCHESTRATION_MODE == "graph":
-        task = celery_app.send_task(
-            "invoke_graph",
-            args=[str(project_id), str(new_doc.id)],
-            queue="heavy",
-        )
-    else:
-        task = celery_app.send_task(
-            "process_document_agents_a",
-            args=[str(new_doc.id), str(project_id)],
-            queue="heavy",
-        )
+    # Paso 2: pipeline de agentes (A1→A2→A3→B1→B2→B3)
+    task = celery_app.send_task(
+        "process_document_agents_a",
+        args=[str(new_doc.id), str(project_id)],
+        queue="heavy",
+    )
 
     return {
         "id": new_doc.id,
         "storage_key": storage_key,
         "filename": file.filename,
-        "estado": "segmentando",
+        "estado": "procesando",
         "pipeline_task_id": task.id,
-        "orchestration": ORCHESTRATION_MODE,
+        "punctuation_fix": needs_punct,
     }
 
 
@@ -307,6 +330,47 @@ async def save_task_segments(
 
     await db.commit()
     return {"num_segmentos": len(segmentos_texto)}
+
+
+@router.post("/{document_id}/punctuate")
+async def punctuate_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Mejora la puntuación del texto extraído usando LLM (FLASH)."""
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+
+    texto = doc.metadatos.get("texto_extraido", "") if doc.metadatos else ""
+    if not texto:
+        raise HTTPException(400, "No hay texto extraído para puntuar")
+
+    needs_punct = _needs_punctuation(texto)
+    if not needs_punct:
+        return {
+            "status": "ok",
+            "punctuation_fix": False,
+            "message": "El texto ya tiene buena puntuación",
+        }
+
+    from app.core.celery_app import celery_app
+
+    task = celery_app.send_task(
+        "punctuate_text",
+        kwargs={
+            "texto": texto[:50000],
+            "max_chars": 3000,
+            "documento_id": str(document_id),
+        },
+        queue="fast",
+    )
+    return {
+        "status": "dispatched",
+        "task_id": task.id,
+        "punctuation_fix": True,
+    }
 
 
 @router.delete("/{document_id}", status_code=204)

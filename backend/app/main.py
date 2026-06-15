@@ -24,6 +24,13 @@ from app.db.database import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await minio_client.ensure_bucket_exists()
+    # Seed theoretical codes vía Celery (la BD se inicializa con sync sessions)
+    try:
+        from app.core.celery_app import celery_app
+
+        celery_app.send_task("seed_theoretical_codes", queue="heavy")
+    except Exception:
+        pass  # Silencioso: Redis puede no estar listo aún
     yield
     await engine.dispose()
 

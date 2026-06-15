@@ -1404,3 +1404,20 @@ def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
     except Exception as e:
         logger.error("Graph invocation failed: %s", e)
         return {"status": "error", "reason": str(e)}
+
+
+@app.task(name="seed_theoretical_codes")
+def task_seed_theoretical_codes() -> dict:
+    """T28: Seed de 12 codigos teoricos built-in. Idempotente."""
+    import sys as _s
+    _s.path.insert(0, "/app")
+    from app.services.theory_seeder import seed_theoretical_codes
+    from database import SessionLocal
+
+    s = SessionLocal()
+    try:
+        inserted = seed_theoretical_codes(s)
+        logger.info("T28: seeded %d theoretical codes", inserted)
+        return {"status": "ok", "inserted": inserted}
+    finally:
+        s.close()

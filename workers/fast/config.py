@@ -24,8 +24,8 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
 CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")
 
 # ── LLM Model Tiers ──────────────────────────────────────────────────
-MODEL_FLASH = os.getenv("MODEL_FLASH", "deepseek-ai/DeepSeek-V3")
-MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-R1")
+MODEL_FLASH = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
+MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
 
 # ── TEI ──────────────────────────────────────────────────────────────
 TEI_URL = os.getenv("TEI_URL", "http://tei:8080")

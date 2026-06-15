@@ -28,7 +28,7 @@ from llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
-app = Celery("fast_tasks", broker=REDIS_URL)
+app = Celery("fast_tasks", broker=REDIS_URL, backend=REDIS_URL)
 llm = LLMClient()
 
 # ═══════════════════════════════════════════════════════════════════════

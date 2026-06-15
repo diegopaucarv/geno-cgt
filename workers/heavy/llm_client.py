@@ -25,9 +25,24 @@ logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
 
-TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": "google/gemma-4-31B-it",
-    "PRO": "deepseek-ai/DeepSeek-R1",
+# ── Model configuration — SINGLE SOURCE: environment variables ──
+
+_MODEL_FLASH = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
+_MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
+
+_TIER_MODELS: dict[ModelTier, str] = {
+    "FLASH": _MODEL_FLASH,
+    "PRO": _MODEL_PRO,
+}
+
+_TIER_MAX_TOKENS: dict[ModelTier, int] = {
+    "FLASH": int(os.getenv("MODEL_FLASH_MAX_TOKENS", "4096")),
+    "PRO": int(os.getenv("MODEL_PRO_MAX_TOKENS", "8192")),
+}
+
+_TIER_TEMPERATURE: dict[ModelTier, float] = {
+    "FLASH": float(os.getenv("MODEL_FLASH_TEMPERATURE", "0.1")),
+    "PRO": float(os.getenv("MODEL_PRO_TEMPERATURE", "0.3")),
 }
 
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
@@ -350,10 +365,14 @@ class LLMClient:
         self,
         agent_id: str,
         variables: dict[str, str],
-        max_tokens: int = 2048,
-        temperature: float = 0.3,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> dict[str, Any]:
-        """Carga prompt, reemplaza variables, inyecta schema, llama al LLM."""
+        """Carga prompt, reemplaza variables, inyecta schema, llama al LLM.
+
+        Si max_tokens o temperature no se especifican, se usan defaults
+        según el tier del modelo (PRO → 8K/0.3, FLASH → 4K/0.1).
+        """
         if self.is_mock:
             return dict(
                 MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
@@ -373,7 +392,19 @@ class LLMClient:
             declared_tier if declared_tier in ("PRO", "FLASH") else "PRO"
         )
 
-        logger.info("Agent %s → tier=%s", agent_id, model_tier)
+        defaults = None
+        if max_tokens is None:
+            max_tokens = _TIER_MAX_TOKENS[model_tier]
+        if temperature is None:
+            temperature = _TIER_TEMPERATURE[model_tier]
+
+        logger.info(
+            "Agent %s → tier=%s tokens=%d temp=%.2f",
+            agent_id,
+            model_tier,
+            max_tokens,
+            temperature,
+        )
 
         prompt_template = parsed["prompt"]
         try:
@@ -385,7 +416,7 @@ class LLMClient:
                 system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
         schema = parsed["schema"]
-        model = TIER_MODELS[model_tier]
+        model = _TIER_MODELS[model_tier]
         return self._call_llm(
             model_tier, model, system_prompt, schema, max_tokens, temperature
         )

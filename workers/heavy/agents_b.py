@@ -34,7 +34,6 @@ def _get_population_assumption(session, proyecto_id: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-
 def _get_coding_style_instruction(session, proyecto_id: str) -> str:
     """Lee los coding_styles del proyecto y devuelve instruccion combinada."""
     config = session.execute(
@@ -54,7 +53,7 @@ def _get_coding_style_instruction(session, proyecto_id: str) -> str:
         "parafrasis": "Nombra cada código con una FRASE CORTA descriptiva (3-8 palabras). Ej: 'El algoritmo decide sin consultar'.",
         "tema_subtema": "Nombra cada código como TEMA → subtema. Ej: 'Control algorítmico → Resistencia'.",
         "causal": "Nombra cada código como CADENA CAUSAL (A → B). Ej: 'Falta de transparencia → Desconfianza'.",
-        "in_vivo": "Nombra cada código con una CITA TEXTUAL del entrevistado (entre comillas). Ej: '"cada uno tiene su maña"'.",
+        "in_vivo": "Nombra cada código con una CITA TEXTUAL del entrevistado (entre comillas). Ej: '\"cada uno tiene su maña\"'.",
     }
     if len(style_keys) == 1:
         return instructions.get(style_keys[0], instructions["gerundio"])
