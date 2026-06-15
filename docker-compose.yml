@@ -109,6 +109,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+    networks:
+      - gt_network
 
   fastapi:
     build: ./backend
@@ -213,6 +215,9 @@ services:
           path: ./workers/heavy/tasks.py
           target: /app/tasks.py
         - action: sync+restart
+          path: ./workers/heavy/agents_b.py
+          target: /app/agents_b.py
+        - action: sync+restart
           path: ./workers/heavy/llm_client.py
           target: /app/llm_client.py
         - action: sync+restart
@@ -221,12 +226,13 @@ services:
         - action: sync
           path: ./backend/app/models
           target: /app/models
+        - action: sync
+          path: ./backend/app/prompts
+          target: /app/prompts
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
           path: ./workers/heavy/Dockerfile
-    volumes:
-      - ./backend/app/models:/app/models:ro
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}

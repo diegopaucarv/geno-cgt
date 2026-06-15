@@ -88,13 +88,39 @@ async def upload_document(
         mime_type=mime,
         size_bytes=file_size,
         tipo_de_fuente="TEXTO",
+        estado="crudo",
         metadatos={"texto_extraido": texto_extraido[:10000]} if texto_extraido else {},
     )
     db.add(new_doc)
     await db.commit()
     await db.refresh(new_doc)
 
-    return {"id": new_doc.id, "storage_key": storage_key, "filename": file.filename}
+    # 7. Disparar pipeline CGT asíncrono
+    from app.core.celery_app import celery_app
+
+    orch_mode = os.getenv("ORCHESTRATION_MODE", "celery")
+
+    if orch_mode == "graph":
+        task = celery_app.send_task(
+            "invoke_graph",
+            args=[str(project_id), str(new_doc.id)],
+            queue="heavy",
+        )
+    else:
+        task = celery_app.send_task(
+            "process_document_agents_a",
+            args=[str(new_doc.id), str(project_id)],
+            queue="heavy",
+        )
+
+    return {
+        "id": new_doc.id,
+        "storage_key": storage_key,
+        "filename": file.filename,
+        "estado": "segmentando",
+        "pipeline_task_id": task.id,
+        "orchestration": orch_mode,
+    }
 
 
 @router.get("/download/{document_id}")

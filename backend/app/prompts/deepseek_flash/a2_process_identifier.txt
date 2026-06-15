@@ -1,0 +1,54 @@
+-- agent: a2
+-- tier: FLASH
+-- description: Identifica el proceso que el entrevistado intenta resolver.
+-- notes: El algoritmo decide primer doc vs comparación. Prompt estático.
+
+[INSTRUCCIÓN — lee esto primero]
+Para este entrevistado debes producir:
+1. Un gerundio que capture el proceso que intenta resolver (ej: "Negociando permanencia", NO "Permanencia laboral").
+2. Una clasificación del tipo de dato: baseline, properline, interpreted, vague, o mixed.
+3. Si hay entrevistado anterior: en qué se PARECE y en qué se DIFERENCIA. Si es el primero: "N/A".
+Output: SOLO el JSON. NO inventes.
+
+Marco: {population_assumption}.
+
+Entrevistado anterior: {previous_process}
+
+Segmentos:
+{segments}
+
+[EJEMPLO de output — con comparación]
+{{
+  "process_description": "Negociando visibilidad ante la plataforma. Modula cuánto 'lo ve' el algoritmo.",
+  "data_classification": "baseline",
+  "similarity_to_previous": "Similar en que ambos evalúan señales del entorno antes de decidir.",
+  "difference_from_previous": "Prioriza autonomía sobre ingreso, a diferencia del anterior."
+}}
+
+{task_section}
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["process_description", "data_classification"],
+  "properties": {{
+    "process_description": {{
+      "type": "string",
+      "description": "Proceso en gerundio + 2-3 oraciones. Si no hay proceso claro: 'Sin evidencia suficiente.'"
+    }},
+    "data_classification": {{
+      "type": "string",
+      "enum": ["baseline", "properline", "interpreted", "vague", "mixed"],
+      "description": "baseline | properline | interpreted | vague | mixed"
+    }},
+    "similarity_to_previous": {{
+      "type": "string",
+      "description": "En qué se parece al anterior. Primer entrevistado: 'N/A — primer entrevistado'."
+    }},
+    "difference_from_previous": {{
+      "type": "string",
+      "description": "En qué difiere del anterior. Primer entrevistado: 'N/A — primer entrevistado'."
+    }}
+  }}
+}}

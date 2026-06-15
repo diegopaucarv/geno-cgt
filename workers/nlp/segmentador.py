@@ -929,3 +929,132 @@ class ProgressiveSegmenter:
             f"({overflow_count} desbordamientos)."
         )
         return final
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# A2 — AnchorBasedReconstructor (Hacedor de texto)
+# ═══════════════════════════════════════════════════════════════════════
+
+class AnchorBasedReconstructor:
+    """
+    Reconstructor determinista de segmentos usando anclas textuales.
+    Equivalente al 'Hacedor de texto' del Open Coder - Document (n8n).
+
+    Toma el texto completo original del documento y los metadatos de cada
+    segmento (first_10, length) para encontrar la posición exacta del
+    segmento en el original. Produce start_char, end_char, y el texto
+    reconstruido como subcadena exacta.
+
+    Si el ancla no se encuentra (texto modificado, encoding, etc.),
+    hace fallback a fuzzy match sobre las primeras 5 palabras.
+    """
+
+    def __init__(self):
+        try:
+            import spacy
+            self.nlp = spacy.load("es_core_news_lg")
+        except Exception:
+            self.nlp = None
+
+    def reconstruct(
+        self,
+        full_text: str,
+        segments: list[dict],
+    ) -> list[dict]:
+        """
+        full_text: texto completo original del documento
+        segments: lista de dicts con al menos 'first_10' (str) y 'length' (int)
+
+        Returns: segmentos con campos adicionales:
+            - text: texto reconstruido (subcadena exacta)
+            - start_char: posición de inicio en full_text
+            - end_char: posición de fin en full_text
+            - is_exact_match: bool
+        """
+        if not full_text or not segments:
+            return segments
+
+        # Dividir en oraciones para navegación estructural
+        if self.nlp:
+            doc = self.nlp(full_text[:100000])
+            sentences = [
+                {"text": s.text, "start": s.start_char, "end": s.end_char}
+                for s in doc.sents
+            ]
+        else:
+            # Fallback sin spaCy: dividir por puntuación
+            import re
+            raw_sents = re.split(r'(?<=[.!?])\s+', full_text)
+            sentences = []
+            pos = 0
+            for s in raw_sents:
+                sentences.append({"text": s, "start": pos, "end": pos + len(s)})
+                pos += len(s) + 1
+
+        results = []
+        for seg in segments:
+            anchor = seg.get("first_10", "")
+            length = seg.get("length", 5)
+            text = seg.get("text", seg.get("texto", ""))
+
+            if not anchor:
+                # Sin ancla: devolver sin modificar
+                results.append({**seg, "is_exact_match": False})
+                continue
+
+            # Buscar posición exacta del ancla
+            pos = self._find_exact_anchor(sentences, anchor)
+
+            if pos == -1:
+                # Fallback: fuzzy sobre primeras 5 palabras
+                pos = self._fuzzy_find(sentences, anchor)
+                is_exact = False
+            else:
+                is_exact = True
+
+            # Calcular límites: 2 oraciones de contexto antes, N oraciones de segmento
+            start_sent = max(0, pos - 2)
+            end_sent = min(len(sentences), start_sent + length)
+
+            extracted = " ".join(s["text"] for s in sentences[start_sent:end_sent])
+            start_char = sentences[start_sent]["start"]
+            end_char = (
+                sentences[end_sent - 1]["end"]
+                if end_sent > start_sent
+                else start_char
+            )
+
+            results.append({
+                **seg,
+                "text": extracted.strip(),
+                "start_char": start_char,
+                "end_char": end_char,
+                "is_exact_match": is_exact,
+            })
+
+        return results
+
+    def _find_exact_anchor(self, sentences: list[dict], anchor: str) -> int:
+        """Busca el ancla exacta (case-insensitive) en las oraciones."""
+        anchor_lower = anchor.lower().strip()
+        for i, s in enumerate(sentences):
+            if anchor_lower in s["text"].lower():
+                return i
+        return -1
+
+    def _fuzzy_find(self, sentences: list[dict], anchor: str) -> int:
+        """Fallback: busca las primeras 5 palabras del ancla, ignora puntuación."""
+        import re
+        words = re.findall(r'\w+', anchor.lower())
+        search_terms = words[:5]
+        if not search_terms:
+            return 0
+        best_idx = 0
+        best_score = 0
+        for i, s in enumerate(sentences):
+            text_lower = s["text"].lower()
+            score = sum(1 for w in search_terms if w in text_lower)
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        return best_idx

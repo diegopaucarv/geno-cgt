@@ -19,3 +19,10 @@ class EstadoDeSaturacion(str, enum.Enum):
     ESTABLE = "ESTABLE"
     SATURADO = "SATURADO"
     REVISION_FORZADA = "REVISION_FORZADA"
+
+
+class RecategorizationAction(str, enum.Enum):
+    """A5: Triada de decision para refinamiento de categorias (Recategorizacion.json)."""
+    ENRICH = "ENRICH"
+    SUBDIVIDE = "SUBDIVIDE"
+    DIVIDE = "DIVIDE"

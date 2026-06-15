@@ -3,7 +3,7 @@ import uuid
 
 from app.models.base import Base
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -19,6 +19,24 @@ class Segmento(Base):
     conteo_tokens: Mapped[int] = mapped_column(Integer, default=0)
 
     es_anomalia: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # ── Clasificación Glaser ────────────────────────
+    tipo_dato_glaser: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    """
+    baseline | properline | interpreted | vague.
+    Pre-clasificado por señales textuales (algorithmic_checks.preclassify_glaser).
+    El LLM puede confirmar o corregir durante codificación.
+    """
+
+    # ── Reconstrucción determinista (A2 — Hacedor de texto) ──
+    first_10: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    """Primeras 10 palabras exactas. Ancla textual para reconstrucción determinista."""
+    start_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Posición de inicio en el texto original (0-based char index)."""
+    end_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Posición de fin en el texto original (0-based char index)."""
+    is_exact_match: Mapped[bool] = mapped_column(Boolean, default=True)
+    """False si el ancla no se encontró en el original (fallback a fuzzy match)."""
 
     # Vector de 1024 dimensiones para búsqueda semántica (TEI — voyage-4-nano)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)

@@ -1,0 +1,55 @@
+-- agent: b2b
+-- tier: PRO
+-- description: Genera códigos en gerundio a partir de indicadores pre-extraídos.
+-- notes: Recibe indicadores ya extraídos por B2a (FLASH). Solo genera nombres y definiciones.
+--        El sistema ya pre-filtró segmentos contra códigos existentes.
+
+[ROL]
+Eres un investigador generando códigos que capturen patrones de comportamiento.
+Recibes indicadores ya extraídos de los segmentos — no necesitas releer texto crudo.
+Tu tarea es abstraer patrones y nombrarlos con gerundios.
+
+Marco analítico: {population_assumption}.
+
+[CONTEXTO POBLACIONAL]
+{population_context}
+
+[CÓDIGOS YA EXISTENTES]
+{existing_codes}
+
+[INDICADORES EXTRAÍDOS DE LOS SEGMENTOS]
+{indicators}
+
+[TAREA]
+A partir de los indicadores proporcionados, genera códigos en gerundio.
+Agrupa indicadores que apuntan al mismo patrón de comportamiento bajo
+un solo código. Si varios indicadores sugieren el mismo patrón con
+distinto vocabulario, asígnales el mismo código.
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["codes"],
+  "properties": {{
+    "codes": {{
+      "type": "array",
+      "description": "Códigos generados a partir de los indicadores.",
+      "items": {{
+        "type": "object",
+        "required": ["code_name", "definition", "indicators", "variations", "relationship_to_existing"],
+        "properties": {{
+          "code_name": {{"type": "string", "description": "Nombre en gerundio que captura la acción."}},
+          "definition": {{"type": "string", "description": "1-2 oraciones. Qué comportamiento captura."}},
+          "indicators": {{"type": "array", "items": {{"type": "string"}}, "description": "Frases clave que señalan este código (de las extraídas por B2a)."}},
+          "variations": {{"type": "string", "description": "Variaciones entre entrevistados."}},
+          "relationship_to_existing": {{
+            "type": "string",
+            "enum": ["new", "same_as_existing", "variation_of_existing", "subcategory_of", "merge_with"],
+            "description": "Relación con códigos existentes."
+          }}
+        }}
+      }}
+    }}
+  }}
+}}

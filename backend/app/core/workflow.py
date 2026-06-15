@@ -84,6 +84,11 @@ class AnalysisState(TypedDict, total=False):
     current_step: str  # for checkpointing / resume
     errors: list[str]  # accumulated errors
 
+    # ── A8: Mem CP + Mem LP state ─────────────────────────────────────────
+    processed_segments: dict[str, dict]  # wave_key → {segment_index: result}
+    current_wave: int  # wave number for multi-pass coding
+    last_checkpoint: int  # last segment index checkpointed
+
 
 # ── Node implementations ───────────────────────────────────────────────────
 # Each node is a function (AnalysisState) → AnalysisState.
@@ -92,198 +97,187 @@ class AnalysisState(TypedDict, total=False):
 
 
 def node_segment_and_index(state: AnalysisState) -> AnalysisState:
-    """
-    Node 1: Segment document using ProgressiveSegmenter (no LLM).
-    Stores segments + embeddings in DB. Populates unprocessed_segments.
-    """
-    # ── Pure Python: calls ProgressiveSegmenter via Celery task ─────────
-    # segmentar_y_indexar_documento(document_id) in worker-nlp
-    # This node is a pass-through; the actual work happens in the worker.
+    """Node 1: Segmenta y genera embeddings (spaCy + TEI)."""
     state["current_step"] = "segment_and_index"
-    logger.info("Node 1: segment_and_index — dispatching to worker-nlp")
+    doc_id = state.get("document_id", "")
+    if not doc_id:
+        return state
+    try:
+        import sys as _s
+        _s.path.insert(0, "/app")
+        from database import SessionLocal
+        s = SessionLocal()
+        try:
+            from workers.heavy.tasks import _ensure_segmented
+            _ensure_segmented(s, doc_id)
+        finally:
+            s.close()
+        logger.info("Node 1: segmented doc=%s", doc_id)
+    except Exception as e:
+        logger.warning("Node 1 failed: %s", e)
     return state
 
 
 def node_extract_entities(state: AnalysisState) -> AnalysisState:
-    """
-    Node 2: Extract entities and relations from each segment (Flash).
-    Uses prompt: entity_extraction (flash/entity_extraction.md)
-    Parallelizable per segment.
-    """
+    """Node 2: GraphRAG extraction — dispatch to worker-fast (fire-and-forget)."""
     state["current_step"] = "extract_entities"
-    # template = get_prompt("entity_extraction")
-    # for segment in state["unprocessed_segments"]:
-    #     result = client.invoke_prompt(template, segment_text=segment["text"], segment_id=segment["id"])
-    #     state["graph_entities"].extend(result["entities"])
-    #     state["graph_relations"].extend(result["relations"])
-    logger.info("Node 2: extract_entities — Flash model, per-segment extraction")
+    doc_id = state.get("document_id", "")
+    pid = state.get("project_id", "")
+    if not doc_id:
+        return state
+    try:
+        from celery import Celery
+        import os as _os
+        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        app.send_task("batch_extract_graph", args=[doc_id, pid], queue="fast")
+        logger.info("Node 2: GraphRAG dispatched for doc=%s", doc_id)
+    except Exception as e:
+        logger.warning("Node 2 failed (non-blocking): %s", e)
     return state
 
 
 def node_batch_code(state: AnalysisState) -> AnalysisState:
-    """
-    Node 3: Batch code segments (Producer + Critic, both Pro).
-    Sub-step 3.0: Producer → batch_coder_producer (pro/batch_coder_producer.md)
-    Sub-step 3.1: Critic   → batch_coder_critic   (pro/batch_coder_critic.md)
-
-    The Producer reuses existing codes when similarity > threshold;
-    generates new codes when needed. The Critic evaluates each as SAT/MOD/FORCED.
-    """
+    """Node 3: Open coding (B2) + Grounding (B2.5)."""
     state["current_step"] = "batch_code"
-    # ── Step 3.0: Producer ──────────────────────────────────────────────
-    # template = get_prompt("batch_coder_producer")
-    # result = client.invoke_prompt(template,
-    #     existing_codes=format_codes(state["existing_codes"]),
-    #     similar_codes=format_similar(state["unprocessed_segments"], state["code_prototypes"]),
-    #     segments_batch=format_segments(state["unprocessed_segments"]),
-    # )
-    # state["proposed_codes"] = result["codes"]
+    pid = state.get("project_id", "")
+    if not pid:
+        return state
+    try:
+    import sys as _sys
+    _sys.path.insert(0, "/app")
+    from database import SessionLocal
+    from llm_client import LLMClient
+    _llm = LLMClient()
 
-    # ── Step 3.1: Critic ────────────────────────────────────────────────
-    # template = get_prompt("batch_coder_critic")
-    # result = client.invoke_prompt(template,
-    #     codes_to_evaluate=format_proposed(state["proposed_codes"]),
-    #     evidence_segments=format_evidence(state["unprocessed_segments"]),
-    #     existing_codes=format_codes(state["existing_codes"]),
-    # )
-    # state["code_evaluations"] = result["evaluations"]
-    # state["new_codes"] = [c for c in proposed if eval[c["code_label"]]["verdict"] != "FORCED"]
-    # state["codes_to_reject"] = [c["code_label"] for c in proposed if eval[c["code_label"]]["verdict"] == "FORCED"]
-    logger.info("Node 3: batch_code — Pro Producer → Pro Critic")
+        from workers.heavy.agents_b import b2_open_code, b2_5_assign_codes_to_segments
+        result = b2_open_code(pid)
+        state["new_codes"] = result.get("codes", [])
+        logger.info("Node 3: B2 created %d codes", result.get("codes_created", 0))
+        ground = b2_5_assign_codes_to_segments(pid)
+        logger.info("Node 3: B2.5 grounded %d segments", ground.get("segments_assigned", 0))
+    except Exception as e:
+        logger.warning("Node 3 failed: %s", e)
     return state
 
 
 def node_map_synthesize(state: AnalysisState) -> AnalysisState:
-    """
-    Node 4: Map phase — intra-document synthesis per code (Pro).
-    Runs per (code × document) pair in parallel.
-    Uses prompt: map_synthesis (pro/map_synthesis.md)
-    """
+    """Node 4: Map-Reduce completo via Celery (reusa process_synthesis_agents_b)."""
     state["current_step"] = "map_synthesize"
-    # template = get_prompt("map_synthesis")
-    # for code in state["new_codes"] + state["modified_codes"]:
-    #     for doc_id in get_docs_with_code(code["id"]):
-    #         result = client.invoke_prompt(template,
-    #             code_label=code["label"],
-    #             code_definition=code["definition"],
-    #             code_id=code["id"],
-    #             document_name=get_doc_name(doc_id),
-    #             document_id=doc_id,
-    #             assigned_segments=get_segments_for_code_in_doc(code["id"], doc_id),
-    #         )
-    #         state["code_document_summaries"].append(result)
-    logger.info("Node 4: map_synthesize — Pro, parallel per code×document")
+    pid = state.get("project_id", "")
+    if not pid:
+        return state
+    try:
+        from celery import Celery
+        import os as _os
+        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        result = app.send_task("process_synthesis_agents_b", args=[pid], queue="heavy")
+        output = result.get(timeout=600)
+        state["code_document_summaries"] = output.get("open_coding", {}).get("codes", [])
+        state["candidate_hypotheses"] = output.get("hypotheses", {}).get("hypotheses", [])
+        logger.info("Node 4: Map-Reduce completed (codes=%d, hyps=%d)",
+            len(state.get("code_document_summaries", [])),
+            len(state.get("candidate_hypotheses", [])))
+    except Exception as e:
+        logger.warning("Node 4 Map-Reduce failed (non-blocking): %s", e)
     return state
 
 
 def node_reduce_synthesize(state: AnalysisState) -> AnalysisState:
-    """
-    Node 5: Reduce phase — inter-document consolidation per code (Pro).
-    Runs once per code after all Map tasks complete.
-    Uses prompt: reduce_synthesis (pro/reduce_synthesis.md)
-    """
+    """Node 5: Reduce phase — handled by node_map_synthesize (Celery task)."""
     state["current_step"] = "reduce_synthesize"
-    # template = get_prompt("reduce_synthesis")
-    # for code in state["new_codes"] + state["modified_codes"]:
-    #     summaries = [s for s in state["code_document_summaries"] if s["code_id"] == code["id"]]
-    #     result = client.invoke_prompt(template,
-    #         code_label=code["label"],
-    #         code_definition=code["definition"],
-    #         code_id=code["id"],
-    #         intra_document_summaries=format_summaries(summaries),
-    #         doc_count=len(summaries),
-    #         segment_count=count_segments_for_code(code["id"]),
-    #     )
-    #     state["code_global_summaries"].append(result)
-    logger.info("Node 5: reduce_synthesize — Pro, one per modified code")
+    logger.info("Node 5: reduce_synthesize — delegated to B agents")
     return state
 
 
 def node_find_core_concern(state: AnalysisState) -> AnalysisState:
-    """
-    Node 5.5: Find main concern (Pro). Runs once per study if not set.
-    Prerequisite for hypothesis_generation.
-    Uses prompt: core_concern_finder (pro/core_concern_finder.md)
-    """
+    """Node 5.5: A14 Main Concern usando 3 preguntas operacionales."""
     if state.get("main_concern"):
-        logger.info("Node 5.5: core_concern_finder — SKIPPED (already set)")
         return state
-
     state["current_step"] = "find_core_concern"
-    # template = get_prompt("core_concern_finder")
-    # result = client.invoke_prompt(template,
-    #     all_codes=format_all_codes(state["existing_codes"]),
-    #     all_memos=format_all_memos(state.get("memos", [])),
-    # )
-    # state["main_concern"] = result["main_concern"]
-    # state["core_category_candidates"] = result["core_category_candidates"]
-    logger.info("Node 5.5: core_concern_finder — Pro, once per study")
+    try:
+        import sys as _s
+        _s.path.insert(0, "/app")
+        from workers.heavy.tasks import task_a14_main_concern
+        result = task_a14_main_concern(state["project_id"])
+        state["main_concern"] = result.get("main_concern", "")
+        logger.info("Node 5.5: main_concern=%s", state["main_concern"][:60])
+    except Exception as e:
+        logger.warning("Node 5.5 failed: %s", e)
     return state
 
 
 def node_generate_hypotheses(state: AnalysisState) -> AnalysisState:
-    """
-    Node 6: Generate candidate hypotheses using Tree of Thoughts (Pro).
-    Requires main_concern to be set (from core_concern_finder or manual).
-    Uses prompt: hypothesis_generation (pro/hypothesis_generation.md)
-    Post-action: stores hypotheses in DB with status='candidate', notifies HITL.
-    """
+    """Node 6: B3 Hypothesis generation (reuses existing if Map-Reduce already did it)."""
     state["current_step"] = "generate_hypotheses"
-    # template = get_prompt("hypothesis_generation")
-    # result = client.invoke_prompt(template,
-    #     main_concern=state["main_concern"],
-    #     codes_with_synthesis=format_synthesis(state["code_global_summaries"]),
-    #     cooccurrence_matrix=format_cooccurrence(state["cooccurrence_matrix"]),
-    # )
-    # state["candidate_hypotheses"] = result["hypotheses"]
-    # ── Store in DB with status='candidate', notify HITL via WebSocket ──
-    logger.info("Node 6: hypothesis_generation — Pro, ToT/GoD")
+    pid = state.get("project_id", "")
+    if state.get("candidate_hypotheses"):
+        logger.info("Node 6: hypotheses already generated by Map-Reduce")
+        return state
+    if not pid:
+        return state
+    try:
+    import sys as _sys
+    _sys.path.insert(0, "/app")
+    from database import SessionLocal
+    from llm_client import LLMClient
+    _llm = LLMClient()
+
+        from workers.heavy.agents_b import b3_generate_hypotheses
+        result = b3_generate_hypotheses(pid)
+        state["candidate_hypotheses"] = result.get("hypotheses", [])
+        logger.info("Node 6: B3 generated %d hypotheses", result.get("hypotheses_created", 0))
+    except Exception as e:
+        logger.warning("Node 6 failed: %s", e)
     return state
 
 
 def node_calculate_saturation(state: AnalysisState) -> AnalysisState:
-    """
-    Node 6.1: Calculate saturation metrics (no LLM).
-    Pure Python: moving centroid, rolling std, per-code status.
-    Optionally calls incident_extractor (Flash) for new incidents.
-    """
+    """Node 7: SaturationCalculator + Paradigm SQL check."""
     state["current_step"] = "calculate_saturation"
-    # ── Pure Python: update_saturation(code_id, new_segments) in worker-nlp ──
-    # ── Optionally: incident_extractor for detailed per-category analysis ──
-    logger.info("Node 6.1: calculate_saturation — code (no LLM)")
+    pid = state.get("project_id", "")
+    if not pid:
+        return state
+    try:
+        from celery import Celery
+        import os as _os
+        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        app.send_task("update_saturation", args=[pid], queue="nlp")
+        logger.info("Node 7: saturation dispatched for project %s", pid)
+    except Exception as e:
+        logger.warning("Node 7 failed (non-blocking): %s", e)
     return state
 
 
 def node_hitl_review(state: AnalysisState) -> AnalysisState:
-    """
-    Node 6.2: HITL — Human reviews hypotheses via UI.
-    This is a LangGraph interrupt() point. The graph pauses here.
-    Researcher calls POST /hypotheses/decision → resumes graph.
-    """
+    """Node 8: HITL — pausa el grafo para revision humana de hipotesis."""
     state["current_step"] = "hitl_review"
-    # ── LangGraph interrupt() — graph pauses, waits for human input ──
-    # This is not an LLM call. The state is checkpointed by PostgresSaver.
-    logger.info("Node 6.2: hitl_review — LangGraph interrupt(), awaiting human")
+    from langgraph.types import interrupt
+    candidates = state.get("candidate_hypotheses", [])
+    if candidates:
+        decision = interrupt({
+            "message": "Revisar hipotesis candidatas",
+            "candidates": [
+                {"text": h.get("text", "")[:200], "level": h.get("level", "emergent")}
+                for h in candidates[:5]
+            ],
+        })
+        state["hitl_decision"] = decision
+        logger.info("Node 8: HITL decision received")
+    else:
+        logger.info("Node 8: HITL skipped (no candidates)")
     return state
 
 
 def node_final_report(state: AnalysisState) -> AnalysisState:
-    """
-    Node 7: Generate final study report (Pro).
-    Triggered only when researcher closes the study (POST /study/close).
-    Uses prompt: final_report (pro/final_report.md)
-    """
+    """Node 9: Final report — placeholder (Fase 14 del Plan.md)."""
     state["current_step"] = "final_report"
-    # template = get_prompt("final_report")
-    # result = client.invoke_prompt(template,
-    #     main_concern=state["main_concern"],
-    #     codes_with_global_summary=format_synthesis(state["code_global_summaries"]),
-    #     confirmed_hypotheses=format_confirmed(state["confirmed_hypotheses"]),
-    #     saturation_metrics=format_saturation(state["saturation_metrics"]),
-    #     anomaly_register=format_anomalies(state.get("anomalies", [])),
-    # )
-    # state["final_report"] = result["report"]
-    logger.info("Node 7: final_report — Pro, on study close")
+    state["final_report"] = {
+        "status": "placeholder",
+        "message": "Final report generation not yet implemented (Fase 14)",
+        "main_concern": state.get("main_concern", ""),
+        "hypotheses_count": len(state.get("candidate_hypotheses", [])),
+    }
+    logger.info("Node 9: final_report placeholder")
     return state
 
 
@@ -416,3 +410,82 @@ PROMPT_NODE_MAP: dict[str, str] = {
     "clusterizador_informado": None,  # Manual fallback, not in main graph
     "final_report": "final_report",  # Node 7
 }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# A8 — RollingWindowStateManager (Mem CP + Mem LP)
+# ═══════════════════════════════════════════════════════════════════════
+
+class RollingWindowStateManager:
+    """
+    Mem CP + Mem LP adaptado al estado de LangGraph.
+    Equivalente al ciclo Mem CP -> Mem LP -> Read/Write Files de n8n.
+
+    Mem CP: guarda el resultado de codificar UN segmento.
+    Mem LP: consolida todos los segmentos al final del documento.
+
+    Usa el estado del grafo (AnalysisState) en lugar de archivos /tmp.
+    El checkpointing de LangGraph (PostgresSaver) persiste automáticamente.
+    """
+
+    @staticmethod
+    def checkpoint_segment(
+        state: dict, segment_index: int, result: dict
+    ) -> dict:
+        """
+        Mem CP: guarda resultado de codificacion de UN segmento.
+        Permite reanudar desde el ultimo segmento si el worker falla.
+        Equivalente a alwaysOutputData: true — si la wave no existe, se crea.
+        """
+        wave = f"wave_{state.get('current_wave', 1)}"
+
+        if "processed_segments" not in state:
+            state["processed_segments"] = {}
+        if wave not in state["processed_segments"]:
+            state["processed_segments"][wave] = {}
+
+        state["processed_segments"][wave][str(segment_index)] = {
+            "text": result.get("text", ""),
+            "study_question": result.get("study_question", ""),
+            "data_type": result.get("glaser_data_type", ""),
+            "main_concern": result.get("main_concern", ""),
+            "code_label": result.get("code_label", ""),
+            "checkpointed_at": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+        state["last_checkpoint"] = segment_index
+        return state
+
+    @staticmethod
+    def consolidate_loop(state: dict) -> dict:
+        """
+        Mem LP: consolida todos los segmentos al final del documento.
+        Produce un resumen para la siguiente iteracion.
+        """
+        total = sum(
+            len(wave)
+            for wave in state.get("processed_segments", {}).values()
+        )
+        return {
+            "document_id": state.get("document_id"),
+            "waves": state.get("processed_segments", {}),
+            "total_segments_processed": total,
+            "last_checkpoint": state.get("last_checkpoint", 0),
+            "consolidated_at": __import__("datetime")
+            .datetime.utcnow()
+            .isoformat(),
+        }
+
+    @staticmethod
+    def get_unprocessed_segments(
+        state: dict, total_segments: int
+    ) -> list[int]:
+        """
+        Indices de segmentos NO procesados en la wave actual.
+        Util para reanudar tras fallo.
+        """
+        wave = f"wave_{state.get('current_wave', 1)}"
+        processed = state.get("processed_segments", {}).get(wave, {})
+        processed_indices = {int(k) for k in processed.keys()}
+        return [
+            i for i in range(total_segments) if i not in processed_indices
+        ]

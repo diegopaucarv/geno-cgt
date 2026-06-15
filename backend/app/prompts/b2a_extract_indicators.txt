@@ -1,0 +1,54 @@
+-- agent: b2a
+-- tier: FLASH
+-- description: Extrae indicadores de comportamiento de segmentos sin codificar.
+-- notes: Tarea determinista. FLASH es suficiente. No genera códigos, solo extrae frases.
+--        El output alimenta a B2b que sí genera los códigos en PRO.
+
+[INSTRUCCIÓN — lee esto primero]
+Para cada segmento, extrae frases textuales que indiquen un patrón de
+comportamiento. No generes códigos ni nombres. Solo identifica:
+1. Frases clave del segmento que revelan lo que el entrevistado HACE
+2. Qué patrón de comportamiento SUGIERE cada frase (en lenguaje natural)
+
+Output: SOLO el JSON.
+
+Segmentos:
+{segments}
+
+[EJEMPLO de output]
+{{
+  "indicators": [
+    {{
+      "segment_index": 0,
+      "key_phrases": ["me voy pa'l otro lado", "si no suena el teléfono"],
+      "suggested_pattern": "Cambia de ubicación cuando no recibe pedidos — posible evasión del sistema de asignación"
+    }},
+    {{
+      "segment_index": 1,
+      "key_phrases": ["acepto las que valen la pena", "las chicas las dejo"],
+      "suggested_pattern": "Evalúa y rechaza selectivamente pedidos según criterio de rentabilidad"
+    }}
+  ]
+}}
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["indicators"],
+  "properties": {{
+    "indicators": {{
+      "type": "array",
+      "description": "Indicadores extraídos de cada segmento.",
+      "items": {{
+        "type": "object",
+        "required": ["segment_index", "key_phrases", "suggested_pattern"],
+        "properties": {{
+          "segment_index": {{"type": "integer", "description": "Índice del segmento en la lista de entrada (0-based)."}},
+          "key_phrases": {{"type": "array", "items": {{"type": "string"}}, "description": "Frases textuales del segmento que revelan comportamiento."}},
+          "suggested_pattern": {{"type": "string", "description": "Descripción en lenguaje natural del patrón de comportamiento que estas frases sugieren."}}
+        }}
+      }}
+    }}
+  }}
+}}

@@ -1,0 +1,54 @@
+-- agent: b1
+-- tier: PRO
+-- description: Muestreo teórico — versión directa. El sistema filtra después.
+
+[INSTRUCCIÓN — lee esto primero]
+Identifica dimensiones de variación entre los entrevistados. Para cada una:
+- Qué varía y por qué importa
+- Evidencia concreta citando entrevistados
+- Perfil para contrastar, extremo, y consistente
+Output: SOLO el JSON. NO inventes.
+
+Marco: {population_assumption}.
+
+Contexto: {population_context}
+Procesos: {processes}
+Códigos: {codes}
+
+[EJEMPLO de output]
+{{
+  "sampling_dimensions": [
+    {{
+      "name": "Relación con la plataforma",
+      "description": "El grado en que percibe la plataforma como adversario vs. herramienta.",
+      "evidence_of_variation": "Entrevistado 1: 'el enemigo'. Entrevistado 3: 'una herramienta'.",
+      "contrast_criteria": "Dependientes totales de la app — probablemente la vean como herramienta.",
+      "extreme_criteria": "Entrevistados sancionados o bloqueados — probablemente la vean como adversario.",
+      "consistent_criteria": "6-12 meses de experiencia sin sanciones."
+    }}
+  ]
+}}
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["sampling_dimensions"],
+  "properties": {{
+    "sampling_dimensions": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": ["name", "description", "evidence_of_variation", "contrast_criteria", "extreme_criteria", "consistent_criteria"],
+        "properties": {{
+          "name": {{"type": "string", "description": "Nombre breve."}},
+          "description": {{"type": "string", "description": "Qué varía."}},
+          "evidence_of_variation": {{"type": "string", "description": "Evidencia concreta."}},
+          "contrast_criteria": {{"type": "string", "description": "Perfil opuesto."}},
+          "extreme_criteria": {{"type": "string", "description": "Caso intenso."}},
+          "consistent_criteria": {{"type": "string", "description": "Perfil similar."}}
+        }}
+      }}
+    }}
+  }}
+}}

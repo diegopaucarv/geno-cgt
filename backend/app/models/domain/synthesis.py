@@ -1,9 +1,9 @@
 # backend/app/models/domain/synthesis.py
 import uuid
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -122,3 +122,33 @@ class GraphRelation(Base):
     )
     relation_type: Mapped[str] = mapped_column(String(100), primary_key=True)
     strength: Mapped[float] = mapped_column(Float, default=1.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# A1 — ParadigmState (category saturator.json)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class ParadigmState(Base, TimestampMixin):
+    """
+    Estado paradigmático de una categoria. Mantenido por el Integrador
+    Paradigmatico (AI Agent1 del category saturator.json).
+
+    Cada iteracion produce una senal booleana did_state_expand.
+    La saturación se verifica con ventana deslizante SQL (bool_and).
+    """
+
+    __tablename__ = "paradigm_states"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    code_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categorias.id"))
+    proyecto_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proyectos.id"))
+    iteration: Mapped[int] = mapped_column(Integer)
+    did_state_expand: Mapped[bool] = mapped_column(Boolean, default=False)
+    expansion_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    """NEW_DIMENSION | NEW_CONDITION | NEW_CONSEQUENCE | NEW_STRATEGY | NONE"""
+    paradigm_snapshot: Mapped[dict] = mapped_column(JSONB, default=dict)
+    """{dimensions: [{label, description, incident_ids}], conditions: [...], consequences: [...], strategies: [...]}"""
+    integration_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_group: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    """Subgrupo de muestreo (como el antiguo agrupa por metadata_group)."""

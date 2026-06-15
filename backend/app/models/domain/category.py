@@ -4,6 +4,7 @@ import uuid
 from app.models.base import Base, TimestampMixin
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -26,6 +27,10 @@ class Categoria(Base, TimestampMixin):
     embedding_centroide: Mapped[list[float]] = mapped_column(
         Vector(1024), nullable=True
     )
+
+    # ── A6: TheoSampler ─────────────────────────────
+    saturation_docs: Mapped[list] = mapped_column(JSONB, default=list)
+    """UUIDs de documentos ya saturados. Alimenta el ANTI-JOIN del TheoSampler."""
 
     # Relaciones
     doc_codes = relationship(

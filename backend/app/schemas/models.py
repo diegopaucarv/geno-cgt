@@ -72,7 +72,10 @@ ProjectResponse = response_schema(Proyecto)
 
 ProjectCreate = create_input_schema(
     Proyecto,
-    exclude={"estado"},
+    exclude={
+        "estado",
+        "creador_id",  # se asigna automáticamente del usuario autenticado
+    },
 )
 
 # ── Document ──────────────────────────────────────────────────────────

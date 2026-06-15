@@ -50,6 +50,7 @@ from app.models.domain.synthesis import (
     GraphEntity,
     GraphRelation,
     Hypothesis,
+    ParadigmState,
     ProcessingState,
     SaturationMetrics,
 )

@@ -25,6 +25,12 @@ class Documento(Base, TimestampMixin):
     # Metadatos flexibles (estructuras complejas, resúmenes IA)
     metadatos: Mapped[dict] = mapped_column(JSONB, default=dict)
 
+    # ── Pipeline state ──────────────────────────────
+    estado: Mapped[str] = mapped_column(String(50), default="crudo")
+    """
+    crudo → segmentando → segmentado → procesando → listo → error
+    """
+
     # Relaciones
     proyecto = relationship("Proyecto", back_populates="documentos")
     segmentos = relationship(
