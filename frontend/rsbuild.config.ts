@@ -9,7 +9,12 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      "/api": "http://fastapi:8000",
+      "/api": {
+        target: "http://fastapi:8000",
+        changeOrigin: true,
+        proxyTimeout: 600000,
+        timeout: 600000,
+      },
     },
   },
   output: {

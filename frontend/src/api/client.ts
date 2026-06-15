@@ -192,6 +192,19 @@ export async function punctuateDocument(documentId: string) {
   }>(`/documents/${documentId}/punctuate`, { method: "POST" });
 }
 
+export async function processDocument(documentId: string, steps: string[]) {
+  return request<{
+    document_id: string;
+    steps: Record<
+      string,
+      { task_id?: string; status: string; reason?: string }
+    >;
+  }>(`/documents/${documentId}/process`, {
+    method: "POST",
+    body: JSON.stringify({ steps }),
+  });
+}
+
 export async function deleteDocument(documentId: string) {
   const token = getToken();
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {

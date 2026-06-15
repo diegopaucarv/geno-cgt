@@ -46,8 +46,8 @@ MODEL_REGISTRY: dict[str, ModelEndpoint] = {
     ),
     # ── FLASH tier: Gemma 4 via Together.ai ───────────────────────
     "deepseek-flash": ModelEndpoint(
-        model_id=os.getenv("MODEL_FLASH", "google/gemma-4-31B-it"),
-        display_name="Gemma 4 Flash (31B)",
+        model_id=os.getenv("MODEL_FLASH", "google/gemma-3n-E4B-it"),
+        display_name="Gemma 3 Flash (E4B)",
         tier="flash",
         max_tokens_default=int(os.getenv("MODEL_FLASH_MAX_TOKENS", "4096")),
         temperature_default=float(os.getenv("MODEL_FLASH_TEMPERATURE", "0.1")),

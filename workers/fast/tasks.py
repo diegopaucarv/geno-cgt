@@ -336,13 +336,39 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
     if not texto:
         return {"punctuated_text": "", "changes_made": False}
 
-    # Si el texto es corto, procesar en una sola llamada
-    if len(texto) <= max_chars:
+    def _safe_punctuate(raw: str, attempt: int = 0) -> dict:
+        """Llama al punctuator y valida que no haya pérdida de texto (>80%)."""
         response = llm.run_agent(
             "punctuator",
-            variables={"raw_text": texto},
+            variables={"raw_text": raw},
             temperature=0.1,
         )
+        out = response.get("punctuated_text", raw)
+        ratio = len(out) / max(len(raw), 1)
+        if ratio < 0.8 and attempt < 2:
+            logger.warning(
+                "Punctuator: texto truncado (%.0f%%). Reintentando (intento %d)…",
+                ratio * 100,
+                attempt + 1,
+            )
+            warn = (
+                "\n\n[ADVERTENCIA CRÍTICA]\n"
+                "El texto de salida NO DEBE ser más corto que el 80%% del original. "
+                "Solo añade puntuación. NO elimines, resumas ni parafrasees NINGÚN contenido. "
+                "Devuelve el texto COMPLETO con la puntuación corregida."
+            )
+            return _safe_punctuate(raw + warn, attempt + 1)
+        if ratio < 0.8:
+            logger.error(
+                "Punctuator: TRUNCACIÓN IRREVERSIBLE (%.0f%%). Revirtiendo.",
+                ratio * 100,
+            )
+            return {"punctuated_text": raw, "changes_made": False}
+        return response
+
+    # Si el texto es corto, procesar en una sola llamada
+    if len(texto) <= max_chars:
+        response = _safe_punctuate(texto)
         result = {
             "punctuated_text": response.get("punctuated_text", texto),
             "changes_made": response.get("changes_made", False),
@@ -367,12 +393,9 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
         punctuated_blocks = []
         changes = False
         for i, block in enumerate(blocks):
-            response = llm.run_agent(
-                "punctuator",
-                variables={"raw_text": block},
-                temperature=0.1,
-            )
-            punctuated_blocks.append(response.get("punctuated_text", block))
+            response = _safe_punctuate(block)
+            out = response.get("punctuated_text", block)
+            punctuated_blocks.append(out)
             if response.get("changes_made", False):
                 changes = True
 
@@ -381,6 +404,16 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
             "changes_made": changes,
             "blocks_processed": len(blocks),
         }
+
+    # Validación final: el texto completo no debe perder más del 20%
+    final_text = result["punctuated_text"]
+    if len(final_text) < len(texto) * 0.8:
+        logger.error(
+            "Punctuator: PÉRDIDA MASIVA de texto (%.0f%% → %.0f%%). Revirtiendo.",
+            len(texto),
+            len(final_text),
+        )
+        result = {"punctuated_text": texto, "changes_made": False}
 
     # If we have a documento_id and changes were made, update the DB
     if documento_id and result.get("changes_made"):
@@ -397,7 +430,7 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
                 meta = row[0] if row[0] else {}
                 if isinstance(meta, str):
                     meta = _json.loads(meta)
-                meta["texto_extraido"] = result["punctuated_text"][:50000]
+                meta["texto_extraido"] = result["punctuated_text"]
                 meta["texto_puntuado"] = True
                 session.execute(
                     text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),

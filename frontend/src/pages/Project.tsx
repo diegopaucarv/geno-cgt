@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   getProject,
@@ -8,7 +8,6 @@ import {
   uploadDocument,
   punctuateDocument,
   deleteDocument,
-  getTaskStatus,
   ping,
   clearToken,
   Project,
@@ -39,10 +38,12 @@ export default function ProjectDetail() {
   const [cats, setCats] = useState<Category[]>([]);
   const [segments, setSegments] = useState<Record<string, Segment[]>>({});
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
-  const [processing, setProcessing] = useState<string | null>(null);
   const [punctStatus, setPunctStatus] = useState<Record<string, string>>({});
-  const [punctFix, setPunctFix] = useState<Record<string, boolean>>({});
+  const [punctRunning, setPunctRunning] = useState<string | null>(null);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
+  const abortRef = useRef(false);
 
   useEffect(() => {
     if (!id) return;
@@ -71,80 +72,143 @@ export default function ProjectDetail() {
     }
   }
 
+  // ── Preprocesar (puntuación) ────────────────────────────────────
+
   async function handlePunctuate(docId: string) {
-    setProcessing(docId);
-    setPunctStatus((prev) => ({
-      ...prev,
-      [docId]: "⏳ Mejorando puntuación…",
-    }));
+    // Si ya está corriendo, cancelar
+    if (punctRunning === docId) {
+      abortRef.current = true;
+      setPunctStatus((prev) => ({ ...prev, [docId]: "⏹ Cancelado" }));
+      setPunctRunning(null);
+      await fetch("/api/v1/admin/workers/fast/stop", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      }).catch(() => {});
+      return;
+    }
+
+    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+    abortRef.current = false;
+    setPunctRunning(docId);
+    setPunctStatus((prev) => ({ ...prev, [docId]: "⏳ Arrancando worker…" }));
+    await fetch("/api/v1/admin/workers/fast/start", {
+      method: "POST",
+      headers: { Authorization: auth },
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    setPunctStatus((prev) => ({ ...prev, [docId]: "⏳ Procesando…" }));
     try {
       const res = await punctuateDocument(docId);
-
-      if (!res.punctuation_fix) {
-        setPunctStatus((prev) => ({
-          ...prev,
-          [docId]: res.message || "✅ Puntuación OK",
-        }));
-        setProcessing(null);
-        return;
-      }
-
-      if (res.task_id) {
-        // Poll for completion
-        let done = false;
-        let attempts = 0;
-        while (!done && attempts < 30) {
-          attempts++;
-          await new Promise((r) => setTimeout(r, 2000));
-          const status = await getTaskStatus(res.task_id);
-          setPunctStatus((prev) => ({
-            ...prev,
-            [docId]: `⏳ ${status.status} (${attempts}/30)`,
-          }));
-          if (status.status === "SUCCESS" || status.status === "success") {
-            setPunctStatus((prev) => ({
-              ...prev,
-              [docId]: "✅ Puntuación mejorada",
-            }));
-            done = true;
-          } else if (
-            status.status === "FAILURE" ||
-            status.status === "failure"
-          ) {
-            throw new Error("Falló la mejora de puntuación");
-          }
-        }
-        if (!done) {
-          setPunctStatus((prev) => ({
-            ...prev,
-            [docId]: "⚠️ Timeout",
-          }));
-        }
+      if (abortRef.current) return;
+      if (res.status === "ok" && res.changes_made) {
+        setPunctStatus((prev) => ({ ...prev, [docId]: "✅ Mejorada" }));
+        refreshDocs();
+        setSegments((prev) => {
+          const n = { ...prev };
+          delete n[docId];
+          return n;
+        });
+      } else if (res.status === "ok") {
+        setPunctStatus((prev) => ({ ...prev, [docId]: "✅ OK" }));
       } else {
         setPunctStatus((prev) => ({
           ...prev,
-          [docId]: "✅ Puntuación mejorada",
+          [docId]: "❌ " + (res.message || "Error"),
         }));
       }
-
-      // Refresh to get updated text
-      refreshDocs();
-      setPunctFix((prev) => ({ ...prev, [docId]: true }));
     } catch (err: any) {
-      setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + err.message }));
+      if (!abortRef.current)
+        setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + err.message }));
     } finally {
-      setProcessing(null);
+      if (abortRef.current)
+        setPunctStatus((prev) => ({ ...prev, [docId]: "⏹ Cancelado" }));
+      setPunctRunning(null);
     }
   }
+
+  // ── Pipeline IA (todos los docs) ────────────────────────────────
+
+  async function runPipeline() {
+    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+    abortRef.current = false;
+    setPipelineRunning(true);
+    setPipelineMsg("⏳ Arrancando workers…");
+    await fetch("/api/v1/admin/workers/nlp/start", {
+      method: "POST",
+      headers: { Authorization: auth },
+    });
+    await fetch("/api/v1/admin/workers/heavy/start", {
+      method: "POST",
+      headers: { Authorization: auth },
+    });
+    await new Promise((r) => setTimeout(r, 2000));
+    const todo = docs.filter((d) => d.estado !== "listo");
+    if (todo.length === 0) {
+      setPipelineMsg("Todos los documentos ya están procesados.");
+      setPipelineRunning(false);
+      return;
+    }
+
+    for (let i = 0; i < todo.length; i++) {
+      if (abortRef.current) break;
+      const d = todo[i];
+      setPipelineMsg(
+        `🧠 Procesando ${i + 1}/${todo.length}: ${d.original_filename}…`,
+      );
+
+      try {
+        setPipelineMsg(
+          `🧠 Procesando ${i + 1}/${todo.length}: ${d.original_filename}…`,
+        );
+        const res = await fetch(`/api/v1/documents/${d.id}/process`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: JSON.stringify({ steps: ["segment", "agents"] }),
+        }).then((r) => r.json());
+
+        const agentResult = res.steps?.agents;
+        if (agentResult?.status === "done") {
+          setPipelineMsg(`🧠 ${d.original_filename}: ✅ completado`);
+        } else if (agentResult?.status === "error") {
+          setPipelineMsg(
+            `🧠 ${d.original_filename}: ❌ ${agentResult.message}`,
+          );
+        }
+      } catch (e: any) {
+        setPipelineMsg(`❌ Error en ${d.original_filename}: ${e.message}`);
+      }
+    }
+
+    setPipelineMsg(
+      abortRef.current ? "⏹ Pipeline cancelado." : "✅ Pipeline completado.",
+    );
+    if (abortRef.current) {
+      await fetch("/api/v1/admin/workers/heavy/stop", {
+        method: "POST",
+        headers: { Authorization: auth },
+      }).catch(() => {});
+      await fetch("/api/v1/admin/workers/nlp/stop", {
+        method: "POST",
+        headers: { Authorization: auth },
+      }).catch(() => {});
+    }
+    refreshDocs();
+    listCategories(id!).then(setCats);
+    setPipelineRunning(false);
+  }
+
+  // ── Upload ───────────────────────────────────────
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !id) return;
     try {
-      const res = await uploadDocument(id, file);
-      if (res.punctuation_fix) {
-        setPunctFix((p) => ({ ...p, [res.id]: true }));
-      }
+      await uploadDocument(id, file);
       refreshDocs();
     } catch (err: any) {
       alert(err.message);
@@ -173,7 +237,7 @@ export default function ProjectDetail() {
         color: "#E6EDF3",
       }}
     >
-      {/* ── Navigation Bar ─────────────────────────── */}
+      {/* ── Navbar ────────────────────────────────── */}
       <div
         style={{
           display: "flex",
@@ -188,11 +252,7 @@ export default function ProjectDetail() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Link
             to="/projects"
-            style={{
-              color: "#58A6FF",
-              fontSize: 13,
-              textDecoration: "none",
-            }}
+            style={{ color: "#58A6FF", fontSize: 13, textDecoration: "none" }}
           >
             ← Proyectos
           </Link>
@@ -227,11 +287,6 @@ export default function ProjectDetail() {
               textDecoration: "none",
               opacity: hasCats ? 1 : 0.5,
             }}
-            title={
-              hasCats
-                ? "Ir al Theoretical Playground"
-                : "Procesa documentos para generar categorías"
-            }
           >
             🧪 Playground
           </Link>
@@ -242,7 +297,52 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* ── Project Meta ───────────────────────────── */}
+      {/* ── Pipeline button ───────────────────────── */}
+      <div
+        style={{
+          marginBottom: 20,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <button
+          onClick={runPipeline}
+          disabled={pipelineRunning || docs.length === 0}
+          style={{
+            padding: "8px 20px",
+            borderRadius: 6,
+            border: "none",
+            cursor: "pointer",
+            background: pipelineRunning
+              ? "#1C2333"
+              : "linear-gradient(135deg, #A371F7, #3FB950)",
+            color: "#FFF",
+            fontSize: 13,
+            fontWeight: 600,
+            opacity: docs.length === 0 ? 0.4 : 1,
+          }}
+        >
+          {pipelineRunning ? "⏳ Ejecutando…" : "🧠 Ejecutar Pipeline IA"}
+        </button>
+        {pipelineRunning && (
+          <button
+            onClick={() => {
+              abortRef.current = true;
+              setPipelineRunning(false);
+              setPipelineMsg("⏹ Cancelado.");
+            }}
+            style={{ ...btnSmall, color: "#F85149" }}
+          >
+            ⏹ Cancelar
+          </button>
+        )}
+        {pipelineMsg && (
+          <span style={{ fontSize: 12, color: "#8B949E" }}>{pipelineMsg}</span>
+        )}
+      </div>
+
+      {/* ── Project meta ──────────────────────────── */}
       <p style={{ margin: "0 0 20px", color: "#8B949E", fontSize: 13 }}>
         Ruta: {project.ruta_de_codificacion} · Estado: {project.estado}
       </p>
@@ -278,7 +378,6 @@ export default function ProjectDetail() {
           Sin documentos. Subí un archivo para empezar.
         </p>
       )}
-
       <ul style={{ listStyle: "none", padding: 0 }}>
         {docs.map((d) => (
           <li
@@ -307,45 +406,37 @@ export default function ProjectDetail() {
                 <span style={{ marginLeft: 8, fontSize: 11, color: "#8B949E" }}>
                   {d.mime_type}
                 </span>
-                {punctFix[d.id] && (
+                {punctStatus[d.id] && (
                   <span
                     style={{
                       marginLeft: 8,
-                      padding: "1px 6px",
-                      borderRadius: 999,
-                      fontSize: 10,
-                      background: "#A371F722",
-                      color: "#A371F7",
+                      fontSize: 11,
+                      color: punctStatus[d.id].startsWith("✅")
+                        ? "#3FB950"
+                        : "#8B949E",
                     }}
                   >
-                    puntuación mejorada
+                    {punctStatus[d.id]}
                   </span>
                 )}
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {punctStatus[d.id] && (
-                  <span style={{ fontSize: 11, color: "#8B949E" }}>
-                    {punctStatus[d.id]}
-                  </span>
-                )}
                 <button onClick={() => toggleSegments(d.id)} style={btnSmall}>
                   {expandedDoc === d.id ? "Ocultar texto" : "Ver texto"}
                 </button>
                 <button
                   onClick={() => handlePunctuate(d.id)}
-                  disabled={processing === d.id}
                   style={{
                     ...btnSmall,
-                    background: processing === d.id ? "#1C2333" : "#A371F7",
+                    background: punctRunning === d.id ? "#F85149" : "#A371F7",
                     color: "#FFF",
                   }}
-                  title="Mejorar puntuación del texto con LLM"
                 >
-                  {processing === d.id ? "⏳" : "✨"} Procesar
+                  {punctRunning === d.id ? "⏹ Cancelar" : "✨ Preprocesar"}
                 </button>
                 <button
                   onClick={async () => {
-                    if (!confirm("¿Eliminar este documento?")) return;
+                    if (!confirm("¿Eliminar?")) return;
                     await deleteDocument(d.id);
                     refreshDocs();
                   }}
@@ -355,11 +446,10 @@ export default function ProjectDetail() {
                 </button>
               </div>
             </div>
-
-            {/* Expanded text view */}
             {expandedDoc === d.id && (
               <textarea
                 readOnly
+                disabled={punctRunning === d.id}
                 style={{
                   width: "100%",
                   marginTop: 8,
@@ -392,8 +482,7 @@ export default function ProjectDetail() {
       <h3 style={{ marginBottom: 12 }}>Categorías ({cats.length})</h3>
       {cats.length === 0 && (
         <p style={{ color: "#8B949E", fontSize: 13 }}>
-          Sin categorías aún. Sube y procesa documentos para generarlas
-          automáticamente con el pipeline.
+          Sin categorías aún. Ejecutá el Pipeline IA para generarlas.
         </p>
       )}
       <ul style={{ listStyle: "none", padding: 0 }}>
@@ -420,7 +509,6 @@ export default function ProjectDetail() {
         ))}
       </ul>
 
-      {/* ── Quick action: go to Playground ─────────── */}
       {hasCats && (
         <div style={{ textAlign: "center", marginTop: 32 }}>
           <Link

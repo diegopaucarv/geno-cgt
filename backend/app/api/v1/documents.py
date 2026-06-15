@@ -51,8 +51,8 @@ def _needs_punctuation(text: str, max_sample: int = 2000) -> bool:
         return False
 
     ratio = len(punct_marks) / max(len(tokens), 1)
-    # Menos de 1 signo de puntuación cada ~15 tokens → probablemente mal formateado
-    return ratio < (1 / 15)
+    # Menos de 1 signo de puntuación cada ~8 tokens → necesita mejora
+    return ratio < (1 / 20)
 
 
 @router.post("/upload/{project_id}")
@@ -122,7 +122,7 @@ async def upload_document(
         tipo_de_fuente="TEXTO",
         estado="crudo",
         metadatos={
-            "texto_extraido": texto_extraido[:10000],
+            "texto_extraido": texto_extraido,
             "needs_punctuation": needs_punct,
         }
         if texto_extraido
@@ -132,49 +132,15 @@ async def upload_document(
     await db.commit()
     await db.refresh(new_doc)
 
-    # 7. Disparar pipeline CGT asíncrono (todo en un solo flujo)
-    from app.core.celery_app import celery_app
-
-    # Paso 0 (opcional): mejorar puntuación con LLM (FLASH)
-    if needs_punct:
-        celery_app.send_task(
-            "punctuate_text",
-            kwargs={
-                "texto": texto_extraido[:50000],
-                "max_chars": 3000,
-                "documento_id": str(new_doc.id),
-            },
-            queue="fast",
-        )
-
-    # Paso 1: segmentar en worker-nlp
-    celery_app.send_task(
-        "segmentar_documento",
-        args=[
-            texto_extraido[:50000],
-            1024,
-            file.filename,
-            "TEXTO",
-            "",
-            str(new_doc.id),
-        ],
-        queue="nlp",
-    )
-
-    # Paso 2: pipeline de agentes (A1→A2→A3→B1→B2→B3)
-    task = celery_app.send_task(
-        "process_document_agents_a",
-        args=[str(new_doc.id), str(project_id)],
-        queue="heavy",
-    )
+    # El pipeline NO se dispara automáticamente.
+    # El usuario decide qué pasos ejecutar desde la UI.
 
     return {
         "id": new_doc.id,
         "storage_key": storage_key,
         "filename": file.filename,
-        "estado": "procesando",
-        "pipeline_task_id": task.id,
-        "punctuation_fix": needs_punct,
+        "estado": "crudo",
+        "needs_punctuation": needs_punct,
     }
 
 
@@ -246,7 +212,7 @@ async def segment_document(
         await db.delete(s)
 
     nlp = spacy.load("es_core_news_lg")
-    doc_nlp = nlp(texto[:100000])
+    doc_nlp = nlp(texto)
 
     for i, sent in enumerate(doc_nlp.sents):
         segmento = Segmento(
@@ -356,21 +322,113 @@ async def punctuate_document(
         }
 
     from app.core.celery_app import celery_app
+    from celery.result import AsyncResult
 
     task = celery_app.send_task(
         "punctuate_text",
         kwargs={
-            "texto": texto[:50000],
-            "max_chars": 3000,
+            "texto": texto,
+            "max_chars": 8000,
             "documento_id": str(document_id),
         },
         queue="fast",
     )
+
+    # Esperar resultado (hasta 3 min, sin bloquear event loop)
+    import asyncio
+
+    result = AsyncResult(task.id, app=celery_app)
+    try:
+        output = await asyncio.to_thread(result.get, timeout=600)
+    except Exception:
+        return {"status": "error", "message": "Timeout o error en el procesamiento"}
+
+    # Refrescar documento
+    await db.refresh(doc)
+
     return {
-        "status": "dispatched",
-        "task_id": task.id,
+        "status": "ok",
         "punctuation_fix": True,
+        "punctuated_text": output.get("punctuated_text", texto)[:500],
+        "changes_made": output.get("changes_made", False),
+        "full_text": doc.texto_extraido[:500],
     }
+
+
+@router.post("/{document_id}/process")
+async def process_document(
+    document_id: UUID,
+    body: dict | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Ejecuta pasos de procesamiento seleccionados por el usuario.
+
+    Body: {"steps": ["punctuate", "segment", "agents"]}
+    Si no se especifica, ejecuta todos.
+    """
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+
+    texto = doc.metadatos.get("texto_extraido", "") if doc.metadatos else ""
+    if not texto:
+        raise HTTPException(400, "No hay texto extraído para procesar")
+
+    steps = (body or {}).get("steps", ["punctuate", "segment", "agents"])
+
+    from app.core.celery_app import celery_app
+    from celery.result import AsyncResult
+
+    result: dict = {"document_id": str(document_id), "steps": {}}
+
+    if "punctuate" in steps:
+        needs = _needs_punctuation(texto)
+        if needs:
+            task = celery_app.send_task(
+                "punctuate_text",
+                kwargs={
+                    "texto": texto,
+                    "max_chars": 8000,
+                    "documento_id": str(document_id),
+                },
+                queue="fast",
+            )
+            result["steps"]["punctuate"] = {"task_id": task.id, "status": "dispatched"}
+        else:
+            result["steps"]["punctuate"] = {
+                "status": "skipped",
+                "reason": "puntuación OK",
+            }
+
+    if "segment" in steps:
+        task = celery_app.send_task(
+            "segmentar_documento",
+            args=[texto, 1024, doc.original_filename, "TEXTO", "", str(document_id)],
+            queue="nlp",
+        )
+        result["steps"]["segment"] = {"task_id": task.id, "status": "dispatched"}
+
+    if "agents" in steps:
+        task = celery_app.send_task(
+            "process_document_agents_a",
+            args=[str(document_id), str(doc.proyecto_id)],
+            queue="heavy",
+        )
+        import asyncio
+
+        async_result = AsyncResult(task.id, app=celery_app)
+        try:
+            output = await asyncio.to_thread(async_result.get, timeout=600)
+            result["steps"]["agents"] = {"status": "done", "result": output}
+        except Exception:
+            result["steps"]["agents"] = {"status": "error", "message": "Timeout"}
+
+    # Actualizar estado del documento
+    doc.estado = "listo"
+    await db.commit()
+
+    return result
 
 
 @router.delete("/{document_id}", status_code=204)

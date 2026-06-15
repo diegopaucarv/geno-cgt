@@ -6,6 +6,7 @@ Los códigos con project_id=NULL son globales (disponibles para todos los proyec
 
 from __future__ import annotations
 
+import json
 import uuid
 from uuid import UUID
 
@@ -299,9 +300,9 @@ def seed_theoretical_codes(session: Session) -> int:
                 "name": code["name"],
                 "family": code["family"],
                 "desc": code["description"],
-                "logic": code.get("evaluation_logic", {}),
-                "schema": code.get("output_schema", {}),
-                "compat": code.get("compatible_with", []),
+                "logic": json.dumps(code.get("evaluation_logic", {})),
+                "schema": json.dumps(code.get("output_schema", {})),
+                "compat": json.dumps(code.get("compatible_with", [])),
                 "layer": code.get("layer", "undefined"),
                 "viz": code.get("visualization_hint", "tendril"),
             },

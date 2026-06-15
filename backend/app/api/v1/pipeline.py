@@ -43,7 +43,7 @@ async def run_pipeline_stage(
             task = celery_app.send_task(
                 "segmentar_documento",
                 args=[
-                    (doc.metadatos or {}).get("texto_extraido", "")[:50000],
+                    (doc.metadatos or {}).get("texto_extraido", ""),
                     1024,
                     doc.original_filename,
                     "TEXTO",

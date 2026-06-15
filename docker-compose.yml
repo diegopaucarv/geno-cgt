@@ -146,6 +146,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - gt_network
 
@@ -169,6 +171,11 @@ services:
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      MODEL_FLASH: ${MODEL_FLASH:-google/gemma-3n-E4B-it}
+      MODEL_FLASH_REPETITION_PENALTY: ${MODEL_FLASH_REPETITION_PENALTY:-1.1}
+      MODEL_FLASH_TOP_P: ${MODEL_FLASH_TOP_P:-0.9}
+      MODEL_FLASH_MAX_TOKENS: ${MODEL_FLASH_MAX_TOKENS:-1500}
+      MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
     volumes:
       - ./backend/app/prompts:/app/prompts:ro
     depends_on:
@@ -250,6 +257,8 @@ services:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      MODEL_FLASH: ${MODEL_FLASH:-google/gemma-4-31B-it}
+      MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
     depends_on:
       - pgbouncer
 

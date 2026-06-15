@@ -355,8 +355,11 @@ class LLMClient:
             try:
                 from together import Together
 
-                self.client = Together(api_key=raw_key)
-                logger.info("LLMClient: Together.ai inicializado")
+                self.client = Together(
+                    api_key=raw_key,
+                    timeout=600,  # 10 minutos para textos largos
+                )
+                logger.info("LLMClient: Together.ai inicializado (timeout=180s)")
             except Exception as e:
                 logger.warning("Together.ai init failed: %s. MOCK mode.", e)
                 self.is_mock = True

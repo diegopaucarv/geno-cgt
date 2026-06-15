@@ -24,13 +24,37 @@ from app.db.database import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await minio_client.ensure_bucket_exists()
-    # Seed theoretical codes vía Celery (la BD se inicializa con sync sessions)
+    # Seed theoretical codes al iniciar (usa psycopg2 sync, no asyncpg)
     try:
-        from app.core.celery_app import celery_app
+        import logging as _log
+        import os
 
-        celery_app.send_task("seed_theoretical_codes", queue="heavy")
-    except Exception:
-        pass  # Silencioso: Redis puede no estar listo aún
+        from sqlalchemy import create_engine
+        from sqlalchemy import text as sa_text
+        from sqlalchemy.orm import sessionmaker
+
+        sync_url = os.getenv("DATABASE_URL", "").replace(
+            "postgresql+asyncpg://", "postgresql://"
+        )
+        if sync_url:
+            sync_engine = create_engine(sync_url)
+            SyncSession = sessionmaker(bind=sync_engine)
+            s = SyncSession()
+            try:
+                from app.services.theory_seeder import seed_theoretical_codes
+
+                inserted = seed_theoretical_codes(s)
+                if inserted:
+                    _log.getLogger("uvicorn").info(
+                        f"Seeded {inserted} theoretical codes"
+                    )
+            finally:
+                s.close()
+                sync_engine.dispose()
+    except Exception as e:
+        import logging as _log
+
+        _log.getLogger("uvicorn").warning(f"Seed skipped: {e}")
     yield
     await engine.dispose()
 

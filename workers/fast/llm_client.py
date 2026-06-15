@@ -32,12 +32,12 @@ _MODEL_FLASH = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
 _MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
 
 _TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": _MODEL_FLASH,
-    "PRO": _MODEL_PRO,
+    "FLASH": os.getenv("MODEL_FLASH", "google/gemma-4-31B-it"),
+    "PRO": os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro"),
 }
 
 _TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": int(os.getenv("MODEL_FLASH_MAX_TOKENS", "4096")),
+    "FLASH": int(os.getenv("MODEL_FLASH_MAX_TOKENS", "1500")),
     "PRO": int(os.getenv("MODEL_PRO_MAX_TOKENS", "8192")),
 }
 
@@ -46,10 +46,17 @@ _TIER_TEMPERATURE: dict[ModelTier, float] = {
     "PRO": float(os.getenv("MODEL_PRO_TEMPERATURE", "0.3")),
 }
 
+_TIER_REPETITION_PENALTY: dict[ModelTier, float] = {
+    "FLASH": float(os.getenv("MODEL_FLASH_REPETITION_PENALTY", "1.1")),
+    "PRO": float(os.getenv("MODEL_PRO_REPETITION_PENALTY", "1.0")),
+}
+
+_TIER_TOP_P: dict[ModelTier, float] = {
+    "FLASH": float(os.getenv("MODEL_FLASH_TOP_P", "0.9")),
+    "PRO": float(os.getenv("MODEL_PRO_TOP_P", "1.0")),
+}
+
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
-
-
-# ═══════════════════════════════════════════════════════════════════════
 # Parseo unificado de prompts (.md YAML + .txt legacy)
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -347,18 +354,13 @@ class LLMClient:
     def __init__(self, api_key: str | None = None):
         raw_key = (api_key or os.getenv("TOGETHER_API_KEY", "")).strip()
         self.is_mock = not raw_key or raw_key.startswith("${") or raw_key == "changeme"
+        self.api_key = raw_key
+        self._http = None  # lazy import
 
         if self.is_mock:
             logger.warning("TOGETHER_API_KEY no configurada. Usando modo MOCK.")
         else:
-            try:
-                from together import Together
-
-                self.client = Together(api_key=raw_key)
-                logger.info("LLMClient: Together.ai inicializado")
-            except Exception as e:
-                logger.warning("Together.ai init failed: %s. MOCK mode.", e)
-                self.is_mock = True
+            logger.info("LLMClient: Together.ai via HTTP directo (timeout=600s)")
 
     def run_agent(
         self,
@@ -397,12 +399,17 @@ class LLMClient:
         if temperature is None:
             temperature = _TIER_TEMPERATURE[model_tier]
 
+        repetition_penalty = _TIER_REPETITION_PENALTY[model_tier]
+        top_p = _TIER_TOP_P[model_tier]
+
         logger.info(
-            "Agent %s → tier=%s tokens=%d temp=%.2f",
+            "Agent %s → tier=%s tokens=%d temp=%.2f rep_pen=%.2f top_p=%.2f",
             agent_id,
             model_tier,
             max_tokens,
             temperature,
+            repetition_penalty,
+            top_p,
         )
 
         prompt_template = parsed["prompt"]
@@ -417,7 +424,14 @@ class LLMClient:
         schema = parsed["schema"]
         model = _TIER_MODELS[model_tier]
         return self._call_llm(
-            model_tier, model, system_prompt, schema, max_tokens, temperature
+            model_tier,
+            model,
+            system_prompt,
+            schema,
+            max_tokens,
+            temperature,
+            repetition_penalty,
+            top_p,
         )
 
     def _call_llm(
@@ -428,6 +442,8 @@ class LLMClient:
         schema: dict | None,
         max_tokens: int,
         temperature: float,
+        repetition_penalty: float = 1.0,
+        top_p: float = 1.0,
         retry: bool = True,
     ) -> dict[str, Any]:
         """Llama a Together.ai con response_format json_object. Retry 1 vez."""
@@ -445,18 +461,41 @@ class LLMClient:
             "LLM: tier=%s model=%s prompt_chars=%d", tier, model, len(system_prompt)
         )
 
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "repetition_penalty": repetition_penalty,
+            "top_p": top_p,
+        }
+        if schema:
+            kwargs["response_format"] = {"type": "json_object"}
+
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=max_tokens,
-                temperature=temperature,
+            import requests as _r
+
+            if self._http is None:
+                self._http = _r.Session()
+                self._http.headers.update(
+                    {
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    }
+                )
+
+            r = self._http.post(
+                "https://api.together.ai/v1/chat/completions",
+                json=kwargs,
+                timeout=600,
             )
-            content = response.choices[0].message.content or ""
+            if r.status_code != 200:
+                raise Exception(f"HTTP {r.status_code}: {r.text[:300]}")
+            data = r.json()
+            content = data["choices"][0]["message"]["content"] or ""
             content = content.strip()
             # Strip markdown code fences if present
             if content.startswith("```"):
@@ -466,9 +505,22 @@ class LLMClient:
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 content = "\n".join(lines)
+
+            # Try to extract JSON even if mixed with text
+            import re as _re
+
+            json_match = _re.search(r"\{[^{}]*\}", content, _re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
+
             return json.loads(content)
 
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(
+                "JSON parse failed: %s. Raw: %s",
+                str(e)[:100],
+                (content if "content" in dir() else "N/A")[:200],
+            )
             if retry:
                 logger.warning(
                     "JSON parse failed for %s: %s. Retrying with error hint.",
@@ -487,6 +539,8 @@ class LLMClient:
                     schema,
                     max_tokens + 512,
                     temperature,
+                    repetition_penalty,
+                    top_p,
                     retry=False,
                 )
             logger.warning("JSON parse failed after retry. Mock fallback.")
