@@ -34,6 +34,37 @@ def _get_population_assumption(session, proyecto_id: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+
+def _get_coding_style_instruction(session, proyecto_id: str) -> str:
+    """Lee los coding_styles del proyecto y devuelve instruccion combinada."""
+    config = session.execute(
+        text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()
+    style_keys = ["gerundio", "in_vivo"]  # default
+    if config and config[0] and isinstance(config[0], dict):
+        style_keys = config[0].get("coding_styles", style_keys)
+        if isinstance(style_keys, str):
+            style_keys = [style_keys]
+
+    # Embedded instructions (avoid import dependency in worker)
+    instructions = {
+        "gerundio": "Nombra cada código con un GERUNDIO (-ando/-iendo). Ej: 'Negociando límites'.",
+        "nominalizacion": "Nombra cada código con un SUSTANTIVO derivado de verbo (-ción, -miento). Ej: 'Negociación de límites'.",
+        "parafrasis": "Nombra cada código con una FRASE CORTA descriptiva (3-8 palabras). Ej: 'El algoritmo decide sin consultar'.",
+        "tema_subtema": "Nombra cada código como TEMA → subtema. Ej: 'Control algorítmico → Resistencia'.",
+        "causal": "Nombra cada código como CADENA CAUSAL (A → B). Ej: 'Falta de transparencia → Desconfianza'.",
+        "in_vivo": "Nombra cada código con una CITA TEXTUAL del entrevistado (entre comillas). Ej: '"cada uno tiene su maña"'.",
+    }
+    if len(style_keys) == 1:
+        return instructions.get(style_keys[0], instructions["gerundio"])
+    return (
+        "Puedes usar CUALQUIERA de estos estilos:\n"
+        + "\n".join(f"  • {instructions[k]}" for k in style_keys if k in instructions)
+        + "\n\nElige el más adecuado para cada código según el contenido."
+    )
+
+
 def b1_distill_sampling(proyecto_id: str) -> dict:
     session = SessionLocal()
     try:
@@ -150,10 +181,14 @@ def b2_open_code(proyecto_id: str) -> dict:
             else "(sin códigos)"
         )
 
-        # ── Step 1: Pattern 1 — pre-filtrar ──
+        # ── Step 1: Pattern 1 — pre-filtrar (C05: baseline_data primero) ──
         unassigned_ids = session.execute(
             text(
-                "SELECT s.id FROM segmentos s JOIN documentos d ON s.documento_id = d.id WHERE d.proyecto_id = :pid AND s.id NOT IN (SELECT segmento_id FROM codigos_segmento) ORDER BY s.posicion LIMIT 20"
+                "SELECT s.id FROM segmentos s JOIN documentos d ON s.documento_id = d.id "
+                "WHERE d.proyecto_id = :pid "
+                "AND s.id NOT IN (SELECT segmento_id FROM codigos_segmento) "
+                "ORDER BY CASE WHEN s.tipo_dato_glaser = 'baseline_data' THEN 0 "
+                "WHEN s.tipo_dato_glaser IS NULL THEN 1 ELSE 2 END, s.posicion LIMIT 20"
             ),
             {"pid": proyecto_id},
         ).fetchall()
@@ -197,7 +232,7 @@ def b2_open_code(proyecto_id: str) -> dict:
         # Cargar textos de segmentos que necesitan LLM
         unassigned = session.execute(
             text(
-                "SELECT texto FROM segmentos WHERE id = ANY(:ids) ORDER BY posicion LIMIT 10"
+                "SELECT texto FROM segmentos WHERE id::text = ANY(:ids) ORDER BY posicion LIMIT 10"
             ),
             {"ids": needs_llm_ids[:10]},
         ).fetchall()
@@ -278,7 +313,7 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
                   AND c.id NOT IN (
                       SELECT DISTINCT categoria_id FROM codigos_segmento
                   )
-                ORDER BY c.updated_at DESC
+                ORDER BY c.actualizado_en DESC
                 LIMIT 30
             """),
             {"pid": proyecto_id},

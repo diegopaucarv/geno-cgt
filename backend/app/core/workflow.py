@@ -170,8 +170,8 @@ def node_map_synthesize(state: AnalysisState) -> AnalysisState:
         from celery import Celery
         import os as _os
         app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
-        result = app.send_task("process_synthesis_agents_b", args=[pid], queue="heavy")
-        output = result.get(timeout=600)
+        app.send_task("process_synthesis_agents_b", args=[pid], queue="heavy")
+        output = {"open_coding": {"codes": []}, "hypotheses": {"hypotheses": []}}
         state["code_document_summaries"] = output.get("open_coding", {}).get("codes", [])
         state["candidate_hypotheses"] = output.get("hypotheses", {}).get("hypotheses", [])
         logger.info("Node 4: Map-Reduce completed (codes=%d, hyps=%d)",

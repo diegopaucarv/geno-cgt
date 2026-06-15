@@ -40,6 +40,19 @@ class Proyecto(Base, TimestampMixin):
     - reinert_micro: bool (default true)
     """
 
+    # C01: Population assumption structurado
+    population_assumption: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    """
+    Configuracion epistemologica del proyecto:
+    - object_of_study: "concern" | "emotion" | "behavior" | "discourse" | "identity" | "custom"
+    - temporal_frame: "present_continuous" | "retrospective" | "prospective" | "longitudinal"
+    - spatial_frame: "cohabiting_group" | "sparse" | "high_diversity"
+    - population_description: str
+    - gerundio_esperado: str (opcional, emerge después de A14)
+    - custom_label: str (solo si object_of_study="custom")
+    - coding_styles: list[str] (default ["gerundio", "in_vivo"]) — estilo de codificación (Saldaña)
+    """
+
     creador_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"))
 
     # Relaciones

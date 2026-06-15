@@ -63,45 +63,44 @@ def segmentar_documento(
     doc_title: str = "",
     source_type: str = "",
     global_summary: str = "",
+    documento_id: str = "",
 ):
-    """
-    Segmenta un texto usando ProgressiveSegmenter.
-
-    Si se proporciona metadata del documento, los embeddings de cada
-    segmento se generan con enriquecimiento contextual (título, fuente,
-    resumen, contexto previo) para mejorar la precisión polisemántica.
-    """
+    """Segmenta y persiste en DB si se proporciona documento_id."""
     from segmentador import ProgressiveSegmenter
 
     reinert = os.getenv("SEGMENTATION_REINERT", "true").lower() in ("1", "true", "yes")
     segmenter = ProgressiveSegmenter(tei_url=TEI_URL, reinert_micro=reinert)
     segmentos = segmenter.segment_text(texto, max_tokens=max_tokens)
 
-    enriched_segments = []
-    prev_text = ""
-
-    for seg in segmentos:
-        seg_text = seg if isinstance(seg, str) else seg.get("texto", str(seg))
-
-        if doc_title or global_summary:
-            enriched_text = build_contextualized_text(
-                segment_text=seg_text,
-                doc_title=doc_title,
-                source_type=source_type,
-                global_summary=global_summary,
-                previous_segment=prev_text,
-            )
-        else:
-            enriched_text = seg_text
-
-        prev_text = seg_text
-
-        if isinstance(seg, dict):
-            seg["enriched_text"] = enriched_text
-        enriched_segments.append(enriched_text)
+    if documento_id:
+        try:
+            import psycopg2, uuid as _uuid
+            db_url = os.getenv("DATABASE_URL", "postgresql://app_user:strongpass@postgres:5432/gt-db")
+            db_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg2").replace("postgresql+psycopg2", "postgresql")
+            conn = psycopg2.connect(db_url)
+            conn.autocommit = False
+            try:
+                cur = conn.cursor()
+                cur.execute("UPDATE documentos SET estado = 'segmentando' WHERE id = %s", (documento_id,))
+                for i, seg in enumerate(segmentos):
+                    seg_text = seg if isinstance(seg, str) else seg.get("texto", str(seg))
+                    cur.execute(
+                        "INSERT INTO segmentos (id, documento_id, texto, posicion, conteo_tokens, es_anomalia) "
+                        "VALUES (%s, %s, %s, %s, %s, false)",
+                        (str(_uuid.uuid4()), documento_id, seg_text.strip(), i + 1, len(seg_text.split())),
+                    )
+                conn.commit()
+                logger.info("Segmentacion DB: doc=%s, %d segmentos", documento_id, len(segmentos))
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cur.close()
+                conn.close()
+        except Exception as e:
+            logger.warning("Segmentacion DB fallo: %s", e)
 
     return {
         "num_segmentos": len(segmentos),
-        "segmentos": segmentos,
-        "enriched": bool(doc_title or global_summary),
+        "inserted": bool(documento_id),
     }

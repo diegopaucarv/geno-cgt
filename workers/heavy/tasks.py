@@ -304,7 +304,7 @@ def a3_make_sense(proyecto_id: str) -> dict:
                 "population_context": pop_ctx[0] if pop_ctx else "",
                 "processes": processes_text,
                 "existing_hypotheses": hyp_text,
-                "task_section": task_section_with_hint,
+                "task_section": task_section,
             },
             temperature=0.4,
         )
@@ -388,46 +388,29 @@ def _ensure_segmented(session, documento_id: str) -> None:
     )
     session.commit()
 
-    try:
-        import spacy
+    # Segmentation happens in worker-nlp. Poll until segments appear.
+    import time as _time
 
-        nlp = spacy.load("es_core_news_lg")
-        doc_nlp = nlp(texto[:100000])
-        for i, sent in enumerate(doc_nlp.sents):
-            session.execute(
-                text(
-                    "INSERT INTO segmentos (id, documento_id, texto, posicion, conteo_tokens) "
-                    "VALUES (gen_random_uuid(), :did, :txt, :pos, :tok)"
-                ),
-                {
-                    "did": documento_id,
-                    "txt": sent.text.strip(),
-                    "pos": i + 1,
-                    "tok": len(sent.text.split()),
-                },
-            )
-        session.commit()
-        logger.info("Segmentacion inline: doc=%s, segmentos=%d", documento_id, i + 1)
-
-        # A2: Anchor-based reconstruction — first_10, start_char, end_char
-        _anchor_segments(session, documento_id, texto)
-
-        # B19: disparar GraphRAG extraction para el documento
-        proyecto_id = session.execute(
-            text("SELECT proyecto_id FROM documentos WHERE id = :did"),
+    for attempt in range(40):
+        count = session.execute(
+            text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
             {"did": documento_id},
-        ).fetchone()
-        if proyecto_id:
-            try:
-                app.send_task(
-                    "batch_extract_graph",
-                    args=[documento_id, str(proyecto_id[0])],
-                    queue="fast",
-                )
-            except Exception as e:
-                logger.warning("GraphRAG dispatch fallo: %s", e)
-    except Exception as e:
-        logger.warning("Segmentacion inline fallo doc %s: %s", documento_id, e)
+        ).fetchone()[0]
+        if count > 0:
+            logger.info("Segments ready: doc=%s, count=%d", documento_id, count)
+            # A2: anchor reconstruction
+            full_text = (
+                metadatos.get("texto_extraido", "")
+                if isinstance(metadatos, dict)
+                else ""
+            )
+            if full_text:
+                _anchor_segments(session, documento_id, full_text)
+            return
+        if attempt == 0:
+            logger.info("Waiting for worker-nlp to segment doc=%s...", documento_id)
+        _time.sleep(3)
+    logger.warning("Timeout waiting for segments: doc=%s", documento_id)
 
 
 def _anchor_segments(session, documento_id: str, full_text: str) -> None:
@@ -505,6 +488,65 @@ def _anchor_segments(session, documento_id: str, full_text: str) -> None:
     )
 
 
+
+
+def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict | None:
+    """C06: Extrae prime mover usando SOLO baseline_data. Se adapta al object_of_study."""
+    # Obtener configuracion del proyecto
+    config = session.execute(
+        text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()
+    obj = "concern"  # default
+    if config and config[0]:
+        obj = config[0].get("object_of_study", "concern") if isinstance(config[0], dict) else "concern"
+
+    # Instrucciones segun objeto de estudio
+    instructions = {
+        "concern": "Busca el patron de COMPORTAMIENTO recurrente. Que intenta resolver este entrevistado una y otra vez?",
+        "emotion": "Busca el patron EMOCIONAL recurrente. Que siente este entrevistado una y otra vez? Expresalo como gerundio (ej. 'Sintiendo culpa', 'Arrpentintiendose').",
+        "behavior": "Busca la CONDUCTA observable recurrente. Que hace este entrevistado una y otra vez?",
+        "discourse": "Busca el patron DISCURSIVO recurrente. Como construye su narrativa este entrevistado?",
+        "identity": "Busca el TRABAJO IDENTITARIO recurrente. Como negocia su identidad este entrevistado?",
+    }
+
+    # Obtener baseline_data segments
+    baseline = session.execute(
+        text(
+            "SELECT texto FROM segmentos WHERE documento_id = :did "
+            "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL) "
+            "ORDER BY posicion LIMIT 10"
+        ),
+        {"did": documento_id},
+    ).fetchall()
+
+    if len(baseline) < 2:
+        return {"prime_mover": "", "insufficient_data": True}
+
+    segments_text = "\n---\n".join(r[0] for r in baseline)
+    doc_name = session.execute(
+        text("SELECT original_filename FROM documentos WHERE id = :did"),
+        {"did": documento_id},
+    ).fetchone()
+
+    response = llm.run_agent(
+        "prime_mover_extractor",
+        variables={
+            "document_name": doc_name[0] if doc_name else "",
+            "baseline_segments": segments_text[:6000],
+            "object_of_study": obj,
+            "object_of_study_instructions": instructions.get(obj, instructions["concern"]),
+        },
+        temperature=0.3,
+    )
+
+    return {
+        "prime_mover": response.get("prime_mover", ""),
+        "description": response.get("description", ""),
+        "confidence": response.get("confidence", "LOW"),
+        "insufficient_data": response.get("insufficient_data", False),
+    }
+
 def _mark_doc_ready(documento_id: str) -> None:
     s = SessionLocal()
     try:
@@ -562,9 +604,7 @@ def _maybe_trigger_phase_b(proyecto_id: str) -> None:
         if new_docs < 3:
             return
 
-        logger.info(
-            "Phase B incremental: +%d docs (total=%d)", new_docs, doc_count
-        )
+        logger.info("Phase B incremental: +%d docs (total=%d)", new_docs, doc_count)
         process_synthesis_agents_b(proyecto_id)
 
         s.execute(
@@ -619,6 +659,16 @@ def process_document_agents_a(documento_id: str, proyecto_id: str) -> dict:
             documento_id, str(results["document_process"].get("error", "a2_failed"))
         )
         return results
+
+    # C06: Extraer prime_mover del documento (usa solo baseline_data)
+    logger.info("C06: Prime mover doc %s", documento_id)
+    try:
+        results["prime_mover"] = _extract_prime_mover(
+            session, documento_id, proyecto_id
+        )
+    except Exception as e:
+        logger.warning("Prime mover extraction fallo: %s", e)
+        results["prime_mover"] = None
 
     logger.info("A3: Sentido emergente proyecto %s", proyecto_id)
     results["sense_making"] = a3_make_sense(proyecto_id)
@@ -1191,36 +1241,39 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
         s.close()
 
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # B21: LangGraph StateGraph — invocacion desde Celery
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @app.task(name="invoke_graph")
 def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
     """
     B21: Invoca el StateGraph para un documento (o el proyecto completo).
-    
+
     El grafo (workflow.py) orquesta los agentes como nodos.
     PostgresSaver checkpointea entre nodos para pausar/reanudar.
     Los agentes se llaman como funciones sincronas (no via Celery).
-    
+
     Si documento_id es None, invoca la fase de sintesis (B).
     """
     try:
-        from app.core.workflow import build_glaser_graph, AnalysisState
-        from langgraph.checkpoint.postgres import PostgresSaver
         import os as _os
-        
-        db_url = _os.getenv("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/gt")
+
+        from app.core.workflow import AnalysisState, build_glaser_graph
+        from langgraph.checkpoint.postgres import PostgresSaver
+
+        db_url = _os.getenv(
+            "DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/gt"
+        )
         saver = PostgresSaver.from_conn_string(db_url)
         saver.setup()
-        
+
         graph = build_glaser_graph()
         graph = graph.with_config(checkpointer=saver)
-        
+
         config = {"configurable": {"thread_id": proyecto_id}}
-        
+
         if documento_id:
             # Fase A: procesar un documento
             s = SessionLocal()
@@ -1232,7 +1285,7 @@ def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
                 texto = (doc[0] or {}).get("texto_extraido", "") if doc else ""
             finally:
                 s.close()
-            
+
             state = AnalysisState(
                 project_id=proyecto_id,
                 document_id=documento_id,
@@ -1247,9 +1300,9 @@ def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
                 study_status="collecting",
                 current_step="reduce_synthesize",
             )
-        
+
         result = graph.invoke(state, config)
-        
+
         return {
             "status": "completed",
             "current_step": result.get("current_step", ""),

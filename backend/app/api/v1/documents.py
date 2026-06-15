@@ -100,6 +100,21 @@ async def upload_document(
 
     orch_mode = os.getenv("ORCHESTRATION_MODE", "celery")
 
+    # Paso 0: segmentar en worker-nlp (tiene spaCy)
+    celery_app.send_task(
+        "segmentar_documento",
+        args=[
+            texto_extraido[:50000],
+            1024,
+            file.filename,
+            "TEXTO",
+            "",
+            str(new_doc.id),
+        ],
+        queue="nlp",
+    )
+
+    # Paso 1: pipeline de agentes en worker-heavy
     if orch_mode == "graph":
         task = celery_app.send_task(
             "invoke_graph",

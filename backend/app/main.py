@@ -3,7 +3,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, coding, documents, events, hypotheses, ping, projects, rag
+from app.api.v1 import (
+    analysis,
+    auth,
+    coding,
+    documents,
+    events,
+    hypotheses,
+    ping,
+    projects,
+    rag,
+)
 from app.core.minio_client import minio_client
 from app.db.database import engine
 
@@ -36,3 +46,4 @@ app.include_router(ping.router)
 app.include_router(projects.router)
 app.include_router(rag.router)
 app.include_router(events.router)
+app.include_router(analysis.router)

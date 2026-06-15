@@ -38,3 +38,33 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     return user
+
+
+async def get_current_user_optional(
+    credentials = None,
+    token: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Auth optional: Bearer header or ?token= query param (for EventSource)."""
+    raw_token = None
+    if credentials and hasattr(credentials, 'credentials') and credentials.credentials:
+        raw_token = credentials.credentials
+    elif token:
+        raw_token = token
+    if not raw_token:
+        return None
+    try:
+        payload = decode_token(raw_token)
+        if not payload:
+            return None
+        jti = payload.get("jti")
+        if jti and await is_token_blacklisted(jti):
+            return None
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        from sqlalchemy import select
+        result = await db.execute(select(Usuario).where(Usuario.id == user_id))
+        return result.scalar_one_or_none()
+    except Exception:
+        return None

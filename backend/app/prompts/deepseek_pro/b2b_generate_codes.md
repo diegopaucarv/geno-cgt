@@ -16,7 +16,7 @@ generar códigos en gerundio que capturen el patrón de comportamiento
 subyacente.
 
 [REGLAS]
-- Códigos = gerundios (ej. "Negociando límites", "Evadiendo control").
+- {coding_style_instruction}
 - Si un indicador coincide con un código existente, indícalo.
 - Si emerge un patrón nuevo, crea un código nuevo con definición.
 - La intercambiabilidad de indicadores guía el nombramiento.
