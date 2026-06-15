@@ -53,4 +53,9 @@ class DocumentProcess(Base, TimestampMixin):
     """HIGH | MEDIUM | LOW. NULL si no se extrajo."""
 
     # Relaciones
-    documento = relationship("Documento", back_populates="document_processes")
+    documento = relationship(
+        "Documento",
+        back_populates="document_processes",
+        foreign_keys=[documento_id],
+    )
+    previous_document = relationship("Documento", foreign_keys=[previous_document_id])

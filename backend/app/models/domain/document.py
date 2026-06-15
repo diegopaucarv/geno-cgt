@@ -37,9 +37,16 @@ class Documento(Base, TimestampMixin):
         "Segmento", back_populates="documento", cascade="all, delete-orphan"
     )
     document_processes = relationship(
-        "DocumentProcess", back_populates="documento", cascade="all, delete-orphan"
+        "DocumentProcess",
+        back_populates="documento",
+        cascade="all, delete-orphan",
+        foreign_keys="[DocumentProcess.documento_id]",
     )
 
     @property
     def texto_extraido(self) -> str:
         return self.metadatos.get("texto_extraido", "") if self.metadatos else ""
+
+
+# Importar aquí para que SQLAlchemy registre la clase antes de resolver relaciones
+from app.models.domain.document_process import DocumentProcess  # noqa: E402,F401
