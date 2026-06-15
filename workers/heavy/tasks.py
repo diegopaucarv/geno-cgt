@@ -488,8 +488,6 @@ def _anchor_segments(session, documento_id: str, full_text: str) -> None:
     )
 
 
-
-
 def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict | None:
     """C06: Extrae prime mover usando SOLO baseline_data. Se adapta al object_of_study."""
     # Obtener configuracion del proyecto
@@ -499,7 +497,11 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
     ).fetchone()
     obj = "concern"  # default
     if config and config[0]:
-        obj = config[0].get("object_of_study", "concern") if isinstance(config[0], dict) else "concern"
+        obj = (
+            config[0].get("object_of_study", "concern")
+            if isinstance(config[0], dict)
+            else "concern"
+        )
 
     # Instrucciones segun objeto de estudio
     instructions = {
@@ -535,7 +537,9 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
             "document_name": doc_name[0] if doc_name else "",
             "baseline_segments": segments_text[:6000],
             "object_of_study": obj,
-            "object_of_study_instructions": instructions.get(obj, instructions["concern"]),
+            "object_of_study_instructions": instructions.get(
+                obj, instructions["concern"]
+            ),
         },
         temperature=0.3,
     )
@@ -546,6 +550,7 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
         "confidence": response.get("confidence", "LOW"),
         "insufficient_data": response.get("insufficient_data", False),
     }
+
 
 def _mark_doc_ready(documento_id: str) -> None:
     s = SessionLocal()
@@ -663,9 +668,24 @@ def process_document_agents_a(documento_id: str, proyecto_id: str) -> dict:
     # C06: Extraer prime_mover del documento (usa solo baseline_data)
     logger.info("C06: Prime mover doc %s", documento_id)
     try:
-        results["prime_mover"] = _extract_prime_mover(
-            session, documento_id, proyecto_id
-        )
+        pm_result = _extract_prime_mover(session, documento_id, proyecto_id)
+        results["prime_mover"] = pm_result
+        # Persistir en document_processes
+        if pm_result and pm_result.get("prime_mover"):
+            session.execute(
+                text(
+                    "UPDATE document_processes SET prime_mover = :pm, "
+                    "prime_mover_confidence = :pmc "
+                    "WHERE documento_id = :did AND proyecto_id = :pid"
+                ),
+                {
+                    "pm": pm_result["prime_mover"],
+                    "pmc": pm_result.get("confidence", "LOW"),
+                    "did": documento_id,
+                    "pid": proyecto_id,
+                },
+            )
+            session.commit()
     except Exception as e:
         logger.warning("Prime mover extraction fallo: %s", e)
         results["prime_mover"] = None
@@ -1067,17 +1087,38 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
         all_codes = "\n".join(f"- {c[0]}: {c[1]}" for c in codes)
         all_memos = "\n---\n".join(m[0] for m in memos) if memos else "(sin memos)"
 
+        # C06: Cargar prime_movers por documento
+        prime_rows = s.execute(
+            text(
+                "SELECT dp.prime_mover, dp.prime_mover_confidence, "
+                "d.original_filename "
+                "FROM document_processes dp "
+                "JOIN documentos d ON dp.documento_id = d.id "
+                "WHERE dp.proyecto_id = :pid AND dp.prime_mover IS NOT NULL"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        prime_movers_text = (
+            "\n".join(f"- {r[2]}: {r[0]} (confidence: {r[1]})" for r in prime_rows)
+            if prime_rows
+            else "(sin prime movers extraídos)"
+        )
+
         response = llm.run_agent(
             "main_concern_proposer",
             variables={
                 "all_codes": all_codes,
                 "all_memos": all_memos,
+                "prime_movers_per_document": prime_movers_text,
             },
         )
         return {
             "main_concern": response.get("main_concern", ""),
             "confidence": response.get("confidence", "LOW"),
             "recurring_problems": response.get("recurring_problems", []),
+            "relevant_population_dimensions": response.get(
+                "relevant_population_dimensions", []
+            ),
         }
     finally:
         s.close()
@@ -1242,6 +1283,56 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Selective Elaboration — dispatches per-code elaboration
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.task(name="trigger_selective_elaboration")
+def trigger_selective_elaboration(proyecto_id: str) -> dict:
+    """
+    Dispara elaboracion selectiva para todas las categorias del proyecto.
+    Itera sobre cada categoria y ejecuta incident_elaborator.
+    """
+    s = SessionLocal()
+    try:
+        # Obtener todas las categorias del proyecto
+        codes = s.execute(
+            text(
+                "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        if not codes:
+            return {"status": "no_codes", "project_id": proyecto_id}
+
+        elaborated = 0
+        errors = 0
+        for code_row in codes:
+            code_id = str(code_row[0])
+            try:
+                # Para cada categoria, ejecutamos la integracion paradigmatica
+                # que evalua si hay divergencia/expansion
+                result = task_a01_integrate_paradigm(code_id, proyecto_id)
+                if result and "error" not in result:
+                    elaborated += 1
+            except Exception as e:
+                logger.warning("Elaboration failed for code %s: %s", code_id, e)
+                errors += 1
+
+        s.commit()
+        return {
+            "status": "completed",
+            "project_id": proyecto_id,
+            "codes_total": len(codes),
+            "elaborated": elaborated,
+            "errors": errors,
+        }
+    finally:
+        s.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # B21: LangGraph StateGraph — invocacion desde Celery
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1261,11 +1352,9 @@ def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
         import os as _os
 
         from app.core.workflow import AnalysisState, build_glaser_graph
+        from config import DATABASE_URL as db_url
         from langgraph.checkpoint.postgres import PostgresSaver
 
-        db_url = _os.getenv(
-            "DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/gt"
-        )
         saver = PostgresSaver.from_conn_string(db_url)
         saver.setup()
 

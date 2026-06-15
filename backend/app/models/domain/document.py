@@ -36,6 +36,9 @@ class Documento(Base, TimestampMixin):
     segmentos = relationship(
         "Segmento", back_populates="documento", cascade="all, delete-orphan"
     )
+    document_processes = relationship(
+        "DocumentProcess", back_populates="documento", cascade="all, delete-orphan"
+    )
 
     @property
     def texto_extraido(self) -> str:

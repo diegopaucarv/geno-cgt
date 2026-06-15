@@ -600,7 +600,7 @@ El investigador no "testea" relaciones — **elabora** conexiones conceptuales. 
 
 ## 🗄️ FASE 1 — Modelos de datos y migraciones
 
-### ⬜ T01. Tabla `theoretical_codes`
+### ⬜ T01. Tabla `theoretical_codes` ✅
 
 **Archivo:** `backend/app/models/domain/theory.py` (nuevo)
 
@@ -633,7 +633,7 @@ class TheoreticalCode(Base, TimestampMixin):
     # "tendril" | "arrow" | "matrix" | "cluster"
 ```
 
-### ⬜ T02. Tabla `category_definition_versions`
+### ⬜ T02. Tabla `category_definition_versions` ✅
 
 **Archivo:** `backend/app/models/domain/theory.py`
 
@@ -661,7 +661,7 @@ class CategoryDefinitionVersion(Base, TimestampMixin):
     # Ej: "Memo H31 absorbido: añadió propiedad 'Intensidad del análisis'"
 ```
 
-### ⬜ T03. Tabla `conceptual_relationships`
+### ⬜ T03. Tabla `conceptual_relationships` ✅
 
 **Archivo:** `backend/app/models/domain/theory.py`
 
@@ -714,7 +714,7 @@ class ConceptualRelationship(Base, TimestampMixin):
     # >0 = divergencia activa (el tendril muestra fisuras)
 ```
 
-### ⬜ T04. Tabla `elaboration_memos`
+### ⬜ T04. Tabla `elaboration_memos` ✅
 
 **Archivo:** `backend/app/models/domain/theory.py`
 
@@ -746,7 +746,7 @@ class ElaborationMemo(Base, TimestampMixin):
     # {blob_positions: {...}, tendril_states: {...}, ghost_positions: {...}}
 ```
 
-### ⬜ T05. Tabla `ecosystem_layouts`
+### ⬜ T05. Tabla `ecosystem_layouts` ✅
 
 **Archivo:** `backend/app/models/domain/theory.py`
 
@@ -777,7 +777,7 @@ class EcosystemLayout(Base, TimestampMixin):
     # {attraction_strength: 0.01, repulsion: 0.05, damping: 0.95, core_gravity: 0.005}
 ```
 
-### ⬜ T06. Migración 010
+### ⬜ T06. Migración 012 (antes 010) ✅
 
 **Archivo:** `backend/migrations/versions/010_theoretical_playground.py` (nuevo)
 
@@ -787,7 +787,7 @@ Crear las 5 tablas. Depende de: `categorias`, `proyectos`, `memos`, `hypotheses`
 
 ## 🧠 FASE 2 — Prompts del Playground
 
-### ⬜ T07. Prompt: `conceptual_elaborator.md`
+### ⬜ T07. Prompt: `conceptual_elaborator.md` ✅
 
 **Archivo:** `backend/app/prompts/deepseek_pro/conceptual_elaborator.md` (nuevo)
 **Tier:** PRO
@@ -926,7 +926,7 @@ Lógica de evaluación: {evaluation_logic}
 ```
 ```
 
-### ⬜ T08. Prompt: `rename_suggester.md`
+### ⬜ T08. Prompt: `rename_suggester.md` ✅
 
 **Archivo:** `backend/app/prompts/deepseek_pro/rename_suggester.md` (nuevo)
 **Tier:** PRO
@@ -950,7 +950,7 @@ constraints:
 ---
 ```
 
-### ⬜ T09. Prompt: `ghost_blob_mapper.md`
+### ⬜ T09. Prompt: `ghost_blob_mapper.md` ✅
 
 **Archivo:** `backend/app/prompts/deepseek_pro/ghost_blob_mapper.md` (nuevo)
 **Tier:** PRO
@@ -972,7 +972,7 @@ constraints:
 ---
 ```
 
-### ⬜ T10. Prompt: `ecosystem_gap_detector.md`
+### ⬜ T10. Prompt: `ecosystem_gap_detector.md` ✅
 
 **Archivo:** `backend/app/prompts/deepseek_pro/ecosystem_gap_detector.md` (nuevo)
 **Tier:** PRO
@@ -983,7 +983,7 @@ Analiza el ecosistema completo y detecta: categorías huérfanas, capas teórica
 
 ## ⚙️ FASE 3 — Servicios core (Python)
 
-### ⬜ T11. `rename_detector.py`
+### ⬜ T11. Servicio `rename_detector.py` ✅
 
 **Archivo:** `backend/app/services/rename_detector.py` (nuevo)
 
@@ -1026,7 +1026,7 @@ def generate_rename_suggestions(category_id: UUID, session: Session) -> list[dic
     """
 ```
 
-### ⬜ T12. `elaboration_engine.py`
+### ⬜ T12. Servicio `elaboration_engine.py` ✅
 
 **Archivo:** `backend/app/services/elaboration_engine.py` (nuevo)
 
@@ -1080,7 +1080,7 @@ class ElaborationEngine:
         """
 ```
 
-### ⬜ T13. `recommendation_engine.py`
+### ⬜ T13. Servicio `recommendation_engine.py` ✅
 
 **Archivo:** `backend/app/services/recommendation_engine.py` (nuevo)
 
@@ -1111,7 +1111,7 @@ class RecommendationEngine:
 
 ## 🔌 FASE 4 — API Endpoints
 
-### ⬜ T14. Theoretical Codes API
+### ⬜ T14. Theoretical Codes API ✅
 
 **Archivo:** `backend/app/api/v1/theoretical_codes.py` (nuevo)
 
@@ -1129,7 +1129,7 @@ GET    /api/v1/projects/{pid}/theoretical/codes/{tcid}
        → Ver código con su lógica de evaluación completa
 ```
 
-### ⬜ T15. Elaboration API
+### ⬜ T15. Elaboration API ✅
 
 **Archivo:** `backend/app/api/v1/elaboration.py` (nuevo)
 
@@ -1157,7 +1157,7 @@ GET    /api/v1/projects/{pid}/elaboration/ghosts
        → Listar ghost-blobs pendientes
 ```
 
-### ⬜ T16. Rename API
+### ⬜ T16. Rename API ✅
 
 **Archivo:** `backend/app/api/v1/elaboration.py` (misma)
 
@@ -1174,7 +1174,7 @@ GET    /api/v1/projects/{pid}/elaboration/categories/{cid}/definition-history
        → Historial completo de definiciones (timeline de evolución)
 ```
 
-### ⬜ T17. Ecosystem & Recommendations API
+### ⬜ T17. Ecosystem & Recommendations API ✅
 
 **Archivo:** `backend/app/api/v1/elaboration.py` (misma)
 
@@ -1195,7 +1195,7 @@ POST   /api/v1/projects/{pid}/elaboration/synthesize
        → Síntesis final: narrativa teórica integrada + esquema de capítulos
 ```
 
-### ⬜ T18. Registrar rutas en main.py
+### ⬜ T18. Registrar rutas en main.py ✅
 
 **Archivo:** `backend/app/main.py`
 
@@ -1316,7 +1316,7 @@ def on_selective_coding_complete(project_id: UUID):
     # 5. Generar recomendaciones iniciales
 ```
 
-### ⬜ T28. Seed de 12 códigos teóricos built-in
+### ⬜ T28. Seed de 12 códigos teóricos built-in ✅
 
 **Archivo:** `backend/app/services/theory_seeder.py` (nuevo)
 

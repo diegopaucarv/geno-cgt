@@ -1,16 +1,14 @@
 # backend/app/services/almacenamiento.py
-import os
-
+from app.core.config import MINIO_ACCESS_KEY, MINIO_ENDPOINT, MINIO_SECRET_KEY
 from minio import Minio
 
 
 class GestorDeArchivosMinIO:
     def __init__(self):
-        # Lee las credenciales de tu archivo .env que configuraste para Docker
         self.cliente = Minio(
-            endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-            access_key=os.environ.get("MINIO_ACCESS_KEY"),
-            secret_key=os.environ.get("MINIO_SECRET_KEY"),
+            endpoint=MINIO_ENDPOINT,
+            access_key=MINIO_ACCESS_KEY,
+            secret_key=MINIO_SECRET_KEY,
             secure=False,  # Falso porque en desarrollo local no usas HTTPS
         )
         self.bucket = "corpus-investigacion"

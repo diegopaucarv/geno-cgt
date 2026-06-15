@@ -3,22 +3,13 @@ Cliente LLM síncrono para workers Celery. Usa Together.ai como proveedor.
 
 Plan §2.1: Patrón Factory. Plan §2.8: Prompt Engineering Skill.
 
-Los prompts son archivos .txt autónomos con formato:
-  -- agent: a1
-  -- tier: PRO
-  -- description: ...
-  -- notes: ...
+Soporta dos formatos de prompt:
+  1. YAML (.md):  ---\nkey: value\n---\n## System\n...\n## Output Schema\n```json...```
+  2. Legacy (.txt): -- agent: a1\n[ROL]...\n---\nSCHEMA\n{{...}}
 
-  [ROL]
-  Eres un...
-
-  ---
-  SCHEMA
-  {{...}}
-
-La metadata (líneas --) guía al orquestador.
-El bloque SCHEMA se extrae para structured output.
-El prompt enviado al LLM solo contiene las secciones [ROL]...[RAZONAMIENTO].
+El parser detecta el formato automáticamente.
+Las variables {nombre} se reemplazan con Python .format().
+El schema se extrae del bloque Output Schema (md) o SCHEMA (txt).
 """
 
 from __future__ import annotations
@@ -32,39 +23,138 @@ from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
-ModelTier = Literal["FAST", "BALANCED", "POWERFUL"]
+ModelTier = Literal["PRO", "FLASH"]
 
 TIER_MODELS: dict[ModelTier, str] = {
-    "FAST": "deepseek-ai/DeepSeek-V3",
-    "BALANCED": "google/gemma-2-27b-it",
-    "POWERFUL": "deepseek-ai/DeepSeek-R1",
+    "FLASH": "deepseek-ai/DeepSeek-V3",
+    "PRO": "deepseek-ai/DeepSeek-R1",
 }
 
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Parseo de archivos .txt unificados
+# Parseo unificado de prompts (.md YAML + .txt legacy)
 # ═══════════════════════════════════════════════════════════════════════
 
 
 def _parse_prompt_file(raw: str) -> dict[str, Any]:
-    """
-    Extrae metadata, prompt y schema de un archivo .txt unificado.
+    """Detecta formato y despacha al parser adecuado."""
+    stripped = raw.strip()
+    if stripped.startswith("---"):
+        return _parse_yaml_format(stripped)
+    return _parse_legacy_format(stripped)
 
-    Estructura esperada:
-        -- agent: a1
-        -- tier: PRO
-        -- description: ...
-        -- notes: ...
 
-        [ROL]
-        Eres un...
+# ── YAML simple (sin dependencia PyYAML) ──────────────────────────
 
-        ---
-        SCHEMA
-        {{...}}
-    """
+
+def _parse_simple_yaml(yaml_str: str) -> dict[str, Any]:
+    """Keys simples, valores string/quoted, multi-línea indentada."""
+    result: dict[str, Any] = {}
+    current_key: str | None = None
+    current_value: list[str] = []
+
+    for raw_line in yaml_str.split("\n"):
+        line = raw_line.rstrip()
+        if not line or line.lstrip().startswith("#"):
+            if current_key and current_value:
+                result[current_key] = "\n".join(current_value).strip()
+                current_key = None
+                current_value = []
+            continue
+
+        if line.startswith(" ") or line.startswith("\t"):
+            if current_key:
+                current_value.append(line.strip())
+            continue
+
+        if ":" in line:
+            if current_key and current_value:
+                result[current_key] = "\n".join(current_value).strip()
+            key, _, val = line.partition(":")
+            key = key.strip()
+            val = val.strip()
+            if val.startswith('"') and val.endswith('"'):
+                val = val[1:-1]
+            elif val.startswith("'") and val.endswith("'"):
+                val = val[1:-1]
+            current_key = key
+            current_value = [val] if val else []
+
+    if current_key and current_value:
+        result[current_key] = "\n".join(current_value).strip()
+    return result
+
+
+def _extract_json_block(section_text: str) -> dict | None:
+    """Extrae JSON de ```json ... ``` o ``` ... ```."""
+    match = re.search(r"```(?:json)?\s*\n(.*?)\n```", section_text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse JSON block in Output Schema")
+    return None
+
+
+def _parse_markdown_sections(body: str) -> dict[str, str]:
+    """Divide cuerpo Markdown en secciones ## Heading."""
+    sections: dict[str, str] = {}
+    current_heading: str | None = None
+    current_lines: list[str] = []
+
+    for line in body.split("\n"):
+        if line.startswith("## "):
+            if current_heading:
+                sections[current_heading] = "\n".join(current_lines).strip()
+            current_heading = line[3:].strip()
+            current_lines = []
+        elif current_heading:
+            current_lines.append(line)
+
+    if current_heading:
+        sections[current_heading] = "\n".join(current_lines).strip()
+    return sections
+
+
+def _parse_yaml_format(raw: str) -> dict[str, Any]:
+    """Formato .md: YAML frontmatter + ## System / ## User / ## Output Schema."""
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        raise ValueError("Formato YAML: falta cierre de frontmatter (---)")
+
+    frontmatter_str = parts[1].strip()
+    body = parts[2].strip()
+
+    metadata = _parse_simple_yaml(frontmatter_str)
+
+    notes: list[str] = []
+    raw_notes = metadata.get("notes", "")
+    if isinstance(raw_notes, str) and raw_notes:
+        notes = [n.strip() for n in raw_notes.split("\n") if n.strip()]
+    elif isinstance(raw_notes, list):
+        notes = raw_notes
+
+    sections = _parse_markdown_sections(body)
+
+    prompt_parts = []
+    if sections.get("System"):
+        prompt_parts.append(sections["System"])
+    if sections.get("User"):
+        prompt_parts.append(sections["User"])
+    prompt = "\n\n".join(prompt_parts).strip()
+
+    schema = None
+    schema_section = sections.get("Output Schema", "")
+    if schema_section:
+        schema = _extract_json_block(schema_section)
+
+    return {"metadata": metadata, "notes": notes, "prompt": prompt, "schema": schema}
+
+
+def _parse_legacy_format(raw: str) -> dict[str, Any]:
+    """Formato .txt: -- metadata + [ROL]...[TAREA]... + --- SCHEMA {{...}}."""
     lines = raw.split("\n")
     metadata: dict[str, str] = {}
     notes: list[str] = []
@@ -73,75 +163,82 @@ def _parse_prompt_file(raw: str) -> dict[str, Any]:
     in_schema = False
 
     for line in lines:
+        stripped = line.strip()
         if in_schema:
             schema_lines.append(line)
-        elif line.strip().startswith("-- agent:"):
-            metadata["agent"] = line.split(":", 1)[1].strip()
-        elif line.strip().startswith("-- tier:"):
-            metadata["tier"] = line.split(":", 1)[1].strip()
-        elif line.strip().startswith("-- description:"):
-            metadata["description"] = line.split(":", 1)[1].strip()
-        elif line.strip().startswith("-- notes:"):
-            notes.append(line.split(":", 1)[1].strip())
-        elif line.strip() == "---":
-            # Check if next non-empty line is SCHEMA
+        elif stripped.startswith("-- agent:"):
+            metadata["agent"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("-- tier:"):
+            metadata["tier"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("-- description:"):
+            metadata["description"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("-- notes:"):
+            notes.append(stripped.split(":", 1)[1].strip())
+        elif stripped.startswith("-- constraints:"):
+            metadata["constraints"] = stripped.split(":", 1)[1].strip()
+        elif stripped == "---":
             in_schema = True
-        elif line.strip().startswith("--"):
-            continue  # otros metadatos
+        elif stripped.startswith("--"):
+            continue
         elif not in_schema:
             prompt_lines.append(line)
 
-    # Parsear schema JSON
     schema: dict | None = None
     schema_text = "\n".join(schema_lines).strip()
     if schema_text and schema_text.upper().startswith("SCHEMA"):
         schema_text = schema_text[len("SCHEMA") :].strip()
-        # Des-escapar {{ }} → { }
         schema_text = schema_text.replace("{{", "{").replace("}}", "}")
         try:
             schema = json.loads(schema_text)
         except json.JSONDecodeError:
-            logger.warning("Failed to parse SCHEMA block in prompt file")
+            logger.warning("Failed to parse SCHEMA block in legacy prompt")
 
     prompt = "\n".join(prompt_lines).strip()
+    return {"metadata": metadata, "notes": notes, "prompt": prompt, "schema": schema}
 
-    return {
-        "metadata": metadata,
-        "notes": notes,
-        "prompt": prompt,
-        "schema": schema,
-    }
+
+# ═══════════════════════════════════════════════════════════════════════
+# Carga de archivos
+# ═══════════════════════════════════════════════════════════════════════
 
 
 def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
-    """Carga y parsea el archivo de prompt para un agente y tier."""
+    """Busca el prompt en deepseek_pro/ o deepseek_flash/. Prueba .md y .txt."""
     tier_dir = {
-        "POWERFUL": "deepseek_pro",
-        "BALANCED": "deepseek_pro",
-        "FAST": "deepseek_flash",
+        "PRO": "deepseek_pro",
+        "FLASH": "deepseek_flash",
     }
     agent_files = {
-        "a1": "a1_population_context.txt",
-        "a2": "a2_process_identifier.txt",
-        "a3": "a3_sense_maker.txt",
-        "b1": "b1_sampling_distiller.txt",
-        "b2a": "b2a_extract_indicators.txt",
-        "b2b": "b2b_generate_codes.txt",
-        "b3": "b3_hypothesis_generator.txt",
+        "a1": "a1_population_context",
+        "a2": "a2_process_identifier",
+        "a3": "a3_sense_maker",
+        "b1": "b1_sampling_distiller",
+        "b2a": "b2a_extract_indicators",
+        "b2b": "b2b_generate_codes",
+        "b3": "b3_hypothesis_generator",
+        "graph_entity_extractor": "entity_extraction",
     }
-    filename = agent_files.get(agent_id, f"{agent_id}.txt")
+    base_name = agent_files.get(agent_id, agent_id)
+    extensions = [".md", ".txt"]
 
-    # Primero buscar en la raíz de prompts/ (archivos sin subdirectorio de tier)
-    filepath = Path(PROMPTS_DIR) / filename
-    if not filepath.exists():
-        # Fallback: buscar en subdirectorio de tier (deepseek_pro/ o deepseek_flash/)
-        filepath = Path(PROMPTS_DIR) / tier_dir[tier] / filename
+    for ext in extensions:
+        filename = base_name + ext
+        # Primero en raíz, luego en subdirectorio de tier
+        for candidate_dir in ("", tier_dir[tier]):
+            dir_path = (
+                Path(PROMPTS_DIR) / candidate_dir
+                if candidate_dir
+                else Path(PROMPTS_DIR)
+            )
+            filepath = dir_path / filename
+            if filepath.exists():
+                raw = filepath.read_text(encoding="utf-8")
+                return _parse_prompt_file(raw)
 
-    if not filepath.exists():
-        raise FileNotFoundError(f"Prompt no encontrado: {filepath}")
-
-    raw = filepath.read_text(encoding="utf-8")
-    return _parse_prompt_file(raw)
+    raise FileNotFoundError(
+        f"Prompt no encontrado para {agent_id} (tier={tier}): "
+        f"buscado como {base_name}.md y {base_name}.txt"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -154,7 +251,10 @@ MOCK_RESPONSES: dict[str, dict] = {
         "language_patterns": "[MOCK] Metáforas espaciales.",
         "data_production_context": "[MOCK] Entrevistas en zonas de espera.",
     },
-    "a2": {"process_description": "[MOCK] Negociando permanencia.", "data_classification": "baseline"},
+    "a2": {
+        "process_description": "[MOCK] Negociando permanencia.",
+        "data_classification": "baseline",
+    },
     "a3": {
         "sense_status": "no_change",
         "hypotheses": [
@@ -179,17 +279,25 @@ MOCK_RESPONSES: dict[str, dict] = {
     },
     "b2a": {
         "indicators": [
-            {"segment_index": 0, "key_phrases": ["cambio de zona"], "suggested_pattern": "Evita zonas sin pedidos"},
-            {"segment_index": 1, "key_phrases": ["acepto las que valen"], "suggested_pattern": "Rechazo selectivo por rentabilidad"}
+            {
+                "segment_index": 0,
+                "key_phrases": ["cambio de zona"],
+                "suggested_pattern": "Evita zonas sin pedidos",
+            },
+            {
+                "segment_index": 1,
+                "key_phrases": ["acepto las que valen"],
+                "suggested_pattern": "Rechazo selectivo por rentabilidad",
+            },
         ]
     },
-    "b2": {
+    "b2b": {
         "codes": [
             {
                 "code_name": "Evadiendo control algorítmico",
-                "definition": "...",
+                "definition": "Patrón de comportamiento donde...",
                 "indicators": ["cambio de zona"],
-                "variations": "...",
+                "variations": "Varía según hora del día",
                 "relationship_to_existing": "Nuevo.",
             }
         ]
@@ -216,8 +324,8 @@ MOCK_RESPONSES: dict[str, dict] = {
 class LLMClient:
     """Cliente síncrono para llamadas LLM desde workers Celery.
 
-    Carga prompts desde archivos .txt autónomos en /app/prompts/.
-    Cada archivo contiene: metadata (--), prompt, y SCHEMA embebido.
+    Carga prompts desde archivos .md (YAML) o .txt (legacy) en /app/prompts/.
+    Soporta ambos formatos automáticamente.
     """
 
     def __init__(self, api_key: str | None = None):
@@ -236,8 +344,6 @@ class LLMClient:
                 logger.warning("Together.ai init failed: %s. MOCK mode.", e)
                 self.is_mock = True
 
-    # ── API de alto nivel ───────────────────────────────────────────
-
     def run_agent(
         self,
         agent_id: str,
@@ -245,37 +351,28 @@ class LLMClient:
         max_tokens: int = 2048,
         temperature: float = 0.3,
     ) -> dict[str, Any]:
-        """
-        Flujo completo:
-        1. Carga el archivo .txt → extrae metadata, prompt template, schema
-        2. Usa el tier declarado en el archivo (-- tier: PRO/FLASH)
-        3. Reemplaza {variables} en el prompt
-        4. Inyecta el SCHEMA como output format
-        5. Llama al LLM (o devuelve mock)
-        """
+        """Carga prompt, reemplaza variables, inyecta schema, llama al LLM."""
         if self.is_mock:
             return dict(
                 MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
             )
 
-        # 1. Primero intenta PRO, si no existe usa FLASH
-        for tier in ("POWERFUL", "FAST"):
+        for tier in ("PRO", "FLASH"):
             try:
-                parsed = _load_agent_prompt(agent_id, tier)  # type: ignore[arg-type]
+                parsed = _load_agent_prompt(agent_id, tier)
                 break
             except FileNotFoundError:
                 continue
         else:
             return {"error": f"Prompt no encontrado para {agent_id}"}
 
-        # 2. Usar el tier del archivo si está declarado, si no el que cargó
         declared_tier = parsed["metadata"].get("tier", "PRO")
-        tier_map = {"PRO": "POWERFUL", "FLASH": "FAST"}
-        model_tier: ModelTier = tier_map.get(declared_tier, "POWERFUL")  # type: ignore[assignment]
+        model_tier: ModelTier = (
+            declared_tier if declared_tier in ("PRO", "FLASH") else "PRO"
+        )
 
-        logger.info("Agent %s → tier=%s (%s)", agent_id, declared_tier, model_tier)
+        logger.info("Agent %s → tier=%s", agent_id, model_tier)
 
-        # 3. Reemplazar variables en el prompt
         prompt_template = parsed["prompt"]
         try:
             system_prompt = prompt_template.format(**variables)
@@ -285,10 +382,7 @@ class LLMClient:
             for k, v in variables.items():
                 system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
-        # 4. Inyectar schema
         schema = parsed["schema"]
-
-        # 5. Llamar al LLM
         model = TIER_MODELS[model_tier]
         return self._call_llm(
             model_tier, model, system_prompt, schema, max_tokens, temperature
@@ -302,11 +396,14 @@ class LLMClient:
         schema: dict | None,
         max_tokens: int,
         temperature: float,
+        retry: bool = True,
     ) -> dict[str, Any]:
-        """Llama a Together.ai con schema inyectado como output format."""
-
+        """Llama a Together.ai con response_format json_object. Retry 1 vez."""
         if schema:
-            system_prompt += f"\n\n[OUTPUT FORMAT — responde EXCLUSIVAMENTE en JSON]\n{json.dumps(schema, indent=2)}"
+            system_prompt += (
+                "\n\n[OUTPUT FORMAT — responde EXCLUSIVAMENTE en JSON]\n"
+                + json.dumps(schema, indent=2)
+            )
 
         user_prompt = (
             "[TAREA]\nResponde según el formato y razonamiento indicados arriba."
@@ -323,11 +420,13 @@ class LLMClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                response_format={"type": "json_object"},
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
             content = response.choices[0].message.content or ""
             content = content.strip()
+            # Strip markdown code fences if present
             if content.startswith("```"):
                 lines = content.split("\n")
                 if lines[0].startswith("```"):
@@ -336,9 +435,31 @@ class LLMClient:
                     lines = lines[:-1]
                 content = "\n".join(lines)
             return json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("JSON parse failed for %s. Mock fallback.", tier)
+
+        except json.JSONDecodeError as e:
+            if retry:
+                logger.warning(
+                    "JSON parse failed for %s: %s. Retrying with error hint.",
+                    tier,
+                    str(e)[:100],
+                )
+                hint = (
+                    f"\n\n[ERROR EN RESPUESTA ANTERIOR]\n"
+                    f"Tu respuesta no era JSON válido: {str(e)[:200]}\n"
+                    f"Corrige y responde SOLO el JSON."
+                )
+                return self._call_llm(
+                    tier,
+                    model,
+                    system_prompt + hint,
+                    schema,
+                    max_tokens + 512,
+                    temperature,
+                    retry=False,
+                )
+            logger.warning("JSON parse failed after retry. Mock fallback.")
             return dict(MOCK_RESPONSES.get(tier, {"error": "JSON parse failed"}))
+
         except Exception as e:
             logger.error("LLM call failed: %s. Mock fallback.", e)
             return dict(MOCK_RESPONSES.get(tier, {"error": str(e)}))

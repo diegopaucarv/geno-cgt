@@ -1,12 +1,8 @@
-import os
-
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-_raw_url = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://app_user:strongpass@pgbouncer:6432/gt-db",
-)
+from app.core.config import DATABASE_URL as _raw_url
+
 # docker-compose usa postgresql://, async necesita postgresql+asyncpg://
 DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 

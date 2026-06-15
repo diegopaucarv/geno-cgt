@@ -104,11 +104,14 @@ def node_segment_and_index(state: AnalysisState) -> AnalysisState:
         return state
     try:
         import sys as _s
+
         _s.path.insert(0, "/app")
         from database import SessionLocal
+
         s = SessionLocal()
         try:
             from workers.heavy.tasks import _ensure_segmented
+
             _ensure_segmented(s, doc_id)
         finally:
             s.close()
@@ -126,8 +129,10 @@ def node_extract_entities(state: AnalysisState) -> AnalysisState:
     if not doc_id:
         return state
     try:
-        from celery import Celery
         import os as _os
+
+        from celery import Celery
+
         app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
         app.send_task("batch_extract_graph", args=[doc_id, pid], queue="fast")
         logger.info("Node 2: GraphRAG dispatched for doc=%s", doc_id)
@@ -143,18 +148,23 @@ def node_batch_code(state: AnalysisState) -> AnalysisState:
     if not pid:
         return state
     try:
-    import sys as _sys
-    _sys.path.insert(0, "/app")
-    from database import SessionLocal
-    from llm_client import LLMClient
-    _llm = LLMClient()
+        import sys as _sys
 
-        from workers.heavy.agents_b import b2_open_code, b2_5_assign_codes_to_segments
+        _sys.path.insert(0, "/app")
+        from database import SessionLocal
+        from llm_client import LLMClient
+
+        _llm = LLMClient()
+
+        from workers.heavy.agents_b import b2_5_assign_codes_to_segments, b2_open_code
+
         result = b2_open_code(pid)
         state["new_codes"] = result.get("codes", [])
         logger.info("Node 3: B2 created %d codes", result.get("codes_created", 0))
         ground = b2_5_assign_codes_to_segments(pid)
-        logger.info("Node 3: B2.5 grounded %d segments", ground.get("segments_assigned", 0))
+        logger.info(
+            "Node 3: B2.5 grounded %d segments", ground.get("segments_assigned", 0)
+        )
     except Exception as e:
         logger.warning("Node 3 failed: %s", e)
     return state
@@ -167,16 +177,24 @@ def node_map_synthesize(state: AnalysisState) -> AnalysisState:
     if not pid:
         return state
     try:
-        from celery import Celery
         import os as _os
+
+        from celery import Celery
+
         app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
         app.send_task("process_synthesis_agents_b", args=[pid], queue="heavy")
         output = {"open_coding": {"codes": []}, "hypotheses": {"hypotheses": []}}
-        state["code_document_summaries"] = output.get("open_coding", {}).get("codes", [])
-        state["candidate_hypotheses"] = output.get("hypotheses", {}).get("hypotheses", [])
-        logger.info("Node 4: Map-Reduce completed (codes=%d, hyps=%d)",
+        state["code_document_summaries"] = output.get("open_coding", {}).get(
+            "codes", []
+        )
+        state["candidate_hypotheses"] = output.get("hypotheses", {}).get(
+            "hypotheses", []
+        )
+        logger.info(
+            "Node 4: Map-Reduce completed (codes=%d, hyps=%d)",
             len(state.get("code_document_summaries", [])),
-            len(state.get("candidate_hypotheses", [])))
+            len(state.get("candidate_hypotheses", [])),
+        )
     except Exception as e:
         logger.warning("Node 4 Map-Reduce failed (non-blocking): %s", e)
     return state
@@ -196,8 +214,10 @@ def node_find_core_concern(state: AnalysisState) -> AnalysisState:
     state["current_step"] = "find_core_concern"
     try:
         import sys as _s
+
         _s.path.insert(0, "/app")
         from workers.heavy.tasks import task_a14_main_concern
+
         result = task_a14_main_concern(state["project_id"])
         state["main_concern"] = result.get("main_concern", "")
         logger.info("Node 5.5: main_concern=%s", state["main_concern"][:60])
@@ -216,16 +236,21 @@ def node_generate_hypotheses(state: AnalysisState) -> AnalysisState:
     if not pid:
         return state
     try:
-    import sys as _sys
-    _sys.path.insert(0, "/app")
-    from database import SessionLocal
-    from llm_client import LLMClient
-    _llm = LLMClient()
+        import sys as _sys
+
+        _sys.path.insert(0, "/app")
+        from database import SessionLocal
+        from llm_client import LLMClient
+
+        _llm = LLMClient()
 
         from workers.heavy.agents_b import b3_generate_hypotheses
+
         result = b3_generate_hypotheses(pid)
         state["candidate_hypotheses"] = result.get("hypotheses", [])
-        logger.info("Node 6: B3 generated %d hypotheses", result.get("hypotheses_created", 0))
+        logger.info(
+            "Node 6: B3 generated %d hypotheses", result.get("hypotheses_created", 0)
+        )
     except Exception as e:
         logger.warning("Node 6 failed: %s", e)
     return state
@@ -238,8 +263,10 @@ def node_calculate_saturation(state: AnalysisState) -> AnalysisState:
     if not pid:
         return state
     try:
-        from celery import Celery
         import os as _os
+
+        from celery import Celery
+
         app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
         app.send_task("update_saturation", args=[pid], queue="nlp")
         logger.info("Node 7: saturation dispatched for project %s", pid)
@@ -252,15 +279,21 @@ def node_hitl_review(state: AnalysisState) -> AnalysisState:
     """Node 8: HITL — pausa el grafo para revision humana de hipotesis."""
     state["current_step"] = "hitl_review"
     from langgraph.types import interrupt
+
     candidates = state.get("candidate_hypotheses", [])
     if candidates:
-        decision = interrupt({
-            "message": "Revisar hipotesis candidatas",
-            "candidates": [
-                {"text": h.get("text", "")[:200], "level": h.get("level", "emergent")}
-                for h in candidates[:5]
-            ],
-        })
+        decision = interrupt(
+            {
+                "message": "Revisar hipotesis candidatas",
+                "candidates": [
+                    {
+                        "text": h.get("text", "")[:200],
+                        "level": h.get("level", "emergent"),
+                    }
+                    for h in candidates[:5]
+                ],
+            }
+        )
         state["hitl_decision"] = decision
         logger.info("Node 8: HITL decision received")
     else:
@@ -416,6 +449,7 @@ PROMPT_NODE_MAP: dict[str, str] = {
 # A8 — RollingWindowStateManager (Mem CP + Mem LP)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class RollingWindowStateManager:
     """
     Mem CP + Mem LP adaptado al estado de LangGraph.
@@ -429,9 +463,7 @@ class RollingWindowStateManager:
     """
 
     @staticmethod
-    def checkpoint_segment(
-        state: dict, segment_index: int, result: dict
-    ) -> dict:
+    def checkpoint_segment(state: dict, segment_index: int, result: dict) -> dict:
         """
         Mem CP: guarda resultado de codificacion de UN segmento.
         Permite reanudar desde el ultimo segmento si el worker falla.
@@ -461,24 +493,17 @@ class RollingWindowStateManager:
         Mem LP: consolida todos los segmentos al final del documento.
         Produce un resumen para la siguiente iteracion.
         """
-        total = sum(
-            len(wave)
-            for wave in state.get("processed_segments", {}).values()
-        )
+        total = sum(len(wave) for wave in state.get("processed_segments", {}).values())
         return {
             "document_id": state.get("document_id"),
             "waves": state.get("processed_segments", {}),
             "total_segments_processed": total,
             "last_checkpoint": state.get("last_checkpoint", 0),
-            "consolidated_at": __import__("datetime")
-            .datetime.utcnow()
-            .isoformat(),
+            "consolidated_at": __import__("datetime").datetime.utcnow().isoformat(),
         }
 
     @staticmethod
-    def get_unprocessed_segments(
-        state: dict, total_segments: int
-    ) -> list[int]:
+    def get_unprocessed_segments(state: dict, total_segments: int) -> list[int]:
         """
         Indices de segmentos NO procesados en la wave actual.
         Util para reanudar tras fallo.
@@ -486,6 +511,334 @@ class RollingWindowStateManager:
         wave = f"wave_{state.get('current_wave', 1)}"
         processed = state.get("processed_segments", {}).get(wave, {})
         processed_indices = {int(k) for k in processed.keys()}
-        return [
-            i for i in range(total_segments) if i not in processed_indices
-        ]
+        return [i for i in range(total_segments) if i not in processed_indices]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# E07-E08 — Feedback Loop + Theoretical Playground Entry
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def node_theosampler_evaluate(state: AnalysisState) -> AnalysisState:
+    """E07: Evalua TODOS los ejes de comparacion (Momento 1 + Momento 2)."""
+    state["current_step"] = "theosampler_evaluate"
+    pid = state.get("project_id", "")
+    if not pid:
+        return state
+
+    try:
+        import sys as _s
+
+        _s.path.insert(0, "/app")
+        import asyncio
+
+        from app.services.saturation_gap_analyzer import SaturationGapAnalyzer
+        from database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            analyzer = SaturationGapAnalyzer(s)
+            report = asyncio.run(analyzer.full_analysis(pid))
+
+            # Convertir gaps a formato del estado
+            gaps = []
+            for g in report.critical + report.warnings:
+                gaps.append(
+                    {
+                        "severity": g.severity.value
+                        if hasattr(g.severity, "value")
+                        else str(g.severity),
+                        "description": g.description,
+                        "suggested_action": g.suggested_action,
+                        "source": g.source.value
+                        if hasattr(g.source, "value")
+                        else str(g.source),
+                        "resolved": False,
+                    }
+                )
+
+            state["pending_gaps"] = gaps
+            state["saturated_codes"] = report.saturated
+            logger.info(
+                "E07: theosampler found %d critical, %d warnings, %d saturated",
+                len(report.critical),
+                len(report.warnings),
+                len(report.saturated),
+            )
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("E07 theosampler failed: %s", e)
+
+    return state
+
+
+def node_hitl_gap_review(state: AnalysisState) -> AnalysisState:
+    """E07: Pausa el grafo para que el investigador revise gaps."""
+    state["current_step"] = "hitl_gap_review"
+    gaps = state.get("pending_gaps", [])
+
+    if not gaps:
+        logger.info("E07: no gaps to review, skipping HITL")
+        return state
+
+    from langgraph.types import interrupt
+
+    decision = interrupt(
+        {
+            "message": "Gaps detectados en ejes de comparacion",
+            "gaps": [
+                {
+                    "severity": g.get("severity"),
+                    "description": g.get("description", "")[:200],
+                    "action": g.get("suggested_action", ""),
+                }
+                for g in gaps[:10]
+            ],
+            "options": [
+                "load_new_data",
+                "search_existing_corpus",
+                "mark_as_limitation",
+                "ignore_and_continue",
+            ],
+        }
+    )
+
+    state["gap_decision"] = decision
+    logger.info("E07: HITL gap decision: %s", str(decision)[:100])
+    return state
+
+
+def node_process_new_data(state: AnalysisState) -> AnalysisState:
+    """E08: Procesa nuevos documentos cargados para llenar gaps."""
+    state["current_step"] = "process_new_data"
+    new_docs = state.get("new_documents", [])
+
+    if not new_docs:
+        logger.info("E08: no new documents to process")
+        return state
+
+    pid = state.get("project_id", "")
+    try:
+        import os as _os
+
+        from celery import Celery
+
+        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+
+        for doc_id in new_docs:
+            app.send_task(
+                "process_document_agents_a",
+                args=[doc_id, pid],
+                queue="heavy",
+            )
+            logger.info("E08: dispatched processing for new doc=%s", doc_id)
+
+        # Despachar sintesis B despues de procesar nuevos docs
+        app.send_task(
+            "process_synthesis_agents_b",
+            args=[pid],
+            queue="heavy",
+        )
+    except Exception as e:
+        logger.warning("E08 process_new_data failed: %s", e)
+
+    # Limpiar nuevos documentos procesados
+    state["new_documents"] = []
+    return state
+
+
+def node_prepare_playground(state: AnalysisState) -> AnalysisState:
+    """T25: Prepara el ecosistema para el Theoretical Playground."""
+    state["current_step"] = "prepare_playground"
+    state["phase"] = "theoretical_playground"
+    pid = state.get("project_id", "")
+
+    try:
+        import sys as _s
+
+        _s.path.insert(0, "/app")
+        from database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            # 1. Seed theoretical codes
+            from app.services.theory_seeder import seed_theoretical_codes
+
+            inserted = seed_theoretical_codes(s)
+            logger.info("T25: seeded %d theoretical codes", inserted)
+
+            # 2. Crear ecosystem layout inicial
+            from sqlalchemy import text
+
+            existing = s.execute(
+                text("SELECT id FROM ecosystem_layouts WHERE project_id = :pid"),
+                {"pid": pid},
+            ).fetchone()
+            if not existing:
+                s.execute(
+                    text(
+                        "INSERT INTO ecosystem_layouts "
+                        "(id, project_id, version, blob_positions, ghost_positions, "
+                        "fog_zones, physics_params) "
+                        "VALUES (gen_random_uuid(), :pid, 1, '{}', '{}', '{}', "
+                        "CAST(:phys AS jsonb))"
+                    ),
+                    {
+                        "pid": pid,
+                        "phys": '{"attraction_strength":0.01,"repulsion":0.05,'
+                        '"damping":0.95,"core_gravity":0.005,'
+                        '"min_distance":80,"max_velocity":3.0}',
+                    },
+                )
+                s.commit()
+                logger.info("T25: created initial ecosystem layout")
+
+            # 3. Generar ghost-blobs desde memos
+            from workers.heavy.llm_client import LLMClient
+
+            _llm = LLMClient()
+            from app.services.ghost_connector import GhostConnector
+
+            connector = GhostConnector(s, _llm)
+            ghosts = connector.generate_ghost_blobs(pid)
+            logger.info("T25: generated %d ghost-blobs", len(ghosts))
+            state["ghost_blobs"] = ghosts
+        finally:
+            s.close()
+    except Exception as e:
+        logger.warning("T25 prepare_playground failed: %s", e)
+
+    return state
+
+
+# ── Routing functions ──────────────────────────────────────────────────────
+
+
+def after_saturation(
+    state: AnalysisState,
+) -> Literal["theosampler_evaluate", "hitl_review"]:
+    """Route to theosampler if we have categories, else skip to HITL."""
+    if state.get("phase") == "theoretical_playground":
+        return "hitl_review"  # Already in playground, skip
+    return "theosampler_evaluate"
+
+
+def after_theosampler(
+    state: AnalysisState,
+) -> Literal["hitl_gap_review", "prepare_playground"]:
+    """If gaps detected → HITL. If no gaps → advance to Playground."""
+    gaps = state.get("pending_gaps", [])
+    if gaps:
+        return "hitl_gap_review"
+    return "prepare_playground"
+
+
+def after_gap_review(
+    state: AnalysisState,
+) -> Literal["process_new_data", "prepare_playground", "segment_and_index"]:
+    """After gap review HITL: load data, continue, or loop back."""
+    decision = state.get("gap_decision", {})
+    if isinstance(decision, dict):
+        action = decision.get("action", "ignore_and_continue")
+    else:
+        action = str(decision) if decision else "ignore_and_continue"
+
+    if action == "load_new_data":
+        return "process_new_data"
+    elif action == "ignore_and_continue":
+        return "prepare_playground"
+    else:
+        return "segment_and_index"  # Loop back for more data
+
+
+# ── Extended graph with Feedback Loop ──────────────────────────────────────
+
+
+def build_glaser_graph_with_feedback():
+    """Build the full graph including TheoSampler + Gap Review + Playground entry."""
+    from langgraph.graph import END, StateGraph
+
+    builder = StateGraph(AnalysisState)
+
+    # Core nodes
+    builder.add_node("segment_and_index", node_segment_and_index)
+    builder.add_node("extract_entities", node_extract_entities)
+    builder.add_node("batch_code", node_batch_code)
+    builder.add_node("map_synthesize", node_map_synthesize)
+    builder.add_node("reduce_synthesize", node_reduce_synthesize)
+    builder.add_node("find_core_concern", node_find_core_concern)
+    builder.add_node("generate_hypotheses", node_generate_hypotheses)
+    builder.add_node("calculate_saturation", node_calculate_saturation)
+
+    # Feedback Loop nodes (E07-E08)
+    builder.add_node("theosampler_evaluate", node_theosampler_evaluate)
+    builder.add_node("hitl_gap_review", node_hitl_gap_review)
+    builder.add_node("process_new_data", node_process_new_data)
+
+    # Playground entry (T25)
+    builder.add_node("prepare_playground", node_prepare_playground)
+
+    # HITL review
+    builder.add_node("hitl_review", node_hitl_review)
+    builder.add_node("final_report", node_final_report)
+
+    # ── Edges ──────────────────────────────────────────────────────────
+    builder.set_entry_point("segment_and_index")
+
+    builder.add_edge("segment_and_index", "extract_entities")
+    builder.add_edge("extract_entities", "batch_code")
+    builder.add_edge("batch_code", "map_synthesize")
+    builder.add_edge("map_synthesize", "reduce_synthesize")
+    builder.add_conditional_edges(
+        "reduce_synthesize",
+        should_find_core_concern,
+        {
+            "find_core_concern": "find_core_concern",
+            "generate_hypotheses": "generate_hypotheses",
+        },
+    )
+    builder.add_edge("find_core_concern", "generate_hypotheses")
+    builder.add_edge("generate_hypotheses", "calculate_saturation")
+
+    # After saturation → evaluate sampling gaps
+    builder.add_conditional_edges(
+        "calculate_saturation",
+        after_saturation,
+        {"theosampler_evaluate": "theosampler_evaluate", "hitl_review": "hitl_review"},
+    )
+
+    # TheoSampler → gap review or playground
+    builder.add_conditional_edges(
+        "theosampler_evaluate",
+        after_theosampler,
+        {
+            "hitl_gap_review": "hitl_gap_review",
+            "prepare_playground": "prepare_playground",
+        },
+    )
+
+    # Gap review → process new data, continue, or loop
+    builder.add_conditional_edges(
+        "hitl_gap_review",
+        after_gap_review,
+        {
+            "process_new_data": "process_new_data",
+            "prepare_playground": "prepare_playground",
+            "segment_and_index": "segment_and_index",
+        },
+    )
+
+    # Process new data → re-evaluate gaps
+    builder.add_edge("process_new_data", "theosampler_evaluate")
+
+    # Playground → HITL → final
+    builder.add_edge("prepare_playground", "hitl_review")
+    builder.add_conditional_edges(
+        "hitl_review",
+        after_hitl,
+        {"segment_and_index": "segment_and_index", "final_report": "final_report"},
+    )
+    builder.add_edge("final_report", END)
+
+    return builder.compile()

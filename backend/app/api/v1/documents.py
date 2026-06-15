@@ -1,8 +1,8 @@
-import os
 import uuid
 from uuid import UUID
 
 import magic
+from app.core.config import ORCHESTRATION_MODE, SEGMENTATION_MODE
 from app.core.minio_client import minio_client
 from app.db.database import get_db
 from app.models.domain.document import Documento
@@ -17,14 +17,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
-SEGMENTATION_MODE = os.getenv("SEGMENTATION_MODE", "spacy")
-
 ALLOWED_MIME_TYPES = [
     "application/pdf",
     "text/plain",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+def _needs_punctuation(text: str) -> bool:
+    """Heurística: +60% de oraciones empiezan con minúscula → necesita puntuación."""
+    import re
+
+    sentences = re.split(r"[.!?]+", text)
+    if len(sentences) < 3:
+        return False
+    lower_starts = sum(1 for s in sentences if s.strip() and s.strip()[0].islower())
+    return lower_starts / max(len(sentences), 1) > 0.6
 
 
 @router.post("/upload/{project_id}")
@@ -80,6 +89,16 @@ async def upload_document(
     except Exception as e:
         print(f"[Upload] Error extrayendo texto: {e}")
 
+    # 5.5 Opcional: mejorar puntuación si el texto lo necesita
+    if texto_extraido and _needs_punctuation(texto_extraido):
+        from app.core.celery_app import celery_app
+
+        celery_app.send_task(
+            "punctuate_text",
+            args=[texto_extraido[:50000], 3000, str(new_doc.id)],
+            queue="fast",
+        )
+
     # 6. Guardar metadatos en DB (texto_extraido en metadatos)
     new_doc = Documento(
         proyecto_id=project_id,
@@ -98,8 +117,6 @@ async def upload_document(
     # 7. Disparar pipeline CGT asíncrono
     from app.core.celery_app import celery_app
 
-    orch_mode = os.getenv("ORCHESTRATION_MODE", "celery")
-
     # Paso 0: segmentar en worker-nlp (tiene spaCy)
     celery_app.send_task(
         "segmentar_documento",
@@ -115,7 +132,7 @@ async def upload_document(
     )
 
     # Paso 1: pipeline de agentes en worker-heavy
-    if orch_mode == "graph":
+    if ORCHESTRATION_MODE == "graph":
         task = celery_app.send_task(
             "invoke_graph",
             args=[str(project_id), str(new_doc.id)],
@@ -134,7 +151,7 @@ async def upload_document(
         "filename": file.filename,
         "estado": "segmentando",
         "pipeline_task_id": task.id,
-        "orchestration": orch_mode,
+        "orchestration": ORCHESTRATION_MODE,
     }
 
 

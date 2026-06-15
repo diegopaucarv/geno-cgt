@@ -152,3 +152,6 @@ class ParadigmState(Base, TimestampMixin):
     integration_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_group: Mapped[str | None] = mapped_column(String(200), nullable=True)
     """Subgrupo de muestreo (como el antiguo agrupa por metadata_group)."""
+
+    # Relaciones
+    category = relationship("Categoria", back_populates="paradigm_states")

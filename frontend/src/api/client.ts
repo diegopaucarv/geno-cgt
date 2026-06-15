@@ -191,3 +191,240 @@ export async function deleteDocument(documentId: string) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
+
+// ── Playground Types ──────────────────────────────────────────────────
+
+export interface TheoreticalCode {
+  id: string;
+  name: string;
+  family: string;
+  description: string;
+  glaserian: boolean;
+  user_defined: boolean;
+  evaluation_logic: Record<string, any>;
+  compatible_with: string[];
+  layer: string;
+  visualization_hint: string;
+}
+
+export interface BlobData {
+  id: string;
+  name: string;
+  definition: string;
+  version: number;
+  relevance: number;
+  saturation: string;
+  is_core: boolean;
+}
+
+export interface TendrilData {
+  id: string;
+  category_ids: string[];
+  code_id: string;
+  status: string;
+  converging: number;
+  diverging: number;
+  fit: number;
+  layer: string;
+  tension: number;
+}
+
+export interface GhostData {
+  id: string;
+  content: string;
+  type: string;
+}
+
+export interface EcosystemState {
+  blobs: BlobData[];
+  tendrils: TendrilData[];
+  layout: EcosystemLayout | null;
+}
+
+export interface EcosystemLayout {
+  blob_positions: Record<string, { x: number; y: number }>;
+  ghost_positions: Record<string, { x: number; y: number }>;
+  fog_zones: Record<string, any>;
+  physics_params: Record<string, number>;
+}
+
+export interface Relationship {
+  id: string;
+  category_ids: string[];
+  theoretical_code_id: string;
+  elaboration_status: string;
+  direction: string | null;
+  converging_docs: number;
+  diverging_docs: number;
+  conceptual_fit: number;
+  layer: string;
+  position_tension: number;
+  question: string;
+  code_name: string;
+}
+
+export interface RenameSuggestion {
+  name: string;
+  level: "conservative" | "moderate" | "transformative";
+  rationale: string;
+  what_it_gains: string;
+  in_vivo_inspiration?: string;
+}
+
+export interface RenameSuggestions {
+  needs_rename: boolean;
+  suggestions: RenameSuggestion[];
+  status?: string;
+  task_id?: string;
+}
+
+export interface DefinitionVersion {
+  version: number;
+  name: string;
+  definition: string;
+  trigger: string;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface Recommendation {
+  category: string;
+  title: string;
+  description: string;
+  action_type: "connect" | "absorb_ghost" | "rename" | "sample" | "resolve_tension";
+  category_ids: string[];
+  suggested_code: string;
+  impact_score: number;
+}
+
+export interface ModelSummary {
+  relationships: TendrilData[];
+  orphan_categories: { id: string; name: string }[];
+  layers_coverage: { covered: string[]; missing: string[] };
+}
+
+// ── Theoretical Codes ─────────────────────────────────────────────────
+
+export async function getTheoreticalCodes(projectId: string) {
+  return request<TheoreticalCode[]>(`/projects/${projectId}/theoretical/codes`);
+}
+
+export async function createTheoreticalCode(projectId: string, body: Record<string, any>) {
+  return request<void>(`/projects/${projectId}/theoretical/codes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Ecosystem ─────────────────────────────────────────────────────────
+
+export async function getEcosystem(projectId: string) {
+  return request<EcosystemState>(`/projects/${projectId}/elaboration/ecosystem`);
+}
+
+export async function saveEcosystemLayout(projectId: string, layout: Partial<EcosystemLayout>) {
+  return request<void>(`/projects/${projectId}/elaboration/ecosystem/layout`, {
+    method: "PUT",
+    body: JSON.stringify(layout),
+  });
+}
+
+// ── Relationships ─────────────────────────────────────────────────────
+
+export async function elaborateRelationship(
+  projectId: string,
+  body: { category_ids: string[]; theoretical_code_id: string; researcher_question: string },
+) {
+  return request<{ status: string; task_id: string }>(
+    `/projects/${projectId}/elaboration/relationships`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function getRelationships(projectId: string) {
+  return request<Relationship[]>(`/projects/${projectId}/elaboration/relationships`);
+}
+
+export async function getRelationship(projectId: string, relId: string) {
+  return request<Relationship>(`/projects/${projectId}/elaboration/relationships/${relId}`);
+}
+
+export async function resolveDivergence(
+  projectId: string,
+  relId: string,
+  body: { divergence_resolution: string },
+) {
+  return request<void>(`/projects/${projectId}/elaboration/relationships/${relId}/diverge`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Ghosts ────────────────────────────────────────────────────────────
+
+export async function getGhosts(projectId: string) {
+  return request<GhostData[]>(`/projects/${projectId}/elaboration/ghosts`);
+}
+
+export async function absorbGhost(
+  projectId: string,
+  memoId: string,
+  targetCategoryId: string,
+) {
+  return request<void>(`/projects/${projectId}/elaboration/ghosts/${memoId}/absorb`, {
+    method: "POST",
+    body: JSON.stringify({ target_category_id: targetCategoryId }),
+  });
+}
+
+// ── Renames ───────────────────────────────────────────────────────────
+
+export async function getRenameSuggestions(projectId: string, categoryId: string) {
+  return request<RenameSuggestions>(
+    `/projects/${projectId}/elaboration/rename-suggestions/${categoryId}`,
+  );
+}
+
+export async function applyRename(
+  projectId: string,
+  body: { category_id: string; new_name: string; rationale: string },
+) {
+  return request<void>(`/projects/${projectId}/elaboration/rename`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getDefinitionHistory(projectId: string, categoryId: string) {
+  return request<DefinitionVersion[]>(
+    `/projects/${projectId}/elaboration/categories/${categoryId}/definition-history`,
+  );
+}
+
+// ── Recommendations ───────────────────────────────────────────────────
+
+export async function getRecommendations(projectId: string) {
+  return request<Recommendation[]>(`/projects/${projectId}/elaboration/recommendations`);
+}
+
+export async function getTheoreticalModel(projectId: string) {
+  return request<ModelSummary>(`/projects/${projectId}/elaboration/model`);
+}
+
+// ── Saturation (Gap Report) ───────────────────────────────────────────
+
+export async function getSaturationGaps(projectId: string) {
+  return request<{
+    project_id: string;
+    generated_at: string;
+    critical: { severity: string; description: string; action: string }[];
+    warnings: { severity: string; source: string; description: string; action: string }[];
+    saturated: string[];
+  }>(`/projects/${projectId}/analysis/saturation-gaps`);
+}
+
+export async function refreshSaturationGaps(projectId: string) {
+  return request<void>(`/projects/${projectId}/analysis/saturation-gaps/refresh`, {
+    method: "POST",
+  });
+}

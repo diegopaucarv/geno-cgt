@@ -1,503 +1,787 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GT — Grounded Theory Pipeline</title>
-<style>
-/* ═══════════════════════════════════════════════════════════════════
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>GT — Grounded Theory Pipeline</title>
+        <style>
+            /* ═══════════════════════════════════════════════════════════════════
    DESIGN TOKENS — Dark bluish theme
    ═══════════════════════════════════════════════════════════════════ */
-:root {
-  --bg-base: #0D1117;
-  --bg-elevated: #161B22;
-  --bg-card: #1C2333;
-  --border: #21262D;
-  --accent: #2A1A3A;
-  --text-primary: #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-disabled: #484F58;
-  --link: #58A6FF;
-  --saturated: #3FB950;
-  --warning: #D29922;
-  --error: #F85149;
-  --elaboration: #A371F7;
-  --convergence: #56D364;
-  --info: #79C0FF;
-  --font-ui: 'Inter', -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --radius: 6px;
-  --radius-lg: 12px;
-  --radius-pill: 999px;
-  --transition: 0.2s ease;
-}
+            :root {
+                --bg-base: #0d1117;
+                --bg-elevated: #161b22;
+                --bg-card: #1c2333;
+                --border: #21262d;
+                --accent: #2a1a3a;
+                --text-primary: #e6edf3;
+                --text-secondary: #8b949e;
+                --text-disabled: #484f58;
+                --link: #58a6ff;
+                --saturated: #3fb950;
+                --warning: #d29922;
+                --error: #f85149;
+                --elaboration: #a371f7;
+                --convergence: #56d364;
+                --info: #79c0ff;
+                --font-ui: "Inter", -apple-system, sans-serif;
+                --font-mono: "JetBrains Mono", "Fira Code", monospace;
+                --radius: 6px;
+                --radius-lg: 12px;
+                --radius-pill: 999px;
+                --transition: 0.2s ease;
+            }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
 
-body {
-  font-family: var(--font-ui);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  height: 100vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
+            body {
+                font-family: var(--font-ui);
+                background: var(--bg-base);
+                color: var(--text-primary);
+                height: 100vh;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
 
-/* ═══════════════════════════════════════════════════════════════════
+            /* ═══════════════════════════════════════════════════════════════════
    HEADER
    ═══════════════════════════════════════════════════════════════════ */
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
-  z-index: 10;
-}
-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
-header .accent { color: var(--elaboration); }
-.header-actions { display: flex; gap: 8px; align-items: center; }
+            header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 24px;
+                background: var(--bg-elevated);
+                border-bottom: 1px solid var(--border);
+                z-index: 10;
+            }
+            header h1 {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+            }
+            header .accent {
+                color: var(--elaboration);
+            }
+            .header-actions {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
 
-/* ═══════════════════════════════════════════════════════════════════
+            /* ═══════════════════════════════════════════════════════════════════
    BUTTONS
    ═══════════════════════════════════════════════════════════════════ */
-.btn {
-  padding: 6px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: var(--font-ui);
-  transition: all var(--transition);
-}
-.btn:hover { background: #252D3A; border-color: #30363D; }
-.btn-primary { background: var(--elaboration); border-color: var(--elaboration); color: #fff; }
-.btn-primary:hover { background: #8B5CF6; }
-.btn-play {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: var(--saturated); border: none; color: #fff;
-  font-size: 16px; cursor: pointer; transition: all var(--transition);
-  display: flex; align-items: center; justify-content: center;
-}
-.btn-play:hover { background: #2EA043; transform: scale(1.05); }
-.btn-play.running { background: var(--error); animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+            .btn {
+                padding: 6px 14px;
+                border-radius: var(--radius);
+                border: 1px solid var(--border);
+                background: var(--bg-card);
+                color: var(--text-primary);
+                cursor: pointer;
+                font-size: 13px;
+                font-family: var(--font-ui);
+                transition: all var(--transition);
+            }
+            .btn:hover {
+                background: #252d3a;
+                border-color: #30363d;
+            }
+            .btn-primary {
+                background: var(--elaboration);
+                border-color: var(--elaboration);
+                color: #fff;
+            }
+            .btn-primary:hover {
+                background: #8b5cf6;
+            }
+            .btn-play {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: var(--saturated);
+                border: none;
+                color: #fff;
+                font-size: 16px;
+                cursor: pointer;
+                transition: all var(--transition);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .btn-play:hover {
+                background: #2ea043;
+                transform: scale(1.05);
+            }
+            .btn-play.running {
+                background: var(--error);
+                animation: pulse 1s infinite;
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.6;
+                }
+            }
 
-/* ═══════════════════════════════════════════════════════════════════
+            /* ═══════════════════════════════════════════════════════════════════
    MAIN LAYOUT — Left: Pipeline | Right: Blobs
    ═══════════════════════════════════════════════════════════════════ */
-main {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
+            main {
+                display: flex;
+                flex: 1;
+                overflow: hidden;
+            }
 
-/* ── LEFT PANEL: Pipeline Flow ─────────────────────────────────── */
-.pipeline-panel {
-  width: 420px;
-  min-width: 420px;
-  overflow-y: auto;
-  padding: 20px 16px;
-  border-right: 1px solid var(--border);
-  background: var(--bg-base);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
+            /* ── LEFT PANEL: Pipeline Flow ─────────────────────────────────── */
+            .pipeline-panel {
+                width: 420px;
+                min-width: 420px;
+                overflow-y: auto;
+                padding: 20px 16px;
+                border-right: 1px solid var(--border);
+                background: var(--bg-base);
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+            }
 
-/* Pipeline stage */
-.stage {
-  position: relative;
-  padding: 14px 16px 14px 44px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 0;
-  cursor: pointer;
-  transition: all var(--transition);
-  border-left: 3px solid var(--border);
-}
-.stage:hover { background: #252D3A; }
-.stage.active { border-left-color: var(--elaboration); background: #1E1A2E; }
-.stage.running { border-left-color: var(--info); animation: shimmer 2s infinite; }
-.stage.done { border-left-color: var(--saturated); }
-.stage.error { border-left-color: var(--error); }
-@keyframes shimmer { 0% { box-shadow: 0 0 0 0 rgba(121,192,255,0.3); } 50% { box-shadow: 0 0 12px 2px rgba(121,192,255,0.15); } 100% { box-shadow: 0 0 0 0 rgba(121,192,255,0); } }
+            /* Pipeline stage */
+            .stage {
+                position: relative;
+                padding: 14px 16px 14px 44px;
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-bottom: 0;
+                cursor: pointer;
+                transition: all var(--transition);
+                border-left: 3px solid var(--border);
+            }
+            .stage:hover {
+                background: #252d3a;
+            }
+            .stage.active {
+                border-left-color: var(--elaboration);
+                background: #1e1a2e;
+            }
+            .stage.running {
+                border-left-color: var(--info);
+                animation: shimmer 2s infinite;
+            }
+            .stage.done {
+                border-left-color: var(--saturated);
+            }
+            .stage.error {
+                border-left-color: var(--error);
+            }
+            @keyframes shimmer {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(121, 192, 255, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 12px 2px rgba(121, 192, 255, 0.15);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(121, 192, 255, 0);
+                }
+            }
 
-.stage-icon {
-  position: absolute; left: 12px; top: 16px;
-  width: 20px; height: 20px; font-size: 14px;
-}
-.stage-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-.stage-subtitle { font-size: 11px; color: var(--text-secondary); }
-.stage-agents { font-size: 10px; color: var(--text-disabled); margin-top: 4px; }
-.stage-status { font-size: 10px; margin-top: 4px; display: flex; gap: 6px; align-items: center; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-.status-dot.idle { background: var(--text-disabled); }
-.status-dot.running { background: var(--info); animation: pulse 1s infinite; }
-.status-dot.done { background: var(--saturated); }
-.status-dot.error { background: var(--error); }
+            .stage-icon {
+                position: absolute;
+                left: 12px;
+                top: 16px;
+                width: 20px;
+                height: 20px;
+                font-size: 14px;
+            }
+            .stage-title {
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 2px;
+            }
+            .stage-subtitle {
+                font-size: 11px;
+                color: var(--text-secondary);
+            }
+            .stage-agents {
+                font-size: 10px;
+                color: var(--text-disabled);
+                margin-top: 4px;
+            }
+            .stage-status {
+                font-size: 10px;
+                margin-top: 4px;
+                display: flex;
+                gap: 6px;
+                align-items: center;
+            }
+            .status-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+            .status-dot.idle {
+                background: var(--text-disabled);
+            }
+            .status-dot.running {
+                background: var(--info);
+                animation: pulse 1s infinite;
+            }
+            .status-dot.done {
+                background: var(--saturated);
+            }
+            .status-dot.error {
+                background: var(--error);
+            }
 
-/* Connector line between stages */
-.stage-connector {
-  width: 2px; height: 12px;
-  background: var(--border);
-  margin-left: 21px;
-}
-.stage-connector.done { background: var(--saturated); }
-.stage-connector.running { background: var(--info); }
+            /* Connector line between stages */
+            .stage-connector {
+                width: 2px;
+                height: 12px;
+                background: var(--border);
+                margin-left: 21px;
+            }
+            .stage-connector.done {
+                background: var(--saturated);
+            }
+            .stage-connector.running {
+                background: var(--info);
+            }
 
-/* Stage config panel (expandable) */
-.stage-config {
-  display: none;
-  padding: 12px 16px;
-  background: #111827;
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  margin-top: -2px;
-  margin-bottom: 8px;
-  margin-left: 0;
-  font-size: 12px;
-}
-.stage-config.open { display: block; }
-.stage-config label { display: block; color: var(--text-secondary); margin: 8px 0 4px; font-size: 11px; }
-.stage-config select, .stage-config input {
-  width: 100%; padding: 6px 10px;
-  background: var(--bg-base); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text-primary);
-  font-family: var(--font-ui); font-size: 12px;
-}
+            /* Stage config panel (expandable) */
+            .stage-config {
+                display: none;
+                padding: 12px 16px;
+                background: #111827;
+                border: 1px solid var(--border);
+                border-top: none;
+                border-radius: 0 0 var(--radius) var(--radius);
+                margin-top: -2px;
+                margin-bottom: 8px;
+                margin-left: 0;
+                font-size: 12px;
+            }
+            .stage-config.open {
+                display: block;
+            }
+            .stage-config label {
+                display: block;
+                color: var(--text-secondary);
+                margin: 8px 0 4px;
+                font-size: 11px;
+            }
+            .stage-config select,
+            .stage-config input {
+                width: 100%;
+                padding: 6px 10px;
+                background: var(--bg-base);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                color: var(--text-primary);
+                font-family: var(--font-ui);
+                font-size: 12px;
+            }
 
-/* ── RIGHT PANEL: Blob Canvas ──────────────────────────────────── */
-.blob-panel {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(ellipse at center, #111827 0%, #0D1117 70%);
-}
-#blob-canvas {
-  width: 100%; height: 100%;
-}
+            /* ── RIGHT PANEL: Blob Canvas ──────────────────────────────────── */
+            .blob-panel {
+                flex: 1;
+                position: relative;
+                overflow: hidden;
+                background: radial-gradient(
+                    ellipse at center,
+                    #111827 0%,
+                    #0d1117 70%
+                );
+            }
+            #blob-canvas {
+                width: 100%;
+                height: 100%;
+            }
 
-/* Floating blob */
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.3s ease;
-  display: flex; align-items: center; justify-content: center;
-  text-align: center;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-  user-select: none;
-}
-.blob:hover { transform: scale(1.15); z-index: 10; }
-.blob.saturated { background: radial-gradient(circle at 30% 30%, #3FB950, #1A5C20); }
-.blob.warning { background: radial-gradient(circle at 30% 30%, #D29922, #5C3A0A); }
-.blob.unsaturated { background: radial-gradient(circle at 30% 30%, #F85149, #5C1010); }
-.blob.elaborating { background: radial-gradient(circle at 30% 30%, #A371F7, #3A105C); animation: blob-pulse 3s infinite; }
-@keyframes blob-pulse { 0%,100% { box-shadow: 0 0 8px rgba(163,113,247,0.3); } 50% { box-shadow: 0 0 20px rgba(163,113,247,0.6); } }
+            /* Floating blob */
+            .blob {
+                position: absolute;
+                border-radius: 50%;
+                cursor: pointer;
+                transition: transform 0.3s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                font-size: 10px;
+                font-weight: 600;
+                color: #fff;
+                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+                user-select: none;
+            }
+            .blob:hover {
+                transform: scale(1.15);
+                z-index: 10;
+            }
+            .blob.saturated {
+                background: radial-gradient(
+                    circle at 30% 30%,
+                    #3fb950,
+                    #1a5c20
+                );
+            }
+            .blob.warning {
+                background: radial-gradient(
+                    circle at 30% 30%,
+                    #d29922,
+                    #5c3a0a
+                );
+            }
+            .blob.unsaturated {
+                background: radial-gradient(
+                    circle at 30% 30%,
+                    #f85149,
+                    #5c1010
+                );
+            }
+            .blob.elaborating {
+                background: radial-gradient(
+                    circle at 30% 30%,
+                    #a371f7,
+                    #3a105c
+                );
+                animation: blob-pulse 3s infinite;
+            }
+            @keyframes blob-pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 8px rgba(163, 113, 247, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 20px rgba(163, 113, 247, 0.6);
+                }
+            }
 
-.blob-label {
-  max-width: 80%; line-height: 1.2;
-  overflow: hidden; text-overflow: ellipsis;
-}
+            .blob-label {
+                max-width: 80%;
+                line-height: 1.2;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-/* Blob tooltip */
-.blob-tooltip {
-  display: none; position: absolute;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 14px;
-  font-size: 12px; z-index: 20; pointer-events: none;
-  white-space: nowrap; color: var(--text-primary);
-}
-.blob:hover .blob-tooltip { display: block; }
+            /* Blob tooltip */
+            .blob-tooltip {
+                display: none;
+                position: absolute;
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 10px 14px;
+                font-size: 12px;
+                z-index: 20;
+                pointer-events: none;
+                white-space: nowrap;
+                color: var(--text-primary);
+            }
+            .blob:hover .blob-tooltip {
+                display: block;
+            }
 
-/* ═══════════════════════════════════════════════════════════════════
+            /* ═══════════════════════════════════════════════════════════════════
    CONSOLE PANEL (bottom)
    ═══════════════════════════════════════════════════════════════════ */
-.console-panel {
-  height: 140px;
-  background: #0A0E14;
-  border-top: 1px solid var(--border);
-  overflow-y: auto;
-  padding: 8px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-.console-panel .log-line { padding: 1px 0; }
-.console-panel .log-line.info { color: var(--info); }
-.console-panel .log-line.success { color: var(--saturated); }
-.console-panel .log-line.warn { color: var(--warning); }
-.console-panel .log-line.error { color: var(--error); }
-.console-panel .log-line.agent { color: var(--elaboration); }
-.console-panel .timestamp { color: var(--text-disabled); margin-right: 8px; }
+            .console-panel {
+                height: 140px;
+                background: #0a0e14;
+                border-top: 1px solid var(--border);
+                overflow-y: auto;
+                padding: 8px 16px;
+                font-family: var(--font-mono);
+                font-size: 11px;
+                line-height: 1.6;
+                color: var(--text-secondary);
+            }
+            .console-panel .log-line {
+                padding: 1px 0;
+            }
+            .console-panel .log-line.info {
+                color: var(--info);
+            }
+            .console-panel .log-line.success {
+                color: var(--saturated);
+            }
+            .console-panel .log-line.warn {
+                color: var(--warning);
+            }
+            .console-panel .log-line.error {
+                color: var(--error);
+            }
+            .console-panel .log-line.agent {
+                color: var(--elaboration);
+            }
+            .console-panel .timestamp {
+                color: var(--text-disabled);
+                margin-right: 8px;
+            }
 
-/* ═══════════════════════════════════════════════════════════════════
+            /* ═══════════════════════════════════════════════════════════════════
    SCROLLBAR
    ═══════════════════════════════════════════════════════════════════ */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-</style>
-</head>
-<body>
-
-<!-- ═══════════════════════════════════════════════════════════════════
+            ::-webkit-scrollbar {
+                width: 6px;
+            }
+            ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 3px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ═══════════════════════════════════════════════════════════════════
      HEADER
      ═══════════════════════════════════════════════════════════════════ -->
-<header>
-  <h1><span class="accent">GT</span> · Pipeline</h1>
-  <div class="header-actions">
-    <select id="project-select" class="btn" style="width:200px">
-      <option value="">— Seleccionar proyecto —</option>
-    </select>
-    <button class="btn" onclick="refreshProjects()">↻</button>
-    <button class="btn-play" id="btn-play" onclick="togglePipeline()" title="Run Pipeline">▶</button>
-  </div>
-</header>
+        <header>
+            <h1><span class="accent">GT</span> · Pipeline</h1>
+            <div class="header-actions">
+                <select id="project-select" class="btn" style="width: 200px">
+                    <option value="">— Seleccionar proyecto —</option>
+                </select>
+                <button class="btn" onclick="refreshProjects()">↻</button>
+                <button
+                    class="btn-play"
+                    id="btn-play"
+                    onclick="togglePipeline()"
+                    title="Run Pipeline"
+                >
+                    ▶
+                </button>
+            </div>
+        </header>
 
-<!-- ═══════════════════════════════════════════════════════════════════
+        <!-- ═══════════════════════════════════════════════════════════════════
      MAIN: Pipeline (left) + Blobs (right)
      ═══════════════════════════════════════════════════════════════════ -->
-<main>
-  <!-- LEFT: Pipeline Flow -->
-  <div class="pipeline-panel" id="pipeline-panel">
-    <!-- Populated by JS -->
-  </div>
+        <main>
+            <!-- LEFT: Pipeline Flow -->
+            <div class="pipeline-panel" id="pipeline-panel">
+                <!-- Populated by JS -->
+            </div>
 
-  <!-- RIGHT: Blob Canvas -->
-  <div class="blob-panel" id="blob-panel">
-    <!-- Blobs float freely here -->
-  </div>
-</main>
+            <!-- RIGHT: Blob Canvas -->
+            <div class="blob-panel" id="blob-panel">
+                <!-- Blobs float freely here -->
+            </div>
+        </main>
 
-<!-- ═══════════════════════════════════════════════════════════════════
+        <!-- ═══════════════════════════════════════════════════════════════════
      CONSOLE
      ═══════════════════════════════════════════════════════════════════ -->
-<div class="console-panel" id="console-panel">
-  <div class="log-line info"><span class="timestamp">00:00</span> GT Pipeline ready. Select a project and press ▶ to start.</div>
-</div>
+        <div class="console-panel" id="console-panel">
+            <div class="log-line info">
+                <span class="timestamp">00:00</span> GT Pipeline ready. Select a
+                project and press ▶ to start.
+            </div>
+        </div>
 
-<script>
-// ═══════════════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════════════
-const STATE = {
-  projectId: null,
-  token: null,
-  running: false,
-  stages: [],
-  blobs: [],
-  eventSource: null,
-};
+        <script>
+            // ═══════════════════════════════════════════════════════════════════
+            // STATE
+            // ═══════════════════════════════════════════════════════════════════
+            const STATE = {
+                projectId: null,
+                token: null,
+                running: false,
+                stages: [],
+                blobs: [],
+                eventSource: null,
+            };
 
-const API = 'http://localhost:8000/api/v1';
+            const API = "http://localhost:8000/api/v1";
 
-// ═══════════════════════════════════════════════════════════════════
-// PIPELINE STAGES DEFINITION
-// ═══════════════════════════════════════════════════════════════════
-const PIPELINE_STAGES = [
-  {
-    id: 'upload',
-    icon: '📤',
-    title: 'Upload & Segment',
-    subtitle: 'Ingesta de documentos, extracción de texto, segmentación',
-    agents: 'segmentar_documento (nlp)',
-    config: [
-      { key: 'max_tokens', label: 'Max tokens por segmento', type: 'number', default: 1024 },
-    ],
-  },
-  {
-    id: 'precoding',
-    icon: '🧬',
-    title: 'Pre-Coding',
-    subtitle: 'Clasificación Glaser (baseline/properline/interpreted/vague)',
-    agents: 'glaser_data_classifier (FLASH)',
-    config: [
-      { key: 'glaser_enabled', label: 'Clasificación Glaser', type: 'select', options: ['true','false'], default: 'true' },
-    ],
-  },
-  {
-    id: 'open_coding',
-    icon: '🏷',
-    title: 'Open Coding (Fase A)',
-    subtitle: 'A1 Contexto Poblacional → A2 Proceso → A3 Sentido',
-    agents: 'A1 (PRO) → A2 (PRO) → A3 (PRO)',
-    config: [
-      { key: 'population_assumption', label: 'Supuesto poblacional', type: 'text', default: 'hábitos hipotéticos de comportamiento...' },
-      { key: 'coding_styles', label: 'Estilos de codificación', type: 'select', options: ['gerundio,in_vivo','gerundio','nominalizacion','parafrasis','tema_subtema','causal','in_vivo'], default: 'gerundio,in_vivo' },
-    ],
-  },
-  {
-    id: 'cross_doc',
-    icon: '🔀',
-    title: 'Cross-Document (Fase B)',
-    subtitle: 'B1 Muestreo → B2 Open Coding → B2.5 Grounding → B3 Hipótesis',
-    agents: 'B1 (PRO) → B2a (FLASH) → B2b (PRO) → B2.5 (algo) → B3 (PRO)',
-    config: [],
-  },
-  {
-    id: 'main_concern',
-    icon: '🎯',
-    title: 'Main Concern (A14)',
-    subtitle: '3 preguntas operacionales → preocupación central',
-    agents: 'A14 main_concern_proposer (PRO)',
-    config: [
-      { key: 'object_of_study', label: 'Objeto de estudio', type: 'select', options: ['concern','emotion','behavior','discourse','identity'], default: 'concern' },
-    ],
-  },
-  {
-    id: 'selective',
-    icon: '🔬',
-    title: 'Selective Coding',
-    subtitle: 'Elaboración por incidente: converge/diverge/expand',
-    agents: 'incident_elaborator (PRO) + SelectiveElaborator',
-    config: [
-      { key: 'auto_apply', label: 'Auto-aplicar acciones', type: 'select', options: ['none','update_definition','all_except_divide'], default: 'update_definition' },
-    ],
-  },
-  {
-    id: 'saturation',
-    icon: '📊',
-    title: 'Saturation Analysis',
-    subtitle: 'Gap Report: 4 fuentes (math, paradigm, axes, density)',
-    agents: 'SaturationGapAnalyzer + check_saturation_sliding_window',
-    config: [],
-  },
-];
+            // ═══════════════════════════════════════════════════════════════════
+            // PIPELINE STAGES DEFINITION
+            // ═══════════════════════════════════════════════════════════════════
+            const PIPELINE_STAGES = [
+                {
+                    id: "upload",
+                    icon: "📤",
+                    title: "Upload & Segment",
+                    subtitle:
+                        "Ingesta de documentos, extracción de texto, segmentación",
+                    agents: "segmentar_documento (nlp)",
+                    config: [
+                        {
+                            key: "max_tokens",
+                            label: "Max tokens por segmento",
+                            type: "number",
+                            default: 1024,
+                        },
+                    ],
+                },
+                {
+                    id: "precoding",
+                    icon: "🧬",
+                    title: "Pre-Coding",
+                    subtitle:
+                        "Clasificación Glaser (baseline/properline/interpreted/vague)",
+                    agents: "glaser_data_classifier (FLASH)",
+                    config: [
+                        {
+                            key: "glaser_enabled",
+                            label: "Clasificación Glaser",
+                            type: "select",
+                            options: ["true", "false"],
+                            default: "true",
+                        },
+                    ],
+                },
+                {
+                    id: "open_coding",
+                    icon: "🏷",
+                    title: "Open Coding (Fase A)",
+                    subtitle:
+                        "A1 Contexto Poblacional → A2 Proceso → A3 Sentido",
+                    agents: "A1 (PRO) → A2 (PRO) → A3 (PRO)",
+                    config: [
+                        {
+                            key: "population_assumption",
+                            label: "Supuesto poblacional",
+                            type: "text",
+                            default: "hábitos hipotéticos de comportamiento...",
+                        },
+                        {
+                            key: "coding_styles",
+                            label: "Estilos de codificación",
+                            type: "select",
+                            options: [
+                                "gerundio,in_vivo",
+                                "gerundio",
+                                "nominalizacion",
+                                "parafrasis",
+                                "tema_subtema",
+                                "causal",
+                                "in_vivo",
+                            ],
+                            default: "gerundio,in_vivo",
+                        },
+                    ],
+                },
+                {
+                    id: "cross_doc",
+                    icon: "🔀",
+                    title: "Cross-Document (Fase B)",
+                    subtitle:
+                        "B1 Muestreo → B2 Open Coding → B2.5 Grounding → B3 Hipótesis",
+                    agents: "B1 (PRO) → B2a (FLASH) → B2b (PRO) → B2.5 (algo) → B3 (PRO)",
+                    config: [],
+                },
+                {
+                    id: "main_concern",
+                    icon: "🎯",
+                    title: "Main Concern (A14)",
+                    subtitle:
+                        "3 preguntas operacionales → preocupación central",
+                    agents: "A14 main_concern_proposer (PRO)",
+                    config: [
+                        {
+                            key: "object_of_study",
+                            label: "Objeto de estudio",
+                            type: "select",
+                            options: [
+                                "concern",
+                                "emotion",
+                                "behavior",
+                                "discourse",
+                                "identity",
+                            ],
+                            default: "concern",
+                        },
+                    ],
+                },
+                {
+                    id: "selective",
+                    icon: "🔬",
+                    title: "Selective Coding",
+                    subtitle:
+                        "Elaboración por incidente: converge/diverge/expand",
+                    agents: "incident_elaborator (PRO) + SelectiveElaborator",
+                    config: [
+                        {
+                            key: "auto_apply",
+                            label: "Auto-aplicar acciones",
+                            type: "select",
+                            options: [
+                                "none",
+                                "update_definition",
+                                "all_except_divide",
+                            ],
+                            default: "update_definition",
+                        },
+                    ],
+                },
+                {
+                    id: "saturation",
+                    icon: "📊",
+                    title: "Saturation Analysis",
+                    subtitle:
+                        "Gap Report: 4 fuentes (math, paradigm, axes, density)",
+                    agents: "SaturationGapAnalyzer + check_saturation_sliding_window",
+                    config: [],
+                },
+            ];
 
-// ═══════════════════════════════════════════════════════════════════
-// CONSOLE LOGGING
-// ═══════════════════════════════════════════════════════════════════
-function log(msg, level = 'info') {
-  const panel = document.getElementById('console-panel');
-  const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-  const line = document.createElement('div');
-  line.className = `log-line ${level}`;
-  line.innerHTML = `<span class="timestamp">${time}</span>${msg}`;
-  panel.appendChild(line);
-  panel.scrollTop = panel.scrollHeight;
-  console.log(`[${level}] ${msg}`);
-}
+            // ═══════════════════════════════════════════════════════════════════
+            // CONSOLE LOGGING
+            // ═══════════════════════════════════════════════════════════════════
+            function log(msg, level = "info") {
+                const panel = document.getElementById("console-panel");
+                const time = new Date().toLocaleTimeString("en-GB", {
+                    hour12: false,
+                });
+                const line = document.createElement("div");
+                line.className = `log-line ${level}`;
+                line.innerHTML = `<span class="timestamp">${time}</span>${msg}`;
+                panel.appendChild(line);
+                panel.scrollTop = panel.scrollHeight;
+                console.log(`[${level}] ${msg}`);
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════════════
-async function ensureAuth() {
-  if (STATE.token) return STATE.token;
+            // ═══════════════════════════════════════════════════════════════════
+            // AUTH
+            // ═══════════════════════════════════════════════════════════════════
+            async function ensureAuth() {
+                if (STATE.token) return STATE.token;
 
-  // Try register then login
-  try {
-    let r = await fetch(`${API}/auth/register`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: 'GT User', correo: 'gt@gt.com', password: 'gt123' }),
-    });
-    log('Auth: registered (or already exists)', 'info');
-  } catch (e) { /* ok */ }
+                // Try register then login
+                try {
+                    let r = await fetch(`${API}/auth/register`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            nombre: "GT User",
+                            correo: "gt@gt.com",
+                            password: "gt123",
+                        }),
+                    });
+                    log("Auth: registered (or already exists)", "info");
+                } catch (e) {
+                    /* ok */
+                }
 
-  const r = await fetch(`${API}/auth/login?email=gt@gt.com&password=gt123`, { method: 'POST' });
-  if (!r.ok) throw new Error('Login failed');
-  const data = await r.json();
-  STATE.token = data.access_token;
-  log('Auth: token obtained', 'success');
-  return STATE.token;
-}
+                const r = await fetch(
+                    `${API}/auth/login?email=gt@gt.com&password=gt123`,
+                    { method: "POST" },
+                );
+                if (!r.ok) throw new Error("Login failed");
+                const data = await r.json();
+                STATE.token = data.access_token;
+                log("Auth: token obtained", "success");
+                return STATE.token;
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// API HELPERS
-// ═══════════════════════════════════════════════════════════════════
-async function api(path, opts = {}) {
-  const token = await ensureAuth();
-  const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: opts.body instanceof FormData
-      ? { 'Authorization': `Bearer ${token}` }
-      : { ...opts.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`${res.status}: ${err}`);
-  }
-  return res.json();
-}
+            // ═══════════════════════════════════════════════════════════════════
+            // API HELPERS
+            // ═══════════════════════════════════════════════════════════════════
+            async function api(path, opts = {}) {
+                const token = await ensureAuth();
+                const res = await fetch(`${API}${path}`, {
+                    ...opts,
+                    headers:
+                        opts.body instanceof FormData
+                            ? { Authorization: `Bearer ${token}` }
+                            : {
+                                  ...opts.headers,
+                                  Authorization: `Bearer ${token}`,
+                                  "Content-Type": "application/json",
+                              },
+                });
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`${res.status}: ${err}`);
+                }
+                return res.json();
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// PROJECTS
-// ═══════════════════════════════════════════════════════════════════
-async function refreshProjects() {
-  try {
-    const data = await api('/projects');
-    const sel = document.getElementById('project-select');
-    sel.innerHTML = '<option value="">— Seleccionar proyecto —</option>';
-    data.forEach(p => {
-      sel.innerHTML += `<option value="${p.id}">${p.nombre || p.id}</option>`;
-    });
-    log(`Projects: ${data.length} loaded`, 'info');
-  } catch (e) {
-    log(`Projects error: ${e.message}`, 'error');
-  }
-}
+            // ═══════════════════════════════════════════════════════════════════
+            // PROJECTS
+            // ═══════════════════════════════════════════════════════════════════
+            async function refreshProjects() {
+                try {
+                    const data = await api("/projects");
+                    const sel = document.getElementById("project-select");
+                    sel.innerHTML =
+                        '<option value="">— Seleccionar proyecto —</option>';
+                    data.forEach((p) => {
+                        sel.innerHTML += `<option value="${p.id}">${p.nombre || p.id}</option>`;
+                    });
+                    log(`Projects: ${data.length} loaded`, "info");
+                } catch (e) {
+                    log(`Projects error: ${e.message}`, "error");
+                }
+            }
 
-async function createProject() {
-  const name = prompt('Project name:', 'Pipeline Test');
-  if (!name) return;
-  try {
-    const data = await api('/projects', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: name, ruta_de_codificacion: 'ABDUCTIVA_CGT' }),
-    });
-    log(`Project created: ${data.id}`, 'success');
-    await refreshProjects();
-    document.getElementById('project-select').value = data.id;
-    STATE.projectId = data.id;
-    renderPipeline();
-  } catch (e) {
-    log(`Create project error: ${e.message}`, 'error');
-  }
-}
+            async function createProject() {
+                const name = prompt("Project name:", "Pipeline Test");
+                if (!name) return;
+                try {
+                    const data = await api("/projects", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            nombre: name,
+                            ruta_de_codificacion: "ABDUCTIVA_CGT",
+                        }),
+                    });
+                    log(`Project created: ${data.id}`, "success");
+                    await refreshProjects();
+                    document.getElementById("project-select").value = data.id;
+                    STATE.projectId = data.id;
+                    renderPipeline();
+                } catch (e) {
+                    log(`Create project error: ${e.message}`, "error");
+                }
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// PIPELINE RENDERING
-// ═══════════════════════════════════════════════════════════════════
-function renderPipeline() {
-  const panel = document.getElementById('pipeline-panel');
-  panel.innerHTML = '';
+            // ═══════════════════════════════════════════════════════════════════
+            // PIPELINE RENDERING
+            // ═══════════════════════════════════════════════════════════════════
+            function renderPipeline() {
+                const panel = document.getElementById("pipeline-panel");
+                panel.innerHTML = "";
 
-  if (!STATE.projectId) {
-    panel.innerHTML = `
+                if (!STATE.projectId) {
+                    panel.innerHTML = `
       <div style="padding:40px;text-align:center;color:var(--text-secondary)">
         <p style="font-size:32px;margin-bottom:12px">📋</p>
         <p>Select or create a project to begin</p>
         <button class="btn btn-primary" style="margin-top:12px" onclick="createProject()">+ New Project</button>
       </div>`;
-    return;
-  }
+                    return;
+                }
 
-  PIPELINE_STAGES.forEach((stage, i) => {
-    // Connector
-    if (i > 0) {
-      const connector = document.createElement('div');
-      connector.className = 'stage-connector';
-      connector.id = `connector-${stage.id}`;
-      panel.appendChild(connector);
-    }
+                PIPELINE_STAGES.forEach((stage, i) => {
+                    // Connector
+                    if (i > 0) {
+                        const connector = document.createElement("div");
+                        connector.className = "stage-connector";
+                        connector.id = `connector-${stage.id}`;
+                        panel.appendChild(connector);
+                    }
 
-    // Stage card
-    const el = document.createElement('div');
-    el.className = 'stage';
-    el.id = `stage-${stage.id}`;
-    el.onclick = () => toggleConfig(stage.id);
-    el.innerHTML = `
+                    // Stage card
+                    const el = document.createElement("div");
+                    el.className = "stage";
+                    el.id = `stage-${stage.id}`;
+                    el.onclick = () => toggleConfig(stage.id);
+                    el.innerHTML = `
       <div class="stage-icon">${stage.icon}</div>
       <div class="stage-title">${stage.title}</div>
       <div class="stage-subtitle">${stage.subtitle}</div>
@@ -507,324 +791,622 @@ function renderPipeline() {
         <span id="status-${stage.id}" style="font-size:10px;color:var(--text-disabled)">idle</span>
       </div>
     `;
-    panel.appendChild(el);
+                    panel.appendChild(el);
 
-    // Config panel
-    if (stage.config && stage.config.length > 0) {
-      const cfg = document.createElement('div');
-      cfg.className = 'stage-config';
-      cfg.id = `config-${stage.id}`;
-      cfg.innerHTML = stage.config.map(c => {
-        if (c.type === 'select') {
-          return `<label>${c.label}</label>
+                    // Config panel
+                    if (stage.config && stage.config.length > 0) {
+                        const cfg = document.createElement("div");
+                        cfg.className = "stage-config";
+                        cfg.id = `config-${stage.id}`;
+                        cfg.innerHTML = stage.config
+                            .map((c) => {
+                                if (c.type === "select") {
+                                    return `<label>${c.label}</label>
             <select id="cfg-${stage.id}-${c.key}">
-              ${c.options.map(o => `<option value="${o}" ${o===c.default?'selected':''}>${o}</option>`).join('')}
+              ${c.options.map((o) => `<option value="${o}" ${o === c.default ? "selected" : ""}>${o}</option>`).join("")}
             </select>`;
-        }
-        return `<label>${c.label}</label>
+                                }
+                                return `<label>${c.label}</label>
           <input type="${c.type}" id="cfg-${stage.id}-${c.key}" value="${c.default}" />`;
-      }).join('');
-      panel.appendChild(cfg);
-    }
-  });
+                            })
+                            .join("");
+                        panel.appendChild(cfg);
+                    }
+                });
 
-  log('Pipeline rendered: 7 stages', 'info');
-}
+                log("Pipeline rendered: 7 stages", "info");
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// STAGE CONFIG TOGGLE
-// ═══════════════════════════════════════════════════════════════════
-function toggleConfig(stageId) {
-  const cfg = document.getElementById(`config-${stageId}`);
-  if (!cfg) return;
-  cfg.classList.toggle('open');
-  const stage = document.getElementById(`stage-${stageId}`);
-  if (stage) stage.classList.toggle('active');
-  log(`Config toggle: ${stageId}`, 'info');
-}
+            // ═══════════════════════════════════════════════════════════════════
+            // STAGE CONFIG TOGGLE
+            // ═══════════════════════════════════════════════════════════════════
+            function toggleConfig(stageId) {
+                const cfg = document.getElementById(`config-${stageId}`);
+                if (!cfg) return;
+                cfg.classList.toggle("open");
+                const stage = document.getElementById(`stage-${stageId}`);
+                if (stage) stage.classList.toggle("active");
+                log(`Config toggle: ${stageId}`, "info");
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// PIPELINE EXECUTION (mock — simulates stage progression)
-// ═══════════════════════════════════════════════════════════════════
-async function runPipeline() {
-  if (!STATE.projectId) {
-    log('No project selected', 'error');
-    return alert('Select or create a project first');
-  }
+            // ═══════════════════════════════════════════════════════════════════
+            // PIPELINE EXECUTION (mock — simulates stage progression)
+            // ═══════════════════════════════════════════════════════════════════
+            async function runPipeline() {
+                if (!STATE.projectId) {
+                    log("No project selected", "error");
+                    return alert("Select or create a project first");
+                }
 
-  STATE.running = true;
-  const btn = document.getElementById('btn-play');
-  btn.textContent = '⏸';
-  btn.classList.add('running');
-  log('══════ PIPELINE START ══════', 'info');
+                STATE.running = true;
+                const btn = document.getElementById("btn-play");
+                btn.textContent = "⏸";
+                btn.classList.add("running");
+                log("══════ PIPELINE START ══════", "info");
 
-  for (const stage of PIPELINE_STAGES) {
-    await runStage(stage);
-  }
+                for (const stage of PIPELINE_STAGES) {
+                    await runStage(stage);
+                }
 
-  STATE.running = false;
-  btn.textContent = '▶';
-  btn.classList.remove('running');
-  log('══════ PIPELINE COMPLETE ══════', 'success');
-  spawnBlobs();
-}
+                STATE.running = false;
+                btn.textContent = "▶";
+                btn.classList.remove("running");
+                log("══════ PIPELINE COMPLETE ══════", "success");
+                spawnBlobs();
+            }
 
+            // ═══════════════════════════════════════════════════════════════════
+            // REAL API DISPATCH — dispatches Celery tasks and polls for completion
+            // ═══════════════════════════════════════════════════════════════════
+            async function pollTask(taskId, maxWaitMs = 120000) {
+                const start = Date.now();
+                while (Date.now() - start < maxWaitMs) {
+                    try {
+                        const data = await api(`/documents/tasks/${taskId}`);
+                        if (
+                            data.status === "SUCCESS" ||
+                            data.status === "FAILURE"
+                        ) {
+                            return data;
+                        }
+                    } catch (e) {
+                        /* retry */
+                    }
+                    await new Promise((r) => setTimeout(r, 2000));
+                }
+                return { status: "TIMEOUT" };
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// REAL API DISPATCH
-// ═══════════════════════════════════════════════════════════════════
-async function dispatchStage(stage) {
-  const pid = STATE.projectId;
-  switch (stage.id) {
-    case 'upload':
-      log('  ↳ Upload: checking existing documents...', 'info');
-      const docs = await api(`/documents?proyecto_id=${pid}`);
-      if (docs.length < 3) {
-        // Create a test doc if needed
-        const testText = `Entrevista de prueba ${docs.length + 1}. Este es un texto de ejemplo para verificar el pipeline CGT. Contiene informacion sobre adaptacion a plataformas digitales y estrategias de los entrevistados para mantener su relevancia profesional.`;
-        const blob = new Blob([testText], { type: 'text/plain' });
-        const form = new FormData();
-        form.append('file', blob, `test_doc_${docs.length + 1}.txt`);
-        await api(`/documents/upload/${pid}`, {
-          method: 'POST', body: form,
-          headers: {} // Let browser set Content-Type for multipart
-        });
-        log(`  ↳ Test document ${docs.length + 1} uploaded`, 'success');
-      }
-      break;
+            async function dispatchStage(stage) {
+                const pid = STATE.projectId;
 
-    case 'precoding':
-      log('  ↳ Pre-Coding: classifiying segments (FLASH)...', 'agent');
-      await new Promise(r => setTimeout(r, 1500)); // Async, fire-and-forget
-      break;
+                switch (stage.id) {
+                    case "upload": {
+                        log("  Upload: ensuring documents exist...", "info");
+                        const docs = await api(`/documents?proyecto_id=${pid}`);
+                        if (docs.length < 3) {
+                            const testText = `Entrevista de prueba ${docs.length + 1}. Este es un texto de ejemplo para verificar el pipeline CGT. Contiene informacion sobre adaptacion a plataformas digitales y estrategias de los entrevistados para mantener su relevancia profesional.`;
+                            const blob = new Blob([testText], {
+                                type: "text/plain",
+                            });
+                            const form = new FormData();
+                            form.append(
+                                "file",
+                                blob,
+                                `test_doc_${docs.length + 1}.txt`,
+                            );
+                            const uploadResult = await api(
+                                `/documents/upload/${pid}`,
+                                {
+                                    method: "POST",
+                                    body: form,
+                                    headers: {},
+                                },
+                            );
+                            log(
+                                `  Test document ${docs.length + 1} uploaded (task: ${uploadResult.pipeline_task_id.slice(0, 8)}...)`,
+                                "success",
+                            );
+                            // Poll segmentation
+                            const segResult = await pollTask(
+                                uploadResult.pipeline_task_id,
+                            );
+                            if (segResult.status === "SUCCESS") {
+                                log(`  Segmentation complete`, "success");
+                            }
+                        } else {
+                            log(
+                                `  ${docs.length} documents already present`,
+                                "info",
+                            );
+                        }
+                        break;
+                    }
 
-    case 'open_coding':
-      log('  ↳ Open Coding: dispatching process_document_agents_a...', 'agent');
-      const docList = await api(`/documents?proyecto_id=${pid}`);
-      for (const doc of docList.slice(0, 3)) {
-        log(`    Processing doc ${doc.id.slice(0,8)}...`, 'info');
-        await new Promise(r => setTimeout(r, 2000));
-      }
-      break;
+                    case "precoding": {
+                        log(
+                            "  Pre-Coding: checking document states...",
+                            "agent",
+                        );
+                        // Precoding runs automatically inside open_coding phase
+                        // Just check if any documents have advanced past "crudo" state
+                        const docs = await api(`/documents?proyecto_id=${pid}`);
+                        const processed = docs.filter(
+                            (d) => d.estado && d.estado !== "crudo",
+                        );
+                        if (processed.length > 0) {
+                            log(
+                                `  ${processed.length} documents already processed past precoding`,
+                                "success",
+                            );
+                        } else {
+                            log(
+                                "  Precoding will run with open_coding phase",
+                                "info",
+                            );
+                            // Trigger pipeline stage endpoint to start processing
+                            await api(
+                                `/projects/${pid}/pipeline/run-stage/precoding`,
+                                { method: "POST" },
+                            );
+                        }
+                        break;
+                    }
 
-    case 'cross_doc':
-      log('  ↳ Cross-Doc: dispatching process_synthesis_agents_b...', 'agent');
-      await new Promise(r => setTimeout(r, 3000));
-      break;
+                    case "open_coding": {
+                        log(
+                            "  Open Coding: dispatching process_document_agents_a...",
+                            "agent",
+                        );
+                        const result = await api(
+                            `/projects/${pid}/pipeline/run-stage/open_coding`,
+                            { method: "POST" },
+                        );
+                        if (result.status === "already_processed") {
+                            log("  All documents already processed", "success");
+                        } else {
+                            log(
+                                `  Dispatched ${result.task_ids.length} agent tasks`,
+                                "info",
+                            );
+                            for (const tid of result.task_ids) {
+                                log(
+                                    `    Waiting for task ${tid.slice(0, 8)}...`,
+                                    "info",
+                                );
+                                const taskResult = await pollTask(tid, 180000);
+                                if (taskResult.status === "SUCCESS") {
+                                    log(
+                                        `    Task ${tid.slice(0, 8)} completed`,
+                                        "success",
+                                    );
+                                } else if (taskResult.status === "FAILURE") {
+                                    log(
+                                        `    Task ${tid.slice(0, 8)} FAILED: ${JSON.stringify(taskResult.result)}`,
+                                        "error",
+                                    );
+                                } else {
+                                    log(
+                                        `    Task ${tid.slice(0, 8)} still running (timeout)`,
+                                        "warn",
+                                    );
+                                }
+                            }
+                        }
+                        break;
+                    }
 
-    case 'main_concern':
-      log('  ↳ Main Concern: analyzing codes + memos...', 'agent');
-      await new Promise(r => setTimeout(r, 2000));
-      break;
+                    case "cross_doc": {
+                        log(
+                            "  Cross-Doc: dispatching process_synthesis_agents_b...",
+                            "agent",
+                        );
+                        const result = await api(
+                            `/projects/${pid}/pipeline/run-stage/cross_doc`,
+                            { method: "POST" },
+                        );
+                        if (result.task_ids.length > 0) {
+                            const tid = result.task_ids[0];
+                            log(
+                                `    Waiting for synthesis task ${tid.slice(0, 8)}...`,
+                                "info",
+                            );
+                            const taskResult = await pollTask(tid, 300000);
+                            if (taskResult.status === "SUCCESS") {
+                                log("    Synthesis complete!", "success");
+                                // Refresh categories for blobs
+                                await loadBlobsFromDB();
+                            } else if (taskResult.status === "FAILURE") {
+                                log(
+                                    `    Synthesis FAILED: ${JSON.stringify(taskResult.result)}`,
+                                    "error",
+                                );
+                            } else {
+                                log(
+                                    "    Synthesis still running (timeout — may continue in background)",
+                                    "warn",
+                                );
+                            }
+                        }
+                        break;
+                    }
 
-    case 'selective':
-      log('  ↳ Selective: elaborating incidents...', 'agent');
-      await new Promise(r => setTimeout(r, 2500));
-      break;
+                    case "main_concern": {
+                        log(
+                            "  Main Concern: dispatching task_a14_main_concern...",
+                            "agent",
+                        );
+                        const result = await api(
+                            `/projects/${pid}/pipeline/run-stage/main_concern`,
+                            { method: "POST" },
+                        );
+                        if (result.task_ids.length > 0) {
+                            const tid = result.task_ids[0];
+                            const taskResult = await pollTask(tid, 120000);
+                            if (taskResult.status === "SUCCESS") {
+                                log(
+                                    "    Main concern analysis complete",
+                                    "success",
+                                );
+                            } else {
+                                log("    Main concern still running", "warn");
+                            }
+                        }
+                        break;
+                    }
 
-    case 'saturation':
-      log('  ↳ Saturation: running GapAnalyzer...', 'info');
-      try {
-        const gaps = await api(`/projects/${pid}/analysis/saturation-gaps`);
-        log(`    Gaps found: ${gaps.critical.length} critical, ${gaps.warnings.length} warnings, ${gaps.saturated.length} saturated`, 'success');
-      } catch (e) {
-        log(`    Gap analysis: ${e.message}`, 'warn');
-      }
-      break;
-  }
-}
+                    case "selective": {
+                        log("  Selective: dispatching elaboration...", "agent");
+                        const result = await api(
+                            `/projects/${pid}/pipeline/run-stage/selective`,
+                            { method: "POST" },
+                        );
+                        if (result.task_ids.length > 0) {
+                            const tid = result.task_ids[0];
+                            const taskResult = await pollTask(tid, 120000);
+                            if (taskResult.status === "SUCCESS") {
+                                log("    Elaboration complete", "success");
+                            } else {
+                                log("    Elaboration still running", "warn");
+                            }
+                        }
+                        break;
+                    }
 
-async function runStage(stage) {
-  const dot = document.getElementById(`dot-${stage.id}`);
-  const status = document.getElementById(`status-${stage.id}`);
-  const el = document.getElementById(`stage-${stage.id}`);
-  const conn = document.getElementById(`connector-${stage.id}`);
+                    case "saturation": {
+                        log("  Saturation: running GapAnalyzer...", "info");
+                        try {
+                            const gaps = await api(
+                                `/projects/${pid}/analysis/saturation-gaps`,
+                            );
+                            log(
+                                `    Gaps: ${gaps.critical.length} critical, ${gaps.warnings.length} warnings, ${gaps.saturated.length} saturated`,
+                                "success",
+                            );
+                        } catch (e) {
+                            log(`    Gap analysis: ${e.message}`, "warn");
+                        }
+                        break;
+                    }
+                }
+            }
 
-  // Mark running
-  if (dot) { dot.className = 'status-dot running'; }
-  if (status) status.textContent = 'running...';
-  if (el) el.classList.add('running');
-  if (conn) conn.classList.add('running');
-  log(`[${stage.icon}] ${stage.title} — ${stage.agents}`, 'agent');
+            async function runStage(stage) {
+                const dot = document.getElementById(`dot-${stage.id}`);
+                const status = document.getElementById(`status-${stage.id}`);
+                const el = document.getElementById(`stage-${stage.id}`);
+                const conn = document.getElementById(`connector-${stage.id}`);
 
-  // Real API dispatch per stage
-  try {
-    await dispatchStage(stage);
-  } catch (e) {
-    log(`  ↳ ERROR: ${e.message}`, 'error');
-    if (dot) { dot.className = 'status-dot error'; }
-    if (status) status.textContent = 'error';
-    if (el) { el.classList.remove('running'); el.classList.add('error'); }
-    return;
-  }
+                // Mark running
+                if (dot) {
+                    dot.className = "status-dot running";
+                }
+                if (status) status.textContent = "running...";
+                if (el) el.classList.add("running");
+                if (conn) conn.classList.add("running");
+                log(
+                    `[${stage.icon}] ${stage.title} — ${stage.agents}`,
+                    "agent",
+                );
 
-  // Mark done
-  if (dot) { dot.className = 'status-dot done'; }
-  if (status) status.textContent = 'done ✓';
-  if (el) { el.classList.remove('running'); el.classList.add('done'); }
-  if (conn) { conn.classList.remove('running'); conn.classList.add('done'); }
-  log(`[${stage.icon}] ${stage.title} — DONE`, 'success');
-}
+                // Real API dispatch per stage
+                try {
+                    await dispatchStage(stage);
+                } catch (e) {
+                    log(`  ↳ ERROR: ${e.message}`, "error");
+                    if (dot) {
+                        dot.className = "status-dot error";
+                    }
+                    if (status) status.textContent = "error";
+                    if (el) {
+                        el.classList.remove("running");
+                        el.classList.add("error");
+                    }
+                    return;
+                }
 
-function togglePipeline() {
-  if (STATE.running) {
-    log('Pipeline stop requested (not implemented)', 'warn');
-  } else {
-    runPipeline();
-  }
-}
+                // Mark done
+                if (dot) {
+                    dot.className = "status-dot done";
+                }
+                if (status) status.textContent = "done ✓";
+                if (el) {
+                    el.classList.remove("running");
+                    el.classList.add("done");
+                }
+                if (conn) {
+                    conn.classList.remove("running");
+                    conn.classList.add("done");
+                }
+                log(`[${stage.icon}] ${stage.title} — DONE`, "success");
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// BLOBS — Floating self-organizing categories
-// ═══════════════════════════════════════════════════════════════════
-function spawnBlobs() {
-  const panel = document.getElementById('blob-panel');
-  const blobData = [
-    { name: 'Negociando\npermanencia', size: 90, state: 'saturated' },
-    { name: 'Evadiendo\ncontrol', size: 45, state: 'unsaturated' },
-    { name: 'Balanceando\nriesgo', size: 75, state: 'warning' },
-    { name: 'Percibiendo\namenaza', size: 100, state: 'saturated' },
-    { name: 'Construyendo\nconfianza', size: 60, state: 'elaborating' },
-    { name: 'Adaptando\nestrategia', size: 55, state: 'warning' },
-    { name: 'Resistiendo\nadopción', size: 40, state: 'unsaturated' },
-    { name: 'Micro-resistencia\nadaptativa', size: 35, state: 'elaborating' },
-  ];
+            function togglePipeline() {
+                if (STATE.running) {
+                    log("Pipeline stop requested (not implemented)", "warn");
+                } else {
+                    runPipeline();
+                }
+            }
 
-  blobData.forEach((b, i) => {
-    const blob = document.createElement('div');
-    blob.className = `blob ${b.state}`;
-    blob.style.width = `${b.size}px`;
-    blob.style.height = `${b.size}px`;
+            // ═══════════════════════════════════════════════════════════════════
+            // BLOBS — Floating self-organizing categories (from DB)
+            // ═══════════════════════════════════════════════════════════════════
 
-    // Random initial position
-    const x = 100 + Math.random() * (panel.clientWidth - 300);
-    const y = 100 + Math.random() * (panel.clientHeight - 300);
-    blob.style.left = `${x}px`;
-    blob.style.top = `${y}px`;
+            // Hardcoded fallback blobs (used when DB has no categories yet)
+            const FALLBACK_BLOBS = [
+                {
+                    name: "Negociando\npermanencia",
+                    size: 90,
+                    state: "saturated",
+                },
+                { name: "Evadiendo\ncontrol", size: 45, state: "unsaturated" },
+                { name: "Balanceando\nriesgo", size: 75, state: "warning" },
+                { name: "Percibiendo\namenaza", size: 100, state: "saturated" },
+                {
+                    name: "Construyendo\nconfianza",
+                    size: 60,
+                    state: "elaborating",
+                },
+                { name: "Adaptando\nestrategia", size: 55, state: "warning" },
+                {
+                    name: "Resistiendo\nadopción",
+                    size: 40,
+                    state: "unsaturated",
+                },
+                {
+                    name: "Micro-resistencia\nadaptativa",
+                    size: 35,
+                    state: "elaborating",
+                },
+            ];
 
-    blob.innerHTML = `
+            async function loadBlobsFromDB() {
+                if (!STATE.projectId) return;
+                try {
+                    const cats = await api(
+                        `/categories?proyecto_id=${STATE.projectId}`,
+                    );
+                    if (cats && cats.length > 0) {
+                        // Map DB categories to blob format
+                        // size = min(40 + segment_count * 8, 180)
+                        // state from estado_saturacion: saturated/warning/unsaturated/elaborating
+                        const blobData = cats.map((c) => {
+                            // segment_count may come from codigos_segmento length
+                            const segCount =
+                                c.segment_count || c.num_segmentos || 0;
+                            const size = Math.min(45 + segCount * 8, 180);
+                            const satState =
+                                c.estado_saturacion || "elaborating";
+                            const stateMap = {
+                                saturado: "saturated",
+                                aproximandose: "warning",
+                                no_saturado: "unsaturated",
+                                elaborando: "elaborating",
+                            };
+                            return {
+                                name: (c.nombre || "Sin nombre")
+                                    .replace(/(.{15})/g, "$1\n")
+                                    .trim(),
+                                size,
+                                state: stateMap[satState] || "elaborating",
+                                rawName: c.nombre,
+                                definition: c.definicion || "",
+                            };
+                        });
+                        log(
+                            `Blobs loaded from DB: ${blobData.length} categories`,
+                            "success",
+                        );
+                        return blobData;
+                    }
+                } catch (e) {
+                    log(`Blobs DB load error: ${e.message}`, "warn");
+                }
+                log("Using fallback blobs (no DB categories yet)", "info");
+                return FALLBACK_BLOBS;
+            }
+
+            async function spawnBlobs() {
+                const panel = document.getElementById("blob-panel");
+                // Clear existing blobs
+                STATE.blobs = [];
+                panel.querySelectorAll(".blob").forEach((el) => el.remove());
+
+                const blobData = await loadBlobsFromDB();
+
+                blobData.forEach((b, i) => {
+                    const blob = document.createElement("div");
+                    blob.className = `blob ${b.state}`;
+                    blob.style.width = `${b.size}px`;
+                    blob.style.height = `${b.size}px`;
+
+                    // Random initial position
+                    const x = 100 + Math.random() * (panel.clientWidth - 300);
+                    const y = 100 + Math.random() * (panel.clientHeight - 300);
+                    blob.style.left = `${x}px`;
+                    blob.style.top = `${y}px`;
+
+                    blob.innerHTML = `
       <span class="blob-label">${b.name}</span>
       <div class="blob-tooltip">
-        ${b.name.replace('\n',' ')}<br>
+        ${b.name.replace("\n", " ")}<br>
         <span style="color:var(--text-secondary);font-size:10px">
-          ${b.state === 'saturated' ? '✓ Saturado' : b.state === 'warning' ? '≈ Aproximándose' : b.state === 'elaborating' ? '🔬 Elaborando' : '⚠ No saturado'}
+          ${b.state === "saturated" ? "✓ Saturado" : b.state === "warning" ? "≈ Aproximándose" : b.state === "elaborating" ? "🔬 Elaborando" : "⚠ No saturado"}
         </span>
       </div>`;
 
-    blob.addEventListener('click', () => {
-      log(`Blob clicked: ${b.name.replace('\n',' ')} (${b.state})`, 'agent');
-    });
+                    blob.addEventListener("click", () => {
+                        log(
+                            `Blob clicked: ${b.name.replace("\n", " ")} (${b.state})`,
+                            "agent",
+                        );
+                    });
 
-    panel.appendChild(blob);
-    STATE.blobs.push({ el: blob, x, y, vx: 0, vy: 0, size: b.size, state: b.state });
-  });
+                    panel.appendChild(blob);
+                    STATE.blobs.push({
+                        el: blob,
+                        x,
+                        y,
+                        vx: 0,
+                        vy: 0,
+                        size: b.size,
+                        state: b.state,
+                    });
+                });
 
-  log(`Blobs spawned: ${blobData.length}`, 'success');
-  requestAnimationFrame(animateBlobs);
-}
+                log(`Blobs spawned: ${blobData.length}`, "success");
+                requestAnimationFrame(animateBlobs);
+            }
 
-function animateBlobs() {
-  const panel = document.getElementById('blob-panel');
-  const W = panel.clientWidth;
-  const H = panel.clientHeight;
+            function animateBlobs() {
+                const panel = document.getElementById("blob-panel");
+                const W = panel.clientWidth;
+                const H = panel.clientHeight;
 
-  for (let i = 0; i < STATE.blobs.length; i++) {
-    const a = STATE.blobs[i];
+                for (let i = 0; i < STATE.blobs.length; i++) {
+                    const a = STATE.blobs[i];
 
-    // Simple physics: drift + soft repulsion from others
-    for (let j = i + 1; j < STATE.blobs.length; j++) {
-      const b = STATE.blobs[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const minDist = (a.size + b.size) / 2 + 20;
-      if (dist < minDist) {
-        const force = (minDist - dist) / minDist * 0.3;
-        a.vx -= (dx / dist) * force;
-        a.vy -= (dy / dist) * force;
-        b.vx += (dx / dist) * force;
-        b.vy += (dy / dist) * force;
-      }
-    }
+                    // Simple physics: drift + soft repulsion from others
+                    for (let j = i + 1; j < STATE.blobs.length; j++) {
+                        const b = STATE.blobs[j];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const minDist = (a.size + b.size) / 2 + 20;
+                        if (dist < minDist) {
+                            const force = ((minDist - dist) / minDist) * 0.3;
+                            a.vx -= (dx / dist) * force;
+                            a.vy -= (dy / dist) * force;
+                            b.vx += (dx / dist) * force;
+                            b.vy += (dy / dist) * force;
+                        }
+                    }
 
-    // Soft attraction to center
-    const cx = W / 2;
-    const cy = H / 2;
-    a.vx += (cx - a.x) * 0.0001;
-    a.vy += (cy - a.y) * 0.0001;
+                    // Soft attraction to center
+                    const cx = W / 2;
+                    const cy = H / 2;
+                    a.vx += (cx - a.x) * 0.0001;
+                    a.vy += (cy - a.y) * 0.0001;
 
-    // Damping
-    a.vx *= 0.98;
-    a.vy *= 0.98;
+                    // Damping
+                    a.vx *= 0.98;
+                    a.vy *= 0.98;
 
-    // Random drift
-    a.vx += (Math.random() - 0.5) * 0.1;
-    a.vy += (Math.random() - 0.5) * 0.1;
+                    // Random drift
+                    a.vx += (Math.random() - 0.5) * 0.1;
+                    a.vy += (Math.random() - 0.5) * 0.1;
 
-    // Update position
-    a.x += a.vx;
-    a.y += a.vy;
+                    // Update position
+                    a.x += a.vx;
+                    a.y += a.vy;
 
-    // Bounce off walls
-    if (a.x < 10) { a.x = 10; a.vx *= -0.5; }
-    if (a.y < 10) { a.y = 10; a.vy *= -0.5; }
-    if (a.x > W - a.size - 10) { a.x = W - a.size - 10; a.vx *= -0.5; }
-    if (a.y > H - a.size - 10) { a.y = H - a.size - 10; a.vy *= -0.5; }
+                    // Bounce off walls
+                    if (a.x < 10) {
+                        a.x = 10;
+                        a.vx *= -0.5;
+                    }
+                    if (a.y < 10) {
+                        a.y = 10;
+                        a.vy *= -0.5;
+                    }
+                    if (a.x > W - a.size - 10) {
+                        a.x = W - a.size - 10;
+                        a.vx *= -0.5;
+                    }
+                    if (a.y > H - a.size - 10) {
+                        a.y = H - a.size - 10;
+                        a.vy *= -0.5;
+                    }
 
-    // Apply to DOM
-    a.el.style.left = `${a.x}px`;
-    a.el.style.top = `${a.y}px`;
-    a.el.style.transform = `scale(${1 + Math.sin(Date.now()/2000 + i) * 0.03})`;
-  }
+                    // Apply to DOM
+                    a.el.style.left = `${a.x}px`;
+                    a.el.style.top = `${a.y}px`;
+                    a.el.style.transform = `scale(${1 + Math.sin(Date.now() / 2000 + i) * 0.03})`;
+                }
 
-  requestAnimationFrame(animateBlobs);
-}
+                requestAnimationFrame(animateBlobs);
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// SSE — Real-time pipeline events
-// ═══════════════════════════════════════════════════════════════════
-function connectSSE() {
-  if (!STATE.projectId) return;
-  if (STATE.eventSource) STATE.eventSource.close();
+            // ═══════════════════════════════════════════════════════════════════
+            // SSE — Real-time pipeline events
+            // ═══════════════════════════════════════════════════════════════════
+            function connectSSE() {
+                if (!STATE.projectId) return;
+                if (STATE.eventSource) STATE.eventSource.close();
 
-  const url = `${API}/events/stream?proyecto_id=${STATE.projectId}`;
-  log(`SSE: connecting to ${url}`, 'info');
+                const url = `${API}/events/stream?proyecto_id=${STATE.projectId}`;
+                log(`SSE: connecting to ${url}`, "info");
 
-  // SSE won't work without auth token in headers, so we use a workaround
-  // For now, just log that we're listening
-  log('SSE: ready for real-time updates (requires auth token in EventSource)', 'info');
-}
+                // SSE won't work without auth token in headers, so we use a workaround
+                // For now, just log that we're listening
+                log(
+                    "SSE: ready for real-time updates (requires auth token in EventSource)",
+                    "info",
+                );
+            }
 
-// ═══════════════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════════════
-async function init() {
-  log('GT Pipeline initializing...', 'info');
-  renderPipeline();
-  await refreshProjects();
+            // ═══════════════════════════════════════════════════════════════════
+            // INIT
+            // ═══════════════════════════════════════════════════════════════════
+            async function init() {
+                log("GT Pipeline initializing...", "info");
+                renderPipeline();
+                await refreshProjects();
 
-  // Listen for project selection
-  document.getElementById('project-select').addEventListener('change', (e) => {
-    STATE.projectId = e.target.value;
-    if (STATE.projectId) {
-      log(`Project selected: ${STATE.projectId}`, 'success');
-      renderPipeline();
-      connectSSE();
-    }
-  });
+                // Listen for project selection
+                document
+                    .getElementById("project-select")
+                    .addEventListener("change", (e) => {
+                        STATE.projectId = e.target.value;
+                        if (STATE.projectId) {
+                            log(
+                                `Project selected: ${STATE.projectId}`,
+                                "success",
+                            );
+                            renderPipeline();
+                            connectSSE();
+                        }
+                    });
 
-  // Keyboard shortcut: Space to toggle pipeline
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !e.target.closest('input,select,textarea')) {
-      e.preventDefault();
-      togglePipeline();
-    }
-  });
+                // Keyboard shortcut: Space to toggle pipeline
+                document.addEventListener("keydown", (e) => {
+                    if (
+                        e.code === "Space" &&
+                        !e.target.closest("input,select,textarea")
+                    ) {
+                        e.preventDefault();
+                        togglePipeline();
+                    }
+                });
 
-  log('GT Pipeline ready. Press SPACE or click ▶ to run.', 'success');
-}
+                log(
+                    "GT Pipeline ready. Press SPACE or click ▶ to run.",
+                    "success",
+                );
+            }
 
-init();
-</script>
-</body>
+            init();
+        </script>
+    </body>
 </html>

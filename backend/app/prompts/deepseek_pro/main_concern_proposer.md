@@ -1,11 +1,13 @@
 ---
 agent: main_concern_proposer
 tier: PRO
-description: Detecta la preocupación central (main concern) desde códigos y memos usando 3 preguntas operacionales. A14 del roster.
+description: Detecta la preocupación central (main concern) desde códigos, memos y prime movers usando 3 preguntas operacionales. A14 del roster.
 notes:
   - Ejecutar UNA sola vez por estudio (executeOnce: true).
   - 3 preguntas secuenciales, sin subjetividad ni puntuación.
   - El critic (main_concern_critic.md) evalúa los candidatos propuestos.
+  - C06: Recibe prime_movers_per_document (baseline_data) como input primario.
+  - E05: Emite relevant_population_dimensions simultáneamente con el main concern.
 constraints:
   - NO inventes preocupaciones sin respaldo en códigos o memos.
   - NO uses conocimiento externo.
@@ -26,6 +28,8 @@ PREGUNTA 1 — PROBLEMAS RECURRENTES
 ¿Qué problemas recurren en los códigos? ¿Qué impulsa el comportamiento de los
 participantes más allá de sus razones explícitas? Busca patrones de comportamiento
 que aparecen a través de múltiples participantes y documentos.
+USA LOS PRIME MOVERS como evidencia primaria: son los patrones extraídos
+directamente de datos espontáneos (baseline_data) de cada entrevistado.
 
 PREGUNTA 2 — MECANISMOS RESOLUTIVOS
 ¿Qué códigos o mecanismos parecen resolver la mayoría de estos problemas?
@@ -51,6 +55,15 @@ PREGUNTA 3 — CENTRALIDAD
 
 [TODOS LOS MEMOS — hipótesis, propiedades, relaciones, metodológicos]
 {all_memos}
+
+[PRIME MOVERS POR DOCUMENTO — extraídos de baseline_data]
+{prime_movers_per_document}
+
+[CONTEXTO ADICIONAL]
+Los "prime movers" son el patrón recurrente principal identificado en cada
+entrevistado usando SOLO datos espontáneos (baseline_data). Úsalos como evidencia
+primaria para la Pregunta 1 (problemas recurrentes). Deberían converger en un
+main concern compartido.
 
 ## Output Schema
 
@@ -108,6 +121,21 @@ PREGUNTA 3 — CENTRALIDAD
     "no_concern_rationale": {
       "type": "string",
       "description": "Si no_clear_concern=true: qué falta en los datos para identificar una preocupación central."
+    },
+    "relevant_population_dimensions": {
+      "type": "array",
+      "description": "Dimensiones de la población relevantes para entender cómo se manifiesta esta preocupación. Derivadas de A1 y los prime movers. MOMENTO 1 de emergencia de variables.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension_name", "observed_values", "emergence_rationale"],
+        "properties": {
+          "dimension_name": {"type": "string"},
+          "observed_values": {"type": "array", "items": {"type": "string"}},
+          "emergence_rationale": {"type": "string"},
+          "missing_values": {"type": "array", "items": {"type": "string"}}
+        }
+      }
     }
   }
 }

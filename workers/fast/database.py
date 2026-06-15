@@ -8,17 +8,13 @@ Usamos psycopg2 para compatibilidad con Alembic/SQLAlchemy sync.
 from __future__ import annotations
 
 import logging
-import os
 
+from config import DATABASE_URL as _raw_url
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-_raw_url = os.getenv(
-    "DATABASE_URL",
-    "postgresql://app_user:strongpass@pgbouncer:6432/gt-db",
-)
 # Asegurar driver síncrono (psycopg2, no asyncpg)
 DATABASE_URL = _raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 if not DATABASE_URL.startswith("postgresql+psycopg2"):

@@ -1,19 +1,16 @@
 import io
-import os
 from typing import BinaryIO, List, Optional
 
 import aioboto3
+from app.core.config import (
+    MINIO_ACCESS_KEY,
+    MINIO_BUCKET,
+    MINIO_ENDPOINT,
+    MINIO_SECRET_KEY,
+    MINIO_SECURE,
+)
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile
-
-# Configuración desde variables de entorno (ponlas en tu .env)
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
-MINIO_BUCKET = os.getenv("MINIO_BUCKET", "gt-documents")
-MINIO_SECURE = (
-    os.getenv("MINIO_SECURE", "false").lower() == "true"
-)  # false para HTTP local
 
 session = aioboto3.Session()
 

@@ -23,12 +23,11 @@ from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
-ModelTier = Literal["FAST", "BALANCED", "POWERFUL"]
+ModelTier = Literal["PRO", "FLASH"]
 
 TIER_MODELS: dict[ModelTier, str] = {
-    "FAST": "deepseek-ai/DeepSeek-V3",
-    "BALANCED": "google/gemma-2-27b-it",
-    "POWERFUL": "deepseek-ai/DeepSeek-R1",
+    "FLASH": "google/gemma-4-31B-it",
+    "PRO": "deepseek-ai/DeepSeek-R1",
 }
 
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
@@ -206,9 +205,8 @@ def _parse_legacy_format(raw: str) -> dict[str, Any]:
 def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
     """Busca el prompt en deepseek_pro/ o deepseek_flash/. Prueba .md y .txt."""
     tier_dir = {
-        "POWERFUL": "deepseek_pro",
-        "BALANCED": "deepseek_pro",
-        "FAST": "deepseek_flash",
+        "PRO": "deepseek_pro",
+        "FLASH": "deepseek_flash",
     }
     agent_files = {
         "a1": "a1_population_context",
@@ -331,7 +329,9 @@ class LLMClient:
     """
 
     def __init__(self, api_key: str | None = None):
-        raw_key = (api_key or os.getenv("TOGETHER_API_KEY", "")).strip()
+        from config import TOGETHER_API_KEY as _cfg_key
+
+        raw_key = (api_key or _cfg_key).strip()
         self.is_mock = not raw_key or raw_key.startswith("${") or raw_key == "changeme"
 
         if self.is_mock:
@@ -359,9 +359,9 @@ class LLMClient:
                 MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
             )
 
-        for tier in ("POWERFUL", "FAST"):
+        for tier in ("PRO", "FLASH"):
             try:
-                parsed = _load_agent_prompt(agent_id, tier)  # type: ignore[arg-type]
+                parsed = _load_agent_prompt(agent_id, tier)
                 break
             except FileNotFoundError:
                 continue
@@ -369,10 +369,11 @@ class LLMClient:
             return {"error": f"Prompt no encontrado para {agent_id}"}
 
         declared_tier = parsed["metadata"].get("tier", "PRO")
-        tier_map = {"PRO": "POWERFUL", "FLASH": "FAST"}
-        model_tier: ModelTier = tier_map.get(declared_tier, "POWERFUL")  # type: ignore[assignment]
+        model_tier: ModelTier = (
+            declared_tier if declared_tier in ("PRO", "FLASH") else "PRO"
+        )
 
-        logger.info("Agent %s → tier=%s (%s)", agent_id, declared_tier, model_tier)
+        logger.info("Agent %s → tier=%s", agent_id, model_tier)
 
         prompt_template = parsed["prompt"]
         try:
@@ -397,8 +398,9 @@ class LLMClient:
         schema: dict | None,
         max_tokens: int,
         temperature: float,
+        retry: bool = True,
     ) -> dict[str, Any]:
-        """Llama a Together.ai con schema inyectado como output format."""
+        """Llama a Together.ai con response_format json_object. Retry 1 vez."""
         if schema:
             system_prompt += (
                 "\n\n[OUTPUT FORMAT — responde EXCLUSIVAMENTE en JSON]\n"
@@ -420,11 +422,13 @@ class LLMClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                response_format={"type": "json_object"},
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
             content = response.choices[0].message.content or ""
             content = content.strip()
+            # Strip markdown code fences if present
             if content.startswith("```"):
                 lines = content.split("\n")
                 if lines[0].startswith("```"):
@@ -433,9 +437,31 @@ class LLMClient:
                     lines = lines[:-1]
                 content = "\n".join(lines)
             return json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("JSON parse failed for %s. Mock fallback.", tier)
+
+        except json.JSONDecodeError as e:
+            if retry:
+                logger.warning(
+                    "JSON parse failed for %s: %s. Retrying with error hint.",
+                    tier,
+                    str(e)[:100],
+                )
+                hint = (
+                    f"\n\n[ERROR EN RESPUESTA ANTERIOR]\n"
+                    f"Tu respuesta no era JSON válido: {str(e)[:200]}\n"
+                    f"Corrige y responde SOLO el JSON."
+                )
+                return self._call_llm(
+                    tier,
+                    model,
+                    system_prompt + hint,
+                    schema,
+                    max_tokens + 512,
+                    temperature,
+                    retry=False,
+                )
+            logger.warning("JSON parse failed after retry. Mock fallback.")
             return dict(MOCK_RESPONSES.get(tier, {"error": "JSON parse failed"}))
+
         except Exception as e:
             logger.error("LLM call failed: %s. Mock fallback.", e)
             return dict(MOCK_RESPONSES.get(tier, {"error": str(e)}))

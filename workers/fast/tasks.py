@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from typing import List
 from uuid import UUID
 
 from celery import Celery
+from config import REDIS_URL, TEI_URL
 from sqlalchemy import text
 
 sys.path.insert(0, "/app")
@@ -28,7 +28,7 @@ from llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
-app = Celery("fast_tasks", broker=os.getenv("REDIS_URL", "redis://redis:6379/0"))
+app = Celery("fast_tasks", broker=REDIS_URL)
 llm = LLMClient()
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -318,3 +318,100 @@ def graphrag_search_local(query: str, proyecto_id: str, top_k: int = 5) -> dict:
 
     finally:
         session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Punctuation agent — añade puntuación a textos crudos (FLASH)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.task(name="punctuate_text")
+def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") -> dict:
+    """
+    Anade puntuacion a texto crudo de entrevistas.
+    Si el texto excede max_chars, lo divide en bloques y procesa iterativamente.
+    Si se proporciona documento_id, actualiza el texto en la DB tras la puntuacion.
+    """
+    texto = texto.strip()
+    if not texto:
+        return {"punctuated_text": "", "changes_made": False}
+
+    # Si el texto es corto, procesar en una sola llamada
+    if len(texto) <= max_chars:
+        response = llm.run_agent(
+            "punctuator",
+            variables={"raw_text": texto},
+            temperature=0.1,
+        )
+        result = {
+            "punctuated_text": response.get("punctuated_text", texto),
+            "changes_made": response.get("changes_made", False),
+        }
+    else:
+        # Texto largo: dividir en bloques por parrafos y procesar iterativamente
+        paragraphs = texto.split("\n")
+        blocks = []
+        current = ""
+        for p in paragraphs:
+            if len(current) + len(p) < max_chars:
+                current += p + "\n"
+            else:
+                if current:
+                    blocks.append(current.strip())
+                current = p + "\n"
+        if current:
+            blocks.append(current.strip())
+
+        logger.info("Punctuator: %d chars -> %d blocks", len(texto), len(blocks))
+
+        punctuated_blocks = []
+        changes = False
+        for i, block in enumerate(blocks):
+            response = llm.run_agent(
+                "punctuator",
+                variables={"raw_text": block},
+                temperature=0.1,
+            )
+            punctuated_blocks.append(response.get("punctuated_text", block))
+            if response.get("changes_made", False):
+                changes = True
+
+        result = {
+            "punctuated_text": "\n\n".join(punctuated_blocks),
+            "changes_made": changes,
+            "blocks_processed": len(blocks),
+        }
+
+    # If we have a documento_id and changes were made, update the DB
+    if documento_id and result.get("changes_made"):
+        session = SessionLocal()
+        try:
+            import json as _json
+
+            # Get current metadatos
+            row = session.execute(
+                text("SELECT metadatos FROM documentos WHERE id = :did"),
+                {"did": documento_id},
+            ).fetchone()
+            if row:
+                meta = row[0] if row[0] else {}
+                if isinstance(meta, str):
+                    meta = _json.loads(meta)
+                meta["texto_extraido"] = result["punctuated_text"][:50000]
+                meta["texto_puntuado"] = True
+                session.execute(
+                    text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),
+                    {"meta": _json.dumps(meta), "did": documento_id},
+                )
+                session.commit()
+                logger.info(
+                    "Punctuator: updated doc %s with punctuated text",
+                    documento_id,
+                )
+        except Exception as e:
+            logger.warning("Punctuator DB update failed: %s", e)
+            session.rollback()
+        finally:
+            session.close()
+
+    return result

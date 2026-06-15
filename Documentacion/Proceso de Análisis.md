@@ -852,117 +852,77 @@ Umbral: **≥ 4 requerido** para la inclusión en la codificación selectiva.
 
 Las puntuaciones se escriben en la BD. Las categorías con puntuación 1–3 se conservan pero no se procesan más a menos que el investigador anule.
 
-#### 5.3 Muestreo Teórico para Codificación Selectiva (TheoSampler)
+#### 5.3 Muestreo Teórico para Codificación Selectiva (TheoSampler v2)
 
-Para cada categoría que supera el umbral, diseñar una estrategia de muestreo dirigida a maximizar las diferencias en los datos (variaciones de propiedades, dimensiones):
+> **Refactorizado (2026-06-16).** El TheoSampler original muestreaba por `documentos.metadatos` (face-sheet variables). El nuevo TheoSampler **emergent_sampler.py (E03)** muestrea por DOS fuentes legítimas que emergen de los datos:
+>
+> **Momento 1** — Variables del core concern: emergen junto con el main concern en A14 (`relevant_population_dimensions`). Definen quiénes experimentan la preocupación y qué los distingue.
+>
+> **Momento 2** — Propiedades de categorías: emergen al comparar incidentes en el ciclo de elaboración (`incident_elaborator.md`, S04). Son dimensiones como "profundidad", "intensidad", "valencia".
 
-| Tipo de muestreo   | Justificación                                                                                  |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
-| Casos de contraste | Documentos con valores altos vs. bajos en variables relevantes — revela límites de propiedades |
-| Casos extremos     | Documentos más alejados de la norma — prueba la categoría bajo estrés                          |
-| Casos consistentes | Documentos similares — verifica la replicabilidad de las afirmaciones sobre propiedades        |
+Para cada categoría que supera el umbral, el **EmergentSampler** evalúa las propiedades documentadas en `ParadigmState.dimensions` y detecta gradientes desbalanceados:
 
-Ahora la búsqueda será de indicadores empíricos específcos o slices de data. No se necesitan todos los documentos enteros. Conectar la necesidad de data según las core categories al POOL de variables o bien a nuevas FUENTES de información. Registrar como memos de muestreo.
+| Tipo de muestreo   | Justificación                                                                                  | Mecanismo |
+| ------------------ | ---------------------------------------------------------------------------------------------- | --------- |
+| Casos de contraste | Propiedades con extremo A dominante y extremo B con pocos incidentes — revela límites          | `corpus_scanner` (FLASH) → busca en segmentos no asignados |
+| Casos extremos     | Propiedades donde un extremo tiene 0 incidentes — prueba la categoría bajo estrés              | `property_sampler` (PRO) → sugiere muestreo externo si el corpus no tiene |
+| Casos consistentes | Propiedades balanceadas — verifica replicabilidad                                              | `incident_elaborator` (PRO) → confirma o expande |
 
-Cuando una comparación requiere estructura dicotómica:
+Cuando el corpus no contiene incidentes en un extremo, el sistema **alerta** (`gap_alerter.md`, E06) y sugiere recolectar nuevos datos o marcar como limitación.
 
-* Binarizar distribuciones de variables continuas u ordinales
-* Se utiliza para estructurar combinaciones de FUENTES en el bucle de comparación constante
+#### 5.3.1 Ciclo de Elaboración por Incidente
 
-Para cada categoría x variable, por combinación de documentos:
+En lugar de 4 nodos paralelos pre-categorizados (Patrones, Propiedades, Causas, Consecuencias), la Fase 5b usa un **ciclo iterativo por categoría**:
 
-1. Cargar datos de la combinació&#x6E;*&#x20;(lacat2 en n8n)*
-2. **Compara varios docs:** encontrar insights nuevos / confirmados / actualizados
-   &#x20;  \* **Nuevo:** dimensión de propiedad no observada previamente en esta categoría
-   &#x20;  \* **Confirmado:** la propiedad aparece nuevamente — incrementar contador de saturación
-   &#x20;  \* **Actualizado:** propiedad refinada; límites cambiados — reiniciar contador de saturación; documentar el refinamiento
-   1. Si es nuevo o actualizado, **Para cada indicador entrante en codificación selectiva:**
-      1. ¿Este indicador se relaciona con la categoría central?
-      2. ¿Desarrolla una propiedad de la categoría central?
-      3. Si SÍ → codificarlo; desarrollar la propiedad
-      4. Si NO → ignorarlo (esto es la delimitación en acción; no un fracaso)
-3. SATURACIÓN: Actualizar el estado de la categoría incrementalmente: propiedades, límites de definición, ejemplos representativos
-4. Si aparece un **contraejemplo**: reiniciar contador de saturación; documentar el contraejemplo explícitamente
+1. **Cada nuevo incidente** se compara contra el estado actual de la categoría (`incident_elaborator.md`, PRO).
+2. Si el incidente **converge** (encaja en propiedades existentes) → densifica (incrementa contador de saturación).
+3. Si el incidente **diverge** (revela algo nuevo) → expande la definición, añade propiedad/dimensión, o sugiere subdivisión.
+4. Si la definición se expande significativamente (≥ 3 versiones O ≥ 2x propiedades O ≥ 3x incidentes) → `rename_detector.py` (T11) activa `rename_suggester.md` (T08).
+5. El investigador **ve** la categoría como un blob que crece y cambia de color (SelectiveCodingCanvas, S09).
 
-**Verificación de Saturación**
+**Esto reemplaza completamente los antiguos 4 nodos paralelos** (Behavioral Patterns, Properties, Causes, Consequences) y el nodo Generate que los sintetizaba. El paradigma (causas, consecuencias, propiedades) ya no se impone — emerge del ciclo de elaboración.
 
-**Nodos de análisis paralelo (ejecución simultánea):**
+#### 5.3.2 Verificación de Saturación (SaturationGapAnalyzer)
 
-* **Nodo de Patrones de Comportamiento:**
-  &#x20; \* Identificar incidentes de comportamiento recurrentes (el patrón debe aparecer en ≥ 3–4 entrevistados)
-  &#x20; \* Citar identificadores de entrevistados por cada patrón afirmado
-  &#x20; \* Agrupar manifestaciones opuestas del mismo fenómeno juntas
-  &#x20; \* No tratar casos aislados como patrones; usarlos como ilustraciones de patrones más grandes solo si procede
-* **Nodo de Propiedades:**
-  &#x20; \* Identificar variaciones, gradientes y extremos que indican subpatrones latentes
-  &#x20; \* Mapear dimensiones: ¿qué varía entre casos que comparten el código de categoría?
-  &#x20; \* Identificar perfiles o tipos claramente opuestos dentro de la categoría
-* **Nodo de Causas:**
-  &#x20; \* Identificar condiciones determinantes: ¿qué desencadena o permite que ocurra esta categoría?
-  &#x20; \* Distinguir condiciones estructurales (siempre presentes) de condiciones contingentes (varían)
-* **Nodo de Consecuencias:**
-  &#x20; \* ¿Qué produce actuar sobre esta categoría?
-  &#x20; \* ¿Qué estrategias genera en los participantes?
-  &#x20; \* ¿Cuáles son los efectos posteriores?
+La saturación ya no depende de un solo criterio. El **SaturationGapAnalyzer (C08)** combina **4 señales**:
 
-**Síntesis (nodo Generate):**
+| Señal | Fuente | Tipo | Qué mide |
+|-------|--------|------|----------|
+| 1 — Matemática | `SaturationMetrics.rolling_std` | Embeddings | Variabilidad numérica. Barata, primer filtro. |
+| 2 — Cualitativa | `ParadigmState.did_state_expand` | LLM PRO | ¿El último incidente expandió el paradigma? Ventana de 5 iteraciones. |
+| 3 — Cobertura | `comparison_axes` (EmergentSampler) | SQL | ¿Todos los extremos de cada propiedad tienen ≥ 1 incidente? |
+| 4 — Integración | `conceptual_relationships` (Playground) | SQL | ¿La categoría está conectada al modelo teórico? |
 
-Recibe: todas las 4 salidas paralelas + JSON bruto + metadatos (hoja de cálculo)
+**El centro móvil no desaparece — se degrada a señal temprana:** si `rolling_std > 0.15`, la categoría es "unsaturated" sin gastar LLM. Solo si `rolling_std < 0.15` se dispara la verificación cualitativa (PRO).
 
-Produce: informe de memo integrado con secciones:
+**Veredicto combinado:**
+- **SATURATED** = señal1 std<0.10 + señal2 5 sin expandir + señal3 todos los extremos ≥1 caso + señal4 conectada (o fase no aplica)
+- **APPROACHING** = señal1 std<0.15 O señal2 3+ sin expandir
+- **UNSATURATED** = señal1 std>0.15 O señal2 última iteración expandió
 
-1. Patrones de Comportamiento: perspectiva compartida; incidentes recurrentes nombrados con gerundios
-2. Propiedades: constructos latentes indicados por cómo varía la categoría
-3. Diferencias internas: perfiles y tipos que la categoría captura
-4. Condiciones causales: estructurales y contingentes
-5. Respuestas y estrategias: qué hacen los participantes con la categoría
-6. Pensamiento vs. Acción: patrones de coherencia y fragmentación entre puntos de vista declarados y comportamiento real
+#### 5.3.3 Ciclo de Feedback
 
-**Refinamiento secuencial:**
+Cuando el SaturationGapAnalyzer detecta gaps (ejes vacíos, propiedades desbalanceadas), el **StateGraph pausa en `hitl_gap_review`** (E07) y presenta alertas al investigador:
 
-* **Nodo de simplificación de variaciones** (Nodo B):
-  &#x20; \* Entrada: salida de Generate
-  &#x20; \* Explorar dimensiones y gradientes que abarcan los datos citados
-  &#x20; \* Comparar, reclasificar y resumir variaciones que están claramente correlacionadas
-  &#x20; \* Separar variaciones correlacionadas de las no correlacionadas
-  &#x20; \* Producir tablas de doble entrada para dimensiones correlacionadas
-  &#x20; \* Verificar intersecciones empíricamente antes de concluir correlación
-  &#x20; \* Debe indicar, dentro de las tablas, qué patrón se refiere a qué tema
-* **Nodo de búsqueda de correlaciones** (Nodo C):
-  &#x20; \* Entrada: salida de Generate + salida de Simplificación de variaciones + hoja de cálculo de metadatos
-  &#x20; \* Cruzar las tablas de Simplificación de variaciones
-  &#x20; \* Identificar dimensiones bivariadas o multivariadas precisas; descartar las no sustentadas
-  &#x20; \* Producir matrices 2×2 para tipologías basadas en evidencia
-  &#x20; \* Citar identificadores de entrevistados dentro de las matrices
-  &#x20; \* Proporcionar descripciones cualitativas de cada cuadrante
-  &#x20; \* Usar términos estadísticos de manera laxa — la salida es cualitativa, no cuantitativa
+- 🔴 **CRÍTICO:** eje completamente vacío. "ROL_ORGANIZACIONAL='fundador' tiene 0 documentos."
+- ⚠️ **ADVERTENCIA:** eje desbalanceado. "Propiedad PROFUNDIDAD: 8 en polo 'profundo', 1 en 'superficial'."
 
-**Por categoría/variable — criterios:**
+El investigador elige:
+- **Cargar nuevos datos** → `process_new_data` (E08) re-ejecuta Fases 1-5b sobre los nuevos documentos
+- **Buscar en corpus existente** → `corpus_scanner` (FLASH) escanea segmentos no asignados
+- **Marcar como limitación** → el gap se documenta para la discusión
 
-| Criterio                                                                                                      | Umbral |
-| ------------------------------------------------------------------------------------------------------------- | ------ |
-| Iteraciones consecutivas sin cambio en propiedades, definición o ejemplos                                     | 3      |
-| Para afirmaciones relacionales abductivas: documentos distintos mostrando la misma relación, 0 contraejemplos | 5      |
-| Iteraciones máximas por variable antes de la revisión forzada                                                 | 20     |
+Nuevos datos re-ingresan al pipeline y los gaps se re-evalúan. El ciclo se repite hasta que los gaps críticos están resueltos o justificadamente marcados como limitaciones.
 
-**No saturada → Protocolo de Limpieza de Memoria:**
+#### 5.3.4 Condición de Saturación Global
 
-* Limpiar el contexto de trabajo de la IA para esta categoría
-* Conservar: definiciones actuales de categorías, declaración de preocupación central, todos los memos
-* Repetir el bucle de comparación constante desde un estado limpio con la misma categoría
-* Si aún no está saturada después de la limpieza de memoria: activar la Fase 4c (Reinterpretación) para esta categoría
+La fase de codificación selectiva termina cuando:
 
-**Saturada → avanzar a la siguiente categoría**
+* Todas las categorías con puntuación de relevancia ≥ 4 están **saturadas** (4 señales en verde)
+* Los gaps críticos están **resueltos o documentados como limitaciones**
+* El Búfer de Residuos ha sido revisado
 
-#### 5b.3 Condición de Saturación Global
-
-La fase de codificación selectiva termina cuando TODAS las siguientes condiciones son verdaderas:
-
-* Todas las categorías con puntuación de relevancia ≥ 4 están saturadas (según el criterio de 5.6)
-* Todas las relaciones inter-categoriales postuladas están saturadas (5 documentos, 0 contraejemplos)
-* El Búfer de Residuos ha sido revisado: los segmentos restantes están clasificados como anomalías justificadas (documentadas)
-
-OJO: La idea tiende a resumir en demasía. Cada ejecución se antepone a la parte superior del documento; las versiones anteriores se conservan debajo
+**Saturada globalmente → se dispara `node_prepare_playground` (T25):** seed de códigos teóricos, creación del ecosystem layout, generación de ghost-blobs desde memos. El investigador entra al **Theoretical Playground** (Fase 6b).
 
 ### 5c: Descripción y visualización
 
@@ -1085,73 +1045,90 @@ Para garantizar que el modelo de lenguaje actúe con rigor científico, el *Syst
 * **Regla de Soberanía Humana:** "Tu rol es sugerir estructuras lógicas y limpiar borradores, no reemplazar el juicio analítico del investigador. Concluye tus síntesis lógicas pidiéndole al usuario que valide si el marco propuesto hace 'click' con su experiencia real en el campo de estudio."
 * **Regla de Dignidad y No-Estigmatización:** "Al redactar descripciones de poblaciones, escenarios o individuos, utiliza un lenguaje neutro y dignificante. Evita la caricaturización o el exotismo, incluso cuando el investigador te pida aplicar tonos dramáticos (como el etnodrama) o narrativos."
 
-### 6b. Codificación y redacción teórica
+### 6b. Theoretical Playground — Ecosistema Conceptual
 
-Recuperar todos los documentos de análisis:
+> **Refactorizado (2026-06-16).** La Fase 6b ya no es una iteración automática por familias de códigos teóricos. Es un **ecosistema conceptual interactivo** donde el investigador construye la integración teórica arrastrando, conectando y expandiendo categorías. La metáfora visual es la de **manchas orgánicas (blobs)** con física simulada.
 
-* Memos de hipótesis, propiedades, relaciones, metodológicos y de muestreo de Memo\_Bank (OJO: todo memo está asignado a una o varias categorías)
-* Descripciones de categorías
-* Incluir cualquier memo de clasificación de medio proceso generado aquí
+#### 6b.1 Entrada al Playground
 
-Un agente iterará sobre todos los memos y documentos del análisis al mismo tiempo, o hará resúmenes, para hallar cómo es que cada familia de códigos teóricos unen las categorías ya existentes. El agente escribe en `Sorting_Log`:
+Al completar la saturación global (Fase 5b), el sistema dispara `node_prepare_playground` (T25):
 
-* Etiquetas de los grupos formados y lista de categorías por grupo. Justificación de las relaciones.
-* Documentos **sin hogar** (no se asignan a ningún grupo).
-* Decisiones ambiguas o colocaciones forzadas.
+1. **Seed de 12 códigos teóricos built-in** (`theory_seeder.py`, T28) — Proceso, Causal, Oposición, Tipología, Jerarquía, Matriz 2×2, Consecuencias, Estrategias, Condición estructural, Contingencia, Covarianza, Intercambiabilidad.
+2. **Creación del ecosystem layout** — posiciones iniciales de blobs, parámetros de física.
+3. **Generación de ghost-blobs** (`ghost_connector.py`, T26) — memos de hipótesis no conectados flotando en los márgenes, listos para ser arrastrados hacia categorías.
 
-#### Iteraciones estándar (cada familia tiene su prompt)
+#### 6b.2 El ecosistema
 
-1. **Temática** – *“Agrupa memos por tema o asunto compartido. No impongas categorías externas.”*
-2. **Causal** – *“Identifica causas, efectos, condiciones mediadoras y variables intervinientes. Construye cadenas causales.”*
-3. **Temporal / proceso** – *“Busca estructura antes/durante/después, etapas de progresión.”*
-4. **Jerárquica / importancia** – *“Clasifica memos como centrales, periféricos, condiciones o consecuencias.”*
-5. *(Opcional)***Oposición / tipología** – *“Agrupa por polos opuestos o perfiles contrastantes.”*
-6. Y si no halla relación aún:
+El investigador interactúa con un lienzo oscuro donde:
 
-| Sesión | Criterio                                                                          | Familia teórica CGT que se evalúa |
-| ------ | --------------------------------------------------------------------------------- | --------------------------------- |
-| 5      | Oposición / contraste / polaridad                                                 | Familia tipológica / dimensional  |
-| 6      | Seis Cs: condiciones, contexto, contingencias, consecuencias, covarianzas, causas | Familia de las Seis C             |
-| 7      | Etapas de proceso social básico (entrada, paso, salida)                           | Familia de proceso                |
-| 8      | Matrices de dos por dos (intersectar dos dimensiones)                             | Familia tipológica / de matrices  |
+- **Blobs** = categorías saturadas. Tamaño = incidentes acumulados. Color = capa teórica (naranja=core, teal=proceso, azul=condiciones, verde=variación, lavanda=consecuencias, dorado=acción). Textura = densidad conceptual. Borde punteado = necesita muestreo. Shimmer = renombre sugerido.
+- **Tendriles** = relaciones elaboradas. Grosor = evidencia convergente. Fisuras doradas = datos divergentes (NO rompen el tendril — lo expanden).
+- **Ghost-blobs** = hipótesis de memos no conectadas. Translúcidos, arrastrables.
+- **Neblina** = zonas de gap conceptual. El sistema recomienda muestreo.
 
-El agente genera un **memo de clasificación** por cada iteración y uno final:
+**Interacciones del investigador:**
 
-* ¿Por qué se formaron esos grupos?
-* ¿Qué insight teórico apareció?
+| Gesto | Acción | Resultado |
+|-------|--------|-----------|
+| Arrastrar dos blobs juntos | Proponer relación | El sistema busca evidencia convergente/divergente (`conceptual_elaborator.md`, T07) |
+| Clic en fisura de tendril | Elaborar dato divergente | El sistema sugiere cómo expandir la relación (condición, subtipo, ruta alternativa) |
+| Doble clic en blob | Ver definición + historial | Panel con timeline de versiones, propiedades, sugerencia de renombre |
+| Arrastrar ghost-blob a blob | Absorber hipótesis | La categoría se densifica: nueva propiedad, definición expandida, posible renombre |
+| Clic en neblina | Recibir recomendación | El sistema sugiere qué muestrear para llenar el gap |
 
-Estos memos se convierten en **borradores de esquemas de capítulos**: cada grupo estable (que se repite en varias iteraciones) es una sección del informe.
+#### 6b.3 Elaboración de relaciones
 
-Tras completar las iteraciones, el agente responde (cualitativamente, sin puntuación):
+A diferencia del sistema antiguo (que iteraba automáticamente por 8 familias), el investigador **elige qué relación explorar y con qué código teórico**. El `ElaborationEngine` (T12):
 
-* ¿Qué estructuras reaparecen en múltiples iteraciones? ¿Qué documentos parecen ir juntos? ¿Por qué?
-* ¿Qué disposiciones requirieron menos colocaciones forzadas?
-* ¿Qué memos quedaron sin hogar y por qué? 
-  * Montones **delgados** (pocos memos, evidencia débil).
-  * Conexiones débiles entre montones.
-  * Preguntas sin respuesta. ¿Dónde es escasa la evidencia en relación con la afirmación teórica que se está haciendo?
-  **Dos rutas:**
-  * **Brecha interna** (se puede llenar con datos existentes) → consultar `Transcript_DB` y reingresar a **Fase 5** (codificación selectiva) enfocada en esa brecha. Luego volver a esta fase.
-  * **Brecha externa** (requiere nuevo conocimiento) → pasar a **Fase 6.6**.
+1. Carga las categorías involucradas con sus incidentes.
+2. Carga el código teórico seleccionado (su `evaluation_logic` es visible y modificable).
+3. Invoca `conceptual_elaborator.md` (PRO) que busca evidencia convergente y divergente.
+4. Crea `ConceptualRelationship` + `ElaborationMemo`.
+5. Si hay datos divergentes, el tendril muestra **fisuras doradas** — el investigador hace clic para expandir la relación.
 
-Al final se elabora un documento final según los siguientes criterios:
+**La evidencia divergente NO rompe la relación. La EXPANDE.** Ej: "A precede a B" con un caso B→A se convierte en "A precede a B, excepto bajo condición X donde la secuencia se invierte".
 
-* Escribir lo que dicen los memos — no imponer una estructura lógica externa sobre ellos
-* Escribir en **tiempo presente** (la teoría describe procesos en curso, no eventos pasados)
-* Escribir sobre **conceptos**, no sobre personas (nivel de abstracción teórica)
-* Si una conexión entre secciones requiere una idea no presente en los memos, marcarla — es una brecha, no una deducción lógica
+#### 6b.4 Renombres y elevación teórica
 
-OJO: Monitorear la propia escritura continuamente (agente crítico) para:
+Cuando una categoría crece (≥ 3 versiones de definición, ≥ 2x propiedades, ≥ 3x incidentes), `rename_detector.py` (T11) activa `rename_suggester.md` (T08) que propone nombres a 3 niveles de abstracción:
 
-* Afirmaciones que carecen de suficiente apoyo de memos
-* Brechas lógicas entre secciones que requieren suposiciones no declaradas
-* Propiedades que aparecen en el texto pero no tienen un memo correspondiente
-* Conexiones asumidas pero nunca validadas empíricamente en las fases de codificación
+- **Conservador:** refinamiento del nombre actual.
+- **Moderado:** mayor alcance, captura dimensiones omitidas.
+- **Transformador:** nuevo concepto. Ej: "Agradeciendo" + incidentes de "desprecio" → "Sintiendo el peso".
 
-Cuando se descubre una brecha:
+Si una categoría absorbe tantas otras que se vuelve la más conectada, el sistema sugiere **promoverla a core category**.
 
-* Marcar: *"La escritura reveló una brecha: \[Descripción de la brecha]"*
-* Bucle: → Fase 6.5 (Gap\_Feeler) → Fase 5.5 (muestreo dirigido) → volver a la escritura
+#### 6b.5 Guía de elaboración
+
+El `RecommendationEngine` (T13) genera sugerencias rankeadas por impacto:
+
+1. **Conexiones sugeridas** — pares de categorías con alta co-ocurrencia pero sin relación elaborada.
+2. **Ghost-blobs sin absorber** — hipótesis que podrían densificar categorías.
+3. **Renombres sugeridos** — categorías con definiciones expandidas.
+4. **Zonas de neblina** — capas teóricas sin cubrir, categorías huérfanas.
+5. **Tensiones sin resolver** — relaciones con datos divergentes no expandidos.
+
+#### 6b.6 Sorting Log y gaps
+
+Cada iteración de elaboración produce un `ElaborationMemo` (T04). El `Sorting_Log` se construye a partir de estos memos:
+
+- Grupos formados y justificación.
+- Categorías sin hogar (no conectadas a ningún grupo).
+- Colocaciones forzadas.
+- Gaps detectados (brechas internas → volver a Fase 5b; brechas externas → muestreo).
+
+Los grupos que reaparecen en múltiples iteraciones se convierten en **borradores de esquemas de capítulos**.
+
+#### 6b.7 Escritura teórica
+
+Al final se elabora un documento según los mismos criterios que antes:
+
+* Escribir lo que dicen los memos — no imponer una estructura lógica externa.
+* Escribir en **tiempo presente**.
+* Escribir sobre **conceptos**, no sobre personas.
+* Si una conexión requiere una idea no presente en los memos, marcarla como brecha.
+
+Monitoreo continuo (agente crítico): afirmaciones sin apoyo de memos, brechas lógicas, propiedades sin memo correspondiente, conexiones no validadas empíricamente.
 
 ### 6c. Discusión con la teoría extante
 

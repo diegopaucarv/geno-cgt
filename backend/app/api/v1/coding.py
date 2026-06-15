@@ -83,7 +83,24 @@ async def list_categories(
     result = await db.execute(
         select(Categoria).where(Categoria.proyecto_id == proyecto_id)
     )
-    return result.scalars().all()
+    categorias = result.scalars().all()
+
+    # Enrich with segment_count from codigos_segmento
+    from sqlalchemy import func
+    from sqlalchemy import text as sa_text
+
+    enriched = []
+    for cat in categorias:
+        seg_count_result = await db.execute(
+            sa_text("SELECT COUNT(*) FROM codigos_segmento WHERE categoria_id = :cid"),
+            {"cid": cat.id},
+        )
+        seg_count = seg_count_result.scalar() or 0
+        cat_dict = CategoryResponse.model_validate(cat).model_dump()
+        cat_dict["segment_count"] = seg_count
+        enriched.append(cat_dict)
+
+    return enriched
 
 
 # ── POST /code-assignments ───────────────────────────────────────────

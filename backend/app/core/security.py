@@ -1,22 +1,25 @@
-import os
 from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as redis
+from app.core.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    JWT_ALGORITHM,
+    JWT_SECRET_KEY,
+    REDIS_URL,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+)
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# Configuración desde variables de entorno
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+SECRET_KEY = JWT_SECRET_KEY
+ALGORITHM = JWT_ALGORITHM
 
 # Hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Conexión a Redis (para blacklist)
-redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
+redis_client = redis.from_url(REDIS_URL)
 
 
 def verify_password(plain_password, hashed_password):

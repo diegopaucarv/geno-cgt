@@ -32,6 +32,12 @@ class Categoria(Base, TimestampMixin):
     saturation_docs: Mapped[list] = mapped_column(JSONB, default=list)
     """UUIDs de documentos ya saturados. Alimenta el ANTI-JOIN del TheoSampler."""
 
+    # ── S01: Jerarquía de categorías ────────────────
+    parent_category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("categorias.id"), nullable=True
+    )
+    """Categoría padre. NULL = categoría raíz."""
+
     # Relaciones
     doc_codes = relationship(
         "DocCode", back_populates="categoria", cascade="all, delete-orphan"
@@ -39,6 +45,25 @@ class Categoria(Base, TimestampMixin):
     codigos_segmento = relationship(
         "CodigoSegmento", back_populates="categoria", cascade="all, delete-orphan"
     )
+    parent = relationship(
+        "Categoria", remote_side="[Categoria.id]", back_populates="children"
+    )
+    children = relationship(
+        "Categoria", back_populates="parent", cascade="all, delete-orphan"
+    )
+    definition_versions = relationship(
+        "CategoryDefinitionVersion",
+        back_populates="category",
+        cascade="all, delete-orphan",
+    )
+    paradigm_states = relationship(
+        "ParadigmState", back_populates="category", cascade="all, delete-orphan"
+    )
+
+
+# Importar aquí para resolver referencias circulares
+from app.models.domain.synthesis import ParadigmState  # noqa: E402,F401
+from app.models.domain.theory import CategoryDefinitionVersion  # noqa: E402,F401
 
 
 class DocCode(Base, TimestampMixin):

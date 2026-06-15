@@ -12,7 +12,7 @@ import uuid
 
 from app.models.base import Base, TimestampMixin
 from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class DocumentProcess(Base, TimestampMixin):
@@ -41,3 +41,16 @@ class DocumentProcess(Base, TimestampMixin):
         ForeignKey("documentos.id"), nullable=True
     )
     """Documento anterior en la secuencia de procesamiento."""
+
+    # ── Prime Mover (C06) ──────────────────────────
+    prime_mover: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Prime mover extraído de baseline_data (C03). Gerundio.
+    Más refinado que process_description: usa SOLO datos espontáneos."""
+
+    prime_mover_confidence: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )
+    """HIGH | MEDIUM | LOW. NULL si no se extrajo."""
+
+    # Relaciones
+    documento = relationship("Documento", back_populates="document_processes")

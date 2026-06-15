@@ -62,3 +62,41 @@ async def get_project(
         "num_documentos": doc_count,
         "num_categorias": cat_count,
     }
+
+
+@router.put("/{project_id}/config/population-assumption")
+async def update_population_assumption(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """C04: Configurar population_assumption en Fase 0."""
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    allowed_keys = {
+        "object_of_study",
+        "temporal_frame",
+        "spatial_frame",
+        "population_description",
+        "gerundio_esperado",
+    }
+    update_data = {k: v for k, v in body.items() if k in allowed_keys}
+
+    if not update_data:
+        raise HTTPException(
+            400, "No se recibieron campos válidos para population_assumption"
+        )
+
+    current = proyecto.population_assumption or {}
+    current.update(update_data)
+    proyecto.population_assumption = current
+    await db.commit()
+    await db.refresh(proyecto)
+    return {
+        "status": "updated",
+        "population_assumption": proyecto.population_assumption,
+        "supuesto_poblacional": proyecto.supuesto_poblacional,
+    }
