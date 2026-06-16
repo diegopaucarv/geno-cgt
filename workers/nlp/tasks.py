@@ -9,13 +9,79 @@ import requests
 from celery import Celery
 from config import DATABASE_URL, REDIS_URL, SEGMENTATION_REINERT, TEI_URL
 from contextual_enrichment import build_contextualized_text
+from kombu import Exchange, Queue
 
 logger = logging.getLogger(__name__)
+
+
+# ── Pipeline log streaming ──────────────────────
+
+
+# ── Pipeline log streaming ──────────────────────
+
+
+def _plog(project_id: str, message: str):
+    """Push a log line to Redis. Works in Celery child processes."""
+    try:
+        import json as _j
+        import os as _os
+        import time as _t
+
+        import redis as _r
+
+        rr = _r.Redis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        rr.rpush(
+            f"pipeline_logs:{project_id}", _j.dumps({"ts": _t.time(), "msg": message})
+        )
+        rr.expire(f"pipeline_logs:{project_id}", 3600)
+    except Exception:
+        pass
+
+
+# Monkey-patch the logger to also push to Redis
+import logging as _logging
+
+_original_info = _logging.Logger.info
+_original_debug = _logging.Logger.debug
+_original_warning = _logging.Logger.warning
+_original_error = _logging.Logger.error
+
+
+class _RedisLogger:
+    project_id = ""
+
+
+def _make_patched(original, level):
+    def patched(self, msg, *args, **kwargs):
+        original(self, msg, *args, **kwargs)
+        if _RedisLogger.project_id:
+            try:
+                formatted = msg % args if args else msg
+                _plog(_RedisLogger.project_id, f"[{level}] {formatted}")
+            except Exception:
+                pass
+
+    return patched
+
+
+_logging.Logger.info = _make_patched(_original_info, "INFO")
+_logging.Logger.debug = _make_patched(_original_debug, "DEBUG")
+_logging.Logger.warning = _make_patched(_original_warning, "WARN")
+_logging.Logger.error = _make_patched(_original_error, "ERROR")
+
+
+def _pipeline_log_to(project_id: str):
+    _RedisLogger.project_id = project_id
+    _plog(project_id, f"Pipeline log activado para proyecto {project_id[:8]}...")
+
 
 app = Celery(
     "nlp_tasks",
     broker=REDIS_URL,
     backend=REDIS_URL,
+)
+app.conf.update(
+    task_queues=(Queue("nlp", Exchange("nlp", type="direct"), routing_key="nlp"),),
 )
 
 
@@ -56,8 +122,46 @@ def generar_embedding(
     return {"embedding": data[0]["embedding"], "enriched": text_to_embed != texto}
 
 
-@app.task(name="segmentar_documento")
+import signal as _signal
+
+from celery import Task as _CeleryTask
+
+
+class AbortableTask(_CeleryTask):
+    """Tarea Celery que puede ser abortada limpiamente."""
+
+    def __init__(self):
+        self._aborted = False
+        self._original_sigterm = None
+
+    def __call__(self, *args, **kwargs):
+        self._original_sigterm = _signal.getsignal(_signal.SIGTERM)
+        _signal.signal(_signal.SIGTERM, self._handle_sigterm)
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            if self._original_sigterm:
+                _signal.signal(_signal.SIGTERM, self._original_sigterm)
+
+    def _handle_sigterm(self, signum, frame):
+        self._aborted = True
+        logger.warning("Task %s received SIGTERM", self.name)
+        if self._original_sigterm:
+            _signal.signal(_signal.SIGTERM, self._original_sigterm)
+        raise Exception(f"Task {self.name} cancelled by SIGTERM")
+
+
+class TaskCancelledError(Exception):
+    pass
+
+
+@app.task(
+    name="segmentar_documento",
+    base=AbortableTask,
+    bind=True,
+)
 def segmentar_documento(
+    self,
     texto: str,
     max_tokens: int = 1024,
     doc_title: str = "",
@@ -74,6 +178,29 @@ def segmentar_documento(
 
     if documento_id:
         try:
+            # Look up project_id for log streaming
+            _proj_id = ""
+            try:
+                import psycopg2 as _pg
+
+                _db = DATABASE_URL.replace("postgresql+asyncpg", "postgresql").replace(
+                    "postgresql+psycopg2", "postgresql"
+                )
+                _c = _pg.connect(_db)
+                _c.autocommit = True
+                _cur = _c.cursor()
+                _cur.execute(
+                    "SELECT proyecto_id FROM documentos WHERE id = %s", (documento_id,)
+                )
+                _row = _cur.fetchone()
+                if _row:
+                    _proj_id = str(_row[0])
+                _cur.close()
+                _c.close()
+            except Exception:
+                pass
+            if _proj_id:
+                _pipeline_log_to(_proj_id)
             import uuid as _uuid
 
             import psycopg2
@@ -105,7 +232,13 @@ def segmentar_documento(
                     cur.execute(
                         "INSERT INTO segmentos (id, documento_id, texto, posicion, conteo_tokens, es_anomalia) "
                         "VALUES (%s, %s, %s, %s, %s, false)",
-                        (sid, documento_id, seg_text.strip(), i + 1, len(seg_text.split())),
+                        (
+                            sid,
+                            documento_id,
+                            seg_text.strip(),
+                            i + 1,
+                            len(seg_text.split()),
+                        ),
                     )
                 conn.commit()
 
@@ -126,7 +259,11 @@ def segmentar_documento(
                                 (emb, sid),
                             )
                         conn.commit()
-                        logger.info("Embeddings: doc=%s, %d segmentos", documento_id, len(embeddings))
+                        logger.info(
+                            "Embeddings: doc=%s, %d segmentos",
+                            documento_id,
+                            len(embeddings),
+                        )
                     except Exception as ee:
                         logger.warning("Embedding fallo (non-fatal): %s", ee)
                         conn.rollback()

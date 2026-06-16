@@ -181,39 +181,59 @@ async def get_pipeline_status(
     }
 
 
-@router.get("/projects/{project_id}/pipeline/log")
-async def get_pipeline_log(
+
+
+@router.post("/projects/{project_id}/pipeline/run")
+async def run_pipeline_orchestrated(
     project_id: UUID,
+    body: dict | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     """
-    Log detallado por documento: qué pasos se completaron y qué falta.
-    Mira la DB real (segmentos, códigos) — no solo el campo estado.
+    Orchestrator único del pipeline. 
+    Recibe {"force": false} y determina qué pasos ejecutar
+    basándose en el estado REAL de la DB (segmentos, códigos).
+    
+    Retorna inmediatamente con task_ids. El frontend hace polling
+    de /pipeline/tail y /pipeline/log para seguir el progreso.
     """
     from sqlalchemy import text
-
+    
+    force = (body or {}).get("force", False)
+    
+    # ── 1. Obtener docs del proyecto ──
     docs_result = await db.execute(
         select(Documento).where(Documento.proyecto_id == project_id)
     )
     docs = docs_result.scalars().all()
+    
+    if not docs:
+        return {"status": "no_docs", "message": "No hay documentos en el proyecto"}
 
+    # Clean old pipeline logs
+    try:
+        import redis.asyncio as _aredis, os as _os
+        _r = _aredis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        await _r.delete(f"pipeline_logs:{project_id}")
+        await _r.close()
+    except Exception:
+        pass
+    
+    # ── 2. Para cada doc, determinar qué falta mirando la DB real ──
     doc_ids = [d.id for d in docs]
-
-    # Contar segmentos por documento
+    
+    # Segmentos por doc
     seg_counts = {}
     if doc_ids:
         seg_result = await db.execute(
-            text(
-                "SELECT documento_id, COUNT(*) FROM segmentos "
-                "WHERE documento_id = ANY(:ids) GROUP BY documento_id"
-            ),
+            text("SELECT documento_id, COUNT(*) FROM segmentos WHERE documento_id = ANY(:ids) GROUP BY documento_id"),
             {"ids": doc_ids},
         )
         for row in seg_result:
             seg_counts[str(row[0])] = row[1]
-
-    # Contar códigos asignados por documento (via segmentos)
+    
+    # Códigos por doc (via segmentos)
     code_counts = {}
     if doc_ids:
         code_result = await db.execute(
@@ -227,68 +247,100 @@ async def get_pipeline_log(
         )
         for row in code_result:
             code_counts[str(row[0])] = row[1]
-
-    # Contar categorías del proyecto
-    cat_result = await db.execute(
-        text("SELECT COUNT(*) FROM categorias WHERE proyecto_id = :pid"),
-        {"pid": project_id},
-    )
-    cat_count = cat_result.scalar() or 0
-
-    # Construir log por documento
-    doc_logs = []
+    
+    # ── 3. Clasificar docs ──
+    need_segment = []
+    need_agents = []
+    already_done = []
+    
     for doc in docs:
         did = str(doc.id)
         n_segs = seg_counts.get(did, 0)
         n_codes = code_counts.get(did, 0)
-        has_text = bool((doc.metadatos or {}).get("texto_extraido", ""))
-        punct_done = bool((doc.metadatos or {}).get("texto_puntuado", False))
-
-        # Determinar qué pasos se completaron
-        steps_done = {
-            "text_extracted": has_text,
-            "punctuation_fixed": punct_done,
-            "segmented": n_segs > 0,
-            "coded": n_codes > 0,
-            "agents_done": doc.estado == "listo" and n_codes > 0,
-        }
-
-        # Determinar qué falta
-        if not has_text:
-            next_action = "extract_text"
-        elif not n_segs:
-            next_action = "segment"
-        elif not n_codes:
-            next_action = "run_agents"
-        elif doc.estado == "listo":
-            next_action = "done"
+        
+        if force:
+            if n_segs == 0:
+                need_segment.append(doc)
+                need_agents.append(doc)
+            else:
+                need_agents.append(doc)
         else:
-            next_action = "run_agents"
-
-        doc_logs.append({
-            "document_id": did,
-            "filename": doc.original_filename,
-            "estado": doc.estado,
-            "steps": steps_done,
-            "segments_count": n_segs,
-            "codes_count": n_codes,
-            "next_action": next_action,
-        })
-
-    # Resumen
-    docs_need_segment = sum(1 for d in doc_logs if d["next_action"] == "segment")
-    docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
-    docs_done = sum(1 for d in doc_logs if d["next_action"] == "done")
-
+            if n_segs == 0:
+                need_segment.append(doc)
+                need_agents.append(doc)
+            elif n_codes == 0:
+                need_agents.append(doc)
+            else:
+                already_done.append(doc)
+    
+    # ── 4. Disparar workers ──
+    from app.core.celery_app import celery_app
+    
+    task_ids = {"segment": [], "agents": []}
+    
+    # Segmentación (una tarea por doc que lo necesita)
+    for doc in need_segment:
+        texto = (doc.metadatos or {}).get("texto_extraido", "")
+        if texto:
+            task = celery_app.send_task(
+                "segmentar_documento",
+                args=[texto, 1024, doc.original_filename, "TEXTO", "", str(doc.id)],
+                queue="nlp",
+            )
+            task_ids["segment"].append({"doc_id": str(doc.id), "task_id": task.id})
+    
+    # Agentes (una tarea por doc que lo necesita)
+    for doc in need_agents:
+        task = celery_app.send_task(
+            "process_document_agents_a",
+            args=[str(doc.id), str(project_id)],
+            queue="heavy",
+        )
+        task_ids["agents"].append({"doc_id": str(doc.id), "task_id": task.id})
+    
     return {
+        "status": "dispatched",
         "project_id": str(project_id),
-        "documents": doc_logs,
         "summary": {
+            "need_segment": len(need_segment),
+            "need_agents": len(need_agents),
+            "already_done": len(already_done),
             "total": len(docs),
-            "need_segment": docs_need_segment,
-            "need_agents": docs_need_agents,
-            "done": docs_done,
-            "categories": cat_count,
-            "playground_ready": cat_count > 0,
         },
+        "task_ids": task_ids,
+        "message": (
+            f"Disparado: {len(need_segment)} segmentaciones, "
+            f"{len(need_agents)} agentes. "
+            f"{len(already_done)} docs ya completos."
+        ),
     }
+
+
+@router.get("/projects/{project_id}/pipeline/tail")
+async def tail_pipeline_logs(
+    project_id: UUID,
+    since: float = 0,
+):
+    """Devuelve logs del pipeline en tiempo real desde Redis."""
+    import json as _json, os as _os
+    import redis.asyncio as _aredis
+
+    redis_url = _os.getenv("REDIS_URL", "redis://redis:6379/0").replace("redis://", "redis://default@")
+    try:
+        r = _aredis.from_url(redis_url)
+        key = f"pipeline_logs:{project_id}"
+        entries = await r.lrange(key, 0, -1)
+        await r.close()
+
+        logs = []
+        for e in entries:
+            try:
+                entry = _json.loads(e)
+                if entry.get("ts", 0) > since:
+                    logs.append(entry)
+            except Exception:
+                pass
+        return {"logs": logs[-100:], "count": len(logs)}
+    except Exception:
+        return {"logs": [], "count": 0, "error": "redis_unavailable"}
+

@@ -40,6 +40,11 @@ from app.models.domain.category import Categoria, CodigoSegmento, DocCode
 from app.models.domain.document import Documento
 from app.models.domain.document_process import DocumentProcess
 from app.models.domain.memo import Memo
+from app.models.domain.pipeline_run import (
+    PipelineRun,
+    PipelineTask,
+    TaskStepCheckpoint,
+)
 from app.models.domain.population_context import PopulationContext
 from app.models.domain.project import Proyecto
 from app.models.domain.segment import Segmento

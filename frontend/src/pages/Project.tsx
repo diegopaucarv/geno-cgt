@@ -74,6 +74,7 @@ export default function ProjectDetail() {
     Record<string, StageStatus>
   >({});
   const [showPipelineOverlay, setShowPipelineOverlay] = useState(false);
+  const [stoppingWorkers, setStoppingWorkers] = useState(false);
 
   // ── Global view switch ──
   const [globalViewMode, setGlobalViewMode] = useState<ViewMode>("original");
@@ -84,6 +85,8 @@ export default function ProjectDetail() {
 
   // ── Execution log ──
   const [showLog, setShowLog] = useState(false);
+  const [pipelineLiveLogs, setPipelineLiveLogs] = useState<Array<{ts: number; msg: string}>>([]);
+  const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -109,20 +112,17 @@ export default function ProjectDetail() {
       return;
     }
     setExpandedDoc(docId);
-    if (!segments[docId]) {
-      const segs = await listSegments(docId).catch(() => []);
-      setSegments((prev) => ({ ...prev, [docId]: segs }));
-    }
+    // Always reload segments when expanding
+    const segs = await listSegments(docId).catch(() => []);
+    setSegments((prev) => ({ ...prev, [docId]: segs }));
   }
 
   function hasSegments(doc: Document): boolean {
+    // Check loaded segments first
     if (segments[doc.id] && segments[doc.id].length > 0) return true;
-    if (
-      doc.estado === "segmentado" ||
-      doc.estado === "listo" ||
-      doc.estado === "procesando"
-    )
-      return true;
+    // Check pipeline log (real DB state)
+    const log = getDocLog(doc.id);
+    if (log && log.segments_count > 0) return true;
     return false;
   }
 
@@ -211,6 +211,20 @@ export default function ProjectDetail() {
     abortRef.current = false;
     setPipelineRunning(true);
     setShowPipelineOverlay(true);
+    setPipelineLiveLogs([]);
+    // Start log polling
+    if (logPollRef.current) clearInterval(logPollRef.current);
+    let lastTs = Date.now() / 1000;
+    logPollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/v1/projects/${id}/pipeline/tail?since=${lastTs}`);
+        const data = await r.json();
+        if (data.logs?.length) {
+          setPipelineLiveLogs(prev => [...prev, ...data.logs].slice(-200));
+          lastTs = Math.max(...data.logs.map((l: any) => l.ts), lastTs);
+        }
+      } catch {}
+    }, 2000);
 
     // Determine mode from pipeline log
     const isContinue = !forceAll && docsNeedSegment === 0 && docsNeedAgents > 0;
@@ -251,37 +265,44 @@ export default function ProjectDetail() {
       updateStage("done", "done");
       setPipelineMsg("Todos los documentos ya están procesados.");
       setPipelineRunning(false);
+      if (logPollRef.current) { clearInterval(logPollRef.current); logPollRef.current = null; }
       return;
     }
 
-    for (let i = 0; i < todo.length; i++) {
-      if (abortRef.current) break;
-      const d = todo[i];
-      const dl = pipelineLog?.documents.find((x) => x.document_id === d.id);
+    // Call unified orchestrator (backend handles all docs)
+    setPipelineMsg("🎯 Orquestador analizando DB…");
 
-      const needsSegment = forceAll || dl?.next_action === "segment" || d.estado === "crudo";
-      const needsAgents = forceAll || dl?.next_action === "run_agents" || (dl?.next_action !== "done" && d.estado !== "listo");
-      const steps: string[] = [];
-      if (needsSegment) steps.push("segment");
-      if (needsAgents) steps.push("agents");
+    try {
+      const res = await fetch(`/api/v1/projects/${id}/pipeline/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+        body: JSON.stringify({ force: forceAll }),
+      }).then((r) => r.json());
 
-      if (needsSegment) updateStage("segment", "running");
+      if (res.status === "no_docs") {
+        setPipelineMsg("No hay documentos.");
+        updateStage("segment", "done");
+        updateStage("agents", "done");
+      } else {
+        setPipelineMsg(res.message || "Pipeline disparado");
+        if (res.summary?.need_segment === 0) updateStage("segment", "done");
+        if (res.summary?.need_agents === 0) updateStage("agents", "done");
 
-      const label = forceAll ? "(forzado)" : needsSegment ? "(completo)" : "(solo agentes)";
-      setPipelineMsg(`🧠 ${i + 1}/${todo.length}: ${d.original_filename} ${label}`);
-
-      try {
-        const res = await fetch(`/api/v1/documents/${d.id}/process`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token")}` },
-          body: JSON.stringify({ steps }),
-        }).then((r) => r.json());
-        const ar = res.steps?.agents;
-        if (ar?.status === "done") setPipelineMsg(`✅ ${d.original_filename}: completado`);
-        else if (ar?.status === "error") setPipelineMsg(`❌ ${d.original_filename}: ${ar.message}`);
-      } catch (e: any) {
-        setPipelineMsg(`❌ Error en ${d.original_filename}: ${e.message}`);
+        // Poll until complete
+        for (let poll = 0; poll < 120 && !abortRef.current; poll++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const status = await getPipelineLog(id!).catch(() => null);
+          if (status) { setPipelineLog(status); }
+          if (status?.summary) {
+            if (status.summary.need_segment === 0) updateStage("segment", "done");
+            if (status.summary.need_agents === 0) updateStage("agents", "done");
+            if (status.summary.done === status.summary.total) { setPipelineMsg("✅ Pipeline completado."); break; }
+          }
+          if (poll % 6 === 0) setPipelineMsg(`⏳ Procesando... (${poll * 5}s)`);
+        }
       }
+    } catch (e: any) {
+      setPipelineMsg(`❌ ${e.message}`);
     }
 
     updateStage("segment", "done");
@@ -511,6 +532,26 @@ export default function ProjectDetail() {
               >✂️ Seg</button>
             </div>
 
+            {/* Delete all segments */}
+            <button
+              onClick={async () => {
+                if (!confirm("¿Eliminar TODOS los segmentos del proyecto? Los docs volverán a estado crudo.")) return;
+                const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                await fetch(`/api/v1/documents/project/${id}/segments`, { method: "DELETE", headers: { Authorization: auth } });
+                refreshDocs();
+                setSegments({});
+                getPipelineLog(id!).then(setPipelineLog).catch(() => {});
+              }}
+              title="Eliminar todos los segmentos y resetear docs"
+              style={{
+                padding: "3px 8px", borderRadius: 6, border: "1px solid #F8514944",
+                background: "transparent", color: "#F85149", fontSize: 10, cursor: "pointer",
+                opacity: 0.7,
+              }}
+            >
+              🗑️ Segs
+            </button>
+
             {/* Playground link */}
             <Link
               to={`/projects/${id}/theory`}
@@ -526,6 +567,20 @@ export default function ProjectDetail() {
             >
               {playgroundReady ? "🧪 Playground →" : "🔒 Playground"}
             </Link>
+
+            {/* Re-open pipeline overlay */}
+            {!showPipelineOverlay && pipelineLiveLogs.length > 0 && (
+              <button
+                onClick={() => setShowPipelineOverlay(true)}
+                title="Ver último log del pipeline"
+                style={{
+                  padding: "3px 8px", borderRadius: 6, border: "1px solid #A371F744",
+                  background: "#A371F722", color: "#A371F7", fontSize: 11, cursor: "pointer",
+                }}
+              >
+                📜 Log
+              </button>
+            )}
 
             {/* Log toggle */}
             <button
@@ -589,6 +644,7 @@ export default function ProjectDetail() {
                 setPipelineRunning(false);
                 setShowPipelineOverlay(false);
                 setPipelineMsg("⏹ Cancelado.");
+                if (logPollRef.current) { clearInterval(logPollRef.current); logPollRef.current = null; }
               }}
               style={{
                 padding: "8px 20px", borderRadius: 6,
@@ -977,6 +1033,7 @@ export default function ProjectDetail() {
             }
           }}
         >
+          <div style={{ display: "flex", gap: 16, maxWidth: 900, maxHeight: "80vh" }}>
           <div
             style={{
               background: "#161B22",
@@ -986,6 +1043,7 @@ export default function ProjectDetail() {
               minWidth: 420,
               maxWidth: 500,
               boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+              flexShrink: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -1151,6 +1209,7 @@ export default function ProjectDetail() {
               <div style={{ textAlign: "center", marginTop: 24 }}>
                 <button
                   onClick={async () => {
+                    setStoppingWorkers(true);
                     abortRef.current = true;
                     const auth = `Bearer ${localStorage.getItem("access_token")}`;
                     await fetch("/api/v1/admin/workers/heavy/stop", { method: "POST", headers: { Authorization: auth } }).catch(() => {});
@@ -1158,20 +1217,23 @@ export default function ProjectDetail() {
                     await fetch("/api/v1/admin/workers/fast/stop", { method: "POST", headers: { Authorization: auth } }).catch(() => {});
                     setStageStatuses((prev) => { const n = { ...prev }; Object.keys(n).forEach((k) => { if (n[k] === "running") n[k] = "error"; }); return n; });
                     setPipelineRunning(false);
+                    setStoppingWorkers(false);
                     setPipelineMsg("⏹ Pipeline detenido.");
                   }}
+                  disabled={stoppingWorkers}
                   style={{
                     padding: "10px 28px",
                     borderRadius: 8,
                     border: "1px solid #F8514944",
-                    background: "#F8514922",
+                    background: stoppingWorkers ? "#F8514910" : "#F8514922",
                     color: "#F85149",
                     fontSize: 14,
                     fontWeight: 600,
-                    cursor: "pointer",
+                    cursor: stoppingWorkers ? "wait" : "pointer",
+                    opacity: stoppingWorkers ? 0.6 : 1,
                   }}
                 >
-                  ⏹ Detener todos los workers
+                  {stoppingWorkers ? "⏳ Deteniendo…" : "⏹ Detener todos los workers"}
                 </button>
               </div>
             ) : (
@@ -1193,6 +1255,44 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
+
+          {/* Live log panel */}
+          {pipelineLiveLogs.length > 0 && (
+            <div style={{
+              background: "#0D1117",
+              border: "1px solid #21262D",
+              borderRadius: 16,
+              padding: "16px 20px",
+              minWidth: 280,
+              maxWidth: 380,
+              boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#8B949E", marginBottom: 8 }}>
+                📋 Log en vivo
+              </div>
+              <div style={{
+                flex: 1,
+                overflowY: "auto",
+                fontSize: 11,
+                fontFamily: "monospace",
+                color: "#8B949E",
+                maxHeight: "60vh",
+              }}>
+                {pipelineLiveLogs.map((l, i) => (
+                  <div key={i} style={{ padding: "2px 0", borderBottom: "1px solid #21262D22" }}>
+                    <span style={{ color: "#484F58" }}>
+                      {new Date(l.ts * 1000).toLocaleTimeString()}
+                    </span>{" "}
+                    {l.msg}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         </div>
       )}
 

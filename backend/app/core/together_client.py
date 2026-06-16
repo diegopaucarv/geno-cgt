@@ -110,6 +110,71 @@ class TogetherLLM:
             "cost_est_output": output_cost if usage else 0,
         }
 
+    async def chat_stream(
+        self,
+        model: str | ModelEndpoint,
+        messages: list[dict[str, str]],
+        abort_event: Optional[Any] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        response_format: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Streaming chat con soporte de abort.
+
+        Si abort_event.is_set() → cierra stream → TCP disconnect →
+        Together.ai detiene la inferencia inmediatamente.
+        Solo se cobran los tokens generados hasta el corte.
+
+        Args:
+            abort_event: asyncio.Event. Si is_set(), corta la generación.
+        """
+        import asyncio
+
+        endpoint = self._resolve_endpoint(model)
+
+        kwargs: dict[str, Any] = {
+            "model": endpoint.model_id,
+            "messages": messages,
+            "max_tokens": max_tokens or endpoint.max_tokens_default,
+            "temperature": temperature or endpoint.temperature_default,
+            "stream": True,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+
+        logger.info(
+            "LLM stream: model=%s tier=%s tokens_max=%d",
+            endpoint.display_name,
+            endpoint.tier,
+            kwargs["max_tokens"],
+        )
+
+        stream = self._client.chat.completions.create(**kwargs)
+
+        full_content = ""
+        aborted = False
+        try:
+            for chunk in stream:
+                if abort_event and (
+                    (hasattr(abort_event, "is_set") and abort_event.is_set())
+                    or (isinstance(abort_event, asyncio.Event) and abort_event.is_set())
+                ):
+                    aborted = True
+                    stream.close()
+                    break
+                if chunk.choices[0].delta.content:
+                    full_content += chunk.choices[0].delta.content
+        finally:
+            stream.close()
+
+        return {
+            "content": full_content,
+            "model": endpoint.model_id,
+            "tier": endpoint.tier,
+            "aborted": aborted,
+        }
+
     def chat_for_prompt(
         self,
         prompt_id: str,

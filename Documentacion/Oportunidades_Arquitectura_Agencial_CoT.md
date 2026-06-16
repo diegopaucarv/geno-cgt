@@ -22,6 +22,7 @@ El sistema tiene **dos clientes LLM** que operan en modo _single-shot_:
 - Elige qué herramienta llamar
 - Itera hasta alcanzar un criterio de calidad
 - Mantiene un _scratchpad_ de pensamiento entre llamadas
+- **Preserva su `reasoning_content` entre turnos** — DeepSeek V4 Pro (modelo PRO) genera cadena de razonamiento nativa (RLVR) que se descarta: `together_client.py:85` y `llm_client.py:463` solo capturan `message.content`, no `message.reasoning_content`. Esto implica que ~40-60% de los tokens de salida ya pagados se tiran a la basura.
 
 ### 1.2 Cimientos existentes (¿qué ya tenés?)
 
@@ -37,6 +38,14 @@ El sistema **ya tiene** piezas que son fundamentales para una arquitectura agenc
 | **TEI Client** | `core/tei_client.py` | Embeddings | **Tool #2** (comparación semántica) |
 | **Celery workers** | `workers/*/tasks.py` | Tareas asíncronas | **Tool #3** (acciones con side-effects) |
 | **Database** | `models/domain/*.py` | Persistencia | **Tool #4** (consultas estructuradas) |
+| **DeepSeek V4 Pro (RLVR)** | `core/llm_config.py` | Modelo PRO con razonamiento nativo | **Razonamiento interno** que debe preservarse entre turnos del bucle (`reasoning_content`) |
+
+> ⚠️ **Gap crítico detectado:** DeepSeek V4 Pro es un modelo de razonamiento nativo (RLVR).
+> Together.ai devuelve `response.choices[0].message.reasoning_content` con la cadena de
+> pensamiento del modelo. Nuestro código descarta este campo. Sin él, el agente
+> pierde el contexto de su reflexión entre turnos y comienza a divagar, repetir
+> acciones, o alucinar datos. **Corregir esto es requisito para que cualquier
+> bucle agencial funcione correctamente.**
 
 ---
 
@@ -86,24 +95,30 @@ def b2b_generate_codes_agentic(pid, indicators, max_iterations=3):
     ]
     
     for iteration in range(max_iterations):
-        # 1. GENERATE: el LLM propone códigos
+        # 1. GENERATE: el LLM propone códigos (PRO — razona internamente)
         response = llm.chat(history + [
             {"role": "user", "content": GENERATE_CODES_TASK}
         ])
-        proposed_codes = parse_json(response)
-        history.append({"role": "assistant", "content": json.dumps(proposed_codes)})
+        proposed_codes = parse_json(response["content"])
         
-        # 2. SELF-CRITIC: el LLM evalúa sus propios códigos
+        # ⚠️ CLAVE: Preservar reasoning_content de DeepSeek V4 Pro
+        assistant_msg = {"role": "assistant", "content": json.dumps(proposed_codes)}
+        if response.get("reasoning_content"):
+            assistant_msg["reasoning_content"] = response["reasoning_content"]
+        history.append(assistant_msg)
+        
+        # 2. SELF-CRITIC: el LLM evalúa sus propios códigos (FLASH — más barato)
         critique = llm.chat(history + [
             {"role": "user", "content": CRITIC_TASK}
         ])
-        evaluation = parse_json(critique)
+        evaluation = parse_json(critique["content"])
         
         # 3. DECIDE: ¿convergió?
         if evaluation.get("all_codes_valid", False):
             break
         
         # 4. REFINE: el LLM corrige solo los códigos problemáticos
+        #    El modelo aún tiene acceso a su reasoning_content previo
         history.append({"role": "user", "content": 
             f"Fix these issues: {evaluation['issues']}"})
     
@@ -138,7 +153,11 @@ Operás en un bucle de mejora continua.
 - Mayor grounding en los datos (menos alucinación conceptual)
 - Sin cambios en la API externa (el caller sigue recibiendo `{codes: [...]}`)
 
-**Costo estimado:** ~2-3x más tokens por documento (típicamente 2 iteraciones bastan)
+**Costo estimado:** ~2-3x más tokens por documento (típicamente 2 iteraciones bastan).
+**Nota sobre reasoning_content:** Los tokens de razonamiento de DeepSeek V4 Pro YA se generan y YA se cobran
+(están en `completion_tokens`). Preservarlos en el historial NO aumenta el costo — solo dejamos de descartarlos.
+El beneficio es que el modelo no tiene que re-razonar desde cero en cada iteración, lo que reduce
+el número de iteraciones necesarias.
 
 ---
 

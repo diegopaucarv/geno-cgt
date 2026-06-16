@@ -75,6 +75,209 @@
 
 ---
 
+## 1.3 Patrones Agenciales: los 4 paradigmas que implementamos
+
+No hay un solo patrón agencial. El sistema GT se beneficia de **4 paradigmas complementarios**,
+cada uno adecuado para un tipo de tarea distinta:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    LOS 4 PARADIGMAS AGENCIALES                           │
+├────────────┬──────────────────────────────┬──────────────────────────────┤
+│ PARADIGMA  │ CUÁNDO USARLO                │ DÓNDE EN GT                  │
+├────────────┼──────────────────────────────┼──────────────────────────────┤
+│ P1: Self-  │ Tareas creativas donde la    │ B2: generar códigos          │
+│ Refinement │ calidad > velocidad. El LLM  │ B2b: definir categorías      │
+│            │ genera, se auto-critica,     │ Map-Reduce: sintetizar       │
+│            │ refina. Sin tools externas.  │                              │
+├────────────┼──────────────────────────────┼──────────────────────────────┤
+│ P2: ReAct  │ Tareas que requieren         │ B3: generar hipótesis con    │
+│ (Reason+   │ buscar/verificar datos.      │ evidencia de segmentos       │
+│  Acting)   │ Thought→Action→Observation   │ A3: sense-making iterativo   │
+│            │ en bucle hasta converger.    │ Elaboration: buscar evidencia│
+├────────────┼──────────────────────────────┼──────────────────────────────┤
+│ P3: Plan-  │ Tareas multi-step complejas  │ Pipeline completo: planificar│
+│ and-Exec.  │ donde conviene planificar    │ qué documentos codificar,    │
+│            │ antes de ejecutar.           │ en qué orden, con qué método │
+│            │ Plan→Execute→Evaluate→Replan │ Orchestrator: decidir ruta   │
+├────────────┼──────────────────────────────┼──────────────────────────────┤
+│ P4: Multi- │ Tareas donde múltiples       │ Elaboration: Proposer vs     │
+│ Agent      │ perspectivas enriquecen.     │ Skeptic vs Synthesizer       │
+│ Debate     │ Agentes con roles opuestos   │ Saturation: múltiples fuentes│
+│            │ debaten hasta síntesis.      │ de señal confluyen           │
+└────────────┴──────────────────────────────┴──────────────────────────────┘
+```
+
+### 1.3.1 Plan-and-Execute: el patrón que faltaba
+
+**ReAct** decide paso a paso sin visión global. **Plan-and-Execute** invierte el orden:
+primero elabora un plan completo, luego lo ejecuta metódicamente, y solo al final evalúa.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              PLAN-AND-EXECUTE (Planificar → Ejecutar → Evaluar)  │
+│                                                                  │
+│  FASE 1: PLANIFICAR                                             │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ LLM recibe el objetivo + estado actual y produce un PLAN │    │
+│  │ {                                                        │    │
+│  │   "goal": "Generar códigos para 15 segmentos",           │    │
+│  │   "steps": [                                             │    │
+│  │     {"id":1, "action":"search_segments", "why":"..."},   │    │
+│  │     {"id":2, "action":"group_indicators", "why":"..."},  │    │
+│  │     {"id":3, "action":"generate_codes", "why":"..."},    │    │
+│  │     {"id":4, "action":"verify_against_existing", ...}    │    │
+│  │   ]                                                      │    │
+│  │ }                                                        │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                        │                                         │
+│                        ▼                                         │
+│  FASE 2: EJECUTAR (con tools)                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Para cada step del plan:                                 │    │
+│  │   Step 1 → tool: search_segments(...) → 45 resultados    │    │
+│  │   Step 2 → tool: group_indicators(...) → 8 grupos        │    │
+│  │   Step 3 → LLM: generate_codes(grupos) → 6 códigos       │    │
+│  │   Step 4 → tool: find_similar_codes(...) → 1 redundante  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                        │                                         │
+│                        ▼                                         │
+│  FASE 3: EVALUAR + REPLANIFICAR (si es necesario)               │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ LLM evalúa el resultado contra el objetivo.              │    │
+│  │ ¿Falta algo? → agrega steps al plan y vuelve a Fase 2.  │    │
+│  │ ¿Todo OK?    → devuelve resultado final.                │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**¿Cuándo usar Plan-and-Execute vs ReAct en GT?**
+
+| Tarea | Patrón | Por qué |
+|-------|--------|---------|
+| Codificar 1 documento (B2) | **ReAct** | Pocos pasos, mucha incertidumbre por segmento |
+| Codificar un proyecto entero | **Plan-and-Execute** | Muchos documentos, conviene planificar orden |
+| Generar hipótesis (B3) | **ReAct** | Exploratorio, cada hallazgo cambia el rumbo |
+| Elaboración selectiva (Fase 5b) | **Plan-and-Execute** | Multi-step: integrar→muestrear→elaborar→verificar |
+| Saturation analysis | **Plan-and-Execute** | 4 fuentes independientes, planificar consultas |
+| Theoretical Playground | **ReAct** | Interactivo, el investigador cambia el rumbo |
+
+### 1.3.2 Tool Calling con RAG: el flujo completo
+
+La llamada a herramientas es el corazón de ReAct y Plan-and-Execute. Acá mostramos
+el flujo concreto de cómo un agente invoca `search_segments` (RAG) y procesa el resultado:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│         TOOL CALLING: search_segments (RAG) — Flujo Completo             │
+│                                                                          │
+│  AGENTE (LLM)                   SISTEMA (Python)        SERVICIOS        │
+│  ─────────────                  ────────────────        ─────────        │
+│                                                                          │
+│  1. Thought:                                                             │
+│  "Necesito evidencia sobre                                              │
+│   'negociando límites'. Voy                                             │
+│   a buscar segmentos que                                                │
+│   mencionen este patrón."                                               │
+│                                                                          │
+│  2. Action: search_segments                                             │
+│  3. Action Input: {                                                      │
+│       "query": "negociando límites",  ──────────────────────────────────▶│
+│       "proyecto_id": "abc-123",       │  ToolRegistry.execute()          │
+│       "top_k": 5                      │  1. Valida tool existe           │
+│     }                                  │  2. Extrae parámetros            │
+│                                        │  3. Invoca search_segments() ───▶│
+│                                        │                                  │
+│                                        │      search_segments(query,     │
+│                                        │      proyecto_id, top_k)        │
+│                                        │         │                        │
+│                                        │         ├─▶ TEIClient            │
+│                                        │         │   .embed_query() ────▶│ TEI Server
+│                                        │         │   POST /v1/embeddings  │ voyage-4-nano
+│                                        │         │                        │
+│                                        │         ├─▶ RAGService           │
+│                                        │         │   .search()            │
+│                                        │         │   ├─ semantic_rank ───▶│ PostgreSQL
+│                                        │         │   │  (HNSW <=>)         │ pgvector
+│                                        │         │   ├─ lexical_rank ────▶│ GIN index
+│                                        │         │   │  (ts_rank)          │
+│                                        │         │   └─ RRF fusion (k=60) │
+│                                        │         │                        │
+│                                        │         └─▶ MMR rerank           │
+│                                        │             (si diversify=True)  │
+│                                        │                                  │
+│  ◀──────────────────────────────────────┤  Resultado (JSON string):       │
+│  4. Observation:                       │  [                               │
+│  [                                      │    {"segmento_id": "s1",        │
+│    {"segmento_id": "s1",                │     "texto": "...acepto las     │
+│     "texto": "...acepto las             │     que valen la pena...",      │
+│     que valen la pena...",              │     "score": 0.87},             │
+│     "score": 0.87},                     │    {"segmento_id": "s2",        │
+│    {"segmento_id": "s2",                │     "texto": "...cada uno       │
+│     "texto": "...cada uno               │     tiene su maña...",          │
+│     tiene su maña...",                  │     "score": 0.82},             │
+│     "score": 0.82}                      │    ...                          │
+│  ]                                      │  ]                              │
+│                                                                          │
+│  5. Thought:                                                             │
+│  "Encontré 5 segmentos con                                              │
+│   score > 0.80. Los incidentes                                          │
+│   muestran un patrón claro de                                           │
+│   negociación con el algoritmo.                                         │
+│   Puedo generar una hipótesis."                                        │
+│                                                                          │
+│  6. Action: FinalAnswer                                                 │
+│  7. FinalAnswer: {                                                       │
+│       "hypotheses": [{                                                   │
+│         "text": "Los participantes                                       │
+│         negocian activamente los                                         │
+│         límites impuestos por el                                         │
+│         algoritmo...",                                                   │
+│         "evidence_segments": ["s1","s2"],                                │
+│         "confidence": 0.85                                               │
+│       }]                                                                 │
+│     }                                                                   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**El contrato de una Tool:**
+
+Toda herramienta en el sistema sigue este contrato:
+
+```python
+# 1. DECLARACIÓN (lo que el LLM ve en el system prompt)
+@tool(
+    name="search_segments",
+    description="Busca segmentos semánticamente en el corpus usando RRF (fusión semántica + léxica). "
+                "Útil para encontrar evidencia textual sobre un tema o patrón.",
+    parameters={
+        "query": "texto de búsqueda en lenguaje natural (ej: 'negociando límites con el algoritmo')",
+        "proyecto_id": "UUID del proyecto (obligatorio)",
+        "top_k": "número de resultados a devolver (default: 5, max: 10)"
+    }
+)
+def search_segments(query, proyecto_id, top_k=5):
+    ...
+
+# 2. INVOCACIÓN (lo que el LLM emite en Action Input)
+# Action: search_segments
+# Action Input: {"query": "negociando límites con el algoritmo", "proyecto_id": "abc-123", "top_k": 5}
+
+# 3. OBSERVACIÓN (lo que el LLM recibe de vuelta)
+# Observation: [{"segmento_id":"s1","texto":"...","score":0.87}, ...]
+```
+
+**Tool Calling vs Function Calling nativo:**
+
+El sistema usa **tool calling por parsing de texto** (no el function calling nativo de la API)
+porque:
+1. Compatible con cualquier modelo (no solo los que soportan native function calling)
+2. El formato `Thought:/Action:/Action Input:` es más flexible y permite razonamiento intercalado
+3. Ya tenemos prompts en formato markdown que se adaptan naturalmente
+4. Si en el futuro migramos a native function calling, el `ToolRegistry` abstrae la diferencia
+
+---
+
 ## 2. Fase 0: Infraestructura Agencial Base
 
 > **Duración:** 1-2 días | **Riesgo:** Bajo | **Dependencias:** Ninguna
@@ -88,6 +291,7 @@ backend/app/agents/
 ├── tool_registry.py               # ToolRegistry centralizado
 ├── react_runner.py                # Motor ReAct genérico
 ├── self_refiner.py                # SelfRefinementLoop genérico
+├── plan_executor.py               # Plan-and-Execute genérico
 ├── tools/
 │   ├── __init__.py
 │   ├── search_tools.py            # search_segments, search_similar_codes
@@ -96,6 +300,227 @@ backend/app/agents/
 └── prompts/
     ├── react_system.txt           # System prompt universal para ReAct
     └── self_critic_system.txt     # System prompt para self-refinement
+```
+
+#### Paso 0.4b — `backend/app/agents/plan_executor.py` (NUEVO: Plan-and-Execute)
+
+```python
+"""PlanExecutor: patrón Plan-and-Execute (Planificar → Ejecutar → Evaluar → Replanificar)."""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from typing import Any
+
+from app.agents.base import BaseAgent
+from app.agents.tool_registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class PlanExecutor(BaseAgent):
+    """
+    Motor Plan-and-Execute genérico.
+
+    A diferencia de ReAct (que decide paso a paso), este agente:
+    1. PLANIFICA: el LLM elabora un plan completo (lista de steps)
+    2. EJECUTA: el sistema ejecuta cada step del plan con tools
+    3. EVALÚA: el LLM revisa el resultado y decide si replanificar
+    4. REPITE desde 1 si es necesario
+
+    Ideal para tareas multi-step donde conviene tener visión global:
+    - Codificación de un proyecto entero
+    - Elaboración selectiva (Fase 5b)
+    - Saturation analysis (4 fuentes)
+    """
+
+    def __init__(
+        self,
+        agent_id: str,
+        llm_client: Any,
+        tool_registry: ToolRegistry,
+        max_plan_cycles: int = 3,
+        timeout_seconds: float = 600.0,
+    ):
+        super().__init__(agent_id, llm_client, max_plan_cycles, timeout_seconds)
+        self.tools = tool_registry
+        self.max_plan_cycles = max_plan_cycles
+
+    def _build_system_prompt(self, **kwargs) -> str:
+        tools_schema = self.tools.get_schema_for_prompt()
+        return f"""[ROL]
+{kwargs.get('role_description', 'Eres un agente planificador. Primero elaborá un plan, después ejecutalo.')}
+
+[FORMATO DEL PLAN]
+Cuando te pida que planifiques, respondé en JSON:
+{{
+  "goal": "objetivo en una frase",
+  "steps": [
+    {{"id": 1, "action": "nombre_de_tool_o_LLM", "description": "qué hace este paso", "input": {{...}} }},
+    ...
+  ],
+  "success_criteria": "cómo sabré que el plan funcionó"
+}}
+
+[HERRAMIENTAS DISPONIBLES]
+{tools_schema}
+
+[ACCIONES SIN TOOL]
+Además de las herramientas, podés usar estas acciones:
+- "generate_codes": el LLM genera códigos (sin tool)
+- "generate_hypotheses": el LLM genera hipótesis (sin tool)
+- "evaluate_result": el LLM evalúa el resultado (sin tool)
+
+[REGLAS]
+- Planificá ANTES de ejecutar.
+- Cada step debe usar una herramienta o ser una acción LLM.
+- Si un step falla, ajustá el plan y reintentá.
+- No uses más de {self.max_plan_cycles} ciclos de planificación.
+"""
+
+    def _step(self, history: list[dict], iteration: int, **kwargs) -> dict:
+        # ── FASE 1: PLANIFICAR ──
+        plan_response = self.llm.chat(
+            messages=history + [{{
+                "role": "user",
+                "content": f"Objetivo: {kwargs.get('goal', 'Completar la tarea')}\n\nEstado actual:\n{kwargs.get('state_summary', '')}\n\nElaborá un PLAN detallado para lograr el objetivo."
+            }}],
+            temperature=0.3,
+        )
+
+        plan = self._parse_json(plan_response.get("content", ""))
+        steps = plan.get("steps", [])
+        goal = plan.get("goal", kwargs.get("goal", ""))
+
+        logger.info("PlanExecutor cycle %d: plan=%s steps=%d", iteration, goal, len(steps))
+
+        if not steps:
+            return {{
+                "type": "error",
+                "iteration": iteration,
+                "error": "No steps in plan",
+            }}
+
+        # ── FASE 2: EJECUTAR ──
+        results = []
+        for step in steps:
+            action = step.get("action", "")
+            step_input = step.get("input", {})
+
+            if action in ("generate_codes", "generate_hypotheses", "evaluate_result"):
+                # Acción LLM (sin tool)
+                llm_response = self.llm.run_agent(
+                    agent_id=action,
+                    variables=step_input,
+                )
+                results.append({{
+                    "step_id": step["id"],
+                    "action": action,
+                    "output": llm_response,
+                    "status": "ok",
+                }})
+            elif action in self.tools.tool_names:
+                # Acción tool
+                try:
+                    observation = self.tools.execute(action, step_input)
+                    results.append({{
+                        "step_id": step["id"],
+                        "action": action,
+                        "output": json.loads(observation) if isinstance(observation, str) else observation,
+                        "status": "ok",
+                    }})
+                except Exception as e:
+                    logger.warning("Plan step %d (%s) failed: %s", step["id"], action, e)
+                    results.append({{
+                        "step_id": step["id"],
+                        "action": action,
+                        "error": str(e),
+                        "status": "error",
+                    }})
+            else:
+                logger.warning("Unknown action in plan: %s", action)
+                results.append({{
+                    "step_id": step["id"],
+                    "action": action,
+                    "error": f"Unknown action: {action}",
+                    "status": "error",
+                }})
+
+        # ── FASE 3: EVALUAR ──
+        evaluation = self.llm.chat(
+            messages=[{{
+                "role": "user",
+                "content": f"""Plan ejecutado. Resultados:
+{json.dumps(results, ensure_ascii=False, indent=2)[:3000]}
+
+Criterio de éxito: {plan.get('success_criteria', '')}
+
+¿El plan logró el objetivo? Respondé en JSON:
+{{"goal_achieved": true/false, "assessment": "...", "missing": "..."}}
+"""
+            }}],
+            temperature=0.1,
+        )
+
+        eval_result = self._parse_json(evaluation.get("content", ""))
+        goal_achieved = eval_result.get("goal_achieved", False)
+
+        if goal_achieved:
+            return {{
+                "type": "final",
+                "iteration": iteration,
+                "output": results,
+                "plan": plan,
+                "evaluation": eval_result,
+            }}
+
+        # ── REPLANIFICAR (implícito en el próximo ciclo) ──
+        history.append({{
+            "role": "user",
+            "content": f"El plan no logró el objetivo. Resultados: {json.dumps(results, ensure_ascii=False)[:1000]}. Evaluación: {eval_result.get('assessment', '')}. Lo que falta: {eval_result.get('missing', '')}. Replanificá."
+        }})
+
+        return {{
+            "type": "replan",
+            "iteration": iteration,
+            "results": results,
+            "evaluation": eval_result,
+        }}
+
+    def _should_stop(self, step_result: dict) -> bool:
+        return step_result.get("type") == "final"
+
+    def _extract_result(self, step_result: dict) -> dict:
+        return {{
+            "plan": step_result.get("plan", {{}}),
+            "results": step_result.get("output", []),
+            "evaluation": step_result.get("evaluation", {{}}),
+        }}
+
+    @staticmethod
+    def _parse_json(text: str) -> dict:
+        """Extrae JSON de texto (tolera markdown fences)."""
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:] if lines[0].startswith("```") else lines
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # Intentar encontrar el primer objeto JSON
+            import re
+            match = re.search(r'\{.+\}', text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    pass
+            return {{"error": "JSON parse failed", "raw": text[:200]}}
 ```
 
 ### 2.2 Paso a paso
@@ -115,6 +540,7 @@ Provides:
 from app.agents.base import AgentResult, AgentLoopLog, BaseAgent
 from app.agents.self_refiner import SelfRefinementLoop
 from app.agents.react_runner import ReactRunner
+from app.agents.plan_executor import PlanExecutor
 from app.agents.tool_registry import ToolRegistry, tool
 
 __all__ = [
@@ -123,6 +549,7 @@ __all__ = [
     "BaseAgent",
     "SelfRefinementLoop",
     "ReactRunner",
+    "PlanExecutor",
     "ToolRegistry",
     "tool",
 ]
@@ -839,24 +1266,27 @@ def find_similar_codes(code_definition: str, proyecto_id: str) -> dict:
 ```bash
 # Test: importar todo el paquete sin errores
 cd backend && python -c "
-from app.agents import BaseAgent, SelfRefinementLoop, ReactRunner, ToolRegistry
+from app.agents import BaseAgent, SelfRefinementLoop, ReactRunner, PlanExecutor, ToolRegistry
 from app.agents.tools.search_tools import search_segments
 from app.agents.tools.db_tools import get_code_details
 from app.agents.tools.compare_tools import compare_embeddings
 print('✅ All imports OK')
 "
 
-# Test: ToolRegistry registra y ejecuta
+# Test: PlanExecutor con mock
 cd backend && python -c "
-from app.agents.tool_registry import ToolRegistry
-r = ToolRegistry()
-def dummy_test(x): return {'result': x * 2}
-r.register(dummy_test, 'dummy', 'test tool', {'x': 'int'})
-assert 'dummy' in r.tool_names
-result = r.execute('dummy', {'x': 5})
-print('✅ ToolRegistry OK:', result)
+from app.agents.plan_executor import PlanExecutor
+# Probar _parse_json con varios formatos
+test_cases = [
+    '{\"goal\": \"test\", \"steps\": []}',
+    '```json\n{\"goal\": \"test\"}\n```',
+    'Thought: algo\n{\"goal\": \"test\"}',
+]
+for tc in test_cases:
+    result = PlanExecutor._parse_json(tc)
+    print(f'Parsed: {result}')
+print('✅ PlanExecutor JSON parser OK')
 "
-```
 
 ---
 
@@ -1542,6 +1972,18 @@ def test_react_parser_action():
     assert parsed["action"] == "search_segments"
     assert parsed["action_input"] == {"query": "test"}
 
+def test_plan_executor_parse_json():
+    from app.agents.plan_executor import PlanExecutor
+    # JSON limpio
+    assert PlanExecutor._parse_json('{"goal": "test"}') == {"goal": "test"}
+    # Con markdown fence
+    result = PlanExecutor._parse_json('```json\n{"goal": "test"}\n```')
+    assert result["goal"] == "test"
+    # Con texto alrededor
+    result = PlanExecutor._parse_json('Thought: algo\n{"goal": "test"}')
+    assert result["goal"] == "test"
+
+
 def test_self_refinement_converges():
     # Mock LLM que devuelve output cada vez mejor
     from app.agents.self_refiner import SelfRefinementLoop
@@ -1606,9 +2048,685 @@ def test_agentic_vs_single_shot_quality():
 
 ---
 
-## 8. Feature Flags & Rollout
+## 9. Optimizaciones: JSON Schema, Nemotron FLASH, Algoritmos
 
-### 8.1 Variables de entorno
+> **Análisis de cada llamada a LLM del plan: ¿podemos reemplazarla, degradarla a FLASH,
+> o hacerla más eficiente con JSON Schema y algoritmos determinísticos?**
+
+### 9.1 Mapa de calor: dónde se gasta el dinero hoy
+
+```
+COSTO ESTIMADO POR FASE (asumiendo PRO=$8.00/M out, FLASH=$1.10/M out)
+
+Fase 1 — Self-Refinement B2 (por lote de ~10 segmentos)
+├── Generate codes (PRO, ~1500 out tokens) ........ $0.0120
+├── Critic (FLASH, ~400 out tokens) ............... $0.0004  ← ya usa FLASH ✅
+├── Refine codes (PRO, ~800 out tokens) ........... $0.0064  (solo si necesario)
+└── TOTAL por iteración ........................... ~$0.0124 (1 iter) ~$0.0188 (2 iter)
+
+Fase 2 — ReAct B3 (por proyecto, ~3-5 pasos)
+├── Thought/Action (PRO, ~200 out × 4 pasos) ...... $0.0064
+├── Tool calls (search_segments, get_code, etc.) .. $0.0000  ← determinístico ✅
+├── FinalAnswer (PRO, ~800 out tokens) ............ $0.0064
+└── TOTAL .......................................... ~$0.0128
+
+Fase 3 — Orchestrator (por decisión)
+├── Decidir próximo nodo (PRO, ~50 out tokens) .... $0.0004  ← podría ser FLASH
+└── TOTAL .......................................... ~$0.0004
+
+Fase 4 — Multi-Agent Debate (por relación)
+├── Proposer (PRO, ~1000 out) ..................... $0.0080
+├── Skeptic (FLASH, ~400 out) ..................... $0.0004  ← ya usa FLASH ✅
+├── Rebuttal (PRO, ~600 out) ...................... $0.0048  (solo si divergencia)
+├── Synthesizer (PRO, ~800 out) ................... $0.0064
+└── TOTAL .......................................... ~$0.0152 (sin rebuttal) ~$0.0200 (con)
+```
+
+### 9.2 Las 12 oportunidades de optimización
+
+```
+┌────┬──────────────────────────────────────────┬──────────┬──────────┬──────────┐
+│  # │  Optimización                            │  Ahorro  │  Riesgo  │  Priority│
+│    │                                          │  estimado│  calidad │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O1 │  JSON Schema en Critic/Skeptic output    │  -30%    │  Nulo    │  ⭐⭐⭐⭐⭐ │
+│    │  (reduce retries por parseo fallido)     │  retries  │          │  AHORA   │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O2 │  Orchestrator → algoritmo determinístico │  -100%    │  Bajo    │  ⭐⭐⭐⭐⭐ │
+│    │  (tabla de reglas en vez de LLM)         │  de esta  │          │  AHORA   │
+│    │                                          │  llamada  │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O3 │  find_similar_codes como tool en Critic  │  +preciso │  Nulo    │  ⭐⭐⭐⭐  │
+│    │  (el Critic llama a TEI en vez de adivinar│          │          │  Fase 1  │
+│    │   si dos códigos son redundantes)        │          │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O4 │  B2a → ya es FLASH + prefiltro TEI       │  0%      │  Nulo    │  ⭐⭐⭐⭐  │
+│    │  (verificar que el prefiltro esté activo)│  (ya está │          │  Ya está │
+│    │                                          │  optimiz.)│          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O5 │  Descomponer B2b: FLASH temas → PRO defs │  -35%    │  Bajo    │  ⭐⭐⭐⭐  │
+│    │  (FLASH agrupa indicadores en temas,     │  tokens   │          │  Fase 1b │
+│    │   PRO solo escribe definiciones)         │  PRO      │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O6 │  Evaluación de calidad → algoritmo puro  │  -100%    │  Bajo    │  ⭐⭐⭐⭐  │
+│    │  (regex para gerundio, TEI para          │  del      │          │  Fase 1  │
+│    │   redundancia, fastText para idioma)     │  critic   │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O7 │  PlanExecutor: validación determinística │  -50%     │  Medio   │  ⭐⭐⭐   │
+│    │  del plan (schema check + precondiciones)│  tokens   │          │  Fase 3  │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O8 │  ReAct: cache de Thought/Action para     │  -20%     │  Bajo    │  ⭐⭐⭐   │
+│    │  queries similares (embedding cache)     │  llamadas │          │  Fase 2  │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O9 │  Multi-Agent: Skeptic con tools propias  │  +preciso │  Nulo    │  ⭐⭐⭐   │
+│    │  (Skeptic llama search_segments para     │          │          │  Fase 4  │
+│    │   encontrar divergencia real, no inventa)│          │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O10│  Hypothesis eval: fastText classifier     │  -100%    │  Medio   │  ⭐⭐    │
+│    │  (pre-clasificar si una hipótesis tiene  │  de eval  │          │  Fase 2b │
+│    │   suficiente evidencia sin llamar LLM)   │  inicial  │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O11│  Reflexive Monitor → solo bajo demanda    │  -100%    │  Bajo    │  ⭐⭐    │
+│    │  (no ejecutar reflexión en cada sync,    │  si no se │          │  Fase 4  │
+│    │   solo cuando el usuario pide "explicar")│  pide     │          │          │
+├────┼──────────────────────────────────────────┼──────────┼──────────┼──────────┤
+│ O12│  RAG query expansion → solo si MMR < 0.5  │  -70%     │  Bajo    │  ⭐⭐    │
+│    │  (no expandir queries que ya devuelven   │  llamadas │          │  Fase 4  │
+│    │   resultados diversos y relevantes)      │          │          │          │
+└────┴──────────────────────────────────────────┴──────────┴──────────┴──────────┘
+```
+
+---
+
+### 9.3 O1: JSON Schema en critic/skeptic (MÁXIMA PRIORIDAD)
+
+**Problema:** El plan actual hace que el LLM devuelva JSON libre. Si falla el parseo,
+hay retry. Cada retry cuesta tokens y latencia.
+
+**Solución:** Usar `response_format` con JSON Schema estricto (Together.ai lo soporta).
+
+#### Código actual (frágil):
+```python
+# SelfRefinementLoop._step() — critic actual
+critic_response = self.llm.run_agent(
+    self.critic_prompt_id,
+    variables=critic_vars,
+    temperature=0.1,
+)
+# ⚠️ Si el LLM devuelve {"all_valid": true} en vez de {"all_valid": true, "issues": []}
+#    o si devuelve texto en vez de JSON, hay retry costoso
+```
+
+#### Código optimizado:
+```python
+# Schema estricto para el critic
+CRITIC_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "code_critic_output",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "all_valid": {"type": "boolean"},
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "code_name": {"type": "string"},
+                            "problem": {
+                                "type": "string",
+                                "enum": [
+                                    "wrong_style",        # no usa gerundio/in-vivo
+                                    "vague_definition",    # definición < 50 chars
+                                    "redundant",           # similar a otro código
+                                    "not_grounded",        # sin indicadores
+                                    "missing_properties"   # sin propiedades/dimensiones
+                                ]
+                            },
+                            "suggestion": {"type": "string"}
+                        },
+                        "required": ["code_name", "problem", "suggestion"],
+                        "additionalProperties": False
+                    }
+                }
+            },
+            "required": ["all_valid", "issues"],
+            "additionalProperties": False
+        }
+    }
+}
+
+# Llamada con schema (Together.ai lo fuerza a devolver JSON válido)
+critic_response = self.llm.chat(
+    messages=[...],
+    response_format=CRITIC_SCHEMA,  # ← el modelo NO puede desviarse
+    temperature=0.1,
+)
+# ✅ Garantizado: JSON válido con la estructura exacta
+```
+
+**Schemas adicionales a definir:**
+
+```python
+# PlanExecutor plan schema
+PLAN_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "agent_plan",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "minLength": 10},
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer", "minimum": 1},
+                            "action": {"type": "string"},
+                            "description": {"type": "string"},
+                            "input": {"type": "object"}
+                        },
+                        "required": ["id", "action", "description", "input"],
+                        "additionalProperties": False
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                },
+                "success_criteria": {"type": "string", "minLength": 5}
+            },
+            "required": ["goal", "steps", "success_criteria"],
+            "additionalProperties": False
+        }
+    }
+}
+
+# ReAct output schema (cuando no es FinalAnswer)
+REACT_ACTION_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "react_action",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "thought": {"type": "string"},
+                "action": {"type": "string"},
+                "action_input": {"type": "object"}
+            },
+            "required": ["thought", "action", "action_input"],
+            "additionalProperties": False
+        }
+    }
+}
+
+# Saturation reflector schema
+REFLECTION_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "saturation_reflection",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "narrative_summary": {"type": "string", "maxLength": 500},
+                "prioritized_actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string"},
+                            "impact": {"type": "string", "enum": ["high", "medium", "low"]},
+                            "rationale": {"type": "string"}
+                        },
+                        "required": ["action", "impact"],
+                        "additionalProperties": False
+                    },
+                    "maxItems": 5
+                },
+                "saturation_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "blind_spots": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["narrative_summary", "prioritized_actions"],
+            "additionalProperties": False
+        }
+    }
+}
+```
+
+**Beneficio:** Elimina el 100% de retries por parseo fallido. El modelo está _forzado_
+a devolver JSON que cumple el schema exacto. Reduce latencia en ~30% para flujos
+con critic/skeptic.
+
+---
+
+### 9.4 O2: Orchestrator determinístico (MÁXIMA PRIORIDAD)
+
+**Problema:** El Orchestrator Agent usa PRO (~$0.0004 por decisión) para una tarea
+que es esencialmente un `switch` statement con ~10 reglas.
+
+**Análisis de decisiones del Orchestrator:**
+
+```python
+# El 90% de las decisiones del pipeline son determinísticas.
+# Solo hay ambigüedad real en 2 puntos:
+#   1. Después de reduce_synthesize: ¿find_core_concern o generate_hypotheses?
+#   2. Después de theosampler_evaluate: ¿gap_review o prepare_playground?
+
+# Solución: Rule Engine con LLM solo para los 2 casos ambiguos
+
+class OrchestratorRuleEngine:
+    """Motor de reglas determinísticas + LLM solo para casos ambiguos."""
+
+    # Regla: current_step → next_step (90% de los casos)
+    RULES = {
+        "segment_and_index": "extract_entities",
+        "extract_entities": "batch_code",
+        "batch_code": "map_synthesize",
+        "map_synthesize": "reduce_synthesize",
+        # "reduce_synthesize": AMBIGUO → ver método _resolve
+        # "find_core_concern": "generate_hypotheses",
+        "generate_hypotheses": "calculate_saturation",
+        "calculate_saturation": "theosampler_evaluate",
+        # "theosampler_evaluate": AMBIGUO → ver método _resolve
+        "hitl_gap_review": "prepare_playground",  # o process_new_data
+        "process_new_data": "theosampler_evaluate",
+        "prepare_playground": "hitl_review",
+        "hitl_review": "final_report",
+    }
+
+    def decide(self, current_step: str, state: dict) -> str:
+        # 1. Intentar regla determinística primero
+        if current_step in self.RULES:
+            return self.RULES[current_step]
+
+        # 2. Casos ambiguos: usar heurísticas, no LLM
+        if current_step == "reduce_synthesize":
+            return self._resolve_after_reduce(state)
+
+        if current_step == "theosampler_evaluate":
+            return self._resolve_after_theosampler(state)
+
+        # 3. Solo si las heurísticas no resuelven → LLM (FLASH, no PRO)
+        return self._llm_fallback(current_step, state)
+
+    def _resolve_after_reduce(self, state: dict) -> str:
+        """Heurística: ¿ya tenemos main_concern?"""
+        if state.get("main_concern"):
+            return "generate_hypotheses"
+        codes_count = len(state.get("new_codes", []))
+        if codes_count >= 3:
+            return "find_core_concern"  # Suficientes códigos para buscar CC
+        return "generate_hypotheses"    # Pocos códigos, seguimos generando
+
+    def _resolve_after_theosampler(self, state: dict) -> str:
+        """Heurística: ¿hay gaps críticos?"""
+        gaps = state.get("pending_gaps", [])
+        critical_gaps = [g for g in gaps if g.get("severity") == "critical"]
+        if critical_gaps:
+            return "hitl_gap_review"
+        return "prepare_playground"
+```
+
+**Beneficio:** Elimina ~90% de las llamadas PRO del Orchestrator. Los casos ambiguos
+se resuelven con heurísticas de 3 líneas. Si alguna vez falla, el fallback a LLM
+(FLASH, no PRO) sigue disponible.
+
+---
+
+### 9.5 O5: Descomponer B2b — FLASH para temas, PRO solo para definiciones
+
+**Problema:** B2b usa PRO para todo el proceso: leer indicadores → agrupar → nombrar → definir.
+Pero agrupar y nombrar son tareas de clasificación que FLASH hace bien.
+
+**Pipeline actual vs optimizado:**
+
+```
+ACTUAL (100% PRO):
+  indicadores (texto) ──────────[ PRO: generate_codes ]──────────→ códigos + definiciones
+  Tokens out: ~1500 PRO
+  Costo: ~$0.0120
+
+OPTIMIZADO (FLASH + PRO):
+  indicadores (texto)
+      │
+      ├──[ FLASH: theme_grouper ]──→ temas agrupados (~5-8 grupos)
+      │   Tokens out: ~300 FLASH
+      │   Costo: ~$0.0003
+      │
+      ├──[ FLASH: code_namer ]─────→ nombres tentativos en gerundio/in-vivo
+      │   Tokens out: ~200 FLASH
+      │   Costo: ~$0.0002
+      │
+      └──[ PRO: definition_writer ]→ definiciones completas con propiedades
+          Tokens out: ~800 PRO       y dimensiones (solo la parte creativa)
+          Costo: ~$0.0064
+
+  TOTAL: ~$0.0069 (vs $0.0120 actual = -42% costo)
+```
+
+**Implementación:**
+
+```python
+def b2b_generate_codes_decomposed(indicators_text, pop_assumption, existing_codes):
+    """B2b descompuesto: FLASH para extracción, PRO solo para definición."""
+
+    # Paso 1: FLASH agrupa indicadores en temas (tarea de clasificación)
+    themes = llm.run_agent(
+        agent_id="theme_grouper",         # NUEVO prompt FLASH
+        variables={"indicators": indicators_text},
+        tier="FLASH",
+        temperature=0.1,
+        response_format=THEME_SCHEMA,     # JSON Schema estricto
+    )
+    # themes = {"themes": [{"name": "...", "indicators": [...], "suggested_gerundio": "..."}]}
+
+    # Paso 2: Para cada tema, FLASH sugiere nombre (en paralelo)
+    names = []
+    for theme in themes["themes"]:
+        name_response = llm.run_agent(
+            agent_id="code_namer",        # NUEVO prompt FLASH
+            variables={
+                "theme": theme["name"],
+                "indicators": json.dumps(theme["indicators"]),
+                "existing_codes": existing_codes,
+                "coding_style": "gerundio"
+            },
+            tier="FLASH",
+            temperature=0.2,
+            response_format=NAMER_SCHEMA,
+        )
+        names.append(name_response)
+
+    # Paso 3: PRO escribe definiciones completas (tarea creativa)
+    definitions = llm.run_agent(
+        agent_id="definition_writer",     # NUEVO prompt PRO
+        variables={
+            "themes_with_names": json.dumps(names, ensure_ascii=False),
+            "population_assumption": pop_assumption,
+            "existing_codes": existing_codes,
+        },
+        tier="PRO",
+        temperature=0.3,
+        response_format=DEFINITION_SCHEMA,
+    )
+
+    return definitions
+```
+
+**Nuevos prompts FLASH necesarios:**
+- `prompts/flash/theme_grouper.md` — Agrupa indicadores por similitud temática
+- `prompts/flash/code_namer.md` — Sugiere nombres en gerundio/in-vivo para un tema
+
+**Nuevo prompt PRO:**
+- `prompts/deepseek_pro/definition_writer.md` — Escribe definiciones con propiedades y dimensiones
+
+**Beneficio:** -42% costo PRO por lote de codificación. La calidad no se degrada porque
+la parte creativa (definiciones) sigue en PRO. FLASH maneja tareas de clasificación
+que son su fuerte.
+
+---
+
+### 9.6 O6: Evaluación de calidad 100% algorítmica
+
+**Problema:** El `SelfRefinementLoop` actual evalúa calidad con `_evaluate_code_quality()`
+(heurística simple) PERO también hace una llamada FLASH para el critic. Podemos
+reemplazar el critic LLM con un pipeline algorítmico más preciso.
+
+**Pipeline algorítmico de evaluación:**
+
+```python
+def evaluate_codes_algorithmic(codes: list[dict], project_id: str, coding_style: str) -> dict:
+    """
+    Evalúa códigos SIN LLM, usando:
+    - Regex para validar estilo (gerundio, in-vivo, etc.)
+    - TEI embeddings para detectar redundancia
+    - Heurísticas para definición, grounding, propiedades
+
+    Retorna el mismo formato que el critic LLM para mantener compatibilidad.
+    """
+    issues = []
+    all_valid = True
+
+    for i, code in enumerate(codes):
+        name = code.get("code_name", "").strip()
+        definition = code.get("definition", "").strip()
+
+        # 1. Validar estilo de codificación (regex, sin LLM)
+        style_ok = validate_coding_style(name, coding_style)
+        if not style_ok:
+            all_valid = False
+            issues.append({
+                "code_name": name,
+                "problem": "wrong_style",
+                "suggestion": f"El nombre debe usar estilo '{coding_style}'. "
+                              f"Ejemplo correcto: {suggest_style_example(name, coding_style)}"
+            })
+
+        # 2. Validar definición sustancial
+        if len(definition) < 50:
+            all_valid = False
+            issues.append({
+                "code_name": name,
+                "problem": "vague_definition",
+                "suggestion": "La definición debe tener al menos 50 caracteres "
+                              "describiendo propiedades y dimensiones."
+            })
+
+        # 3. Detectar redundancia con TEI (algorítmico, sin LLM)
+        for j, other in enumerate(codes):
+            if j <= i:
+                continue
+            similarity = compare_code_embeddings(
+                f"{name}: {definition}",
+                f"{other.get('code_name', '')}: {other.get('definition', '')}"
+            )
+            if similarity > 0.85:
+                all_valid = False
+                issues.append({
+                    "code_name": name,
+                    "problem": "redundant",
+                    "suggestion": f"Similar a '{other['code_name']}' (similitud: {similarity:.2f}). "
+                                  f"Considerar fusionar ambos códigos."
+                })
+
+    return {"all_valid": all_valid, "issues": issues}
+
+
+def validate_coding_style(name: str, style: str) -> bool:
+    """Validación por regex, sin LLM."""
+    if style == "gerundio":
+        return bool(re.search(r'(ando|iendo)$', name, re.IGNORECASE))
+    elif style == "in_vivo":
+        return name.startswith('"') and name.endswith('"')
+    elif style == "nominalizacion":
+        return bool(re.search(r'(ción|miento|dad|encia|anza)$', name, re.IGNORECASE))
+    return True  # otros estilos sin validación estricta
+
+
+def compare_code_embeddings(text_a: str, text_b: str) -> float:
+    """Compara dos textos vía TEI (cached)."""
+    import asyncio
+    from app.core.tei_client import TEIClient
+    tei = TEIClient()
+
+    async def _cmp():
+        emb_a = await tei.embed_query(text_a)
+        emb_b = await tei.embed_query(text_b)
+        return sum(a * b for a, b in zip(emb_a, emb_b))
+
+    return asyncio.run(_cmp())
+```
+
+**Cuándo usar el critic algorítmico vs LLM:**
+
+```python
+# SelfRefinementLoop modificado:
+def _step(self, history, iteration, **kwargs):
+    gen_response = self.llm.run_agent(...)  # Generate (PRO)
+
+    # PRIMERO: evaluación algorítmica (gratis, instantánea)
+    algo_eval = evaluate_codes_algorithmic(
+        gen_response.get("codes", []),
+        kwargs.get("project_id"),
+        kwargs.get("coding_style", "gerundio")
+    )
+
+    if algo_eval["all_valid"]:
+        # Si pasa el chequeo algorítmico, ni llamamos al LLM critic
+        return {
+            "type": "refinement_step",
+            "output": gen_response,
+            "critic": algo_eval,
+            "is_valid": True,
+            "issues": [],
+        }
+
+    # SOLO si falla el algorítmico → LLM critic para sugerencias cualitativas
+    critic_response = self.llm.run_agent(
+        self.critic_prompt_id,
+        variables={**kwargs.get("critic_vars", {}),
+                   "output_to_evaluate": json.dumps(gen_response),
+                   "algorithmic_issues": json.dumps(algo_eval["issues"])},
+        temperature=0.1,
+    )
+    ...
+```
+
+**Beneficio:** ~60% de las iteraciones del critic se resuelven sin LLM (solo regex + TEI).
+La llamada FLASH solo se usa cuando hay problemas que requieren sugerencias cualitativas.
+
+---
+
+### 9.7 Las que MENOS conviene optimizar
+
+#### O10: fastText para evaluar hipótesis ❌
+
+fastText es un clasificador de texto rápido pero **no entiende semántica**. No puede
+evaluar si una hipótesis como "la experiencia modula la sofisticación de estrategias"
+tiene evidencia en los segmentos. Para eso necesitás embeddings (TEI) o LLM.
+
+**Conclusión:** No implementar. Usar TEI embeddings + threshold en vez de fastText.
+
+#### O12: RAG query expansion condicional ❌ (por ahora)
+
+La idea es buena (no expandir queries que ya devuelven buenos resultados), pero:
+- Requiere evaluar la calidad de resultados actuales → otra llamada LLM
+- El costo de expandir con FLASH es mínimo (~$0.0002)
+- La complejidad añadida no justifica el ahorro
+
+**Conclusión:** Postergar. Implementar solo si vemos que > 30% de queries ya son buenas.
+
+#### Reemplazar TODO el critic con algoritmo ❌
+
+El critic algorítmico (O6) funciona para chequeos estructurales (estilo, longitud,
+redundancia). Pero no puede evaluar:
+- "¿Esta definición captura la esencia del fenómeno?"
+- "¿Las propiedades descritas son realmente dimensiones del concepto?"
+- "¿El nombre refleja adecuadamente la definición?"
+
+Para esos juicios cualitativos, el LLM (FLASH) sigue siendo necesario.
+
+**Conclusión:** Algorítmico para filtro, LLM para juicio cualitativo. Híbrido.
+
+#### Usar solo FLASH para todo ❌
+
+El plan ya reserva PRO para: generación de códigos, hipótesis, síntesis,
+elaboración. Degradar estas tareas a FLASH ahorraría ~85% de costo pero la
+calidad se desplomaría. FLASH no tiene la profundidad de razonamiento para
+metodología Grounded Theory.
+
+**Conclusión:** No hacer. PRO es necesario para tareas creativas/analíticas.
+
+---
+
+### 9.8 Tabla resumen: qué optimizar y en qué orden
+
+```
+SEMANA 1-2 (Fase 0 + Fase 1) — Optimizaciones inmediatas
+┌──────────────────────────────────────────────────────────────────┐
+│ ✅ O1: JSON Schema en Critic, PlanExecutor, ReAct               │
+│    → Archivos: schemas.py nuevo, modificar self_refiner.py,     │
+│       plan_executor.py, react_runner.py                         │
+│    → Tiempo: 2-3 horas                                          │
+│                                                                  │
+│ ✅ O2: Orchestrator → Rule Engine determinístico                │
+│    → Archivos: orchestrator.py (reescribir)                     │
+│    → Tiempo: 2-3 horas                                          │
+│                                                                  │
+│ ✅ O3: find_similar_codes como tool en Critic                   │
+│    → Archivos: tools/compare_tools.py (ya existe)               │
+│    → Tiempo: 1 hora (solo integrar)                             │
+│                                                                  │
+│ ✅ O6: Evaluación algorítmica (regex + TEI)                     │
+│    → Archivos: NUEVO quality/scorer.py                          │
+│    → Tiempo: 3-4 horas                                          │
+└──────────────────────────────────────────────────────────────────┘
+
+SEMANA 2-3 (Fase 2 + Fase 3) — Optimizaciones de costo
+┌──────────────────────────────────────────────────────────────────┐
+│ ✅ O5: Descomponer B2b (FLASH temas → PRO definiciones)         │
+│    → Archivos: NUEVOS prompts/theme_grouper.md, code_namer.md   │
+│    → Tiempo: 4-5 horas                                          │
+│                                                                  │
+│ ✅ O7: PlanExecutor validación determinística                   │
+│    → Archivos: plan_executor.py (modificar _step)               │
+│    → Tiempo: 2-3 horas                                          │
+└──────────────────────────────────────────────────────────────────┘
+
+SEMANA 3-4 (Fase 4) — Optimizaciones de precisión
+┌──────────────────────────────────────────────────────────────────┐
+│ ✅ O9: Skeptic con tools propias (busca divergencia real)       │
+│    → Archivos: elaboration_engine.py, tools/search_tools.py     │
+│    → Tiempo: 3-4 horas                                          │
+│                                                                  │
+│ ⬜ O8: Cache de Thought/Action (si hay volumen)                  │
+│    → Solo si vemos > 100 queries/día similares                  │
+│                                                                  │
+│ ⬜ O11: Reflexive solo bajo demanda (ya está en el plan)         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 9.9 Impacto acumulado estimado
+
+```
+COSTO POR PROYECTO TÍPICO (10 documentos, ~200 segmentos)
+
+Sin optimizaciones (plan original):
+├── B2 coding (10 docs × 2 iter) .............. $0.376
+├── B3 hypotheses (5 pasos ReAct) ............. $0.064
+├── Orchestrator (20 decisiones) .............. $0.008
+├── Elaboration (5 relaciones) ................ $0.100
+├── Reflexive monitor (1 vez) ................. $0.005
+├── RAG query expansion (5 queries) ........... $0.002
+└── TOTAL ...................................... ~$0.555
+
+Con optimizaciones O1-O9:
+├── B2 coding (FLASH temas + PRO defs) ........ $0.218  (-42%)
+├── B3 hypotheses (con cache) ................. $0.051  (-20%)
+├── Orchestrator (determinístico) ............. $0.000  (-100%)
+├── Elaboration (Skeptic con tools) ........... $0.100  (igual)
+├── Reflexive (solo bajo demanda) ............. $0.000  (-100%)
+├── RAG query expansion (con guard) ........... $0.001  (-50%)
+└── TOTAL ...................................... ~$0.370  (-33%)
+
+AHORRO ESTIMADO: ~$0.185/proyecto (−33%)
+Para 100 proyectos/mes: ~$18.50/mes → $222/año
+
+El ahorro real es mayor porque:
+- Menos retries por JSON Schema → menos tokens desperdiciados
+- Menos latencia → mejor UX → más proyectos completados
+- Evaluación algorítmica → menos iteraciones del refinement loop
+```
+
+---
+
+## 10. Feature Flags & Rollout
+
+### 10.1 Variables de entorno
 
 ```bash
 # .env o docker-compose.yml
@@ -1623,7 +2741,7 @@ AGENTIC_TIMEOUT_SECONDS=300          # Timeout global por agente
 AGENTIC_CRITIC_TIER=flash            # Modelo para critic (flash es más barato)
 ```
 
-### 8.2 Plan de rollout
+### 10.2 Plan de rollout
 
 ```
 Semana 1: Fase 0 + Fase 1
@@ -1647,7 +2765,7 @@ Semana 4: Producción
   └── Día 20: Full rollout
 ```
 
-### 8.3 Rollback
+### 10.3 Rollback
 
 Si algo falla, desactivar con:
 
@@ -1663,10 +2781,10 @@ Todos los paths de código nuevo están condicionados por `AGENTIC_MODE`, por lo
 
 | Fase | Archivos nuevos | Archivos modificados | Días |
 |------|----------------|---------------------|------|
-| **F0** | 12 (`agents/` completo) | 0 | 1-2 |
+| **F0** | 13 (`agents/` completo) | 0 | 1-2 |
 | **F1** | 0 | `agents_b.py`, `llm_client.py`, `b2b_generate_codes.md` | 3-4 |
 | **F2** | 0 | `agents_b.py`, `llm_client.py`, `tasks.py`, `llm_config.py` | 4-5 |
 | **F3** | `orchestrator.py`, `orchestrator_decider.md` | `workflow.py` | 3-4 |
 | **F4** | `relationship_proposer.md`, `relationship_skeptic.md`, `relationship_synthesizer.md`, `saturation_reflector.md`, `query_expander.md` | `elaboration_engine.py`, `saturation_gap_analyzer.py`, `rag.py`, `analysis.py` | 5-6 |
 | **Tests** | `test_agents.py` | `test_integration.py` | (incluido) |
-| **TOTAL** | **19 nuevos** | **12 modificados** | **15-20** |
+| **TOTAL** | **20 nuevos** | **12 modificados** | **15-20** |

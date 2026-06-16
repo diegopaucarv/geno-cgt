@@ -30,7 +30,77 @@ from llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
+
+# ── Pipeline log streaming ──────────────────────
+
+
+# ── Pipeline log streaming ──────────────────────
+
+
+def _plog(project_id: str, message: str):
+    """Push a log line to Redis. Works in Celery child processes."""
+    try:
+        import json as _j
+        import os as _os
+        import time as _t
+
+        import redis as _r
+
+        rr = _r.Redis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+        rr.rpush(
+            f"pipeline_logs:{project_id}", _j.dumps({"ts": _t.time(), "msg": message})
+        )
+        rr.expire(f"pipeline_logs:{project_id}", 3600)
+    except Exception:
+        pass
+
+
+# Monkey-patch the logger to also push to Redis
+import logging as _logging
+
+_original_info = _logging.Logger.info
+_original_debug = _logging.Logger.debug
+_original_warning = _logging.Logger.warning
+_original_error = _logging.Logger.error
+
+
+class _RedisLogger:
+    project_id = ""
+
+
+def _make_patched(original, level):
+    def patched(self, msg, *args, **kwargs):
+        original(self, msg, *args, **kwargs)
+        if _RedisLogger.project_id:
+            try:
+                formatted = msg % args if args else msg
+                _plog(_RedisLogger.project_id, f"[{level}] {formatted}")
+            except Exception:
+                pass
+
+    return patched
+
+
+_logging.Logger.info = _make_patched(_original_info, "INFO")
+_logging.Logger.debug = _make_patched(_original_debug, "DEBUG")
+_logging.Logger.warning = _make_patched(_original_warning, "WARN")
+_logging.Logger.error = _make_patched(_original_error, "ERROR")
+
+
+def _pipeline_log_to(project_id: str):
+    _RedisLogger.project_id = project_id
+    _plog(project_id, f"Pipeline log activado para proyecto {project_id[:8]}...")
+
+
+from kombu import Exchange, Queue
+
 app = Celery("heavy_tasks", broker=os.getenv("REDIS_URL", "redis://redis:6379/0"))
+app.conf.update(
+    task_queues=(
+        Queue("heavy", Exchange("heavy", type="direct"), routing_key="heavy"),
+        Queue("nlp", Exchange("nlp", type="direct"), routing_key="nlp"),
+    ),
+)
 llm = LLMClient()
 
 
@@ -625,76 +695,205 @@ def _maybe_trigger_phase_b(proyecto_id: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Pipeline A
+# Pipeline A — con soporte de checkpoint/resume
 # ═══════════════════════════════════════════════════════════════════════
 
+import signal as _signal
 
-@app.task(name="process_document_agents_a")
-def process_document_agents_a(documento_id: str, proyecto_id: str) -> dict:
+from celery import Task as _CeleryTask
+
+
+class AbortableTask(_CeleryTask):
+    """Tarea Celery que puede ser abortada limpiamente con SIGTERM.
+
+    Cuando se llama revoke(task_id, terminate=True, signal='SIGTERM'),
+    el worker recibe la señal y la tarea puede hacer cleanup en finally.
+    """
+
+    def __init__(self):
+        self._aborted = False
+        self._original_sigterm = None
+
+    def __call__(self, *args, **kwargs):
+        self._original_sigterm = _signal.getsignal(_signal.SIGTERM)
+        _signal.signal(_signal.SIGTERM, self._handle_sigterm)
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            if self._original_sigterm:
+                _signal.signal(_signal.SIGTERM, self._original_sigterm)
+
+    def _handle_sigterm(self, signum, frame):
+        self._aborted = True
+        logger.warning("Task %s received SIGTERM — aborting gracefully", self.name)
+        if self._original_sigterm:
+            _signal.signal(_signal.SIGTERM, self._original_sigterm)
+        raise TaskCancelledError(task_id=self.request.id if self.request else "")
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        if isinstance(exc, TaskCancelledError):
+            logger.info("Task %s cancelled by user", task_id)
+
+
+class TaskCancelledError(Exception):
+    """La tarea fue cancelada vía SIGTERM."""
+
+    def __init__(self, task_id: str = ""):
+        super().__init__(f"Task {task_id} cancelled")
+        self.task_id = task_id
+
+
+@app.task(
+    name="process_document_agents_a",
+    base=AbortableTask,
+    bind=True,
+)
+def process_document_agents_a(
+    self,
+    documento_id: str,
+    proyecto_id: str,
+    resume_from_step: str | None = None,
+) -> dict:
+    """
+    Procesa un documento con agentes A (A1→A2→PrimeMover→A3).
+
+    Soporta resume: si se canceló a mitad, al re-ejecutar con
+    resume_from_step, limpia los pasos "in_progress" y continúa
+    desde el primer paso no completado.
+    """
+    from app.agents.checkpoint_helpers import (
+        checkpoint,
+        cleanup_step,
+        load_checkpoints,
+    )
+
     results: dict[str, Any] = {"documento_id": documento_id}
     session = SessionLocal()
 
     try:
-        # 0. Asegurar segmentación (si el doc no tiene segmentos aún)
-        _ensure_segmented(session, documento_id)
+        _pipeline_log_to(proyecto_id)
 
-        # Actualizar estado → procesando
+        # ── Detectar punto de resume ──
+        completed: set[str] = set()
+        if resume_from_step:
+            completed, dirty = load_checkpoints(session, documento_id)
+            for step in dirty:
+                cleanup_step(session, step, documento_id)
+            logger.info(
+                "Resume: %d steps completed, %d dirty cleaned. Starting from '%s'",
+                len(completed),
+                len(dirty),
+                resume_from_step,
+            )
+
+        # ── Step 0: Segmentation ──
+        STEP = "segmentation"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            _ensure_segmented(session, documento_id)
+            checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Update estado → procesando ──
         session.execute(
             text("UPDATE documentos SET estado = 'procesando' WHERE id = :did"),
             {"did": documento_id},
         )
         session.commit()
+
+        # ── Step 1: A1 — Population Context ──
+        STEP = "a1_population_context"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("A1: Contexto poblacional doc %s", documento_id)
+            results["population_context"] = a1_build_population_context(
+                documento_id, proyecto_id
+            )
+            checkpoint(session, documento_id, STEP, "completed")
+            if "error" in results["population_context"]:
+                _mark_doc_error(
+                    documento_id,
+                    str(results["population_context"].get("error", "a1_failed")),
+                )
+                return results
+
+        # ── Step 2: A2 — Process Identification ──
+        STEP = "a2_identify_process"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("A2: Proceso doc %s", documento_id)
+            results["document_process"] = a2_identify_process(documento_id, proyecto_id)
+            checkpoint(session, documento_id, STEP, "completed")
+            if "error" in results["document_process"]:
+                _mark_doc_error(
+                    documento_id,
+                    str(results["document_process"].get("error", "a2_failed")),
+                )
+                return results
+
+        # ── Step 3: C06 — Prime Mover ──
+        STEP = "extract_prime_mover"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("C06: Prime mover doc %s", documento_id)
+            try:
+                pm_result = _extract_prime_mover(session, documento_id, proyecto_id)
+                results["prime_mover"] = pm_result
+                if pm_result and pm_result.get("prime_mover"):
+                    session.execute(
+                        text(
+                            "UPDATE document_processes SET prime_mover = :pm, "
+                            "prime_mover_confidence = :pmc "
+                            "WHERE documento_id = :did AND proyecto_id = :pid"
+                        ),
+                        {
+                            "pm": pm_result["prime_mover"],
+                            "pmc": pm_result.get("confidence", "LOW"),
+                            "did": documento_id,
+                            "pid": proyecto_id,
+                        },
+                    )
+                    session.commit()
+            except Exception as e:
+                logger.warning("Prime mover extraction fallo: %s", e)
+                results["prime_mover"] = None
+            checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Step 4: A3 — Sense Making ──
+        STEP = "a3_make_sense"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("A3: Sentido emergente proyecto %s", proyecto_id)
+            results["sense_making"] = a3_make_sense(proyecto_id)
+            checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Mark ready ──
+        _mark_doc_ready(documento_id)
+
+        # ── Maybe trigger Phase B ──
+        _maybe_trigger_phase_b(proyecto_id)
+
+        return results
+
+    except TaskCancelledError:
+        logger.warning(
+            "Task process_document_agents_a cancelled for doc=%s", documento_id
+        )
+        return {"status": "cancelled", "documento_id": documento_id}
+    except Exception as e:
+        _mark_doc_error(documento_id, str(e))
+        raise
     finally:
         session.close()
-
-    logger.info("A1: Contexto poblacional doc %s", documento_id)
-    results["population_context"] = a1_build_population_context(
-        documento_id, proyecto_id
-    )
-    if "error" in results["population_context"]:
-        _mark_doc_error(
-            documento_id, str(results["population_context"].get("error", "a1_failed"))
-        )
-        return results
-
-    logger.info("A2: Proceso doc %s", documento_id)
-    results["document_process"] = a2_identify_process(documento_id, proyecto_id)
-    if "error" in results["document_process"]:
-        _mark_doc_error(
-            documento_id, str(results["document_process"].get("error", "a2_failed"))
-        )
-        return results
-
-    # C06: Extraer prime_mover del documento (usa solo baseline_data)
-    logger.info("C06: Prime mover doc %s", documento_id)
-    try:
-        pm_result = _extract_prime_mover(session, documento_id, proyecto_id)
-        results["prime_mover"] = pm_result
-        # Persistir en document_processes
-        if pm_result and pm_result.get("prime_mover"):
-            session.execute(
-                text(
-                    "UPDATE document_processes SET prime_mover = :pm, "
-                    "prime_mover_confidence = :pmc "
-                    "WHERE documento_id = :did AND proyecto_id = :pid"
-                ),
-                {
-                    "pm": pm_result["prime_mover"],
-                    "pmc": pm_result.get("confidence", "LOW"),
-                    "did": documento_id,
-                    "pid": proyecto_id,
-                },
-            )
-            session.commit()
-    except Exception as e:
-        logger.warning("Prime mover extraction fallo: %s", e)
-        results["prime_mover"] = None
-
-    logger.info("A3: Sentido emergente proyecto %s", proyecto_id)
-    results["sense_making"] = a3_make_sense(proyecto_id)
-
-    # Marcar documento como listo
-    _mark_doc_ready(documento_id)
 
     # Si es el tercer documento (o múltiplo de 3), disparar síntesis B
     _maybe_trigger_phase_b(proyecto_id)

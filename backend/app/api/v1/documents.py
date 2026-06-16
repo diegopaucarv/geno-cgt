@@ -498,3 +498,24 @@ async def delete_document(
     await minio_client.delete_file(doc.storage_key)
     await db.delete(doc)
     await db.commit()
+
+
+@router.delete("/project/{project_id}/segments", status_code=200)
+async def delete_all_segments(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Elimina todos los segmentos de un proyecto y resetea docs a crudo."""
+    from sqlalchemy import text
+    await db.execute(
+        text("DELETE FROM segmentos WHERE documento_id IN (SELECT id FROM documentos WHERE proyecto_id = :pid)"),
+        {"pid": project_id},
+    )
+    await db.execute(
+        text("UPDATE documentos SET estado = 'crudo' WHERE proyecto_id = :pid"),
+        {"pid": project_id},
+    )
+    await db.commit()
+    return {"status": "ok", "message": "Segmentos eliminados, docs reseteados a crudo"}
+
