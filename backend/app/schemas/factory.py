@@ -26,6 +26,9 @@ _CUSTOM_TYPE_MAP: dict[str, type] = {
     # pgvector
     "VECTOR": list[float],
     "vector": list[float],
+    # JSONB can be dict or list
+    "JSONB": dict | list,
+    "JSON": dict | list,
 }
 
 # ── Columnas que típicamente se excluyen ──
@@ -42,16 +45,16 @@ def _resolve_python_type(col, model_cls: Type[DeclarativeBase]) -> type:
     2. Fallback al _CUSTOM_TYPE_MAP (pgvector)
     3. Fallback a la anotación Mapped[] de la clase (FK sin tipo explícito)
     """
-    # Intento 1: python_type nativo
+    # Intento 1: mapa custom (pgvector, JSONB, etc.)
+    type_name = type(col.type).__name__
+    if type_name in _CUSTOM_TYPE_MAP:
+        return _CUSTOM_TYPE_MAP[type_name]
+
+    # Intento 2: python_type nativo
     try:
         return col.type.python_type
     except NotImplementedError:
         pass
-
-    # Intento 2: mapa custom (pgvector)
-    type_name = type(col.type).__name__
-    if type_name in _CUSTOM_TYPE_MAP:
-        return _CUSTOM_TYPE_MAP[type_name]
 
     # Intento 3: leer de la anotación Mapped[] de la clase
     # SQLAlchemy 2.0: FK sin tipo explícito → NullType, pero la anotación lo tiene

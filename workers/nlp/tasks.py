@@ -90,21 +90,52 @@ def segmentar_documento(
                     "UPDATE documentos SET estado = 'segmentando' WHERE id = %s",
                     (documento_id,),
                 )
+                # Eliminar segmentos previos para evitar duplicados
+                cur.execute(
+                    "DELETE FROM segmentos WHERE documento_id = %s",
+                    (documento_id,),
+                )
+                segment_ids = []
                 for i, seg in enumerate(segmentos):
                     seg_text = (
                         seg if isinstance(seg, str) else seg.get("texto", str(seg))
                     )
+                    sid = str(_uuid.uuid4())
+                    segment_ids.append((sid, seg_text.strip(), i))
                     cur.execute(
                         "INSERT INTO segmentos (id, documento_id, texto, posicion, conteo_tokens, es_anomalia) "
                         "VALUES (%s, %s, %s, %s, %s, false)",
-                        (
-                            str(_uuid.uuid4()),
-                            documento_id,
-                            seg_text.strip(),
-                            i + 1,
-                            len(seg_text.split()),
-                        ),
+                        (sid, documento_id, seg_text.strip(), i + 1, len(seg_text.split())),
                     )
+                conn.commit()
+
+                # Compute embeddings via TEI (outside the insert loop)
+                if TEI_URL and segment_ids:
+                    try:
+                        texts = [t for _, t, _ in segment_ids]
+                        resp = requests.post(
+                            f"{TEI_URL}/v1/embeddings",
+                            json={"input": texts, "model": "voyageai/voyage-4-nano"},
+                            timeout=120.0,
+                        )
+                        resp.raise_for_status()
+                        embeddings = [d["embedding"] for d in resp.json()["data"]]
+                        for (sid, _, _), emb in zip(segment_ids, embeddings):
+                            cur.execute(
+                                "UPDATE segmentos SET embedding = %s WHERE id = %s",
+                                (emb, sid),
+                            )
+                        conn.commit()
+                        logger.info("Embeddings: doc=%s, %d segmentos", documento_id, len(embeddings))
+                    except Exception as ee:
+                        logger.warning("Embedding fallo (non-fatal): %s", ee)
+                        conn.rollback()
+
+                # Marcar como segmentado
+                cur.execute(
+                    "UPDATE documentos SET estado = 'segmentado' WHERE id = %s",
+                    (documento_id,),
+                )
                 conn.commit()
                 logger.info(
                     "Segmentacion DB: doc=%s, %d segmentos",

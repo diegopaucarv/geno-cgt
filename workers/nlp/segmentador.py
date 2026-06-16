@@ -21,8 +21,23 @@ _USE_GPU = os.getenv("USE_GPU", "false").lower() in ("1", "true", "yes")
 if _USE_GPU:
     spacy.require_gpu()
     _stanza_gpu = True
+    try:
+        import torch
+
+        _torch_available = True
+    except ImportError:
+        _torch_available = False
 else:
     _stanza_gpu = False
+    _torch_available = False
+
+
+def _free_gpu_memory() -> None:
+    """Libera caché CUDA si hay GPU disponible. No-op en CPU."""
+    if _USE_GPU and _torch_available:
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
 
 # ── Stanza coref bug-fix ──────────────────────────────────────────────────────
 try:
@@ -306,6 +321,7 @@ class ProgressiveSegmenter:
                     sentences.append(clean_sent)
         finally:
             self.nlp.max_length = original_max
+            del doc
 
         logging.info(
             f"[Preprocess] {len(sentences)} oraciones extraídas de {len(text)} caracteres."
@@ -562,6 +578,14 @@ class ProgressiveSegmenter:
 
     # ── Subject extraction ─────────────────────────────────────────────────────
     def find_subjects_for_roots(self, text: str) -> list[str]:
+        # Cache by text identity to avoid re-running Stanza on the same boundary.
+        # Keys are the text itself (cheap: boundary is ≤500 chars, dedup is the goal).
+        cached = getattr(self, "_roots_cache", None)
+        if cached is None:
+            self._roots_cache: dict[str, list[str]] = {}
+        if text in self._roots_cache:
+            return self._roots_cache[text]
+
         subjects = []
         try:
             stanza_pipe = self.get_stanza()
@@ -591,7 +615,10 @@ class ProgressiveSegmenter:
                         if not phrase_found:
                             subjects.append(word.text)
 
-            return list(set([s.strip() for s in subjects if s]))
+            result = list(set([s.strip() for s in subjects if s]))
+            del doc  # free Stanza parse tree
+            self._roots_cache[text] = result
+            return result
         except Exception as e:
             logging.error(f"[COREF] Subject extraction failure: {e}")
             return []
@@ -646,6 +673,7 @@ class ProgressiveSegmenter:
                     f"    MemoryError en ventana UCE {uce_idx + 1} — saltando."
                 )
                 gc.collect()
+                _free_gpu_memory()
                 continue
             except Exception as e:
                 logging.error(f"[COREF] Stanza window error: {e}")
@@ -708,6 +736,14 @@ class ProgressiveSegmenter:
                 seen_chain_keys.add(chain_key)
                 global_chains.append({"mentions": mentions})
 
+            # ── Free Stanza parse tree after extracting mentions ──────────
+            del doc
+            if uce_idx % 5 == 0:
+                gc.collect()
+                _free_gpu_memory()
+
+        gc.collect()
+        _free_gpu_memory()
         self._dprint(
             f"Extracción global completada: {len(global_chains)} cadenas únicas."
         )
@@ -792,6 +828,8 @@ class ProgressiveSegmenter:
 
         self._dprint("Fase 1: extrayendo cadenas coref globales...")
         global_chains = self._extract_global_chains(segments_info, full_doc_text)
+        del full_doc_text  # no longer needed after chain extraction
+        gc.collect()
         self._dprint(f"Fase 1 completada: {len(global_chains)} cadenas únicas.\n")
 
         self._dprint("Fase 2: pasada de merge greedy con van_unidos()...")
@@ -937,13 +975,23 @@ class ProgressiveSegmenter:
         print(f"[SegText] {len(all_segments)} segmentos tras segmentación recursiva.")
 
         self.tfidf_vectorizer.fit(sentences)
-        print(f"[SegText] TF-IDF ajustado sobre {len(sentences)} oraciones crudas.")
+        del sentences  # raw sentences no longer needed after TF-IDF fit
+        gc.collect()
+        _free_gpu_memory()
+        print(
+            f"[SegText] TF-IDF ajustado sobre {len(all_segments)} segmentos (vocabulario de oraciones)."
+        )
 
         clustered_segments = self.final_clustering(all_segments)
+        del all_segments
+        gc.collect()
         print(f"[SegText] {len(clustered_segments)} segmentos tras clustering final.")
 
         print(f"[SegText] Iniciando resolución de correferencias...")
         clustered_segments = self.resolve_coreferences(clustered_segments)
+        _free_gpu_memory()
+        # Clear roots cache between documents to prevent unbounded growth
+        self._roots_cache = {}
         print(
             f"[SegText] {len(clustered_segments)} UCEs tras resolución de correferencias."
         )
@@ -982,6 +1030,9 @@ class ProgressiveSegmenter:
             f"{len(final)} UCEs finales (Reinert={'ON' if self.reinert_micro else 'OFF'}) "
             f"({overflow_count} desbordamientos)."
         )
+        del segmentos
+        gc.collect()
+        _free_gpu_memory()
         return final
 
 

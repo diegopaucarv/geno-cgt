@@ -442,11 +442,17 @@ async def process_document(
         try:
             output = await asyncio.to_thread(async_result.get, timeout=600)
             result["steps"]["agents"] = {"status": "done", "result": output}
+            # Solo marcar como listo si los agentes terminaron bien
+            doc.estado = "listo"
         except Exception:
             result["steps"]["agents"] = {"status": "error", "message": "Timeout"}
+            # Si fallaron los agentes pero la segmentación sí corrió, marcar segmentado
+            if "segment" in steps:
+                doc.estado = "segmentado"
+    elif "segment" in steps:
+        # Solo segmentación, sin agentes
+        doc.estado = "segmentado"
 
-    # Actualizar estado del documento
-    doc.estado = "listo"
     await db.commit()
 
     return result

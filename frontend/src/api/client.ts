@@ -54,7 +54,46 @@ export interface Document {
   mime_type: string;
   size_bytes: number;
   creado_en: string;
+  estado: string;
   texto_extraido?: string;
+}
+
+export interface PipelineStatus {
+  project_id: string;
+  documents: number;
+  segments: number;
+  categories: number;
+  hypotheses: number;
+  stages: Record<string, "done" | "in_progress" | "pending">;
+}
+
+export interface DocPipelineLog {
+  document_id: string;
+  filename: string;
+  estado: string;
+  steps: {
+    text_extracted: boolean;
+    punctuation_fixed: boolean;
+    segmented: boolean;
+    coded: boolean;
+    agents_done: boolean;
+  };
+  segments_count: number;
+  codes_count: number;
+  next_action: "extract_text" | "segment" | "run_agents" | "done";
+}
+
+export interface PipelineLog {
+  project_id: string;
+  documents: DocPipelineLog[];
+  summary: {
+    total: number;
+    need_segment: number;
+    need_agents: number;
+    done: number;
+    categories: number;
+    playground_ready: boolean;
+  };
 }
 
 export interface Category {
@@ -212,6 +251,14 @@ export async function deleteDocument(documentId: string) {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function getPipelineStatus(projectId: string) {
+  return request<PipelineStatus>(`/projects/${projectId}/pipeline/status`);
+}
+
+export async function getPipelineLog(projectId: string) {
+  return request<PipelineLog>(`/projects/${projectId}/pipeline/log`);
 }
 
 // ── Playground Types ──────────────────────────────────────────────────

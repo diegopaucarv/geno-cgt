@@ -1,0 +1,759 @@
+@startuml GT_Sistema_Secuencias
+' ============================================================================
+' DIAGRAMA DE SECUENCIAS — Sistema GT (Grounded Theory)
+'
+' Referencia todos los archivos del sistema organizados por flujos principales.
+' ============================================================================
+
+title Sistema GT — Diagrama de Secuencias Integral
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+skinparam BoxPadding 10
+
+' ============================================================================
+' PARTICIPANTES
+' ============================================================================
+
+actor "Usuario\n(Investigador)" as User
+
+box "Frontend — React SPA" #LightBlue
+    participant "Browser\nsrc/main.tsx" as Main
+    participant "App.tsx" as App
+    participant "Pages\nLogin|Register|Projects|Project|Playground" as Pages
+    participant "Components\nEcosystemCanvas|ElaborationPanel|\nRecommendationGuide|RenameModal|\nCategoryBlob|GhostBlob|RelationshipTendril" as Components
+    participant "API Client\nsrc/api/client.ts" as APIClient
+end box
+
+box "Backend — FastAPI :8000" #LightGreen
+    participant "main.py\n(lifespan + routers)" as FastAPI
+    participant "API Routers\napi/v1/{auth|projects|documents|\ncoding|pipeline|elaboration|\nanalysis|hypotheses|theoretical_codes|\nevents|rag|ping}.py" as Routers
+    participant "Middleware\nrate_limit.py" as Middleware
+    participant "Auth Service\nservices/auth.py" as AuthSvc
+    participant "Core Security\ncore/security.py\n(JWT + Redis blacklist)" as Security
+    participant "Database\nmodels/domain/*.py\ndb/database.py" as DB
+    participant "MinIO Client\ncore/minio_client.py" as MinIO
+    participant "TEI Client\ncore/tei_client.py" as TEIClient
+    participant "RAG Service\nservices/rag.py" as RAGSvc
+    participant "Workflow (LangGraph)\ncore/workflow.py" as Workflow
+    participant "Together AI Client\ncore/together_client.py" as TogetherLLM
+    participant "Elaboration Engine\nservices/elaboration_engine.py" as ElaborationEngine
+    participant "Recommendation Engine\nservices/recommendation_engine.py" as RecEngine
+    participant "SaturationGapAnalyzer\nservices/saturation_gap_analyzer.py" as SaturationGap
+    participant "Ghost Connector\nservices/ghost_connector.py" as GhostConnector
+    participant "Rename Detector\nservices/rename_detector.py" as RenameDetector
+    participant "Selective Elaborator\nservices/selective_elaborator.py" as SelectiveElaborator
+    participant "Theory Seeder\nservices/theory_seeder.py" as TheorySeeder
+    participant "Emergent Sampler\nservices/emergent_sampler.py" as EmergentSampler
+    participant "Celery App\ncore/celery_app.py" as CeleryApp
+    participant "Prompt Loader\nprompts/loader.py" as PromptLoader
+    participant "Config\ncore/config.py" as Config
+end box
+
+box "Infrastructure Services" #LightYellow
+    database "PostgreSQL + pgvector\n(pgvector/pgvector:pg16)" as Postgres
+    database "PgBouncer\n(connection pool)" as PgBouncer
+    database "Redis :6379\n(broker + cache + pub/sub)" as Redis
+    database "MinIO :9000\n(S3 object storage)" as MinIOServer
+    participant "TEI Server :8080\ntei/server.py\n(voyage-4-nano ONNX)" as TEIServer
+    participant "Together.ai API\n(DeepSeek V4 Pro / Nemotron)" as TogetherAPI
+end box
+
+box "Celery Workers" #LightCoral
+    participant "Worker NLP\nworkers/nlp/tasks.py\nsegmentador.py\nembedding_client.py\ncontextual_enrichment.py" as WorkerNLP
+    participant "Worker Fast\nworkers/fast/tasks.py\nllm_client.py\nalgorithmic_checks.py" as WorkerFast
+    participant "Worker Heavy\nworkers/heavy/tasks.py\nagents_b.py\nllm_client.py\nalgorithmic_checks.py" as WorkerHeavy
+end box
+
+box "Prompts — LLM Instructions" #Lavender
+    collections "deepseek_pro/\na1..a3, b1..b3,\nagrupador, critic,\nelaborator, etc.\n(34 archivos .md/.txt)" as ProPrompts
+    collections "deepseek_flash/\na1..a3, b1..b3,\ncontext_synthesizer,\ndocument_summarizer,\netc. (15 archivos)" as FlashPrompts
+    collections "flash/\n(4 archivos)" as Flash4
+    collections "pro/\n(8 archivos)" as Pro8
+end box
+
+' ============================================================================
+' FLUJO 1: ARRANQUE DEL SISTEMA
+' ============================================================================
+
+== F1: Arranque del Sistema (docker-compose up) ==
+
+FastAPI -> Config: load .env\n(backend/app/core/config.py)
+FastAPI -> Postgres: connect via asyncpg\n(backend/app/db/database.py)
+FastAPI -> PgBouncer: connect via pool\n(docker-compose.yml)
+FastAPI -> MinIO: ensure_bucket_exists()\n(backend/app/core/minio_client.py)
+FastAPI -> TheorySeeder: seed_theoretical_codes(sync_session)\n(backend/app/services/theory_seeder.py)
+TheorySeeder -> Postgres: INSERT 12 built-in theoretical codes\n(theoretical_codes table)
+TheorySeeder --> FastAPI: seeded N codes
+note right: Arranque completo.\nRouters registrados en main.py:\nauth|projects|documents|coding|pipeline|\nelaboration|analysis|hypotheses|\ntheoretical_codes|events|rag|ping
+
+TEIServer -> TEIServer: Cargar modelo ONNX\n(voyage-4-nano)\n(backend/tei/server.py)
+WorkerNLP -> Redis: connect (broker)\n(workers/nlp/tasks.py)
+WorkerFast -> Redis: connect (broker)\n(workers/fast/tasks.py)
+WorkerHeavy -> Redis: connect (broker)\n(workers/heavy/tasks.py)
+
+' ============================================================================
+' FLUJO 2: AUTENTICACIÓN
+' ============================================================================
+
+== F2: Autenticación (Register / Login / Logout) ==
+
+User -> Pages: /register o /login
+Pages -> APIClient: login(email, password) o register()
+APIClient -> FastAPI: POST /api/v1/auth/register o login
+FastAPI -> Routers: \n(backend/app/api/v1/auth.py)
+
+alt Register
+    Routers -> DB: SELECT Usuario WHERE correo
+    DB --> Routers: exists?
+    Routers -> Security: get_password_hash(password)\n(backend/app/core/security.py)
+    Routers -> DB: INSERT INTO usuarios
+    Routers -> Security: create_access_token() + create_refresh_token()
+    Security -> Redis: (blacklist ready)
+else Login
+    Routers -> DB: SELECT Usuario WHERE correo
+    DB --> Routers: usuario
+    Routers -> Security: verify_password(password, hashed)
+    Routers -> Security: create_access_token() + create_refresh_token()
+end
+
+Routers --> APIClient: access_token + refresh_token
+APIClient -> APIClient: setToken() → localStorage
+APIClient --> Pages: user data
+Pages --> User: Dashboard / Projects
+
+alt Logout
+    User -> Pages: Clic logout
+    Pages -> APIClient: clearToken()
+    APIClient -> FastAPI: POST /api/v1/auth/logout
+    Routers -> Security: decode_token() + add_token_to_blacklist()
+    Security -> Redis: SETEX blacklist:{jti}
+end
+
+' ============================================================================
+' FLUJO 3: GESTIÓN DE PROYECTOS
+' ============================================================================
+
+== F3: Gestión de Proyectos ==
+
+User -> Pages: Crear / Listar proyectos
+Pages -> APIClient: listProjects() / createProject()
+APIClient -> FastAPI: GET/POST /api/v1/projects
+FastAPI -> Routers: \n(backend/app/api/v1/projects.py)
+
+Routers -> AuthSvc: get_current_user()\n(backend/app/services/auth.py)
+AuthSvc -> Security: decode_token()
+AuthSvc -> DB: SELECT Usuario
+AuthSvc --> Routers: current_user
+
+Routers -> DB: SELECT/INSERT Proyecto\n(models/domain/project.py)
+DB --> Routers: datos
+Routers --> APIClient: Project[]
+APIClient --> Pages: projects
+Pages --> User: Lista de proyectos
+
+User -> Pages: Ver proyecto (conteos)
+Pages -> APIClient: getProject(id)
+Routers -> DB: SELECT COUNT(Documento), COUNT(Categoria)
+DB --> Routers: num_documentos, num_categorias
+Routers --> APIClient: Project + metadata
+
+' ============================================================================
+' FLUJO 4: SUBIDA DE DOCUMENTOS
+' ============================================================================
+
+== F4: Subida y Extracción de Documentos ==
+
+User -> Pages: Seleccionar archivo (PDF/TXT/DOCX)
+Pages -> APIClient: uploadDocument(projectId, file)
+APIClient -> FastAPI: POST /api/v1/documents/upload/{project_id}
+FastAPI -> Routers: \n(backend/app/api/v1/documents.py)
+
+Routers -> Routers: validar MIME type (magic)\nvalidar tamaño (MAX 50MB)
+Routers -> MinIO: upload_file(file, storage_key)\n(backend/app/core/minio_client.py)
+MinIO -> MinIOServer: put_object()
+MinIOServer --> MinIO: OK
+
+Routers -> Routers: extraer texto\n- PDF: PyMuPDF (fitz)\n- TXT: decode UTF-8/Latin-1\n- DOCX: python-docx
+Routers -> Routers: _needs_punctuation(texto)?
+note right: Heurística:\ncaracteres extraños +\nratio puntuación/tokens
+
+Routers -> DB: INSERT INTO documentos\n(estado='crudo', metadatos={texto_extraido,...})\n(backend/app/models/domain/document.py)
+DB --> Routers: nuevo doc
+Routers --> APIClient: {id, filename, estado, needs_punctuation}
+
+' ============================================================================
+' FLUJO 5: PIPELINE — SEGMENTACIÓN (NLP Worker)
+' ============================================================================
+
+== F5: Pipeline — Segmentación ==
+
+User -> Pages: Clic "Segmentar" o "Run Pipeline > upload"
+Pages -> APIClient: segmentDocument(docId) o\nprocessDocument(docId, ["segment"])
+APIClient -> FastAPI: POST /api/v1/documents/{id}/segment
+
+alt SEGMENTATION_MODE == "progressive" (Celery)
+    Routers -> CeleryApp: send_task("segmentar_documento",\nqueue="nlp")
+    CeleryApp -> Redis: enqueue task
+    Redis -> WorkerNLP: deliver task
+    WorkerNLP -> WorkerNLP: segmentar_documento()\n(workers/nlp/tasks.py)
+    WorkerNLP -> WorkerNLP: ProgressiveSegmenter.segment_text()\n(workers/nlp/segmentador.py)
+
+    note over WorkerNLP: ProgressiveSegmenter:\n- preprocess_text()\n- generate_embeddings() via TEI\n- compute_similarities()\n- hierarchical_clustering()\n- detect_topic_shift()\n- resolve_coreferences()\n- segmentar_alceste_micro() (Reinert)
+
+    WorkerNLP -> TEIServer: POST /v1/embeddings\n(workers/nlp/embedding_client.py)
+    TEIServer --> WorkerNLP: embeddings
+    WorkerNLP -> Postgres: DELETE segmentos previos\nINSERT segmentos (id, texto, posicion,...)\nUPDATE documentos SET estado='segmentado'
+
+    WorkerNLP -> WorkerNLP: AnchorBasedReconstructor.reconstruct()\n(workers/nlp/segmentador.py)\nfirst_10, start_char, end_char
+
+    WorkerNLP --> Redis: task result
+    CeleryApp --> Routers: task_id
+
+else SEGMENTATION_MODE == "spacy" (síncrono)
+    Routers -> Routers: spacy.load("es_core_news_lg")\nsentencias → Segmento()
+    Routers -> DB: INSERT segmentos + DELETE previos
+end
+
+Routers --> APIClient: {status, num_segmentos, task_id}
+
+' ============================================================================
+' FLUJO 6: PIPELINE — PUNTUACIÓN (Fast Worker)
+' ============================================================================
+
+== F6: Pipeline — Mejora de Puntuación (Fast Worker) ==
+
+User -> Pages: Clic "Punctuate"
+Pages -> APIClient: punctuateDocument(docId)
+APIClient -> FastAPI: POST /api/v1/documents/{id}/punctuate
+Routers -> Routers: _needs_punctuation()?
+
+alt necesita puntuación
+    Routers -> CeleryApp: send_task("punctuate_text", queue="fast")
+    CeleryApp -> Redis: enqueue
+    Redis -> WorkerFast: deliver
+
+    WorkerFast -> WorkerFast: punctuate_text()\n(workers/fast/tasks.py)
+    WorkerFast -> WorkerFast: LLMClient.run_agent("punctuator")\n(workers/fast/llm_client.py)
+    WorkerFast -> ProPrompts: cargar punctuator.md\n(backend/app/prompts/deepseek_flash/punctuator.md)
+    WorkerFast -> TogetherAPI: chat completion (FLASH model)
+    TogetherAPI --> WorkerFast: punctuated_text
+
+    WorkerFast -> Postgres: UPDATE documentos\nSET metadatos.texto_puntuado=true
+    WorkerFast --> Redis: result
+    Routers --> APIClient: {punctuation_fix: true, punctuated_text}
+end
+
+' ============================================================================
+' FLUJO 7: PIPELINE — OPEN CODING (Heavy Worker — Agentes A)
+' ============================================================================
+
+== F7: Pipeline — Open Coding (Heavy Worker — Agents A) ==
+
+User -> Pages: Clic "Run Pipeline > open_coding"
+Pages -> APIClient: runPipelineStage("open_coding")
+APIClient -> FastAPI: POST /api/v1/projects/{id}/pipeline/run-stage/open_coding
+FastAPI -> Routers: \n(backend/app/api/v1/pipeline.py)
+
+Routers -> DB: SELECT Documento WHERE proyecto_id
+loop for each document in estado 'crudo'|'segmentando'|'segmentado'
+    Routers -> CeleryApp: send_task("process_document_agents_a",\nargs=[doc_id, project_id], queue="heavy")
+    CeleryApp -> Redis: enqueue
+end
+
+Redis -> WorkerHeavy: deliver "process_document_agents_a"
+
+WorkerHeavy -> WorkerHeavy: process_document_agents_a()\n(workers/heavy/tasks.py)
+
+group Fase A: Análisis por Documento (Agentes A)
+    WorkerHeavy -> WorkerHeavy: a1_build_population_context()\n→ LLM: a1_population_context.txt
+    WorkerHeavy -> ProPrompts: cargar a1_population_context
+    WorkerHeavy -> TogetherAPI: chat (PRO model)
+    TogetherAPI --> WorkerHeavy: surprising_details, language_patterns
+    WorkerHeavy -> Postgres: INSERT INTO population_contexts
+
+    WorkerHeavy -> WorkerHeavy: _ensure_segmented()\n(workers/heavy/tasks.py)
+    WorkerHeavy -> Postgres: SELECT segmentos WHERE documento_id
+
+    WorkerHeavy -> WorkerHeavy: _anchor_segments()\nAnchorBasedReconstructor
+    WorkerHeavy -> Postgres: UPDATE segmentos SET first_10, start_char, end_char
+
+    WorkerHeavy -> WorkerHeavy: a2_identify_process()\n→ LLM: a2_process_identifier.txt
+    WorkerHeavy -> Postgres: UPDATE segmentos SET parafrasis
+
+    WorkerHeavy -> WorkerHeavy: _extract_prime_mover()\n→ LLM: prime_mover_extractor.md (PRO)
+
+    WorkerHeavy -> WorkerHeavy: a3_make_sense()\n→ LLM: a3_sense_maker.txt
+    WorkerHeavy -> Postgres: INSERT/UPDATE document_processes
+end
+
+WorkerHeavy -> WorkerHeavy: _mark_doc_ready()\nUPDATE documentos SET estado='listo'
+
+WorkerHeavy -> WorkerHeavy: _maybe_trigger_phase_b()
+note right: Si todos los docs están listos,\ndispara automáticamente\nprocess_synthesis_agents_b
+
+WorkerHeavy --> Redis: task result
+WorkerHeavy -> WorkerHeavy: publish_event() → Redis pub/sub\n(backend/app/api/v1/events.py)
+
+' ============================================================================
+' FLUJO 8: PIPELINE — CROSS-DOC SYNTHESIS (Heavy Worker — Agents B)
+' ============================================================================
+
+== F8: Pipeline — Cross-Doc Synthesis (Heavy Worker — Agents B) ==
+
+User -> Pages: Clic "Run Pipeline > cross_doc"
+Pages -> APIClient: runPipelineStage("cross_doc")
+Routers -> CeleryApp: send_task("process_synthesis_agents_b", queue="heavy")
+
+Redis -> WorkerHeavy: deliver
+
+WorkerHeavy -> WorkerHeavy: process_synthesis_agents_b()\n(workers/heavy/tasks.py)
+WorkerHeavy -> WorkerHeavy: __rebuild_cache()\n(code_prototypes, code_document_summaries)
+
+group Fase B: Síntesis Cross-Document (Agentes B)
+    WorkerHeavy -> WorkerHeavy: b1_distill_sampling()\n(workers/heavy/agents_b.py)
+    note right: Sampling distiller:\nidentifica qué documentos\ncontienen qué patrones
+
+    WorkerHeavy -> WorkerHeavy: b2_open_code()\n(workers/heavy/agents_b.py)
+
+    group B2a: Extract Indicators
+        WorkerHeavy -> ProPrompts: b2a_extract_indicators.md
+    end
+
+    group B2b: Generate Codes
+        WorkerHeavy -> ProPrompts: b2b_generate_codes.md
+        WorkerHeavy -> TogetherAPI: chat (PRO)
+        TogetherAPI --> WorkerHeavy: códigos candidatos
+    end
+
+    WorkerHeavy -> WorkerHeavy: b2_5_assign_codes_to_segments()
+    note right: Asigna códigos a segmentos\nusando embedding similarity
+    WorkerHeavy -> Postgres: INSERT INTO categorias\nINSERT INTO codigos_segmento\n(code assignment)
+
+    WorkerHeavy -> WorkerHeavy: b3_generate_hypotheses()\n(workers/heavy/agents_b.py)
+    WorkerHeavy -> ProPrompts: b3_hypothesis_generator.md
+    WorkerHeavy -> TogetherAPI: chat (PRO)
+    TogetherAPI --> WorkerHeavy: hipótesis emergentes
+    WorkerHeavy -> Postgres: INSERT INTO hypotheses\n(backend/app/models/domain/synthesis.py)
+end
+
+WorkerHeavy --> Redis: result
+
+' ============================================================================
+' FLUJO 9: CODIFICACIÓN MANUAL + RECOMENDACIONES RAG
+' ============================================================================
+
+== F9: Codificación Manual + Recomendaciones RAG ==
+
+User -> Pages: Ver segmentos de un documento
+Pages -> APIClient: listSegments(docId)
+APIClient -> FastAPI: GET /api/v1/documents/{id}/segments
+Routers -> DB: SELECT Segmento ORDER BY posicion\n(backend/app/models/domain/segment.py)
+Routers --> APIClient: Segment[]
+
+User -> Pages: Crear categoría manual
+Pages -> APIClient: createCategory({nombre, definicion})
+APIClient -> FastAPI: POST /api/v1/categories
+Routers -> DB: INSERT INTO categorias\n(backend/app/models/domain/category.py)
+
+User -> Pages: Asignar código a segmento
+Pages -> APIClient: assignCode({segmento_id, categoria_id})
+APIClient -> FastAPI: POST /api/v1/code-assignments
+Routers -> DB: INSERT INTO codigos_segmento\n(backend/app/models/domain/category.py → CodigoSegmento)
+
+User -> Pages: Pedir recomendaciones para segmento
+Pages -> APIClient: getRecommendations(segId)
+APIClient -> FastAPI: GET /api/v1/segments/{id}/recommendations
+Routers -> RAGSvc: search_similar_codes()\n(backend/app/services/rag.py)
+RAGSvc -> DB: SELECT categorias WHERE\nembedding_centroide <=> segment_embedding\n(HNSW index en pgvector)
+DB --> RAGSvc: top_k candidates
+RAGSvc --> Routers: RecommendationItem[]
+Routers --> APIClient: recommendations
+Pages --> User: Sugerencias de códigos
+
+' ============================================================================
+' FLUJO 10: BÚSQUEDA RAG (RRF + MMR)
+' ============================================================================
+
+== F10: Búsqueda RAG (RRF + Semantic + Lexical) ==
+
+User -> Pages: Buscar en segmentos
+Pages -> APIClient: searchSegments(query, projectId, fusion)
+APIClient -> FastAPI: GET /api/v1/rag/search?q=...&fusion=rrf
+FastAPI -> Routers: \n(backend/app/api/v1/rag.py)
+Routers -> RAGSvc: search(query, project_id, top_k, fusion)
+
+RAGSvc -> TEIClient: embed_query(query)\n(backend/app/core/tei_client.py)
+TEIClient -> TEIServer: POST /v1/embeddings (prompt_name="query")
+TEIServer --> TEIClient: query_embedding
+
+alt fusion == "rrf"
+    RAGSvc -> DB: semantic_rank (HNSW <=> operator)\n+ lexical_rank (ts_rank, GIN index)\n→ RRF fusion (k=60)
+    DB --> RAGSvc: ranked results
+else fusion == "semantic"
+    RAGSvc -> DB: cosine similarity (<=>)
+else fusion == "lexical"
+    RAGSvc -> DB: BM25 (ts_rank + plainto_tsquery)
+end
+
+opt diversify == true
+    RAGSvc -> RAGSvc: _mmr_rerank()\n(Maximal Marginal Relevance\ncon lambda y duplicate_threshold)
+end
+
+RAGSvc --> Routers: RAGResult[]
+Routers --> APIClient: resultados
+
+' ============================================================================
+' FLUJO 11: THEORETICAL PLAYGROUND (Fase 6b)
+' ============================================================================
+
+== F11: Theoretical Playground — Ecosystem ==
+
+User -> Pages: Navegar a /projects/{id}/theory
+Pages -> Pages: PlaygroundProvider\n(PlaygroundContext.tsx)
+Pages -> Components: EcosystemCanvas, ElaborationPanel,\nRecommendationGuide, RenameModal
+Pages -> APIClient: getEcosystem(projectId)\ngetTheoreticalCodes(projectId)\ngetRecommendations(projectId)
+
+APIClient -> FastAPI: GET /api/v1/projects/{id}/elaboration/ecosystem
+Routers -> DB: SELECT categorias (blobs)\nSELECT conceptual_relationships (tendrils)\nSELECT ecosystem_layouts (positions)
+DB --> Routers: EcosystemState
+
+APIClient -> FastAPI: GET /api/v1/projects/{id}/theoretical/codes
+Routers -> DB: SELECT FROM theoretical_codes\nWHERE project_id IS NULL OR project_id = :pid\n(backend/app/models/domain/theory.py)
+DB --> Routers: TheoreticalCode[]
+
+APIClient -> FastAPI: GET /api/v1/projects/{id}/elaboration/recommendations
+Routers -> RecEngine: generate_recommendations()\n(backend/app/services/recommendation_engine.py)
+
+RecEngine -> DB: _suggest_connections() — pares co-ocurrentes sin relación
+RecEngine -> DB: _suggest_ghost_absorption() — memos huérfanos
+RecEngine -> DB: _suggest_renames() — ≥3 versiones de definición
+RecEngine -> DB: _suggest_sampling_zones() — capas no cubiertas, huérfanas
+RecEngine -> DB: _suggest_tension_resolution() — divergencias sin resolver
+RecEngine --> Routers: Recommendation[] (rankeados por impacto)
+
+Routers --> APIClient: ecosystem + codes + recommendations
+Pages -> Components: renderizar blobs, tendrils, ghosts, fog zones
+
+' ============================================================================
+' FLUJO 12: ELABORACIÓN DE RELACIONES
+' ============================================================================
+
+== F12: Elaboración de Relaciones Conceptuales ==
+
+User -> Components: Arrastrar código teórico a 2+ categorías
+User -> Components: Escribir researcher_question
+Components -> APIClient: elaborateRelationship(projectId, {category_ids, theoretical_code_id, question})
+APIClient -> FastAPI: POST /api/v1/projects/{id}/elaboration/relationships
+FastAPI -> Routers: \n(backend/app/api/v1/elaboration.py)
+
+Routers -> CeleryApp: send_task("invoke_graph", queue="heavy")
+note right: LangGraph workflow\n(backend/app/core/workflow.py)
+
+alt Elaboración directa (llm_client)
+    Routers -> ElaborationEngine: elaborate_relationship()\n(backend/app/services/elaboration_engine.py)
+
+    ElaborationEngine -> DB: SELECT categorias + incidentes\nSELECT theoretical_code
+    ElaborationEngine -> ProPrompts: cargar conceptual_elaborator.md\n(backend/app/prompts/deepseek_pro/)
+    ElaborationEngine -> TogetherLLM: invoke_prompt() → TogetherAPI\n(backend/app/core/together_client.py)
+
+    TogetherLLM -> Config: get_model_for_prompt(prompt_id)\n(backend/app/core/llm_config.py)
+    TogetherLLM -> TogetherAPI: chat completion (PRO)
+    TogetherAPI --> TogetherLLM: response
+
+    ElaborationEngine -> DB: INSERT INTO conceptual_relationships\nINSERT INTO elaboration_memos\n(backend/app/models/domain/theory.py)
+
+    ElaborationEngine --> Routers: ElaborationResult\n{status, conceptual_fit, converging, diverging}
+
+else Divergence resolution
+    User -> Components: Resolver divergencia
+    Components -> APIClient: resolveDivergence(projectId, relId, {resolution})
+    Routers -> ElaborationEngine: elaborate_divergence()
+    ElaborationEngine -> DB: UPDATE conceptual_relationships\nSET divergence_resolution, elaboration_status='expanded'
+end
+
+' ============================================================================
+' FLUJO 13: GHOST BLOBS — ABSORCIÓN
+' ============================================================================
+
+== F13: Ghost Blobs — Conexión y Absorción ==
+
+User -> Components: Entrar al Playground
+Components -> APIClient: getGhosts(projectId)
+APIClient -> FastAPI: GET /api/v1/projects/{id}/elaboration/ghosts
+Routers -> GhostConnector: generate_ghost_blobs()\n(backend/app/services/ghost_connector.py)
+
+GhostConnector -> DB: SELECT memos WHERE tipo='HIPOTESIS'\nAND NOT IN elaboration_memos
+GhostConnector -> DB: SELECT categorias (relevantes)
+GhostConnector -> TogetherLLM: run_agent("ghost_blob_mapper")\n→ ghost_blob_mapper.md (PRO)
+TogetherLLM -> TogetherAPI: chat
+TogetherAPI --> GhostConnector: mappings
+GhostConnector --> Routers: ghost_blobs[]\n(con posición y target_category sugeridos)
+
+User -> Components: Arrastrar ghost a categoría
+Components -> APIClient: absorbGhost(projectId, memoId, categoryId)
+APIClient -> FastAPI: POST /api/v1/projects/{id}/elaboration/ghosts/{mid}/absorb
+Routers -> GhostConnector: absorb_ghost()
+GhostConnector -> ElaborationEngine: absorb_ghost_blob()
+ElaborationEngine -> DB: INSERT category_definition_versions\nINSERT elaboration_memos
+ElaborationEngine -> RenameDetector: should_suggest_rename()\n(backend/app/services/rename_detector.py)
+RenameDetector -> DB: verificar versiones + crecimiento
+RenameDetector --> ElaborationEngine: needs_rename?
+ElaborationEngine --> Routers: {category_id, new_version, rename_suggested}
+
+' ============================================================================
+' FLUJO 14: RENOMBRES
+' ============================================================================
+
+== F14: Renombres de Categorías ==
+
+User -> Components: Clic "Rename" en categoría
+Components -> APIClient: getRenameSuggestions(projectId, categoryId)
+APIClient -> FastAPI: GET /api/v1/projects/{id}/elaboration/rename-suggestions/{cid}
+
+Routers -> RenameDetector: get_rename_candidates()
+RenameDetector -> DB: SELECT categoria (nombre, definicion, version)\nSELECT category_definition_versions (historial)
+RenameDetector -> TogetherLLM: run_agent("rename_suggester")\n→ rename_suggester.md (PRO)
+TogetherLLM -> TogetherAPI: chat
+TogetherAPI --> RenameDetector: suggestions[]
+RenameDetector --> Routers: {suggestions: [{name, level, rationale}]}
+
+Routers --> Components: RenameSuggestions
+Components -> Components: Mostrar RenameModal con opciones
+
+User -> Components: Seleccionar nombre
+Components -> APIClient: applyRename(projectId, {category_id, new_name, rationale})
+APIClient -> FastAPI: POST /api/v1/projects/{id}/elaboration/rename
+
+Routers -> RenameDetector: apply_rename()
+RenameDetector -> DB: UPDATE categorias SET nombre, version\nINSERT category_definition_versions (trigger='rename_applied')
+RenameDetector --> Routers: OK
+Routers --> APIClient: void
+
+' ============================================================================
+' FLUJO 15: SATURATION GAP ANALYSIS
+' ============================================================================
+
+== F15: Análisis de Gaps de Saturación ==
+
+User -> Pages: Clic "Sync gaps" en Playground
+Pages -> APIClient: getSaturationGaps(projectId)
+APIClient -> FastAPI: GET /api/v1/projects/{id}/analysis/saturation-gaps
+FastAPI -> Routers: \n(backend/app/api/v1/analysis.py)
+
+Routers -> SaturationGap: full_analysis()\n(backend/app/services/saturation_gap_analyzer.py)
+
+group 4 Fuentes de Gap
+    SaturationGap -> DB: _analyze_math_saturation()\n→ saturation_metrics.rolling_std
+    SaturationGap -> DB: _analyze_paradigm_state()\n→ paradigm_states (ventana deslizante 5 iteraciones)
+    SaturationGap -> DB: _analyze_sampling_axes()\n→ COUNT segmentos < 3 por categoría
+    SaturationGap -> DB: _analyze_relationship_density()\n→ categorías sin conceptual_relationships
+end
+
+SaturationGap --> Routers: GapReport {critical[], warnings[], saturated[]}
+Routers --> APIClient: gaps
+Pages -> Components: actualizar visualización
+
+' ============================================================================
+' FLUJO 16: SSE EVENT STREAM (tiempo real)
+' ============================================================================
+
+== F16: Eventos en Tiempo Real (SSE) ==
+
+Pages -> APIClient: new EventSource('/api/v1/events/stream?proyecto_id=...')
+APIClient -> FastAPI: GET /api/v1/events/stream
+FastAPI -> Routers: \n(backend/app/api/v1/events.py)
+
+Routers -> Redis: aioredis.pubsub.subscribe("project:{pid}:events")
+note over Redis, WorkerHeavy: Los workers publican eventos al completar tareas
+
+WorkerHeavy -> Redis: publish("project:{pid}:events", {type: "stage_complete", ...})
+Redis -> Routers: message
+Routers --> APIClient: data: {type: "stage_complete", ...}\n(SSE streaming)
+APIClient --> Pages: evento recibido
+Pages -> Pages: actualizar UI en tiempo real
+
+' ============================================================================
+' FLUJO 17: HIPÓTESIS HITL (Human In The Loop)
+' ============================================================================
+
+== F17: Revisión Humana de Hipótesis (HITL) ==
+
+User -> Pages: Hypothesis Panel
+Pages -> APIClient: listHypothesisCandidates(projectId)
+APIClient -> FastAPI: GET /api/v1/hypotheses/candidates?proyecto_id=...
+FastAPI -> Routers: \n(backend/app/api/v1/hypotheses.py)
+Routers -> DB: SELECT hypotheses WHERE status='candidate'\n(backend/app/models/domain/synthesis.py → Hypothesis)
+Routers --> APIClient: HypothesisCandidate[]
+
+alt Accept
+    User -> Pages: Aceptar hipótesis
+    Pages -> APIClient: acceptHypothesis(id)
+    Routers -> DB: UPDATE hypotheses SET status='accepted', confidence=1.0
+
+else Modify
+    User -> Pages: Modificar texto/nivel
+    Pages -> APIClient: modifyHypothesis(id, {new_text, new_level})
+    Routers -> DB: UPDATE hypotheses SET text, level, status='candidate'
+
+else Reject
+    User -> Pages: Rechazar hipótesis
+    Pages -> APIClient: rejectHypothesis(id, {reason})
+    Routers -> DB: UPDATE hypotheses SET status='rejected', confidence=0.0
+
+else Split (Tree of Thoughts)
+    User -> Pages: Dividir en sub-hipótesis
+    Pages -> APIClient: splitHypothesis(id, {children: [...]})
+    Routers -> DB: UPDATE parent → 'split'\nINSERT INTO hypotheses (hijas con parent_hypothesis_id)
+end
+
+' ============================================================================
+' FLUJO 18: SELECTIVE ELABORATION (Fase 5b)
+' ============================================================================
+
+== F18: Selective Elaboration (Fase 5b) ==
+
+User -> Pages: Clic "Run Pipeline > selective"
+Pages -> APIClient: runPipelineStage("selective")
+Routers -> CeleryApp: send_task("trigger_selective_elaboration", queue="heavy")
+
+Redis -> WorkerHeavy: deliver
+
+WorkerHeavy -> WorkerHeavy: trigger_selective_elaboration()\n(workers/heavy/tasks.py)
+
+group Tareas de Elaboración Selectiva
+    WorkerHeavy -> WorkerHeavy: task_a06_theoretical_sample()\nTheoSampler: muestreo teórico
+
+    WorkerHeavy -> WorkerHeavy: task_a01_integrate_paradigm()\n→ LLM: paradigm_integrator.md (PRO)\nIntegración paradigmática por metadata_group
+
+    WorkerHeavy -> WorkerHeavy: task_a07_build_evidence_map()\n→ LLM: evidence_classifier.md (FLASH)\nConstruye mapa de evidencia
+
+    WorkerHeavy -> WorkerHeavy: task_a14_main_concern()\n→ LLM: main_concern_proposer.md + main_concern_critic.md (PRO)\nIdentifica el Core Concern
+
+    WorkerHeavy -> WorkerHeavy: task_a15_core_emergence()\n→ LLM: core_emergence_proposer.md + core_emergence_critic.md (PRO)
+
+    WorkerHeavy -> WorkerHeavy: task_a16_interchangeability()\n→ LLM: interchangeability_tester.md (PRO)
+
+    WorkerHeavy -> WorkerHeavy: task_a04_group_constructs()\n→ LLM: agrupador.md (PRO)\nAgrupación de constructos
+
+    WorkerHeavy -> WorkerHeavy: invoke_graph()\n(workers/heavy/tasks.py)\n→ LangGraph workflow\n(backend/app/core/workflow.py)
+
+    WorkerHeavy -> Workflow: build_glaser_graph() o\nbuild_glaser_graph_with_feedback()
+
+    note over Workflow: LangGraph StateGraph:\nnode_segment_and_index\nnode_extract_entities\nnode_batch_code\nnode_map_synthesize\nnode_reduce_synthesize\nnode_find_core_concern\nnode_generate_hypotheses\nnode_calculate_saturation\nnode_hitl_review\nnode_final_report\nnode_theosampler_evaluate\nnode_hitl_gap_review\nnode_process_new_data\nnode_prepare_playground
+end
+
+WorkerHeavy --> Redis: result
+WorkerHeavy -> Redis: publish event
+
+' ============================================================================
+' FLUJO 19: LANGGRAPH CHECKPOINTS (Persistencia)
+' ============================================================================
+
+== F19: LangGraph — Checkpoints y GraphRAG ==
+
+Workflow -> Postgres: save checkpoint\n(backend/app/models/langgraph_checkpoints.py)
+note right: LangGraph Checkpointer\npersiste estado entre\niteraciones del grafo
+
+Workflow -> CeleryApp: send_task("extract_graph_entities")
+CeleryApp -> Redis: enqueue
+Redis -> WorkerFast: deliver
+
+WorkerFast -> WorkerFast: extract_graph_entities()\n(workers/fast/tasks.py)
+WorkerFast -> TogetherLLM: run_agent("entity_extraction")\n→ entity_extraction.md (FLASH)
+WorkerFast -> Postgres: INSERT INTO graph_entities\nINSERT INTO graph_relations\n(backend/app/models/domain/synthesis.py)
+
+' ============================================================================
+' FLUJO 20: PIPELINE STATUS + LOG
+' ============================================================================
+
+== F20: Consulta de Estado del Pipeline ==
+
+User -> Pages: Ver panel de pipeline
+Pages -> APIClient: getPipelineStatus(projectId) + getPipelineLog(projectId)
+APIClient -> FastAPI: GET /api/v1/projects/{id}/pipeline/status\nGET /api/v1/projects/{id}/pipeline/log
+
+Routers -> DB: SELECT COUNT(segmentos, categorias, hypotheses)\n(backend/app/api/v1/pipeline.py)
+DB --> Routers: counts
+
+Routers -> DB: SELECT segmentos + codigos_segmento\n→ doc_logs[] con steps_done\n(backend/app/api/v1/pipeline.py)
+DB --> Routers: doc_logs
+
+Routers --> APIClient: PipelineStatus + PipelineLog\n{stages: {upload, precoding, open_coding, cross_doc, main_concern, selective, saturation}}\n{documents: [{steps, next_action}]}
+APIClient --> Pages: estado completo
+Pages --> User: Panel de progreso
+
+' ============================================================================
+' LEYENDA DE ARCHIVOS
+' ============================================================================
+
+== RESUMEN: Archivos del Sistema ==
+
+note across
+**Frontend (20 archivos):**
+• src/main.tsx — entry point
+• src/App.tsx — BrowserRouter + Routes
+• src/api/client.ts — API client (JWT, fetch wrapper)
+• src/pages/Login.tsx, Register.tsx, Projects.tsx, Project.tsx, Playground.tsx
+• src/components/theory/EcosystemCanvas.tsx, ElaborationPanel.tsx
+• src/components/theory/RecommendationGuide.tsx, RenameModal.tsx
+• src/components/theory/GhostBlob.tsx, CategoryBlob.tsx, RelationshipTendril.tsx
+• src/components/theory/PlaygroundContext.tsx, CategoryBlob.module.css
+• src/components/selective/CategoryEvolutionPanel.tsx
+• index.html, pipeline.html
+• rsbuild.config.ts, tsconfig.json, package.json
+
+**Backend API (12 routers):**
+• app/main.py — FastAPI init + lifespan + CORS
+• app/api/v1/auth.py, projects.py, documents.py, coding.py
+• app/api/v1/pipeline.py, elaboration.py, analysis.py
+• app/api/v1/hypotheses.py, theoretical_codes.py, events.py, rag.py, ping.py
+
+**Backend Core (12 archivos):**
+• core/config.py, celery_app.py, security.py, workflow.py (LangGraph)
+• core/minio_client.py, tei_client.py, together_client.py
+• core/llm_config.py, coding_styles.py, dynamic_schema.py
+• core/embedding_cache.py, bi_encoder_cache.py
+
+**Backend Models (15 archivos):**
+• models/base.py, exec_log.py, langgraph_checkpoints.py
+• models/domain/user.py, project.py, document.py, document_process.py
+• models/domain/segment.py, category.py, memo.py, workflow.py
+• models/domain/synthesis.py, theory.py, population_context.py
+• models/domain/canvas.py, enums.py
+
+**Backend Services (11 archivos):**
+• services/auth.py, rag.py, elaboration_engine.py
+• services/recommendation_engine.py, saturation_gap_analyzer.py
+• services/ghost_connector.py, rename_detector.py
+• services/selective_elaborator.py, emergent_sampler.py
+• services/theory_seeder.py, almacenamiento.py
+
+**Prompts (65+ archivos):**
+• prompts/loader.py, schemas.py
+• prompts/b2a_extract_indicators.txt, b2b_generate_codes.txt
+• prompts/deepseek_pro/ (34 archivos .md/.txt)
+• prompts/deepseek_flash/ (15 archivos .md/.txt)
+• prompts/flash/ (4 archivos)
+• prompts/pro/ (8 archivos)
+
+**Workers (3 workers, 18+ archivos):**
+• workers/nlp/tasks.py, segmentador.py, embedding_client.py, config.py
+• workers/nlp/contextual_enrichment.py, saturation.py
+• workers/fast/tasks.py, llm_client.py, config.py, database.py
+• workers/fast/algorithmic_checks.py
+• workers/heavy/tasks.py, agents_b.py, llm_client.py, config.py
+• workers/heavy/database.py, algorithmic_checks.py
+
+**TEI Microservice:**
+• backend/tei/server.py, Dockerfile, requirements.txt
+
+**Infrastructure:**
+• docker-compose.yml, Dockerfile.base, Makefile
+• backend/Dockerfile, alembic.ini
+• workers/{fast,heavy,nlp}/Dockerfile
+• Procesos-antiguo/ (12 workflows JSON legacy)
+• Documentacion/ (documentación + diagramas)
+end note
+
+@enduml

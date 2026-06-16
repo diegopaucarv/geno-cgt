@@ -179,3 +179,116 @@ async def get_pipeline_status(
         "hypotheses": hyp_count,
         "stages": stages_status,
     }
+
+
+@router.get("/projects/{project_id}/pipeline/log")
+async def get_pipeline_log(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Log detallado por documento: qué pasos se completaron y qué falta.
+    Mira la DB real (segmentos, códigos) — no solo el campo estado.
+    """
+    from sqlalchemy import text
+
+    docs_result = await db.execute(
+        select(Documento).where(Documento.proyecto_id == project_id)
+    )
+    docs = docs_result.scalars().all()
+
+    doc_ids = [d.id for d in docs]
+
+    # Contar segmentos por documento
+    seg_counts = {}
+    if doc_ids:
+        seg_result = await db.execute(
+            text(
+                "SELECT documento_id, COUNT(*) FROM segmentos "
+                "WHERE documento_id = ANY(:ids) GROUP BY documento_id"
+            ),
+            {"ids": doc_ids},
+        )
+        for row in seg_result:
+            seg_counts[str(row[0])] = row[1]
+
+    # Contar códigos asignados por documento (via segmentos)
+    code_counts = {}
+    if doc_ids:
+        code_result = await db.execute(
+            text(
+                "SELECT s.documento_id, COUNT(cs.segmento_id) "
+                "FROM segmentos s "
+                "LEFT JOIN codigos_segmento cs ON cs.segmento_id = s.id "
+                "WHERE s.documento_id = ANY(:ids) GROUP BY s.documento_id"
+            ),
+            {"ids": doc_ids},
+        )
+        for row in code_result:
+            code_counts[str(row[0])] = row[1]
+
+    # Contar categorías del proyecto
+    cat_result = await db.execute(
+        text("SELECT COUNT(*) FROM categorias WHERE proyecto_id = :pid"),
+        {"pid": project_id},
+    )
+    cat_count = cat_result.scalar() or 0
+
+    # Construir log por documento
+    doc_logs = []
+    for doc in docs:
+        did = str(doc.id)
+        n_segs = seg_counts.get(did, 0)
+        n_codes = code_counts.get(did, 0)
+        has_text = bool((doc.metadatos or {}).get("texto_extraido", ""))
+        punct_done = bool((doc.metadatos or {}).get("texto_puntuado", False))
+
+        # Determinar qué pasos se completaron
+        steps_done = {
+            "text_extracted": has_text,
+            "punctuation_fixed": punct_done,
+            "segmented": n_segs > 0,
+            "coded": n_codes > 0,
+            "agents_done": doc.estado == "listo" and n_codes > 0,
+        }
+
+        # Determinar qué falta
+        if not has_text:
+            next_action = "extract_text"
+        elif not n_segs:
+            next_action = "segment"
+        elif not n_codes:
+            next_action = "run_agents"
+        elif doc.estado == "listo":
+            next_action = "done"
+        else:
+            next_action = "run_agents"
+
+        doc_logs.append({
+            "document_id": did,
+            "filename": doc.original_filename,
+            "estado": doc.estado,
+            "steps": steps_done,
+            "segments_count": n_segs,
+            "codes_count": n_codes,
+            "next_action": next_action,
+        })
+
+    # Resumen
+    docs_need_segment = sum(1 for d in doc_logs if d["next_action"] == "segment")
+    docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
+    docs_done = sum(1 for d in doc_logs if d["next_action"] == "done")
+
+    return {
+        "project_id": str(project_id),
+        "documents": doc_logs,
+        "summary": {
+            "total": len(docs),
+            "need_segment": docs_need_segment,
+            "need_agents": docs_need_agents,
+            "done": docs_done,
+            "categories": cat_count,
+            "playground_ready": cat_count > 0,
+        },
+    }
