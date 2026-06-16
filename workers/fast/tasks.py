@@ -360,7 +360,7 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
         response = llm.run_agent(
             "punctuator",
             variables={"raw_text": raw},
-            temperature=0.1,
+            temperature=0.3,
         )
         out = response.get("punctuated_text", raw)
         # Usar expected_len si se proporciona (bloques con overlap)
