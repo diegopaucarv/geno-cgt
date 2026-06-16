@@ -286,6 +286,23 @@ async def get_pipeline_log(
         if d["next_action"] == "error"
     ]
 
+    # Count failed system tasks (Phase B, etc.) from active pipeline run
+    failed_tasks = 0
+    try:
+        run_row = await db.execute(
+            text(
+                "SELECT COUNT(*) FROM pipeline_tasks "
+                "JOIN pipeline_runs ON pipeline_tasks.run_id = pipeline_runs.id "
+                "WHERE pipeline_runs.project_id = :pid "
+                "AND pipeline_runs.status = 'running' "
+                "AND pipeline_tasks.status IN ('failed', 'cancelled')"
+            ),
+            {"pid": project_id},
+        )
+        failed_tasks = run_row.scalar() or 0
+    except Exception:
+        pass
+
     return {
         "project_id": str(project_id),
         "documents": doc_logs,
@@ -295,6 +312,7 @@ async def get_pipeline_log(
             "need_agents": docs_need_agents,
             "done": docs_done,
             "failed": docs_failed,
+            "failed_tasks": failed_tasks,
             "errors": error_list,
             "categories": cat_count,
             "playground_ready": cat_count > 0,
@@ -512,3 +530,121 @@ async def tail_pipeline_logs(
         return {"logs": logs[-100:], "count": len(logs)}
     except Exception:
         return {"logs": [], "count": 0, "error": "redis_unavailable"}
+
+
+@router.get("/projects/{project_id}/agent-memos")
+async def get_agent_memos(
+    project_id: UUID,
+    include_intermediate: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Returns agent outputs as memo cards. Uses agent_families for grouping."""
+    from sqlalchemy import text
+
+    # ── Families metadata ──
+    fam_rows = await db.execute(
+        text(
+            "SELECT family, label, icon, description FROM agent_families ORDER BY family"
+        )
+    )
+    families = [
+        {"key": r[0], "label": r[1], "icon": r[2], "description": r[3]}
+        for r in fam_rows
+    ]
+
+    memos = []
+    is_final_filter = (
+        "TRUE" if not include_intermediate else "TRUE"
+    )  # always include finals
+
+    # ── A1: Population Contexts (descriptive_data, PRO) ──
+    pc_rows = await db.execute(
+        text(
+            "SELECT pc.id, pc.version, pc.surprising_details, pc.language_patterns, "
+            "pc.data_production_context, pc.creado_en "
+            "FROM population_contexts pc "
+            "WHERE pc.proyecto_id = :pid "
+            "ORDER BY pc.version DESC LIMIT 20"
+        ),
+        {"pid": project_id},
+    )
+    for row in pc_rows:
+        memos.append(
+            {
+                "id": f"pc-{row[0]}",
+                "family": "descriptive_data",
+                "agentId": "A1 (PRO)",
+                "isFinal": True,
+                "documentName": f"Population Context v{row[1]}",
+                "timestamp": str(row[5]) if row[5] else "",
+                "data": {
+                    "surprising_details": row[2] or "",
+                    "language_patterns": row[3] or "",
+                    "data_production_context": row[4] or "",
+                    "version": row[1],
+                },
+            }
+        )
+
+    # ── A2: Document Processes (descriptive_data, PRO) ──
+    dp_rows = await db.execute(
+        text(
+            "SELECT dp.id, dp.process_description, dp.is_first_document, "
+            "dp.has_comparison, dp.prime_mover, dp.prime_mover_confidence, "
+            "dp.creado_en, d.original_filename "
+            "FROM document_processes dp "
+            "JOIN documentos d ON dp.documento_id = d.id "
+            "WHERE dp.proyecto_id = :pid "
+            "ORDER BY dp.creado_en DESC LIMIT 30"
+        ),
+        {"pid": project_id},
+    )
+    for row in dp_rows:
+        data = {
+            "process_description": row[1] or "",
+            "is_first_document": row[2] or False,
+            "has_comparison": row[3] or False,
+        }
+        if row[4]:
+            data["prime_mover"] = row[4]
+            data["prime_mover_confidence"] = row[5] or "LOW"
+        memos.append(
+            {
+                "id": f"dp-{row[0]}",
+                "family": "descriptive_data",
+                "agentId": "A2 (PRO)",
+                "isFinal": True,
+                "documentName": row[7] or "unknown",
+                "timestamp": str(row[6]) if row[6] else "",
+                "data": data,
+            }
+        )
+
+    # ── B2: Categories (inductive_data, PRO) ──
+    cat_rows = await db.execute(
+        text(
+            "SELECT c.id, c.nombre, c.definicion, c.puntaje_relevancia, c.es_central, c.creado_en "
+            "FROM categorias c WHERE c.proyecto_id = :pid ORDER BY c.puntaje_relevancia DESC NULLS LAST LIMIT 30"
+        ),
+        {"pid": project_id},
+    )
+    for row in cat_rows:
+        memos.append(
+            {
+                "id": f"cat-{row[0]}",
+                "family": "inductive_data",
+                "agentId": "B2 (PRO)",
+                "isFinal": True,
+                "documentName": f"{row[1]}{' ⭐' if row[4] else ''}",
+                "timestamp": str(row[5]) if row[5] else "",
+                "data": {
+                    "nombre": row[1],
+                    "definicion": row[2] or "",
+                    "puntaje_relevancia": row[3],
+                    "es_central": row[4] or False,
+                },
+            }
+        )
+
+    return {"memos": memos, "total": len(memos), "families": families}

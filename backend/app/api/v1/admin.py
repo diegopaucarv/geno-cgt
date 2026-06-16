@@ -182,7 +182,17 @@ async def stop_project_pipeline(
     run.status = "cancelled"
     await db.commit()
 
-    # 4. Limpiar logs de Redis
+    # 3.5 Limpiar processing states para permitir re-ejecución
+    await db.execute(
+        text(
+            "DELETE FROM processing_states "
+            "WHERE entity_type = 'project' AND entity_id = :pid"
+        ),
+        {"pid": str(project_id)},
+    )
+    await db.commit()
+
+    # 4. Limpiar logs de Redis + purgar colas pendientes
     try:
         import os as _os
 
@@ -190,6 +200,9 @@ async def stop_project_pipeline(
 
         r = _aredis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
         await r.delete(f"pipeline_logs:{project_id}")
+        # Purge Celery queues so pending tasks don't auto-run on restart
+        for queue in ("nlp", "heavy", "fast"):
+            await r.delete(queue)
         await r.close()
     except Exception:
         pass

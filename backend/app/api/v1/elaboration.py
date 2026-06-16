@@ -478,3 +478,145 @@ async def _get_layer_coverage(db, project_id: UUID) -> dict:
             - covered
         ),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# T20 — P5: HITL Modification Agent
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.post("/projects/{project_id}/modification/request")
+async def request_modification(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """P5 Fases 1-4: Solicitar modificacion de un memo con verificacion agencial.
+
+    Body esperado:
+    {
+        "agent_id": "b2b_generate_codes",
+        "user_request": "Creo que el gerundio no captura bien el patron...",
+        "current_memo": {"code_name": "...", "definition": "..."},
+        "memo_id": "uuid-del-output",
+        "original_prompt": "b2b_generate_codes.md"  (opcional)
+    }
+
+    Retorna:
+    {
+        "valid_request": true/false,
+        "filter_reason": "...",
+        "suggested_questions": [...],
+        "recommended": true/false/null,
+        "recommendation_reason": "...",
+        "recommendation_confidence": 0.85,
+        "evidence_sufficient": true/false,
+        "modified_memo": {...},
+        "impact_summary": "...",
+        "missing_evidence": "..."
+    }
+    """
+    import sys as _sys
+
+    _sys.path.insert(0, "/app")
+    from workers.heavy.llm_client import LLMClient
+
+    _llm = LLMClient()
+
+    from app.agents.hitl_modifier import HITLModificationAgent
+
+    agent = HITLModificationAgent(_llm)
+
+    result = agent.process_request(
+        agent_id=body.get("agent_id", ""),
+        user_request=body.get("user_request", ""),
+        current_memo=body.get("current_memo", {}),
+        proyecto_id=str(project_id),
+        original_prompt=body.get("original_prompt", ""),
+    )
+
+    return result.to_response()
+
+
+@router.post("/projects/{project_id}/modification/apply")
+async def apply_modification(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """P5 Fase 5: Aplicar una modificacion confirmada por el usuario.
+
+    Body esperado:
+    {
+        "agent_id": "b2b_generate_codes",
+        "memo_id": "uuid-del-output-a-modificar",
+        "new_content": {"code_name": "...", "definition": "..."},
+        "agent_output_id": "uuid-del-agent-output"  (opcional, para log)
+    }
+
+    Retorna:
+    {
+        "status": "applied",
+        "wiped_tables": ["codigos_segmento", "code_document_summaries"],
+        "restart_from": "batch_code",
+        "invalidated_outputs": ["B2.5 grounding", "B3 hypotheses"]
+    }
+    """
+    import sys as _sys
+
+    _sys.path.insert(0, "/app")
+    from workers.heavy.llm_client import LLMClient
+
+    _llm = LLMClient()
+
+    from app.agents.hitl_modifier import HITLModificationAgent
+
+    agent = HITLModificationAgent(_llm)
+
+    result = agent.apply_modification(
+        agent_id=body.get("agent_id", ""),
+        memo_id=body.get("memo_id", ""),
+        new_content=body.get("new_content", {}),
+        proyecto_id=str(project_id),
+    )
+
+    # Si se aplico, registrar en output_modifications
+    if result.get("status") == "applied":
+        try:
+            from app.models.domain.agent_outputs import OutputModification
+            from database import SessionLocal
+            import json as _json
+            from datetime import datetime, timezone
+
+            s = SessionLocal()
+            try:
+                mod = OutputModification(
+                    proyecto_id=project_id,
+                    modified_by=current_user.id,
+                    agent_output_id=body.get("agent_output_id"),
+                    user_request=body.get("user_request", ""),
+                    recommended=body.get("recommended"),
+                    recommendation_reason=body.get("recommendation_reason", ""),
+                    recommendation_confidence=body.get("recommendation_confidence"),
+                    original_content=body.get("current_memo", {}),
+                    modified_content=body.get("new_content", {}),
+                    evidence_collected=body.get("evidence_collected", []),
+                    verification_plan=body.get("verification_plan"),
+                    applied=True,
+                    applied_at=datetime.now(timezone.utc).isoformat(),
+                    wiped_tables=result.get("wiped_tables", []),
+                    pipeline_restarted_from=result.get("restart_from", ""),
+                )
+                s.add(mod)
+                s.commit()
+            finally:
+                s.close()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to log OutputModification: %s", e
+            )
+
+    return result

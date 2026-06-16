@@ -205,7 +205,7 @@ services:
           path: ./workers/nlp/Dockerfile
     volumes:
       - ./uploads:/app/uploads
-      - ./backend/app/agents:/app/agents:ro
+      - ./backend:/app/backend:ro
     command: celery -A tasks worker --queues=nlp --concurrency=${NLP_CONCURRENCY:-1} --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
@@ -216,8 +216,9 @@ services:
       USE_GPU: ${USE_GPU:-false}
       SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
       SPACY_MODEL: ${SPACY_MODEL:-es_core_news_lg}
-      SPACY_EXCLUDE: ${SPACY_EXCLUDE:-vectors,lemmatizer}
-    mem_limit: ${NLP_MEM_LIMIT:-8g}
+      SPACY_EXCLUDE: ${SPACY_EXCLUDE:-auto}
+      PYTHONPATH: /app/backend:/app/backend/app
+    # No hard mem_limit — worker-nlp self-regulates via memory.py
     depends_on:
       pgbouncer:
         condition: service_started
@@ -247,15 +248,6 @@ services:
         - action: sync+restart
           path: ./workers/heavy/database.py
           target: /app/database.py
-        - action: sync
-          path: ./backend/app/models
-          target: /app/backend/app/models
-        - action: sync
-          path: ./backend/app/prompts
-          target: /app/backend/app/prompts
-        - action: sync
-          path: ./backend/app/agents
-          target: /app/backend/app/agents
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
@@ -264,13 +256,15 @@ services:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
-      MODEL_FLASH: ${MODEL_FLASH:-google/gemma-4-31B-it}
+      MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
       PYTHONPATH: /app/backend:/app/backend/app
     depends_on:
       - pgbouncer
     volumes:
       - ./backend:/app/backend:ro
+      - ./backend/app/prompts:/app/prompts:ro
+    # No hard mem_limit — API-bound, negligible memory
 
   frontend:
     image: node:22-alpine

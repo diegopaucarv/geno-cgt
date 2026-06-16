@@ -97,6 +97,17 @@ class PipelineOrchestrator:
         if not docs:
             return {"status": "no_docs", "message": "No hay documentos"}
 
+        # Clean old processing states on force (allow re-trigger of Phase B)
+        if force:
+            self.db.execute(
+                text(
+                    "DELETE FROM processing_states WHERE entity_type = 'project' "
+                    "AND entity_id = :pid"
+                ),
+                {"pid": str(project_id)},
+            )
+            self.db.commit()
+
         # Crear PipelineRun
         run = PipelineRun(
             project_id=project_id,
@@ -133,6 +144,15 @@ class PipelineOrchestrator:
             n_segs = self._count_segments(doc_id, self.db)
             n_codes = self._count_codes(doc_id, self.db)
 
+            # Reset errored docs so they can be retried
+            if estado == "error":
+                self.db.execute(
+                    text("UPDATE documentos SET estado = 'crudo' WHERE id = :did"),
+                    {"did": doc_id},
+                )
+                self.db.flush()
+                estado = "crudo"
+
             if n_segs == 0:
                 # Necesita segmentación
                 task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
@@ -159,6 +179,14 @@ class PipelineOrchestrator:
             "already_done": skipped,
         }
         self.db.commit()
+
+        # If all docs already done, trigger Phase B directly (no transition will fire it)
+        if skipped == len(docs) and skipped >= 3:
+            from app.agents.transitions import _maybe_trigger_phase_b
+
+            result = _maybe_trigger_phase_b(self.db, str(project_id))
+            if result:
+                task_ids["phase_b"] = result.get("task_id")
 
         return {
             "status": "dispatched",

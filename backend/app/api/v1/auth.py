@@ -7,6 +7,7 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     get_password_hash,
+    is_token_blacklisted,
     verify_password,
 )
 from app.db.database import get_db
@@ -91,3 +92,20 @@ async def logout(
         if ttl > 0:
             await add_token_to_blacklist(jti, ttl)
     return {"msg": "Logged out"}
+
+
+@router.post("/refresh")
+async def refresh_access_token(refresh_token: str):
+    """Refresh access token using a valid refresh token."""
+    payload = decode_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    jti = payload.get("jti")
+    if jti and await is_token_blacklisted(jti):
+        raise HTTPException(status_code=401, detail="Token revoked")
+
+    user_id = payload.get("sub")
+    new_jti = str(uuid.uuid4())
+    access_token = create_access_token(data={"sub": user_id, "jti": new_jti})
+    return {"access_token": access_token, "token_type": "bearer"}

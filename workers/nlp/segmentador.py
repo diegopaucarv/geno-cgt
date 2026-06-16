@@ -7,6 +7,7 @@ from typing import Optional
 
 import numpy as np
 import spacy
+import torch
 from embedding_client import EmbeddingClient
 from rapidfuzz import fuzz
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -14,6 +15,7 @@ from scipy.spatial.distance import squareform
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from spacy.language import Language
+from torchao.quantization import Int8DynamicActivationInt8WeightConfig, quantize_
 
 # ── GPU / CPU switch ──────────────────────────────────────────────────────────
 _USE_GPU = os.getenv("USE_GPU", "false").lower() in ("1", "true", "yes")
@@ -21,8 +23,6 @@ if _USE_GPU:
     spacy.require_gpu()
     _stanza_gpu = True
     try:
-        import torch
-
         _torch_available = True
     except ImportError:
         _torch_available = False
@@ -222,7 +222,7 @@ class ProgressiveSegmenter:
     def __init__(
         self,
         spacy_model: str = "es_core_news_lg",
-        spacy_exclude: str = "vectors,lemmatizer",
+        spacy_exclude: str = "auto",
         stanza_lang: str = "es",
         similarity_threshold: float = 0.6,
         max_depth: int = 3,
@@ -253,6 +253,8 @@ class ProgressiveSegmenter:
             )
         else:
             _exclude = [c.strip() for c in spacy_exclude.split(",") if c.strip()]
+        self._spacy_model = spacy_model
+        self._spacy_exclude = _exclude
         self.nlp = spacy.load(spacy_model, exclude=_exclude)
         logging.info(
             f"[Init] spaCy '{spacy_model}' loaded (excluded: {_exclude or 'none'})"
@@ -267,6 +269,8 @@ class ProgressiveSegmenter:
 
         self.tfidf_vectorizer = TfidfVectorizer()
         self._stanza_pipeline = None
+        self._doc_count = 0  # track documents for periodic spaCy reset
+        self._roots_cache: dict[str, list[str]] = {}
         logging.info(
             f"[Init] GPU: {_stanza_gpu}, TEI: {self.embedding_client.base_url}"
         )
@@ -310,6 +314,7 @@ class ProgressiveSegmenter:
                     verbose=False,
                     download_method=None,  # no descargar, usar modelos locales
                 )
+
                 print("[COREF] ✓ Stanza coref pipeline cargado.")
             except Exception as e:
                 print(
@@ -623,6 +628,14 @@ class ProgressiveSegmenter:
         subjects = []
         try:
             stanza_pipe = self.get_stanza()
+
+            if stanza_pipe is not None:
+                coref_processor = stanza_pipe.processors.get("coref")
+                print("Comprimiendo el modelo XLM-RoBERTa para CPU...")
+                quantize_(
+                    coref_processor.model, Int8DynamicActivationInt8WeightConfig()
+                )
+
             if not stanza_pipe:
                 return []
 
@@ -1019,6 +1032,7 @@ class ProgressiveSegmenter:
         clustered_segments = self.final_clustering(all_segments)
         del all_segments
         gc.collect()
+        _free_gpu_memory()
         print(f"[SegText] {len(clustered_segments)} segmentos tras clustering final.")
 
         print(f"[SegText] Iniciando resolución de correferencias...")
@@ -1068,7 +1082,23 @@ class ProgressiveSegmenter:
         del segmentos
         gc.collect()
         _free_gpu_memory()
+        self._cleanup_after_doc()
         return final
+
+    def _cleanup_after_doc(self) -> None:
+        """Libera memoria acumulada tras cada documento."""
+        self._doc_count += 1
+        _free_gpu_memory()
+
+        # Recrear pipeline spaCy CADA documento (previene bloat de cachés internos)
+        del self.nlp
+        gc.collect()
+        _free_gpu_memory()
+        self.nlp = spacy.load(self._spacy_model, exclude=self._spacy_exclude)
+        if "conversational_sbd" not in self.nlp.pipe_names:
+            self.nlp.add_pipe("conversational_sbd", before="parser")
+        if hasattr(self, "classicseg"):
+            self.classicseg.nlp = self.nlp
 
 
 # ═══════════════════════════════════════════════════════════════════════

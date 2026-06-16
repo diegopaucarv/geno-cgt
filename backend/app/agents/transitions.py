@@ -17,11 +17,16 @@ Workers llaman:
 from __future__ import annotations
 
 import logging
+import os as _os
 from uuid import UUID
 
+from celery import Celery
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+# Shared Celery instance — no crear nuevas por cada dispatch
+_celery_app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
 # ═══════════════════════════════════════════════════════════════════════
 # State machine: current_state → (next_state, next_task)
@@ -146,24 +151,19 @@ def _dispatch_next(
     doc_estado_before: str,
 ) -> dict | None:
     """Despacha una tarea Celery y crea PipelineTask tracking."""
-    import os as _os
-
-    from celery import Celery
-
-    app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
     # Despachar según tipo de tarea
     if task_name == "segmentar_documento":
         texto = _get_texto(session, documento_id)
         if not texto:
             return None
-        task = app.send_task(
+        task = _celery_app.send_task(
             task_name,
             args=[texto, 1024, "", "TEXTO", "", documento_id],
             queue=queue,
         )
     else:
-        task = app.send_task(
+        task = _celery_app.send_task(
             task_name,
             args=[documento_id, proyecto_id],
             queue=queue,
@@ -206,7 +206,12 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
     if listos < 3:
         return None
 
-    step = f"phase_b_dc_{listos}"
+    # Dedup by active pipeline run, not by doc count
+    run_id = _get_active_run(session, proyecto_id)
+    if not run_id:
+        return None
+
+    step = f"phase_b_run_{run_id}"
     already = session.execute(
         text(
             "SELECT step FROM processing_states "
@@ -228,12 +233,7 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
     )
     session.commit()
 
-    import os as _os
-
-    from celery import Celery
-
-    app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
-    task = app.send_task(
+    task = _celery_app.send_task(
         "process_synthesis_agents_b",
         args=[proyecto_id],
         queue="heavy",
@@ -419,8 +419,7 @@ def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
     )
     session.commit()
 
-    app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
-    task = app.send_task(
+    task = _celery_app.send_task(
         "selective_coding_coordinator",
         args=[proyecto_id],
         queue="heavy",

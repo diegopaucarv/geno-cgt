@@ -9,6 +9,7 @@ import {
   punctuateDocument,
   deleteDocument,
   getPipelineLog,
+  getAgentMemos,
   getPendingHitl,
   decideHitl,
   ping,
@@ -23,6 +24,7 @@ import {
   DocPipelineLog,
   HitlPendingItem,
 } from "../api/client";
+import { MemoHistory, type MemoEntry } from "../components/MemoHistory";
 import HITLModal from "../components/HITLModal";
 
 // ── Styles ────────────────────────────────────────────────────────
@@ -82,7 +84,6 @@ export default function ProjectDetail() {
   const [stageStatuses, setStageStatuses] = useState<
     Record<string, StageStatus>
   >({});
-  const [showPipelineOverlay, setShowPipelineOverlay] = useState(false);
   const [stoppingWorkers, setStoppingWorkers] = useState(false);
 
   // ── Global view switch ──
@@ -94,10 +95,23 @@ export default function ProjectDetail() {
 
   // ── Execution log ──
   const [showLog, setShowLog] = useState(false);
+  const [pipelineFailed, setPipelineFailed] = useState(false);
+  const [memoFilter, setMemoFilter] = useState("all");
+  const [agentMemos, setAgentMemos] = useState<any[]>([]);
+  const [agentFamilies, setAgentFamilies] = useState<any[]>([]);
+  const [showIntermediates, setShowIntermediates] = useState(false);
   const [pipelineLiveLogs, setPipelineLiveLogs] = useState<
     Array<{ ts: number; msg: string }>
   >([]);
+  const logPanelRef = useRef<HTMLDivElement>(null);
   const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-scroll log panel
+  useEffect(() => {
+    if (logPanelRef.current && showLog && pipelineLiveLogs.length > 0) {
+      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
+    }
+  }, [pipelineLiveLogs, showLog]);
 
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
@@ -115,7 +129,27 @@ export default function ProjectDetail() {
     getPipelineLog(id)
       .then(setPipelineLog)
       .catch(() => {});
+    getAgentMemos(id)
+      .then((r) => {
+        console.log("MEMOS LOADED:", r.total, "families:", r.families?.length);
+        setAgentMemos(r.memos || []);
+        setAgentFamilies(r.families || []);
+      })
+      .catch((e) => console.error("agent-memos failed:", e));
   }, [id]);
+
+  // Debug: force fetch on every render if empty
+  useEffect(() => {
+    if (id && agentMemos.length === 0 && agentFamilies.length === 0) {
+      getAgentMemos(id)
+        .then((r) => {
+          console.log("MEMOS RETRY:", r.total);
+          setAgentMemos(r.memos || []);
+          setAgentFamilies(r.families || []);
+        })
+        .catch((e) => console.error("retry failed:", e));
+    }
+  });
 
   // ── HITL polling ──
   useEffect(() => {
@@ -225,6 +259,29 @@ export default function ProjectDetail() {
     }
   }
 
+  // ── Stage restart ──────────────────────────────
+
+  function findLastCompletedIdx(): number {
+    let last = -1;
+    PIPELINE_STAGES.forEach((s, i) => {
+      if ((stageStatuses[s.key] || "pending") === "done") last = i;
+    });
+    return last;
+  }
+
+  function restartFromStage(stageKey: string) {
+    const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === stageKey);
+    // Mark previous stages as done, this one as running, later as pending
+    PIPELINE_STAGES.forEach((s, i) => {
+      if (i < stageIdx) updateStage(s.key, "done");
+      else if (i === stageIdx) updateStage(s.key, "running");
+      else updateStage(s.key, "pending");
+    });
+    // Run pipeline
+    setPipelineRunning(true);
+    runPipeline(false);
+  }
+
   // ── Pipeline IA ──────────────────────────────────
 
   function resetStages(presets?: Record<string, StageStatus>) {
@@ -243,7 +300,6 @@ export default function ProjectDetail() {
     const auth = `Bearer ${localStorage.getItem("access_token")}`;
     abortRef.current = false;
     setPipelineRunning(true);
-    setShowPipelineOverlay(true);
     setPipelineLiveLogs([]);
     // Start log polling
     if (logPollRef.current) clearInterval(logPollRef.current);
@@ -326,7 +382,7 @@ export default function ProjectDetail() {
     }
 
     let pipelineOk = false;
-    let pipelineFailed = false;
+    setPipelineFailed(false);
 
     try {
       const response = await fetch(`/api/v1/projects/${id}/pipeline/run`, {
@@ -364,6 +420,12 @@ export default function ProjectDetail() {
           updateStage("agents", "running");
         }
 
+        // Phase B (synthesis) detection
+        if ((res as any).task_ids?.phase_b) {
+          updateStage("synthesis", "running");
+          setPipelineMsg("🔗 Phase B: Síntesis cross-documento…");
+        }
+
         // Poll until complete
         for (let poll = 0; poll < 120 && !abortRef.current; poll++) {
           await new Promise((r) => setTimeout(r, 5000));
@@ -373,14 +435,15 @@ export default function ProjectDetail() {
           }
           if (status?.summary) {
             // ── Failure detection ──
-            if (status.summary.failed > 0) {
+            if (status.summary.failed > 0 || status.summary.failed_tasks > 0) {
               const errNames = (status.summary.errors || [])
                 .map((e: { filename: string }) => e.filename)
                 .join(", ");
               setPipelineMsg(`❌ Falló: ${errNames || "documento"}`);
               updateStage("segment", "error");
               updateStage("agents", "error");
-              pipelineFailed = true;
+              updateStage("synthesis", "error");
+              setPipelineFailed(true);
               abortRef.current = true;
               break;
             }
@@ -392,6 +455,12 @@ export default function ProjectDetail() {
               status.summary.need_segment === 0
             )
               updateStage("agents", "done");
+
+            // Synthesis (Phase B) completion: playground_ready = codes assigned to segments
+            if (status.summary.playground_ready) {
+              updateStage("synthesis", "done");
+            }
+
             if (status.summary.done === status.summary.total) {
               setPipelineMsg("✅ Pipeline completado.");
               break;
@@ -413,8 +482,14 @@ export default function ProjectDetail() {
       await stopProjectPipeline(id!).catch(() => {});
       if (pipelineFailed) {
         // Keep error states set during polling
-        updateStage("categories", "error");
-        updateStage("done", "error");
+        [
+          "synthesis",
+          "find_cc",
+          "reduce",
+          "saturate",
+          "build_db",
+          "playground",
+        ].forEach((k) => updateStage(k, "error"));
       } else {
         resetStages();
         setPipelineMsg("⏹ Pipeline cancelado — DB restaurada.");
@@ -423,6 +498,7 @@ export default function ProjectDetail() {
       // Pipeline completed normally
       updateStage("segment", "done");
       updateStage("agents", "done");
+      updateStage("synthesis", "done");
       updateStage("categories", "done");
       updateStage("done", "done");
       setPipelineMsg("✅ Pipeline completado.");
@@ -432,6 +508,12 @@ export default function ProjectDetail() {
     listCategories(id!).then(setCats);
     getPipelineLog(id!)
       .then(setPipelineLog)
+      .catch(() => {});
+    getAgentMemos(id!)
+      .then((r) => {
+        setAgentMemos(r.memos || []);
+        setAgentFamilies(r.families || []);
+      })
       .catch(() => {});
     setPipelineRunning(false);
   }
@@ -475,6 +557,54 @@ export default function ProjectDetail() {
     return pipelineLog?.documents.find((d) => d.document_id === docId);
   }
 
+  // ── Memo builder (legacy, replaced by agent-memos API) ──
+
+  function buildMemosFromLog(
+    log: PipelineLog | null,
+    docsList: Document[],
+  ): MemoEntry[] {
+    if (!log) return [];
+    const memos: MemoEntry[] = [];
+    for (const dl of log.documents) {
+      const doc = docsList.find((d) => d.id === dl.document_id);
+      const docName = doc?.original_filename || dl.filename || dl.document_id;
+      if (dl.steps.agents_done) {
+        memos.push({
+          id: `${dl.document_id}-agents`,
+          family: "inductive_data",
+          agentId: "A1-A3",
+          isFinal: true,
+          documentName: docName,
+          timestamp: new Date().toLocaleTimeString(),
+          data: {
+            estado: dl.estado,
+            segmentos: dl.segments_count,
+            códigos: dl.codes_count,
+            "texto extraído": dl.steps.text_extracted,
+            segmentado: dl.steps.segmented,
+            codificado: dl.steps.coded,
+          },
+        });
+      }
+      if (dl.segments_count > 0) {
+        memos.push({
+          id: `${dl.document_id}-segment`,
+          family: "descriptive_data",
+          agentId: "NLP",
+          isFinal: true,
+          documentName: docName,
+          timestamp: new Date().toLocaleTimeString(),
+          data: {
+            "segmentos generados": dl.segments_count,
+            "códigos asignados": dl.codes_count,
+            "siguiente acción": dl.next_action,
+          },
+        });
+      }
+    }
+    return memos;
+  }
+
   function getEstadoBadge(doc: Document): {
     text: string;
     color: string;
@@ -514,1219 +644,623 @@ export default function ProjectDetail() {
   return (
     <div
       style={{
-        maxWidth: 960,
-        margin: "0 auto",
-        padding: "0 24px 40px",
+        display: "flex",
+        flexDirection: "row-reverse",
         background: "#0D1117",
         minHeight: "100vh",
         color: "#E6EDF3",
-        position: "relative",
       }}
     >
-      {/* ── Navbar ────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 24px",
-          background: "#161B22",
-          borderBottom: "1px solid #21262D",
-          margin: "0 -24px 20px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Link
-            to="/projects"
-            style={{ color: "#58A6FF", fontSize: 13, textDecoration: "none" }}
-          >
-            ← Proyectos
-          </Link>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>
-            {project.nombre}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span
-            style={{
-              fontSize: 11,
-              padding: "2px 8px",
-              borderRadius: 999,
-              background: "#8B949E22",
-              color: "#8B949E",
-            }}
-          >
-            {docs.length} docs · {cats.length} cats
-          </span>
-
-          <span style={{ fontSize: 11, color: "#8B949E" }}>{userName}</span>
-          <button onClick={handleLogout} style={{ ...btnSmall, fontSize: 11 }}>
-            Salir
-          </button>
-        </div>
-      </div>
-
-      {/* ── UNIFIED HEADER ── */}
-      <div
-        style={{
-          marginBottom: 16,
-          padding: "14px 16px",
-          background: "#161B22",
-          borderRadius: 10,
-          border: "1px solid #21262D",
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        {/* Row 1: project meta + view switch + log toggle */}
+      {/* ── Left: Main Content ── */}
+      <div style={{ flex: 1, minWidth: 0, padding: "0 24px 40px" }}>
+        {/* ── Navbar ────────────────────────────────── */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8,
+            padding: "8px 24px",
+            background: "#161B22",
+            borderBottom: "1px solid #21262D",
+            margin: "0 -24px 20px",
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <Link
+              to="/projects"
+              style={{ color: "#58A6FF", fontSize: 13, textDecoration: "none" }}
+            >
+              ← Proyectos
+            </Link>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>
+              {project.nombre}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: "#8B949E22",
+                color: "#8B949E",
+              }}
+            >
+              {docs.length} docs · {cats.length} cats
+            </span>
+
+            <span style={{ fontSize: 11, color: "#8B949E" }}>{userName}</span>
+            <button
+              onClick={handleLogout}
+              style={{ ...btnSmall, fontSize: 11 }}
+            >
+              Salir
+            </button>
+          </div>
+        </div>
+
+        {/* ── UNIFIED HEADER ── */}
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "14px 16px",
+            background: "#161B22",
+            borderRadius: 10,
+            border: "1px solid #21262D",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {/* Row 1: project meta + view switch + log toggle */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              justifyContent: "space-between",
               flexWrap: "wrap",
+              gap: 8,
             }}
           >
-            <span style={{ fontSize: 12, color: "#8B949E" }}>
-              {project.ruta_de_codificacion} · {project.estado}
-            </span>
-            {/* Status pills inline */}
-            <span
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 999,
-                background:
-                  docsDone === docs.length && docs.length > 0
-                    ? "#3FB95022"
-                    : "#8B949E22",
-                color:
-                  docsDone === docs.length && docs.length > 0
-                    ? "#3FB950"
-                    : "#8B949E",
-                border: `1px solid ${docsDone === docs.length && docs.length > 0 ? "#3FB95033" : "#8B949E33"}`,
-              }}
-            >
-              ✓ {docsDone} listo{docsDone !== 1 ? "s" : ""}
-            </span>
-            {docsNeedSegment > 0 && (
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background: "#D2992222",
-                  color: "#D29922",
-                  border: "1px solid #D2992233",
-                }}
-              >
-                ✂️ {docsNeedSegment} por segmentar
-              </span>
-            )}
-            {docsNeedAgents > 0 && (
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background: "#A371F722",
-                  color: "#A371F7",
-                  border: "1px solid #A371F733",
-                }}
-              >
-                🧠 {docsNeedAgents} por agentes
-              </span>
-            )}
-            <span
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 999,
-                background: cats.length > 0 ? "#A371F722" : "#8B949E22",
-                color: cats.length > 0 ? "#A371F7" : "#8B949E",
-                border: `1px solid ${cats.length > 0 ? "#A371F733" : "#8B949E33"}`,
-              }}
-            >
-              🏷️ {cats.length}
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 999,
-                fontWeight: 600,
-                background: playgroundReady ? "#3FB95022" : "#D2992222",
-                color: playgroundReady ? "#3FB950" : "#D29922",
-                border: `1px solid ${playgroundReady ? "#3FB95033" : "#D2992233"}`,
-              }}
-            >
-              {playgroundReady ? "✅ Playground" : "🔒 Sin cats"}
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Global view switch */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 0,
-                background: "#0D1117",
-                borderRadius: 6,
-                border: "1px solid #21262D",
-                overflow: "hidden",
+                gap: 10,
+                flexWrap: "wrap",
               }}
             >
-              <button
-                onClick={() => {
-                  setGlobalViewMode("original");
-                  setViewModeOverride({});
-                }}
+              <span style={{ fontSize: 12, color: "#8B949E" }}>
+                {project.ruta_de_codificacion} · {project.estado}
+              </span>
+              {/* Status pills inline */}
+              <span
                 style={{
-                  padding: "3px 10px",
-                  border: "none",
-                  fontSize: 11,
-                  cursor: "pointer",
+                  fontSize: 10,
+                  padding: "2px 8px",
+                  borderRadius: 999,
                   background:
-                    globalViewMode === "original" ? "#A371F7" : "transparent",
-                  color: globalViewMode === "original" ? "#FFF" : "#8B949E",
+                    docsDone === docs.length && docs.length > 0
+                      ? "#3FB95022"
+                      : "#8B949E22",
+                  color:
+                    docsDone === docs.length && docs.length > 0
+                      ? "#3FB950"
+                      : "#8B949E",
+                  border: `1px solid ${docsDone === docs.length && docs.length > 0 ? "#3FB95033" : "#8B949E33"}`,
                 }}
               >
-                📄 Orig
-              </button>
-              <button
-                onClick={() => {
-                  setGlobalViewMode("segmented");
-                  setViewModeOverride({});
-                }}
+                ✓ {docsDone} listo{docsDone !== 1 ? "s" : ""}
+              </span>
+              {docsNeedSegment > 0 && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "#D2992222",
+                    color: "#D29922",
+                    border: "1px solid #D2992233",
+                  }}
+                >
+                  ✂️ {docsNeedSegment} por segmentar
+                </span>
+              )}
+              {docsNeedAgents > 0 && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "#A371F722",
+                    color: "#A371F7",
+                    border: "1px solid #A371F733",
+                  }}
+                >
+                  🧠 {docsNeedAgents} por agentes
+                </span>
+              )}
+              <span
                 style={{
-                  padding: "3px 10px",
-                  border: "none",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  background:
-                    globalViewMode === "segmented" ? "#A371F7" : "transparent",
-                  color: globalViewMode === "segmented" ? "#FFF" : "#8B949E",
+                  fontSize: 10,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  background: cats.length > 0 ? "#A371F722" : "#8B949E22",
+                  color: cats.length > 0 ? "#A371F7" : "#8B949E",
+                  border: `1px solid ${cats.length > 0 ? "#A371F733" : "#8B949E33"}`,
                 }}
               >
-                ✂️ Seg
-              </button>
+                🏷️ {cats.length}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  fontWeight: 600,
+                  background: playgroundReady ? "#3FB95022" : "#D2992222",
+                  color: playgroundReady ? "#3FB950" : "#D29922",
+                  border: `1px solid ${playgroundReady ? "#3FB95033" : "#D2992233"}`,
+                }}
+              >
+                {playgroundReady ? "✅ Playground" : "🔒 Sin cats"}
+              </span>
             </div>
 
-            {/* Delete all segments */}
-            <button
-              onClick={async () => {
-                if (
-                  !confirm(
-                    "¿Eliminar TODOS los segmentos del proyecto? Los docs volverán a estado crudo.",
-                  )
-                )
-                  return;
-                const auth = `Bearer ${localStorage.getItem("access_token")}`;
-                await fetch(`/api/v1/documents/project/${id}/segments`, {
-                  method: "DELETE",
-                  headers: { Authorization: auth },
-                });
-                refreshDocs();
-                setSegments({});
-                getPipelineLog(id!)
-                  .then(setPipelineLog)
-                  .catch(() => {});
-              }}
-              title="Eliminar todos los segmentos y resetear docs"
-              style={{
-                padding: "3px 8px",
-                borderRadius: 6,
-                border: "1px solid #F8514944",
-                background: "transparent",
-                color: "#F85149",
-                fontSize: 10,
-                cursor: "pointer",
-                opacity: 0.7,
-              }}
-            >
-              🗑️ Segs
-            </button>
-
-            {/* Playground link */}
-            <Link
-              to={`/projects/${id}/theory`}
-              onClick={(e) => {
-                if (!playgroundReady) e.preventDefault();
-              }}
-              title={
-                playgroundReady
-                  ? "Explorar el modelo teórico"
-                  : "Necesitás ejecutar el pipeline primero"
-              }
-              style={{
-                padding: "3px 10px",
-                borderRadius: 6,
-                border: "1px solid #21262D",
-                background: playgroundReady ? "#3FB95022" : "#D2992222",
-                color: playgroundReady ? "#3FB950" : "#D29922",
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: playgroundReady ? "pointer" : "not-allowed",
-                textDecoration: "none",
-                opacity: playgroundReady ? 1 : 0.6,
-              }}
-            >
-              {playgroundReady ? "🧪 Playground →" : "🔒 Playground"}
-            </Link>
-
-            {/* Re-open pipeline overlay */}
-            {!showPipelineOverlay && pipelineLiveLogs.length > 0 && (
-              <button
-                onClick={() => setShowPipelineOverlay(true)}
-                title="Ver último log del pipeline"
-                style={{
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #A371F744",
-                  background: "#A371F722",
-                  color: "#A371F7",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                📜 Log
-              </button>
-            )}
-
-            {/* Log toggle */}
-            <button
-              onClick={() => setShowLog(!showLog)}
-              style={{
-                padding: "3px 10px",
-                borderRadius: 6,
-                border: "1px solid #21262D",
-                background: showLog ? "#A371F722" : "#1C2333",
-                color: showLog ? "#A371F7" : "#8B949E",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              📋 {docs.length > 0 ? `(${docsDone}/${docs.length})` : ""}
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Log (collapsible) */}
-        {showLog && docs.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-              paddingTop: 4,
-              borderTop: "1px solid #21262D",
-            }}
-          >
-            {docs.map((d) => {
-              const badge = getEstadoBadge(d);
-              const log = getDocLog(d.id);
-              return (
-                <div
-                  key={d.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "3px 6px",
-                    borderRadius: 3,
-                    background: "#0D1117",
-                    fontSize: 11,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#E6EDF3",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      flex: 1,
-                      marginRight: 8,
-                    }}
-                  >
-                    {d.original_filename}
-                  </span>
-                  <span
-                    style={{ display: "flex", gap: 4, alignItems: "center" }}
-                  >
-                    {log?.segments_count ? (
-                      <span style={{ fontSize: 9, color: "#8B949E" }}>
-                        {log.segments_count} seg
-                      </span>
-                    ) : null}
-                    {log?.codes_count ? (
-                      <span style={{ fontSize: 9, color: "#8B949E" }}>
-                        {log.codes_count} cod
-                      </span>
-                    ) : null}
-                    <span
-                      style={{
-                        fontSize: 9,
-                        padding: "1px 6px",
-                        borderRadius: 999,
-                        background: badge.bg,
-                        color: badge.color,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {badge.text}
-                    </span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Row 3: Pipeline buttons */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-            justifyContent: "flex-start",
-            paddingTop: 4,
-            borderTop: "1px solid #21262D",
-          }}
-        >
-          {pipelineRunning ? (
-            <button
-              onClick={() => {
-                abortRef.current = true;
-                setStageStatuses((prev) => {
-                  const n = { ...prev };
-                  Object.keys(n).forEach((k) => {
-                    if (n[k] === "running") n[k] = "error";
-                  });
-                  return n;
-                });
-                setPipelineRunning(false);
-                setShowPipelineOverlay(false);
-                setPipelineMsg("⏹ Cancelado.");
-                if (logPollRef.current) {
-                  clearInterval(logPollRef.current);
-                  logPollRef.current = null;
-                }
-              }}
-              style={{
-                padding: "8px 20px",
-                borderRadius: 6,
-                border: "1px solid #F8514944",
-                background: "#F8514922",
-                color: "#F85149",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              ⏹ Cancelar pipeline
-            </button>
-          ) : docsNeedAgents > 0 ? (
-            <>
-              <button
-                onClick={() => runPipeline(false)}
-                disabled={docs.length === 0}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 6,
-                  border: "none",
-                  cursor: "pointer",
-                  background: "linear-gradient(135deg, #3FB950, #58A6FF)",
-                  color: "#FFF",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  boxShadow: "0 2px 12px rgba(63,185,80,0.3)",
-                }}
-              >
-                {`▶ ${nextStage.icon} ${nextStage.label} (${nextStageCount} doc${nextStageCount !== 1 ? "s" : ""})`}
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm("¿Re-ejecutar TODO desde cero?"))
-                    runPipeline(true);
-                }}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #F8514944",
-                  background: "transparent",
-                  color: "#F85149",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                🔄 Forzar todo
-              </button>
-            </>
-          ) : (
-            <>
-              {docs.length > 0 && (
-                <button
-                  onClick={() => runPipeline(false)}
-                  disabled={docs.length === 0}
-                  style={{
-                    padding: "10px 24px",
-                    borderRadius: 6,
-                    border: "none",
-                    cursor: "pointer",
-                    background: "linear-gradient(135deg, #A371F7, #3FB950)",
-                    color: "#FFF",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    boxShadow: "0 4px 24px rgba(163,113,247,0.3)",
-                  }}
-                >
-                  🧠 Ejecutar Pipeline IA
-                </button>
-              )}
-              {docsDone > 0 && (
-                <button
-                  onClick={() => {
-                    if (confirm("¿Re-ejecutar desde cero?")) runPipeline(true);
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid #F8514944",
-                    background: "transparent",
-                    color: "#F85149",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  🔄 Re-ejecutar
-                </button>
-              )}
-            </>
-          )}
-          {pipelineMsg && pipelineRunning && (
-            <span style={{ fontSize: 11, color: "#A371F7" }}>
-              {pipelineMsg}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Upload ─────────────────────────────────── */}
-      <div style={{ marginBottom: 20 }}>
-        <label
-          style={{
-            display: "inline-block",
-            padding: "8px 20px",
-            borderRadius: 6,
-            background: "#1C2333",
-            border: "1px dashed #30363D",
-            color: "#E6EDF3",
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          📎 Subir documento (PDF, TXT, DOCX)
-          <input
-            type="file"
-            accept=".pdf,.txt,.docx"
-            style={{ display: "none" }}
-            onChange={handleUpload}
-          />
-        </label>
-      </div>
-
-      {/* ── Documents ──────────────────────────────── */}
-      <h3 style={{ marginBottom: 12 }}>Documentos ({docs.length})</h3>
-      {docs.length === 0 && (
-        <p style={{ color: "#8B949E", fontSize: 13 }}>
-          Sin documentos. Subí un archivo para empezar.
-        </p>
-      )}
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {docs.map((d) => {
-          const docHasSegs = hasSegments(d);
-          const currentView = docViewMode(d);
-          return (
-            <li
-              key={d.id}
-              style={{
-                marginBottom: 8,
-                padding: "10px 14px",
-                background: "#161B22",
-                borderRadius: 8,
-                border: "1px solid #21262D",
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Global view switch */}
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: 8,
+                  gap: 0,
+                  background: "#0D1117",
+                  borderRadius: 6,
+                  border: "1px solid #21262D",
+                  overflow: "hidden",
                 }}
               >
-                <div
+                <button
+                  onClick={() => {
+                    setGlobalViewMode("original");
+                    setViewModeOverride({});
+                  }}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
+                    padding: "3px 10px",
+                    border: "none",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    background:
+                      globalViewMode === "original" ? "#A371F7" : "transparent",
+                    color: globalViewMode === "original" ? "#FFF" : "#8B949E",
                   }}
                 >
-                  <strong style={{ color: "#E6EDF3" }}>
-                    {d.original_filename}
-                  </strong>
-                  <span style={{ fontSize: 11, color: "#8B949E" }}>
-                    {d.mime_type}
-                  </span>
-                  {/* Estado badge from log */}
-                  {(() => {
-                    const badge = getEstadoBadge(d);
-                    return (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 999,
-                          background: badge.bg,
-                          color: badge.color,
-                          border: `1px solid ${badge.color}33`,
-                        }}
-                      >
-                        {badge.text}
-                      </span>
-                    );
-                  })()}
-                  {punctStatus[d.id] && (
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: punctStatus[d.id].startsWith("✅")
-                          ? "#3FB950"
-                          : "#8B949E",
-                      }}
-                    >
-                      {punctStatus[d.id]}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <button onClick={() => toggleSegments(d.id)} style={btnSmall}>
-                    {expandedDoc === d.id ? "Ocultar texto" : "Ver texto"}
-                  </button>
-                  <button
-                    onClick={() => handlePunctuate(d.id)}
-                    disabled={d.estado !== "crudo" && punctRunning !== d.id}
-                    title={
-                      d.estado !== "crudo"
-                        ? "No se puede preprocesar después de segmentar"
-                        : "Mejorar puntuación del texto"
-                    }
-                    style={{
-                      ...btnSmall,
-                      background:
-                        d.estado !== "crudo" && punctRunning !== d.id
-                          ? "#21262D"
-                          : punctRunning === d.id
-                            ? "#F85149"
-                            : "#A371F7",
-                      color:
-                        d.estado !== "crudo" && punctRunning !== d.id
-                          ? "#484F58"
-                          : "#FFF",
-                      cursor:
-                        d.estado !== "crudo" && punctRunning !== d.id
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    {punctRunning === d.id
-                      ? "⏹ Cancelar"
-                      : d.estado !== "crudo"
-                        ? "✨ Preprocesar"
-                        : "✨ Preprocesar"}
-                  </button>
-                  {punctRunning !== d.id && originalTexts.current[d.id] && (
-                    <button
-                      onClick={async () => {
-                        const orig = originalTexts.current[d.id];
-                        if (!orig || !confirm("¿Restaurar texto original?"))
-                          return;
-                        await fetch(
-                          `/api/v1/documents/${d.id}/undo-punctuate`,
-                          {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-                            },
-                            body: JSON.stringify({ original_text: orig }),
-                          },
-                        );
-                        delete originalTexts.current[d.id];
-                        setPunctStatus((prev) => ({
-                          ...prev,
-                          [d.id]: "↩ Restaurado",
-                        }));
-                        refreshDocs();
-                        setSegments((prev) => {
-                          const n = { ...prev };
-                          delete n[d.id];
-                          return n;
-                        });
-                      }}
-                      style={{ ...btnSmall, color: "#D29922" }}
-                    >
-                      ↩ Deshacer
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      if (!confirm("¿Eliminar?")) return;
-                      await deleteDocument(d.id);
-                      refreshDocs();
-                    }}
-                    style={{ ...btnSmall, color: "#F85149" }}
-                  >
-                    ✕
-                  </button>
-                </div>
+                  📄 Orig
+                </button>
+                <button
+                  onClick={() => {
+                    setGlobalViewMode("segmented");
+                    setViewModeOverride({});
+                  }}
+                  style={{
+                    padding: "3px 10px",
+                    border: "none",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    background:
+                      globalViewMode === "segmented"
+                        ? "#A371F7"
+                        : "transparent",
+                    color: globalViewMode === "segmented" ? "#FFF" : "#8B949E",
+                  }}
+                >
+                  ✂️ Seg
+                </button>
               </div>
 
-              {/* ── Expanded text view ── */}
-              {expandedDoc === d.id && (
-                <div style={{ marginTop: 8 }}>
-                  {/* Per-doc override toggle (shows when doc has segments) */}
-                  {docHasSegs && (
+              {/* Delete all segments */}
+              <button
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      "¿Eliminar TODOS los segmentos del proyecto? Los docs volverán a estado crudo.",
+                    )
+                  )
+                    return;
+                  const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                  await fetch(`/api/v1/documents/project/${id}/segments`, {
+                    method: "DELETE",
+                    headers: { Authorization: auth },
+                  });
+                  refreshDocs();
+                  setSegments({});
+                  getPipelineLog(id!)
+                    .then(setPipelineLog)
+                    .catch(() => {});
+                }}
+                title="Eliminar todos los segmentos y resetear docs"
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #F8514944",
+                  background: "transparent",
+                  color: "#F85149",
+                  fontSize: 10,
+                  cursor: "pointer",
+                  opacity: 0.7,
+                }}
+              >
+                🗑️ Segs
+              </button>
+
+              {/* Playground link */}
+              <Link
+                to={`/projects/${id}/theory`}
+                onClick={(e) => {
+                  if (!playgroundReady) e.preventDefault();
+                }}
+                title={
+                  playgroundReady
+                    ? "Explorar el modelo teórico"
+                    : "Necesitás ejecutar el pipeline primero"
+                }
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #21262D",
+                  background: playgroundReady ? "#3FB95022" : "#D2992222",
+                  color: playgroundReady ? "#3FB950" : "#D29922",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: playgroundReady ? "pointer" : "not-allowed",
+                  textDecoration: "none",
+                  opacity: playgroundReady ? 1 : 0.6,
+                }}
+              >
+                {playgroundReady ? "🧪 Playground →" : "🔒 Playground"}
+              </Link>
+
+              {/* Status pills inline */}
+              {/* Log toggle */}
+            </div>
+          </div>
+
+          {/* ── Upload ─────────────────────────────────── */}
+          <div style={{ marginBottom: 20 }}>
+            <label
+              style={{
+                display: "inline-block",
+                padding: "8px 20px",
+                borderRadius: 6,
+                background: "#1C2333",
+                border: "1px dashed #30363D",
+                color: "#E6EDF3",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              📎 Subir documento (PDF, TXT, DOCX)
+              <input
+                type="file"
+                accept=".pdf,.txt,.docx"
+                style={{ display: "none" }}
+                onChange={handleUpload}
+              />
+            </label>
+          </div>
+
+          {/* ── Documents ──────────────────────────────── */}
+          <h3 style={{ marginBottom: 12 }}>Documentos ({docs.length})</h3>
+          {docs.length === 0 && (
+            <p style={{ color: "#8B949E", fontSize: 13 }}>
+              Sin documentos. Subí un archivo para empezar.
+            </p>
+          )}
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {docs.map((d) => {
+              const docHasSegs = hasSegments(d);
+              const currentView = docViewMode(d);
+              return (
+                <li
+                  key={d.id}
+                  style={{
+                    marginBottom: 8,
+                    padding: "10px 14px",
+                    background: "#161B22",
+                    borderRadius: 8,
+                    border: "1px solid #21262D",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 8,
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                        marginBottom: 8,
+                        flexWrap: "wrap",
                       }}
                     >
+                      <strong style={{ color: "#E6EDF3" }}>
+                        {d.original_filename}
+                      </strong>
                       <span style={{ fontSize: 11, color: "#8B949E" }}>
-                        Este documento:
+                        {d.mime_type}
                       </span>
-                      <button
-                        onClick={() =>
-                          setViewModeOverride((prev) => ({
-                            ...prev,
-                            [d.id]: "original",
-                          }))
-                        }
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          border: "1px solid #21262D",
-                          background:
-                            currentView === "original" ? "#A371F7" : "#1C2333",
-                          color: "#E6EDF3",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Original
-                      </button>
-                      <button
-                        onClick={() =>
-                          setViewModeOverride((prev) => ({
-                            ...prev,
-                            [d.id]: "segmented",
-                          }))
-                        }
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          border: "1px solid #21262D",
-                          background:
-                            currentView === "segmented" ? "#A371F7" : "#1C2333",
-                          color: "#E6EDF3",
-                          fontSize: 11,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Segmentos ({segments[d.id]?.length || "?"})
-                      </button>
-                      {viewModeOverride[d.id] && (
-                        <button
-                          onClick={() =>
-                            setViewModeOverride((prev) => {
-                              const n = { ...prev };
-                              delete n[d.id];
-                              return n;
-                            })
-                          }
-                          style={{
-                            fontSize: 10,
-                            color: "#8B949E",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            textDecoration: "underline",
-                          }}
-                        >
-                          usar global
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <textarea
-                    readOnly
-                    disabled={punctRunning === d.id}
-                    style={{
-                      width: "100%",
-                      minHeight: 150,
-                      fontFamily: "monospace",
-                      fontSize: 13,
-                      background: "#0D1117",
-                      color: "#E6EDF3",
-                      border: "1px solid #21262D",
-                      borderRadius: 6,
-                      padding: 8,
-                      resize: "vertical",
-                    }}
-                    value={
-                      currentView === "segmented" && segments[d.id]?.length
-                        ? segments[d.id]!.map(
-                            (s) => `[${s.posicion}] ${s.texto}`,
-                          ).join("\n\n")
-                        : d.texto_extraido || "(sin texto disponible)"
-                    }
-                  />
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
-
-      {/* ── Categories ─────────────────────────────── */}
-      <h3 style={{ marginBottom: 12 }}>Categorías ({cats.length})</h3>
-      {cats.length === 0 && (
-        <p style={{ color: "#8B949E", fontSize: 13 }}>
-          Sin categorías aún. Ejecutá el Pipeline IA para generarlas.
-        </p>
-      )}
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {cats.map((c) => (
-          <li
-            key={c.id}
-            style={{
-              marginBottom: 8,
-              padding: "10px 14px",
-              background: "#161B22",
-              borderRadius: 8,
-              border: "1px solid #21262D",
-            }}
-          >
-            <strong>
-              {c.nombre}
-              {c.es_central && " ⭐"}
-            </strong>
-            <br />
-            <span style={{ fontSize: 13, color: "#8B949E" }}>
-              {c.definicion}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {/* ══════════════════════════════════════════════════════════════
-          ── PIPELINE STAGE OVERLAY (Vercel v0 style) ───────────────
-          ══════════════════════════════════════════════════════════════ */}
-      {showPipelineOverlay && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0,0,0,0.7)",
-            backdropFilter: "blur(4px)",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !pipelineRunning) {
-              setShowPipelineOverlay(false);
-            }
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              maxWidth: 900,
-              maxHeight: "80vh",
-            }}
-          >
-            <div
-              style={{
-                background: "#161B22",
-                border: "1px solid #21262D",
-                borderRadius: 16,
-                padding: "32px 40px",
-                minWidth: 420,
-                maxWidth: 500,
-                boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-                flexShrink: 0,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                }}
-              >
-                <h2
-                  style={{
-                    margin: "0 0 8px",
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: "#E6EDF3",
-                    textAlign: "center",
-                    flex: 1,
-                  }}
-                >
-                  {pipelineRunning
-                    ? "Ejecutando Pipeline IA"
-                    : pipelineMsg.includes("✅")
-                      ? "Pipeline Completado"
-                      : pipelineMsg.includes("⏹")
-                        ? "Pipeline Detenido"
-                        : "Pipeline Finalizado"}
-                </h2>
-                {!pipelineRunning && (
-                  <button
-                    onClick={() => setShowPipelineOverlay(false)}
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      border: "1px solid #30363D",
-                      background: "transparent",
-                      color: "#8B949E",
-                      fontSize: 16,
-                      cursor: "pointer",
-                      lineHeight: 1,
-                    }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-              <p
-                style={{
-                  margin: "0 0 24px",
-                  fontSize: 12,
-                  color: "#8B949E",
-                  textAlign: "center",
-                }}
-              >
-                {pipelineMsg}
-              </p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                {PIPELINE_STAGES.map((stage, idx) => {
-                  const status = stageStatuses[stage.key] || "pending";
-                  const isLast = idx === PIPELINE_STAGES.length - 1;
-                  return (
-                    <div key={stage.key}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 14,
-                          padding: "12px 0",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: "50%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 16,
-                            flexShrink: 0,
-                            background:
-                              status === "done"
-                                ? "#3FB95022"
-                                : status === "running"
-                                  ? "#A371F722"
-                                  : status === "error"
-                                    ? "#F8514922"
-                                    : "#21262D",
-                            border:
-                              status === "running"
-                                ? "2px solid #A371F7"
-                                : status === "done"
-                                  ? "2px solid #3FB950"
-                                  : status === "error"
-                                    ? "2px solid #F85149"
-                                    : "2px solid #30363D",
-                            animation:
-                              status === "running"
-                                ? "pulse 1.5s ease-in-out infinite"
-                                : "none",
-                          }}
-                        >
-                          {status === "done" ? (
-                            "✓"
-                          ) : status === "error" ? (
-                            "✕"
-                          ) : status === "running" ? (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                width: 12,
-                                height: 12,
-                                borderRadius: "50%",
-                                background: "#A371F7",
-                              }}
-                            />
-                          ) : (
-                            <span style={{ color: "#8B949E", fontSize: 14 }}>
-                              {stage.icon}
-                            </span>
-                          )}
-                        </div>
-
-                        <div style={{ flex: 1 }}>
-                          <div
+                      {/* Estado badge from log */}
+                      {(() => {
+                        const badge = getEstadoBadge(d);
+                        return (
+                          <span
                             style={{
-                              fontSize: 14,
-                              fontWeight: status === "running" ? 600 : 400,
-                              color:
-                                status === "done"
-                                  ? "#3FB950"
-                                  : status === "running"
-                                    ? "#E6EDF3"
-                                    : status === "error"
-                                      ? "#F85149"
-                                      : "#8B949E",
+                              fontSize: 10,
+                              padding: "2px 8px",
+                              borderRadius: 999,
+                              background: badge.bg,
+                              color: badge.color,
+                              border: `1px solid ${badge.color}33`,
                             }}
                           >
-                            {stage.label}
-                          </div>
-                        </div>
-
+                            {badge.text}
+                          </span>
+                        );
+                      })()}
+                      {punctStatus[d.id] && (
                         <span
                           style={{
                             fontSize: 11,
-                            color:
-                              status === "done"
-                                ? "#3FB950"
-                                : status === "running"
-                                  ? "#A371F7"
-                                  : status === "error"
-                                    ? "#F85149"
-                                    : "#484F58",
+                            color: punctStatus[d.id].startsWith("✅")
+                              ? "#3FB950"
+                              : "#8B949E",
                           }}
                         >
-                          {status === "done"
-                            ? "Completado"
-                            : status === "running"
-                              ? "En progreso…"
-                              : status === "error"
-                                ? "Error"
-                                : "Pendiente"}
+                          {punctStatus[d.id]}
                         </span>
-                      </div>
-
-                      {!isLast && (
-                        <div style={{ display: "flex", paddingLeft: 15 }}>
-                          <div
-                            style={{
-                              width: 2,
-                              height: 16,
-                              background:
-                                status === "done"
-                                  ? "#3FB950"
-                                  : status === "running"
-                                    ? "linear-gradient(to bottom, #A371F7, #21262D)"
-                                    : "#21262D",
-                              borderRadius: 1,
-                            }}
-                          />
-                        </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-
-              {pipelineRunning ? (
-                <div style={{ textAlign: "center", marginTop: 24 }}>
-                  <button
-                    onClick={async () => {
-                      setStoppingWorkers(true);
-                      abortRef.current = true;
-                      // Clear polling
-                      if (logPollRef.current) {
-                        clearInterval(logPollRef.current);
-                        logPollRef.current = null;
-                      }
-                      if (id) {
-                        await stopProjectPipeline(id).catch(() => {});
-                      }
-                      // Reset ALL stages — DB was rolled back
-                      resetStages();
-                      setPipelineRunning(false);
-                      setStoppingWorkers(false);
-                      setPipelineMsg("⏹ Pipeline detenido — DB restaurada.");
-                    }}
-                    disabled={stoppingWorkers}
-                    style={{
-                      padding: "10px 28px",
-                      borderRadius: 8,
-                      border: "1px solid #F8514944",
-                      background: stoppingWorkers ? "#F8514910" : "#F8514922",
-                      color: "#F85149",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: stoppingWorkers ? "wait" : "pointer",
-                      opacity: stoppingWorkers ? 0.6 : 1,
-                    }}
-                  >
-                    {stoppingWorkers
-                      ? "⏳ Deteniendo…"
-                      : "⏹ Detener todos los workers"}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ textAlign: "center", marginTop: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      justifyContent: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      onClick={() => setShowPipelineOverlay(false)}
-                      style={{
-                        padding: "8px 24px",
-                        borderRadius: 6,
-                        border: "1px solid #21262D",
-                        background: "#1C2333",
-                        color: "#E6EDF3",
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
+                    <div
+                      style={{ display: "flex", gap: 6, alignItems: "center" }}
                     >
-                      Cerrar
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (!id) return;
-                        if (
-                          !confirm(
-                            "¿Reintentar todas las tareas fallidas del último pipeline?",
-                          )
-                        )
-                          return;
-                        await restartFailedTasks(id).catch(() => {});
-                        setPipelineMsg("🔄 Reintentando tareas fallidas…");
-                        refreshDocs();
-                        getPipelineLog(id!)
-                          .then(setPipelineLog)
-                          .catch(() => {});
-                      }}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: 6,
-                        border: "1px solid #D2992233",
-                        background: "#D2992222",
-                        color: "#D29922",
-                        fontSize: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      🔄 Reintentar fallidas
-                    </button>
+                      <button
+                        onClick={() => toggleSegments(d.id)}
+                        style={btnSmall}
+                      >
+                        {expandedDoc === d.id ? "Ocultar texto" : "Ver texto"}
+                      </button>
+                      <button
+                        onClick={() => handlePunctuate(d.id)}
+                        disabled={d.estado !== "crudo" && punctRunning !== d.id}
+                        title={
+                          d.estado !== "crudo"
+                            ? "No se puede preprocesar después de segmentar"
+                            : "Mejorar puntuación del texto"
+                        }
+                        style={{
+                          ...btnSmall,
+                          background:
+                            d.estado !== "crudo" && punctRunning !== d.id
+                              ? "#21262D"
+                              : punctRunning === d.id
+                                ? "#F85149"
+                                : "#A371F7",
+                          color:
+                            d.estado !== "crudo" && punctRunning !== d.id
+                              ? "#484F58"
+                              : "#FFF",
+                          cursor:
+                            d.estado !== "crudo" && punctRunning !== d.id
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {punctRunning === d.id
+                          ? "⏹ Cancelar"
+                          : d.estado !== "crudo"
+                            ? "✨ Preprocesar"
+                            : "✨ Preprocesar"}
+                      </button>
+                      {punctRunning !== d.id && originalTexts.current[d.id] && (
+                        <button
+                          onClick={async () => {
+                            const orig = originalTexts.current[d.id];
+                            if (!orig || !confirm("¿Restaurar texto original?"))
+                              return;
+                            await fetch(
+                              `/api/v1/documents/${d.id}/undo-punctuate`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                                },
+                                body: JSON.stringify({ original_text: orig }),
+                              },
+                            );
+                            delete originalTexts.current[d.id];
+                            setPunctStatus((prev) => ({
+                              ...prev,
+                              [d.id]: "↩ Restaurado",
+                            }));
+                            refreshDocs();
+                            setSegments((prev) => {
+                              const n = { ...prev };
+                              delete n[d.id];
+                              return n;
+                            });
+                          }}
+                          style={{ ...btnSmall, color: "#D29922" }}
+                        >
+                          ↩ Deshacer
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (!confirm("¿Eliminar?")) return;
+                          await deleteDocument(d.id);
+                          refreshDocs();
+                        }}
+                        style={{ ...btnSmall, color: "#F85149" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Live log panel */}
-            {pipelineLiveLogs.length > 0 && (
-              <div
+                  {/* ── Expanded text view ── */}
+                  {expandedDoc === d.id && (
+                    <div style={{ marginTop: 8 }}>
+                      {/* Per-doc override toggle (shows when doc has segments) */}
+                      {docHasSegs && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span style={{ fontSize: 11, color: "#8B949E" }}>
+                            Este documento:
+                          </span>
+                          <button
+                            onClick={() =>
+                              setViewModeOverride((prev) => ({
+                                ...prev,
+                                [d.id]: "original",
+                              }))
+                            }
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: 4,
+                              border: "1px solid #21262D",
+                              background:
+                                currentView === "original"
+                                  ? "#A371F7"
+                                  : "#1C2333",
+                              color: "#E6EDF3",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Original
+                          </button>
+                          <button
+                            onClick={() =>
+                              setViewModeOverride((prev) => ({
+                                ...prev,
+                                [d.id]: "segmented",
+                              }))
+                            }
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: 4,
+                              border: "1px solid #21262D",
+                              background:
+                                currentView === "segmented"
+                                  ? "#A371F7"
+                                  : "#1C2333",
+                              color: "#E6EDF3",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Segmentos ({segments[d.id]?.length || "?"})
+                          </button>
+                          {viewModeOverride[d.id] && (
+                            <button
+                              onClick={() =>
+                                setViewModeOverride((prev) => {
+                                  const n = { ...prev };
+                                  delete n[d.id];
+                                  return n;
+                                })
+                              }
+                              style={{
+                                fontSize: 10,
+                                color: "#8B949E",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                textDecoration: "underline",
+                              }}
+                            >
+                              usar global
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <textarea
+                        readOnly
+                        disabled={punctRunning === d.id}
+                        style={{
+                          width: "100%",
+                          minHeight: 150,
+                          fontFamily: "monospace",
+                          fontSize: 13,
+                          background: "#0D1117",
+                          color: "#E6EDF3",
+                          border: "1px solid #21262D",
+                          borderRadius: 6,
+                          padding: 8,
+                          resize: "vertical",
+                        }}
+                        value={
+                          currentView === "segmented" && segments[d.id]?.length
+                            ? segments[d.id]!.map(
+                                (s) => `[${s.posicion}] ${s.texto}`,
+                              ).join("\n\n")
+                            : d.texto_extraido || "(sin texto disponible)"
+                        }
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
+
+          {/* ── Categories ─────────────────────────────── */}
+          <h3 style={{ marginBottom: 12 }}>Categorías ({cats.length})</h3>
+          {cats.length === 0 && (
+            <p style={{ color: "#8B949E", fontSize: 13 }}>
+              Sin categorías aún. Ejecutá el Pipeline IA para generarlas.
+            </p>
+          )}
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {cats.map((c) => (
+              <li
+                key={c.id}
                 style={{
-                  background: "#0D1117",
+                  marginBottom: 8,
+                  padding: "10px 14px",
+                  background: "#161B22",
+                  borderRadius: 8,
                   border: "1px solid #21262D",
-                  borderRadius: 16,
-                  padding: "16px 20px",
-                  minWidth: 280,
-                  maxWidth: 380,
-                  boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#8B949E",
-                    marginBottom: 8,
-                  }}
-                >
-                  📋 Log en vivo
-                </div>
-                <div
-                  style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    fontSize: 11,
-                    fontFamily: "monospace",
-                    color: "#8B949E",
-                    maxHeight: "60vh",
-                  }}
-                >
-                  {pipelineLiveLogs.map((l, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "2px 0",
-                        borderBottom: "1px solid #21262D22",
-                      }}
-                    >
-                      <span style={{ color: "#484F58" }}>
-                        {new Date(l.ts * 1000).toLocaleTimeString()}
-                      </span>{" "}
-                      {l.msg}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                <strong>
+                  {c.nombre}
+                  {c.es_central && " ⭐"}
+                </strong>
+                <br />
+                <span style={{ fontSize: 13, color: "#8B949E" }}>
+                  {c.definicion}
+                </span>
+              </li>
+            ))}
+          </ul>
 
-      <style>{`
+          {/* ── HITL Modal ── */}
+          <style>{`
         body {
           background: #0D1117;
           margin: 0;
@@ -1737,23 +1271,361 @@ export default function ProjectDetail() {
         }
       `}</style>
 
-      {/* ── HITL Modal ── */}
-      {hitlPending.length > 0 && id && (
-        <HITLModal
-          open={showHITLModal}
-          projectId={id}
-          gateName={hitlPending[0].gate_name}
-          proposal={{ pending: hitlPending[0].proposal_summary }}
-          criticVerdict={{ verdict: hitlPending[0].critic_verdict }}
-          onClose={() => setShowHITLModal(false)}
-          onDecided={() => {
-            setShowHITLModal(false);
-            getPendingHitl(id)
-              .then(setHitlPending)
-              .catch(() => {});
-          }}
-        />
-      )}
+          {/* ── HITL Modal ── */}
+          {hitlPending.length > 0 && id && (
+            <HITLModal
+              open={showHITLModal}
+              projectId={id}
+              gateName={hitlPending[0].gate_name}
+              onClose={() => setShowHITLModal(false)}
+              onDecided={() => {
+                setShowHITLModal(false);
+                getPendingHitl(id)
+                  .then(setHitlPending)
+                  .catch(() => {});
+              }}
+            />
+          )}
+
+          {/* ── Memo History ── */}
+          <div
+            style={{
+              marginTop: 24,
+              paddingTop: 20,
+              borderTop: "1px solid #21262D",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#E6EDF3" }}>
+                📝 Historial de Memos
+              </span>
+              <span style={{ fontSize: 11, color: "#484F58" }}>
+                {pipelineLog?.documents?.length || 0} docs · {agentMemos.length}{" "}
+                memos · {agentFamilies.length} familias
+              </span>
+            </div>
+            <MemoHistory
+              memos={agentMemos}
+              families={agentFamilies}
+              activeFilter={memoFilter}
+              showIntermediates={showIntermediates}
+              onFilterChange={setMemoFilter}
+              onToggleIntermediates={setShowIntermediates}
+            />
+          </div>
+        </div>
+
+        {/* ── End Left Column ── */}
+      </div>
+
+      {/* ── Left: Pipeline Flow Panel ── */}
+      <div
+        style={{
+          width: 340,
+          flexShrink: 0,
+          borderRight: "1px solid #21262D",
+          background: "#161B22",
+          padding: "16px 14px",
+          overflowY: "auto",
+          maxHeight: "100vh",
+          position: "sticky",
+          top: 0,
+        }}
+      >
+        {/* Pipeline Flow — inline */}
+        <div style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 14,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#8B949E" }}>
+              {showLog ? "📋 Logs" : "🔄 Flujo del Pipeline"}
+            </span>
+            <button
+              onClick={() => setShowLog(!showLog)}
+              style={{
+                background: "#21262D",
+                border: "1px solid #30363D",
+                borderRadius: 6,
+                color: "#8B949E",
+                fontSize: 11,
+                padding: "3px 8px",
+                cursor: "pointer",
+              }}
+            >
+              {showLog ? "📊 Diagrama" : "📋 Logs"}
+            </button>
+            {!pipelineRunning && (
+              <button
+                onClick={() => runPipeline(false)}
+                disabled={docs.length === 0}
+                style={{
+                  background: "linear-gradient(135deg, #A371F7, #3FB950)",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "#FFF",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "4px 12px",
+                  cursor: docs.length === 0 ? "not-allowed" : "pointer",
+                  opacity: docs.length === 0 ? 0.5 : 1,
+                }}
+              >
+                ▶
+              </button>
+            )}
+            {pipelineRunning && (
+              <button
+                onClick={() => {
+                  abortRef.current = true;
+                  if (logPollRef.current) {
+                    clearInterval(logPollRef.current);
+                    logPollRef.current = null;
+                  }
+                }}
+                style={{
+                  background: "#F8514922",
+                  border: "1px solid #F8514944",
+                  borderRadius: 6,
+                  color: "#F85149",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                ⏹
+              </button>
+            )}
+          </div>
+
+          {pipelineMsg && (
+            <div
+              style={{
+                fontSize: 11,
+                color: pipelineFailed ? "#F85149" : "#8B949E",
+                marginBottom: 12,
+                padding: "6px 10px",
+                background: pipelineFailed ? "#F8514922" : "#21262D",
+                borderRadius: 6,
+                border: `1px solid ${pipelineFailed ? "#F8514944" : "#30363D"}`,
+              }}
+            >
+              {pipelineMsg}
+            </div>
+          )}
+
+          {showLog ? (
+            /* ── Live Log Panel ── */
+            <div
+              ref={logPanelRef}
+              style={{
+                background: "#0D1117",
+                borderRadius: 6,
+                border: "1px solid #21262D",
+                padding: 8,
+                maxHeight: 400,
+                overflowY: "auto",
+                fontSize: 10,
+                fontFamily: "monospace",
+                marginBottom: 12,
+              }}
+            >
+              {pipelineLiveLogs.length === 0 && (
+                <span style={{ color: "#484F58" }}>Sin logs aún…</span>
+              )}
+              {pipelineLiveLogs.map((l, i) => {
+                const msg = l.msg || "";
+                const isError = /\[ERROR\]|❌|failed|error/i.test(msg);
+                const isActive =
+                  /A[123]:|C0?6:|B[123]:|B2\.5:|\[COREF\]|\[SegText\]|Agent \w|LLM:|Phase B|Pipeline log/i.test(
+                    msg,
+                  );
+                const color = isError
+                  ? "#F85149"
+                  : isActive
+                    ? "#58A6FF"
+                    : "#8B949E";
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "1px 0",
+                      color,
+                    }}
+                  >
+                    <span style={{ color: "#484F58" }}>
+                      {new Date(l.ts * 1000).toLocaleTimeString()}
+                    </span>{" "}
+                    {msg}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              {PIPELINE_STAGES.map((stage, idx) => {
+                const status = stageStatuses[stage.key] || "pending";
+                const isLast = idx === PIPELINE_STAGES.length - 1;
+                const isClickable =
+                  (status === "done" || status === "error") && !pipelineRunning;
+                return (
+                  <div key={stage.key}>
+                    <div
+                      onClick={() => {
+                        if (!isClickable) return;
+                        const lastDone = findLastCompletedIdx();
+                        if (status === "error") {
+                          restartFromStage(stage.key);
+                          return;
+                        }
+                        if (idx === lastDone) {
+                          // Clicking last completed: restart from here
+                          restartFromStage(stage.key);
+                        } else if (idx < lastDone) {
+                          // Clicking earlier completed: warn
+                          if (
+                            !confirm(
+                              `¿Reiniciar desde "${stage.label}"? Se eliminarán datos de etapas posteriores.`,
+                            )
+                          )
+                            return;
+                          restartFromStage(stage.key);
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "8px 0",
+                        cursor: isClickable ? "pointer" : "default",
+                        opacity:
+                          status === "pending" && !pipelineRunning ? 0.5 : 1,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          flexShrink: 0,
+                          background:
+                            status === "done"
+                              ? "#3FB95022"
+                              : status === "running"
+                                ? "#A371F722"
+                                : status === "error"
+                                  ? "#F8514922"
+                                  : "#21262D",
+                          border:
+                            status === "running"
+                              ? "2px solid #A371F7"
+                              : status === "done"
+                                ? "2px solid #3FB950"
+                                : status === "error"
+                                  ? "2px solid #F85149"
+                                  : "2px solid #30363D",
+                          animation:
+                            status === "running"
+                              ? "pulse 1.5s ease-in-out infinite"
+                              : "none",
+                        }}
+                      >
+                        {status === "done" ? (
+                          "✓"
+                        ) : status === "error" ? (
+                          "✕"
+                        ) : status === "running" ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background: "#A371F7",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ color: "#8B949E", fontSize: 11 }}>
+                            {stage.icon}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: status === "running" ? 600 : 400,
+                            color:
+                              status === "done"
+                                ? "#3FB950"
+                                : status === "running"
+                                  ? "#E6EDF3"
+                                  : status === "error"
+                                    ? "#F85149"
+                                    : "#8B949E",
+                          }}
+                        >
+                          {stage.label}
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color:
+                            status === "done"
+                              ? "#3FB950"
+                              : status === "running"
+                                ? "#A371F7"
+                                : status === "error"
+                                  ? "#F85149"
+                                  : "#484F58",
+                        }}
+                      >
+                        {status === "done"
+                          ? "✓"
+                          : status === "running"
+                            ? "…"
+                            : status === "error"
+                              ? "✕"
+                              : "○"}
+                      </span>
+                    </div>
+                    {!isLast && (
+                      <div style={{ display: "flex", paddingLeft: 11 }}>
+                        <div
+                          style={{
+                            width: 1,
+                            height: 10,
+                            background:
+                              status === "done" ? "#3FB950" : "#21262D",
+                            borderRadius: 1,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

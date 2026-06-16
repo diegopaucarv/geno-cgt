@@ -621,8 +621,23 @@ class AbortableTask(_CeleryTask):
         raise TaskCancelledError(task_id=self.request.id if self.request else "")
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        if isinstance(exc, TaskCancelledError):
-            logger.info("Task %s cancelled by user", task_id)
+        """Mark PipelineTask as failed so frontend can detect & abort pipeline."""
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            s = SessionLocal()
+            s.execute(
+                text(
+                    "UPDATE pipeline_tasks SET status = 'failed' "
+                    "WHERE celery_task_id = :tid AND status != 'completed'"
+                ),
+                {"tid": task_id},
+            )
+            s.commit()
+            s.close()
+        except Exception:
+            pass
 
 
 class TaskCancelledError(Exception):
@@ -663,6 +678,7 @@ def process_document_agents_a(
 
     try:
         _pipeline_log_to(proyecto_id)
+        logger.info("🧠 Open Coding iniciado — doc=%s", documento_id)
 
         # ── Detectar punto de resume ──
         completed: set[str] = set()
@@ -847,6 +863,9 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
 
     s = SessionLocal()
     try:
+        _pipeline_log_to(proyecto_id)
+        logger.info("🔗 Phase B iniciado — proyecto=%s", proyecto_id)
+
         # ── B1: Sampling distiller ──
         _checkpoint_step(s, proyecto_id, "b1_distill_sampling", "in_progress")
         logger.info("B1: Muestreo %s", proyecto_id)
@@ -899,6 +918,14 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         return {"status": "cancelled", "proyecto_id": proyecto_id}
     except Exception:
         logger.exception("process_synthesis_agents_b failed for %s", proyecto_id)
+        # Push error to pipeline logs so overlay shows it even if worker crashes
+        try:
+            _plog(
+                proyecto_id,
+                "[ERROR] Phase B (synthesis) FAILED — check worker-heavy logs",
+            )
+        except Exception:
+            pass
         raise
     finally:
         s.close()

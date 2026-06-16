@@ -29,7 +29,7 @@ MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
 # ── JWT / Auth ───────────────────────────────────────────────────────
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 * 100  # nunca
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # ── TEI (Text Embeddings Inference) ──────────────────────────────────

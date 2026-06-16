@@ -157,6 +157,27 @@ class AbortableTask(_CeleryTask):
             _signal.signal(_signal.SIGTERM, self._original_sigterm)
         raise Exception(f"Task {self.name} cancelled by SIGTERM")
 
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        """Mark PipelineTask as failed so frontend can detect & abort pipeline."""
+        try:
+            import psycopg2 as _pg
+
+            _db = DATABASE_URL.replace("postgresql+asyncpg", "postgresql").replace(
+                "postgresql+psycopg2", "postgresql"
+            )
+            _c = _pg.connect(_db)
+            _c.autocommit = True
+            _cur = _c.cursor()
+            _cur.execute(
+                "UPDATE pipeline_tasks SET status = 'failed' "
+                "WHERE celery_task_id = %s AND status != 'completed'",
+                (task_id,),
+            )
+            _cur.close()
+            _c.close()
+        except Exception:
+            pass
+
 
 class TaskCancelledError(Exception):
     pass
@@ -179,6 +200,32 @@ def segmentar_documento(
     """Segmenta y persiste en DB si se proporciona documento_id."""
     from segmentador import ProgressiveSegmenter
 
+    # Look up project_id BEFORE segmenting so logs are streamed even on failure
+    _proj_id = ""
+    if documento_id:
+        try:
+            import psycopg2 as _pg
+
+            _db = DATABASE_URL.replace("postgresql+asyncpg", "postgresql").replace(
+                "postgresql+psycopg2", "postgresql"
+            )
+            _c = _pg.connect(_db)
+            _c.autocommit = True
+            _cur = _c.cursor()
+            _cur.execute(
+                "SELECT proyecto_id FROM documentos WHERE id = %s", (documento_id,)
+            )
+            _row = _cur.fetchone()
+            if _row:
+                _proj_id = str(_row[0])
+            _cur.close()
+            _c.close()
+        except Exception:
+            pass
+        if _proj_id:
+            _pipeline_log_to(_proj_id)
+            logger.info("✂️ Segmentación iniciada — %s chars", len(texto))
+
     reinert = SEGMENTATION_REINERT
     segmenter = ProgressiveSegmenter(
         spacy_model=SPACY_MODEL,
@@ -190,29 +237,6 @@ def segmentar_documento(
 
     if documento_id:
         try:
-            # Look up project_id for log streaming
-            _proj_id = ""
-            try:
-                import psycopg2 as _pg
-
-                _db = DATABASE_URL.replace("postgresql+asyncpg", "postgresql").replace(
-                    "postgresql+psycopg2", "postgresql"
-                )
-                _c = _pg.connect(_db)
-                _c.autocommit = True
-                _cur = _c.cursor()
-                _cur.execute(
-                    "SELECT proyecto_id FROM documentos WHERE id = %s", (documento_id,)
-                )
-                _row = _cur.fetchone()
-                if _row:
-                    _proj_id = str(_row[0])
-                _cur.close()
-                _c.close()
-            except Exception:
-                pass
-            if _proj_id:
-                _pipeline_log_to(_proj_id)
             import uuid as _uuid
 
             import psycopg2

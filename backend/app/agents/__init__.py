@@ -14,6 +14,7 @@ Patrones implementados:
 
 from app.agents.base import AgentLoopLog, AgentResult, BaseAgent
 from app.agents.exceptions import AgentAbortedError, TaskCancelledError
+from app.agents.hitl_modifier import HITLModificationAgent, ModificationResult
 from app.agents.orchestrator import OrchestratorRuleEngine
 from app.agents.plan_executor import PlanExecutor
 from app.agents.react_runner import ReactRunner
@@ -25,6 +26,8 @@ __all__ = [
     "AgentLoopLog",
     "AgentResult",
     "BaseAgent",
+    "HITLModificationAgent",
+    "ModificationResult",
     "OrchestratorRuleEngine",
     "PlanExecutor",
     "ReactRunner",

@@ -14,3 +14,5 @@ rapidfuzz>=3.0
 # Stanza coref dependencies
 transformers>=4.40
 peft>=0.10
+
+torchao>=0.3.0

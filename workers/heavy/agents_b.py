@@ -18,6 +18,22 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 llm = LLMClient()
 
+# Lazy pgvector registration (needs psycopg2 connection available)
+_vector_registered = False
+
+
+def _ensure_vector_adapter():
+    global _vector_registered
+    if not _vector_registered:
+        try:
+            from pgvector.psycopg2 import register_vector
+
+            register_vector()
+            _vector_registered = True
+        except Exception as e:
+            logger.warning("pgvector adapter registration failed: %s", e)
+
+
 # Feature flag para modo agencial (activar con AGENTIC_MODE=true)
 AGENTIC_MODE = os.getenv("AGENTIC_MODE", "false").lower() in ("1", "true", "yes")
 
@@ -362,6 +378,7 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
         codes_processed = 0
 
         for (code_id, code_name, code_def), code_emb in zip(codes, embeddings):
+            _ensure_vector_adapter()  # register pgvector before first <=> query
             # Buscar top-5 segmentos más similares (con embedding)
             similar = session.execute(
                 text("""
@@ -467,9 +484,12 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
 
         if AGENTIC_MODE:
             raw_hypotheses = b3_generate_hypotheses_agentic(
-                proyecto_id, pop_assumption,
+                proyecto_id,
+                pop_assumption,
                 pop_ctx[0] if pop_ctx else "",
-                processes_text, codes_text, hyp_text
+                processes_text,
+                codes_text,
+                hyp_text,
             )
         else:
             response = llm.run_agent(
@@ -529,6 +549,7 @@ def _b2b_generate_codes_agentic(
     AGENTIC_MODE=true. Usa PRO para generar y FLASH para evaluar.
     """
     import sys as _sys
+
     _sys.path.insert(0, "/app")
     from app.agents.self_refiner import SelfRefinementLoop
 
@@ -562,7 +583,9 @@ def _b2b_generate_codes_agentic(
 
     # Fallback to single-shot on failure
     logger.warning("Agentic B2b failed: %s. Falling back to single-shot.", result.error)
-    return _b2b_generate_codes(pop_assumption, pop_context, existing_codes, indicators_text)
+    return _b2b_generate_codes(
+        pop_assumption, pop_context, existing_codes, indicators_text
+    )
 
 
 def b3_generate_hypotheses_agentic(
@@ -580,18 +603,41 @@ def b3_generate_hypotheses_agentic(
     etc. para verificar evidencia antes de hipotetizar.
     """
     import sys as _sys
+
     _sys.path.insert(0, "/app")
     from app.agents.react_runner import ReactRunner
     from app.agents.tool_registry import ToolRegistry
-    from app.agents.tools.db_tools import get_all_codes, get_code_details, get_existing_hypotheses
+    from app.agents.tools.db_tools import (
+        get_all_codes,
+        get_code_details,
+        get_existing_hypotheses,
+    )
     from app.agents.tools.search_tools import search_segments, search_similar_codes
 
     tools = ToolRegistry()
-    tools.register(search_segments, "search_segments", "Busca segmentos semanticamente en el corpus.")
-    tools.register(get_code_details, "get_code_details", "Obten definicion e incidentes de un codigo.")
-    tools.register(get_all_codes, "get_all_codes", "Lista todos los codigos del proyecto.")
-    tools.register(get_existing_hypotheses, "get_existing_hypotheses", "Lista hipotesis ya generadas.")
-    tools.register(search_similar_codes, "search_similar_codes", "Busca codigos similares (anti-redundancia).")
+    tools.register(
+        search_segments,
+        "search_segments",
+        "Busca segmentos semanticamente en el corpus.",
+    )
+    tools.register(
+        get_code_details,
+        "get_code_details",
+        "Obten definicion e incidentes de un codigo.",
+    )
+    tools.register(
+        get_all_codes, "get_all_codes", "Lista todos los codigos del proyecto."
+    )
+    tools.register(
+        get_existing_hypotheses,
+        "get_existing_hypotheses",
+        "Lista hipotesis ya generadas.",
+    )
+    tools.register(
+        search_similar_codes,
+        "search_similar_codes",
+        "Busca codigos similares (anti-redundancia).",
+    )
 
     runner = ReactRunner(
         agent_id="b3",

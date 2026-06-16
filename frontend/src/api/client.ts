@@ -4,12 +4,52 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+function getRefreshToken(): string | null {
+  return localStorage.getItem("refresh_token");
+}
+
 export function setToken(token: string) {
   localStorage.setItem("access_token", token);
 }
 
+export function setRefreshToken(token: string) {
+  localStorage.setItem("refresh_token", token);
+}
+
 export function clearToken() {
   localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+}
+
+let _refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+
+  // Deduplicate concurrent refresh attempts
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/auth/refresh?refresh_token=${encodeURIComponent(refresh)}`,
+        {
+          method: "POST",
+        },
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      setToken(data.access_token);
+      return data.access_token;
+    } catch {
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -20,11 +60,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    // Try refresh once
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    }
+  }
+
   if (res.status === 401) {
     clearToken();
     window.location.href = "/login";
+    throw new Error("Session expired");
   }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -98,6 +150,7 @@ export interface PipelineLog {
     need_agents: number;
     done: number;
     failed: number;
+    failed_tasks: number;
     errors: PipelineLogError[];
     categories: number;
     playground_ready: boolean;
@@ -133,6 +186,7 @@ export async function login(email: string, password: string) {
   if (!res.ok) throw new Error("Credenciales inválidas");
   const data = await res.json();
   setToken(data.access_token);
+  if (data.refresh_token) setRefreshToken(data.refresh_token);
   return data;
 }
 
@@ -267,6 +321,12 @@ export async function getPipelineStatus(projectId: string) {
 
 export async function getPipelineLog(projectId: string) {
   return request<PipelineLog>(`/projects/${projectId}/pipeline/log`);
+}
+
+export async function getAgentMemos(projectId: string) {
+  return request<{ memos: any[]; total: number; families: any[] }>(
+    `/projects/${projectId}/agent-memos`,
+  );
 }
 
 // ── Playground Types ──────────────────────────────────────────────────

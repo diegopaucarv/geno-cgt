@@ -1,0 +1,753 @@
+@startuml
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Sequence.puml
+
+title CGT Phase 1: Unified Open Coding with Natural Flow
+
+Container(Unified_Coder, "Unified Coder", "Integrated Analyst", "Reads, questions, codes simultaneously")
+
+Container(Memo_Capturer, "Memo Capturer", "Insight Recorder", "Captures theoretical ideas immediately")
+
+Container(Comparison_Engine, "Comparison Engine", "Pattern Detector", "Compares incidents naturally")
+
+Container(Code_Tracker, "Code Tracker", "Pattern Logger", "Tracks emergent patterns")
+
+== Phase 1: Natural Open Coding Flow ==
+
+note over Unified_Coder, Memo_Capturer
+
+**CGT CORE: Unified Cognitive Process**
+
+No artificial separation of reading/questioning/coding
+
+One integrated agent mimics human analyst
+
+No pre-tagging or pre-processing
+
+end note
+
+group Natural Batch Processing
+
+Orchestrator -> Transcript_DB: Fetch first transcript
+
+loop For each line/segment (natural reading flow)
+
+Unified_Coder -> Transcript_DB: Get next segment
+
+Unified_Coder -> Unified_Coder: Simultaneous processing
+
+note right
+
+**UNIFIED PROCESSING:**
+
+1. Read line (explication)
+
+2. Ask: "What's happening here?"
+
+3. Ask: "What category does this indicate?"
+
+4. Code with gerund if pattern emerges
+
+All in one cognitive flow - no separate agents
+
+end note
+
+alt Pattern recognized (emergent, not forced)
+
+Unified_Coder -> Comparison_Engine: "Potential pattern: [Gerund]"
+
+Comparison_Engine -> Code_Tracker: Check previous incidents
+
+Comparison_Engine -> Comparison_Engine: Natural comparison
+
+note right
+
+**NATURAL COMPARISON:**
+
+• Is this similar to previous?
+
+• How is it different?
+
+• Does it modify understanding?
+
+• Let comparison guide coding
+
+end note
+
+alt New insight during comparison
+
+Comparison_Engine -> Memo_Capturer: "Theoretical idea!"
+
+Memo_Capturer -> Memo_Bank: Capture immediately
+
+note right of Memo_Bank
+
+**IMMEDIATE MEMOING:**
+
+• Stop everything
+
+• Capture raw insight
+
+• Don't format or polish
+
+• Resume after capture
+
+end note
+
+end
+
+Comparison_Engine -> Code_Tracker: Update pattern understanding
+
+end
+
+end
+
+group Natural Respite (Drugless Trip)
+
+Orchestrator -> All_Agents: "Processing pause - natural break"
+
+note right of Orchestrator
+
+**PRECONSCIOUS PROCESSING:**
+
+• No active analysis during break
+
+• System in low-power reflection mode
+
+• Allow connections to form naturally
+
+• Simulates human "cooking time"
+
+end note
+
+alt Insight emerges during respite
+
+Memo_Capturer -> Memo_Bank: "Breakthrough during break"
+
+end
+
+Orchestrator -> All_Agents: "Resume processing"
+
+end
+
+end
+
+newpage
+
+title CGT Phase 2: Emergent Core Category Discovery
+
+Container(Main_Concern_Sensor, "Main Concern Sensor", "Problem Detector", "Senses latent main concern")
+
+Container(Core_Emergence_Detector, "Core Emergence Detector", "Pattern Integrator", "Detects emergent core")
+
+Container(Interchangeability_Tester, "Interchangeability Tester", "Concept Validator", "Tests true interchangeability")
+
+== Phase 2: Letting Core Emerge ==
+
+note over Main_Concern_Sensor, Core_Emergence_Detector
+
+**CGT PRINCIPLE: Let It Emerge**
+
+No external theory comparison
+
+No forcing of categories
+
+Let patterns reveal themselves
+
+end note
+
+group Main Concern Discovery (Natural)
+
+Main_Concern_Sensor -> Code_Tracker: Review all codes
+
+Main_Concern_Sensor -> Memo_Bank: Review memos
+
+Main_Concern_Sensor -> Main_Concern_Sensor: Sense latent concern
+
+note right
+
+**LATENT CONCERN SENSING:**
+
+1. What problems recur in codes?
+
+2. What tensions appear in memos?
+
+3. What drives participant behavior?
+
+4. Don't look for stated problems
+
+5. Sense the underlying worry
+
+end note
+
+Main_Concern_Sensor -> Orchestrator: "Main concern sensed: [Concern]"
+
+end
+
+group Core Category Emergence (Natural)
+
+Core_Emergence_Detector -> Code_Tracker: Review pattern landscape
+
+Core_Emergence_Detector -> Core_Emergence_Detector: Let core reveal itself
+
+note right
+
+**CORE REVELATION PROCESS:**
+
+Questions to ask (not algorithms):
+
+1. Which pattern resolves the main concern?
+
+2. Which pattern connects to most others?
+
+3. Which pattern has theoretical grab?
+
+4. Which pattern feels central?
+
+No scoring, no algorithms
+
+Qualitative, emergent sense
+
+end note
+
+Core_Emergence_Detector -> Interchangeability_Tester: "Test candidate: [Pattern]"
+
+end
+
+group True Interchangeability Testing
+
+Interchangeability_Tester -> Code_Tracker: Get incidents for pattern
+
+Interchangeability_Tester -> Interchangeability_Tester: Test conceptual equivalence
+
+note right
+
+**INTERCHANGEABILITY TEST:**
+
+Take 3 different incidents with same code:
+
+1. Strip away context details
+
+2. Compare core process essence
+
+3. Ask: "Are these really the same?"
+
+4. Test: Can they substitute in explanation?
+
+If yes → category valid
+
+If no → refine or split category
+
+end note
+
+alt True interchangeability
+
+Interchangeability_Tester -> Core_Emergence_Detector: "Valid category"
+
+else Not interchangeable
+
+Interchangeability_Tester -> Code_Tracker: "Split or refine category"
+
+end
+
+end
+
+group Natural Delimitation
+
+Core_Emergence_Detector -> Orchestrator: "Core emerged: [Core Category]"
+
+Orchestrator -> All_Agents: "Switch to selective coding"
+
+note right of Orchestrator
+
+**NATURAL DELIMITATION:**
+
+1. Now focus only on core
+
+2. Code only related data
+
+3. Ignore interesting but irrelevant
+
+4. Let comparison continue naturally
+
+end note
+
+end
+
+newpage
+
+title CGT Phase 3: Selective Coding with True Saturation
+
+Container(Selective_Coder, "Selective Coder", "Focused Analyst", "Codes only core-related data")
+
+Container(True_Saturation_Detector, "True Saturation Detector", "Interchangeability Monitor", "Monitors conceptual saturation")
+
+Container(Theoretical_Sampler, "Theoretical Sampler", "Gap Filler", "Samples for specific gaps")
+
+== Phase 3: Natural Selective Coding ==
+
+note over Selective_Coder, Theoretical_Sampler
+
+**CGT REALITY: Field-Based Sampling**
+
+Primarily sample from available data
+
+Only use external sources when necessary
+
+Focus on filling specific theoretical gaps
+
+end note
+
+group Selective Coding Process
+
+loop For each new segment
+
+Selective_Coder -> Transcript_DB: Fetch segment
+
+Selective_Coder -> Selective_Coder: Assess relevance naturally
+
+note right
+
+**NATURAL RELEVANCE ASSESSMENT:**
+
+1. Does this relate to core category?
+
+2. Does it develop core properties?
+
+3. If yes → code it
+
+4. If no → ignore it (delimitation)
+
+No scoring algorithms
+
+Natural judgment based on understanding
+
+end note
+
+alt Relevant to core
+
+Selective_Coder -> Code_Tracker: "Develop property: [Property]"
+
+True_Saturation_Detector -> Code_Tracker: Monitor development
+
+end
+
+end
+
+end
+
+group True Saturation via Interchangeability
+
+True_Saturation_Detector -> True_Saturation_Detector: Check saturation
+
+note right
+
+**TRUE SATURATION DEFINITION:**
+
+Saturation occurs when:
+
+New incidents add NO NEW PROPERTIES
+
+to existing categories.
+
+All indicators become interchangeable.
+
+Not about counting incidents.
+
+About conceptual completeness.
+
+end note
+
+loop Until saturation
+
+True_Saturation_Detector -> Code_Tracker: Get latest incidents
+
+True_Saturation_Detector -> True_Saturation_Detector: Check for new properties
+
+note right
+
+**NEW PROPERTY CHECK:**
+
+For each new incident:
+
+1. Does it reveal new dimension of category?
+
+2. New condition for occurrence?
+
+3. New consequence?
+
+4. New strategy variation?
+
+If no new properties in last 5 incidents → saturated
+
+end note
+
+alt No new properties (interchangeability achieved)
+
+True_Saturation_Detector -> Orchestrator: "Conceptually saturated"
+
+break
+
+else New property discovered
+
+True_Saturation_Detector -> Theoretical_Sampler: "Gap: [Specific property gap]"
+
+end
+
+end
+
+end
+
+group Natural Theoretical Sampling
+
+Theoretical_Sampler -> True_Saturation_Detector: Receive gap information
+
+Theoretical_Sampler -> Theoretical_Sampler: Plan natural sampling
+
+note right
+
+**NATURAL SAMPLING APPROACH:**
+
+1. Look for data that might fill this gap
+
+2. Search existing transcripts first
+
+3. Only if necessary: look externally
+
+4. External sources = new data to code
+
+Example gap: "How does core occur in conflict?"
+
+→ Look for conflict situations in transcripts
+
+→ If none, maybe search conflict literature (as new data)
+
+end note
+
+alt Gap requires existing data
+
+Theoretical_Sampler -> Transcript_DB: "Find segments about: [Gap topic]"
+
+else Gap requires external knowledge
+
+Theoretical_Sampler -> External_Sources: "Search as NEW data about: [Gap]"
+
+External_Sources -> Transcript_DB: Store as new transcript
+
+note right of Transcript_DB
+
+**EXTERNAL AS NEW DATA:**
+
+Literature excerpts treated as:
+
+• New "interviews" to code
+
+• Compare to existing theory
+
+• Not as authority to follow
+
+end note
+
+end
+
+end
+
+newpage
+
+title CGT Phase 4: Physical Hand Sorting & Integration
+
+Container(Hand_Sorting_Manager, "Hand Sorting Manager", "Physical Sort Facilitator", "Manages manual memo sorting")
+
+Container(Theoretical_Sense_Maker, "Theoretical Sense Maker", "Pattern Integrator", "Makes sense of sorted structure")
+
+Container(Gap_Feeler, "Gap Feeler", "Completeness Sensor", "Feels for thin areas in theory")
+
+== Phase 4: True Physical Sorting ==
+
+note over Hand_Sorting_Manager, Gap_Feeler
+
+**CGT ESSENCE: Manual Sorting Required**
+
+Not algorithmic sorting
+
+Physical arrangement essential
+
+Allows lateral thinking and serendipity
+
+end note
+
+group Prepare for Hand Sorting
+
+Hand_Sorting_Manager -> Memo_Bank: Retrieve all memos
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Prepare physical environment
+
+note right
+
+**PHYSICAL SORTING PREPARATION:**
+
+1. Each memo printed (or virtual card)
+
+2. Large table space
+
+3. Freedom to move and group
+
+4. No predefined categories
+
+5. Let structure emerge naturally
+
+end note
+
+end
+
+group Manual Hand Sorting Process
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Begin sorting session
+
+loop Multiple sorting sessions
+
+group Session 1: Thematic Grouping
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Group by theme
+
+Hand_Sorting_Manager -> Sorting_Log: "Session 1: Thematic groups"
+
+end
+
+group Session 2: Causal Flow
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Arrange by cause-effect
+
+Hand_Sorting_Manager -> Sorting_Log: "Session 2: Causal flow"
+
+end
+
+group Session 3: Temporal Sequence
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Arrange by time
+
+Hand_Sorting_Manager -> Sorting_Log: "Session 3: Temporal sequence"
+
+end
+
+group Session 4: Importance Hierarchy
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Arrange by importance
+
+Hand_Sorting_Manager -> Sorting_Log: "Session 4: Hierarchy"
+
+end
+
+end
+
+Hand_Sorting_Manager -> Theoretical_Sense_Maker: "Sorting complete - examine patterns"
+
+end
+
+group Let Theoretical Family Emerge (Not Test)
+
+Theoretical_Sense_Maker -> Sorting_Log: Review all sorting sessions
+
+Theoretical_Sense_Maker -> Theoretical_Sense_Maker: Sense emergent family
+
+note right
+
+**EMERGENT FAMILY SENSING:**
+
+Don't test families against data.
+
+Instead, ask:
+
+1. Which arrangement felt most natural?
+
+2. Which structure kept emerging?
+
+3. Do memos want to be in stages? (Process)
+
+4. Do memos want to be in causes? (Six C's)
+
+5. Do memos want to be in strategies?
+
+Let the family reveal itself from sorting.
+
+end note
+
+alt Family emerges clearly
+
+Theoretical_Sense_Maker -> Hand_Sorting_Manager: "Family emerged: [Family]"
+
+else No clear family
+
+Theoretical_Sense_Maker -> Hand_Sorting_Manager: "Novel structure - document"
+
+end
+
+end
+
+group Memo on Sort & Gap Feeling
+
+Hand_Sorting_Manager -> Hand_Sorting_Manager: Write sorting memos
+
+note right
+
+**SORTING MEMOS:**
+
+1. Explain why memos grouped this way
+
+2. Document theoretical insights from sorting
+
+3. Capture relationships discovered
+
+4. These become draft chapters
+
+end note
+
+Gap_Feeler -> Hand_Sorting_Manager: Examine sorted structure
+
+Gap_Feeler -> Gap_Feeler: Feel for thin areas
+
+note right
+
+**GAP FEELING (Not Algorithmic):**
+
+1. Which piles feel thin (few memos)?
+
+2. Which connections feel weak?
+
+3. Where is evidence sparse?
+
+4. What questions remain unanswered?
+
+These feelings guide further sampling.
+
+end note
+
+alt Gaps felt during sorting
+
+Gap_Feeler -> Theoretical_Sampler: "Need data for: [Felt gap]"
+
+break
+
+end
+
+end
+
+newpage
+
+title CGT Phase 5: Natural Writing & Literature Integration
+
+Container(Natural_Writer, "Natural Writer", "Theory Articulator", "Writes from sorted memos")
+
+Container(Literature_Comparer, "Literature Comparer", "External Dialoguer", "Compares with existing work")
+
+Container(Theory_Evolver, "Theory Evolver", "Living Theory Manager", "Manages theory evolution")
+
+== Phase 5: Writing as Natural Extension ==
+
+note over Natural_Writer, Theory_Evolver
+
+**CGT WRITING: Natural Extension of Analysis**
+
+Writing continues the analysis
+
+Gaps discovered naturally during writing
+
+Literature integrated only now
+
+end note
+
+group Natural Writing Process
+
+Natural_Writer -> Hand_Sorting_Manager: Get sorted memo piles
+
+Natural_Writer -> Natural_Writer: Write naturally from piles
+
+note right
+
+**NATURAL WRITING APPROACH:**
+
+1. Each pile becomes a section
+
+2. Write what the memos say
+
+3. Let theory articulate itself
+
+4. Don't force structure
+
+Writing in present tense
+
+About concepts, not people
+
+end note
+
+group Gap Discovery During Writing
+
+Natural_Writer -> Natural_Writer: Monitor own writing
+
+alt Gap discovered while writing
+
+Natural_Writer -> Theoretical_Sampler: "Writing revealed gap: [Gap]"
+
+break
+
+end
+
+end
+
+end
+
+group Literature Integration (Final Step Only)
+
+Literature_Comparer -> Natural_Writer: Get complete theory draft
+
+Literature_Comparer -> External_Sources: Gather relevant literature
+
+Literature_Comparer -> Literature_Comparer: Compare as dialogue
+
+note right
+
+**LITERATURE AS DIALOGUE (Not Authority):**
+
+1. How does my theory extend existing work?
+
+2. Where does it differ?
+
+3. What new perspective does it offer?
+
+4. How does it fill gaps in literature?
+
+NOT: Does my theory match existing theory?
+
+BUT: How does my theory contribute?
+
+end note
+
+Literature_Comparer -> Natural_Writer: "Literature comparison complete"
+
+end
+
+group Living Theory Management
+
+Theory_Evolver -> Natural_Writer: Receive final theory
+
+Theory_Evolver -> Theory_Evolver: Set up evolution framework
+
+note right
+
+**LIVING THEORY PRINCIPLES:**
+
+1. Theory is modifiable with new data
+
+2. Always open to refinement
+
+3. New data compared to theory
+
+4. Theory evolves based on comparison
+
+end note
+
+Theory_Evolver -> Output: "Deliver living theory"
+
+end
+
+@enduml
