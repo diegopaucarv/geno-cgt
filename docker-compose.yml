@@ -206,7 +206,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./backend/app/agents:/app/agents:ro
-    command: celery -A tasks worker --queues=nlp --loglevel=info
+    command: celery -A tasks worker --queues=nlp --concurrency=${NLP_CONCURRENCY:-1} --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379/0
@@ -216,7 +216,8 @@ services:
       USE_GPU: ${USE_GPU:-false}
       SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
       SPACY_MODEL: ${SPACY_MODEL:-es_core_news_lg}
-    mem_limit: 6g
+      SPACY_EXCLUDE: ${SPACY_EXCLUDE:-vectors,lemmatizer}
+    mem_limit: ${NLP_MEM_LIMIT:-8g}
     depends_on:
       pgbouncer:
         condition: service_started
@@ -248,13 +249,13 @@ services:
           target: /app/database.py
         - action: sync
           path: ./backend/app/models
-          target: /app/models
+          target: /app/backend/app/models
         - action: sync
           path: ./backend/app/prompts
-          target: /app/prompts
+          target: /app/backend/app/prompts
         - action: sync
           path: ./backend/app/agents
-          target: /app/agents
+          target: /app/backend/app/agents
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
@@ -265,11 +266,11 @@ services:
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       MODEL_FLASH: ${MODEL_FLASH:-google/gemma-4-31B-it}
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
-      PYTHONPATH: /
+      PYTHONPATH: /app/backend:/app/backend/app
     depends_on:
       - pgbouncer
     volumes:
-      - ./backend/app/agents:/app/agents:ro
+      - ./backend:/app/backend:ro
 
   frontend:
     image: node:22-alpine

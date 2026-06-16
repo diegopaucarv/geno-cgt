@@ -433,7 +433,41 @@ def build_glaser_graph():
     return builder.compile()
 
 
-# ── Prompt-to-node mapping (for documentation and introspection) ────────────
+def build_glaser_graph_reduced():
+    """
+    Build and return a reduced LangGraph StateGraph — open coding ONLY.
+
+    Este grafo contiene solo los nodos de open coding (Fase 3-4).
+    Los nodos de selective coding se ejecutan via el
+    selective_coding_coordinator (Celery), no via LangGraph.
+
+    Nodos: segment_and_index → extract_entities → batch_code
+           → map_synthesize → reduce_synthesize → END
+    """
+    from langgraph.graph import END, StateGraph
+
+    builder = StateGraph(AnalysisState)
+
+    # Solo open coding nodes
+    builder.add_node("segment_and_index", node_segment_and_index)
+    builder.add_node("extract_entities", node_extract_entities)
+    builder.add_node("batch_code", node_batch_code)
+    builder.add_node("map_synthesize", node_map_synthesize)
+    builder.add_node("reduce_synthesize", node_reduce_synthesize)
+
+    # Linear chain → END
+    builder.set_entry_point("segment_and_index")
+    builder.add_edge("segment_and_index", "extract_entities")
+    builder.add_edge("extract_entities", "batch_code")
+    builder.add_edge("batch_code", "map_synthesize")
+    builder.add_edge("map_synthesize", "reduce_synthesize")
+    builder.add_edge("reduce_synthesize", END)
+
+    return builder.compile()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PROMPT_NODE_MAP
 # Generated from the langgraph_node metadata in each prompt .md file.
 
 PROMPT_NODE_MAP: dict[str, str] = {

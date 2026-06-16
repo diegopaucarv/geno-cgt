@@ -1,22 +1,10 @@
-import { useState } from "react";
-import { decideHitl } from "../api/client";
-
-// ── Types ─────────────────────────────────────────────────────────
+import { useEffect, useState } from "react";
+import { decideHitl, getHitlDetail } from "../api/client";
 
 interface HITLModalProps {
   open: boolean;
   projectId: string;
   gateName: string;
-  proposal: Record<string, unknown>;
-  criticVerdict: {
-    verdict: string;
-    rationale?: string;
-    suggestions?: string[];
-    grounding_score?: number;
-    coverage_score?: number;
-    abstraction_score?: number;
-    agreement_percentage?: number;
-  };
   onClose: () => void;
   onDecided?: (decision: "accept" | "modify" | "reject") => void;
 }
@@ -39,14 +27,10 @@ const VERDICT_COLORS: Record<string, string> = {
   DISAGREE: "#F85149",
 };
 
-// ── Component ─────────────────────────────────────────────────────
-
 export default function HITLModal({
   open,
   projectId,
   gateName,
-  proposal,
-  criticVerdict,
   onClose,
   onDecided,
 }: HITLModalProps) {
@@ -56,8 +40,41 @@ export default function HITLModal({
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [proposal, setProposal] = useState<Record<string, unknown>>({});
+  const [criticVerdict, setCriticVerdict] = useState<Record<string, unknown>>(
+    {},
+  );
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!open || !projectId || !gateName) return;
+    setLoading(true);
+    setDecision(null);
+    setNote("");
+    setFeedback("");
+    getHitlDetail(projectId, gateName)
+      .then((detail) => {
+        setProposal(detail.proposal || {});
+        setCriticVerdict(detail.critic_verdict || {});
+      })
+      .catch(() => {
+        setProposal({ error: "Failed to load decision details" });
+        setCriticVerdict({ verdict: "UNKNOWN" });
+      })
+      .finally(() => setLoading(false));
+  }, [open, projectId, gateName]);
 
   if (!open) return null;
+
+  const cv = criticVerdict as Record<string, unknown>;
+  const verdict = (cv.verdict as string) || "SAT";
+  const rationale = (cv.rationale as string) || "";
+  const suggestions = (cv.suggestions as string[]) || [];
+  const grounding = cv.grounding_score as number | undefined;
+  const coverage = cv.coverage_score as number | undefined;
+  const abstraction = cv.abstraction_score as number | undefined;
+  const agreement = cv.agreement_percentage as number | undefined;
+  const verdictColor = VERDICT_COLORS[verdict] || "#30363D";
 
   const handleSubmit = async () => {
     if (!decision) return;
@@ -77,10 +94,6 @@ export default function HITLModal({
       setSubmitting(false);
     }
   };
-
-  const gateLabel = GATE_LABELS[gateName] || gateName;
-  const verdictColor =
-    VERDICT_COLORS[criticVerdict.verdict] || "#30363D";
 
   return (
     <div
@@ -106,287 +119,277 @@ export default function HITLModal({
           color: "#E6EDF3",
         }}
       >
-        {/* Header */}
         <h2 style={{ margin: "0 0 4px 0", fontSize: 18 }}>
           🛑 HITL Decision Required
         </h2>
-        <p
-          style={{
-            margin: "0 0 16px 0",
-            color: "#8B949E",
-            fontSize: 13,
-          }}
-        >
-          Gate: <strong>{gateLabel}</strong>
+        <p style={{ margin: "0 0 16px 0", color: "#8B949E", fontSize: 13 }}>
+          Gate: <strong>{GATE_LABELS[gateName] || gateName}</strong>
         </p>
 
-        {/* Critic Verdict Banner */}
-        <div
-          style={{
-            padding: "12px 16px",
-            borderRadius: 8,
-            marginBottom: 16,
-            background: "#1C2333",
-            border: `1px solid ${verdictColor}`,
-          }}
-        >
-          <span
+        {loading ? (
+          <div
             style={{
-              fontWeight: 700,
+              padding: 40,
+              textAlign: "center",
+              color: "#8B949E",
               fontSize: 14,
-              color: verdictColor,
             }}
           >
-            Critic Verdict: {criticVerdict.verdict}
-          </span>
-          {criticVerdict.rationale && (
-            <p
-              style={{
-                margin: "8px 0 0 0",
-                fontSize: 13,
-                color: "#8B949E",
-                lineHeight: 1.5,
-              }}
-            >
-              {criticVerdict.rationale}
-            </p>
-          )}
-          {criticVerdict.suggestions &&
-            criticVerdict.suggestions.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <strong style={{ fontSize: 12, color: "#D29922" }}>
-                  Suggestions:
-                </strong>
-                <ul
-                  style={{
-                    margin: "4px 0 0 0",
-                    paddingLeft: 20,
-                    fontSize: 12,
-                    color: "#8B949E",
-                  }}
-                >
-                  {criticVerdict.suggestions.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          {/* Scores for main_concern gate */}
-          {criticVerdict.grounding_score !== undefined && (
+            Loading decision details...
+          </div>
+        ) : (
+          <>
+            {/* Critic Verdict */}
             <div
               style={{
-                marginTop: 8,
-                display: "flex",
-                gap: 16,
-                fontSize: 12,
-              }}
-            >
-              <span style={{ color: "#8B949E" }}>
-                Grounding:{" "}
-                {(criticVerdict.grounding_score * 100).toFixed(0)}%
-              </span>
-              <span style={{ color: "#8B949E" }}>
-                Coverage:{" "}
-                {(criticVerdict.coverage_score! * 100).toFixed(0)}%
-              </span>
-              <span style={{ color: "#8B949E" }}>
-                Abstraction:{" "}
-                {(criticVerdict.abstraction_score! * 100).toFixed(0)}%
-              </span>
-            </div>
-          )}
-          {criticVerdict.agreement_percentage !== undefined && (
-            <div style={{ marginTop: 4, fontSize: 12, color: "#8B949E" }}>
-              Agreement: {criticVerdict.agreement_percentage.toFixed(0)}%
-            </div>
-          )}
-        </div>
-
-        {/* Proposal Summary */}
-        <div
-          style={{
-            padding: "12px 16px",
-            borderRadius: 8,
-            marginBottom: 16,
-            background: "#0D1117",
-            border: "1px solid #21262D",
-            maxHeight: 200,
-            overflow: "auto",
-          }}
-        >
-          <strong style={{ fontSize: 12, color: "#58A6FF" }}>
-            Proposer Output:
-          </strong>
-          <pre
-            style={{
-              margin: "8px 0 0 0",
-              fontSize: 12,
-              color: "#C9D1D9",
-              whiteSpace: "pre-wrap",
-              fontFamily: "monospace",
-            }}
-          >
-            {JSON.stringify(proposal, null, 2)}
-          </pre>
-        </div>
-
-        {/* Decision Buttons */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-          {(["accept", "modify", "reject"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDecision(d)}
-              style={{
-                flex: 1,
-                padding: "10px 0",
+                padding: "12px 16px",
                 borderRadius: 8,
-                border: "none",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                background:
-                  decision === d
-                    ? d === "accept"
-                      ? "#1F6FEB"
-                      : d === "modify"
-                        ? "#9E6A03"
-                        : "#DA3633"
-                    : "#21262D",
-                color: decision === d ? "#FFF" : "#8B949E",
-                border:
-                  decision === d ? "none" : "1px solid #30363D",
+                marginBottom: 16,
+                background: "#1C2333",
+                border: `1px solid ${verdictColor}`,
               }}
             >
-              {d === "accept"
-                ? "✓ ACCEPT"
-                : d === "modify"
-                  ? "✎ MODIFY"
-                  : "✗ REJECT"}
-            </button>
-          ))}
-        </div>
+              <span
+                style={{ fontWeight: 700, fontSize: 14, color: verdictColor }}
+              >
+                Critic Verdict: {verdict}
+              </span>
+              {rationale && (
+                <p
+                  style={{
+                    margin: "8px 0 0 0",
+                    fontSize: 13,
+                    color: "#8B949E",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {rationale}
+                </p>
+              )}
+              {suggestions.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong style={{ fontSize: 12, color: "#D29922" }}>
+                    Suggestions:
+                  </strong>
+                  <ul
+                    style={{
+                      margin: "4px 0 0 0",
+                      paddingLeft: 20,
+                      fontSize: 12,
+                      color: "#8B949E",
+                    }}
+                  >
+                    {suggestions.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {grounding !== undefined && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    gap: 16,
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{ color: "#8B949E" }}>
+                    Grounding: {(grounding * 100).toFixed(0)}%
+                  </span>
+                  <span style={{ color: "#8B949E" }}>
+                    Coverage: {((coverage || 0) * 100).toFixed(0)}%
+                  </span>
+                  <span style={{ color: "#8B949E" }}>
+                    Abstraction: {((abstraction || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+              {agreement !== undefined && (
+                <div style={{ marginTop: 4, fontSize: 12, color: "#8B949E" }}>
+                  Agreement: {agreement.toFixed(0)}%
+                </div>
+              )}
+            </div>
 
-        {/* Note */}
-        <div style={{ marginBottom: 12 }}>
-          <label
-            style={{
-              fontSize: 12,
-              color: "#8B949E",
-              display: "block",
-              marginBottom: 4,
-            }}
-          >
-            Note{" "}
-            {decision === "reject"
-              ? "(required — explain why)"
-              : "(optional)"}
-            :
-          </label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            placeholder={
-              decision === "reject"
-                ? "Why are you rejecting this proposal?"
-                : "Any observations for the methodology log..."
-            }
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: 6,
-              background: "#0D1117",
-              border: "1px solid #30363D",
-              color: "#E6EDF3",
-              fontSize: 12,
-              resize: "vertical",
-              fontFamily: "inherit",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-
-        {/* Feedback (only for MODIFY) */}
-        {decision === "modify" && (
-          <div style={{ marginBottom: 12 }}>
-            <label
+            {/* Proposal */}
+            <div
               style={{
-                fontSize: 12,
-                color: "#D29922",
-                display: "block",
-                marginBottom: 4,
-              }}
-            >
-              Feedback for re-execution (what should the proposer
-              do differently?):
-            </label>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              rows={3}
-              placeholder="Be specific: what should change in the proposal?"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                borderRadius: 6,
+                padding: "12px 16px",
+                borderRadius: 8,
+                marginBottom: 16,
                 background: "#0D1117",
-                border: "1px solid #D29922",
-                color: "#E6EDF3",
-                fontSize: 12,
-                resize: "vertical",
-                fontFamily: "inherit",
-                boxSizing: "border-box",
+                border: "1px solid #21262D",
+                maxHeight: 200,
+                overflow: "auto",
               }}
-            />
-          </div>
-        )}
+            >
+              <strong style={{ fontSize: 12, color: "#58A6FF" }}>
+                Proposer Output:
+              </strong>
+              <pre
+                style={{
+                  margin: "8px 0 0 0",
+                  fontSize: 12,
+                  color: "#C9D1D9",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "monospace",
+                }}
+              >
+                {JSON.stringify(proposal, null, 2)}
+              </pre>
+            </div>
 
-        {/* Actions */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid #30363D",
-              background: "#21262D",
-              color: "#E6EDF3",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={
-              !decision ||
-              (decision === "reject" && !note.trim()) ||
-              submitting
-            }
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "none",
-              background: !decision ? "#21262D" : "#1F6FEB",
-              color: !decision ? "#484F58" : "#FFF",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor:
-                !decision || submitting
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {submitting ? "Submitting..." : "Submit Decision"}
-          </button>
-        </div>
+            {/* Decision buttons */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+              {(["accept", "modify", "reject"] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDecision(d)}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background:
+                      decision === d
+                        ? d === "accept"
+                          ? "#1F6FEB"
+                          : d === "modify"
+                            ? "#9E6A03"
+                            : "#DA3633"
+                        : "#21262D",
+                    color: decision === d ? "#FFF" : "#8B949E",
+                    border: decision === d ? "none" : "1px solid #30363D",
+                  }}
+                >
+                  {d === "accept"
+                    ? "✓ ACCEPT"
+                    : d === "modify"
+                      ? "✎ MODIFY"
+                      : "✗ REJECT"}
+                </button>
+              ))}
+            </div>
+
+            {/* Note */}
+            <div style={{ marginBottom: 12 }}>
+              <label
+                style={{
+                  fontSize: 12,
+                  color: "#8B949E",
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
+                Note{" "}
+                {decision === "reject"
+                  ? "(required — explain why)"
+                  : "(optional)"}
+                :
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder={
+                  decision === "reject"
+                    ? "Why are you rejecting this proposal?"
+                    : "Any observations for the methodology log..."
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  background: "#0D1117",
+                  border: "1px solid #30363D",
+                  color: "#E6EDF3",
+                  fontSize: 12,
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* Feedback for MODIFY */}
+            {decision === "modify" && (
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{
+                    fontSize: 12,
+                    color: "#D29922",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Feedback for re-execution (what should the proposer do
+                  differently?):
+                </label>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  rows={3}
+                  placeholder="Be specific: what should change in the proposal?"
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    background: "#0D1117",
+                    border: "1px solid #D29922",
+                    color: "#E6EDF3",
+                    fontSize: 12,
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div
+              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+            >
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #30363D",
+                  background: "#21262D",
+                  color: "#E6EDF3",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={
+                  !decision ||
+                  (decision === "reject" && !note.trim()) ||
+                  submitting
+                }
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: !decision ? "#21262D" : "#1F6FEB",
+                  color: !decision ? "#484F58" : "#FFF",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: !decision || submitting ? "not-allowed" : "pointer",
+                }}
+              >
+                {submitting ? "Submitting..." : "Submit Decision"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

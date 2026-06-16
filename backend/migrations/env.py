@@ -39,6 +39,7 @@ from app.models.domain.canvas import (
 from app.models.domain.category import Categoria, CodigoSegmento, DocCode
 from app.models.domain.document import Documento
 from app.models.domain.document_process import DocumentProcess
+from app.models.domain.hitl_decision import HitlDecision
 from app.models.domain.memo import Memo
 from app.models.domain.pipeline_run import (
     PipelineRun,

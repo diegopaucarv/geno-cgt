@@ -33,12 +33,27 @@ NEXT: dict[str, tuple[str, str | None, str | None]] = {
     "segmentando": ("segmentado", None, None),  # NLP actualiza al terminar
     "segmentado": ("procesando", "process_document_agents_a", "heavy"),
     "procesando": ("listo", None, None),  # heavy actualiza al terminar
-    "listo": (None, None, None),  # terminal
+    "listo": (None, None, None),  # terminal (open coding completado)
+    "sintetizado": (None, None, None),  # terminal (cross-doc synthesis completada)
     "error": ("crudo", None, None),  # reset en retry
 }
 
 # Estados terminales (no se despacha nada después)
-TERMINAL = {"listo", "error"}
+TERMINAL = {"listo", "sintetizado", "error"}
+
+# ═══════════════════════════════════════════════════════════════════════
+# Project state machine (nivel proyecto — post open coding)
+# ═══════════════════════════════════════════════════════════════════════
+
+PROJECT_STATES: dict[str, str] = {
+    "collecting": "coding",
+    "coding": "finding_cc",
+    "finding_cc": "reducing",
+    "reducing": "saturating",
+    "saturating": "building_db",
+    "building_db": "playground_ready",
+    "playground_ready": "completed",
+}
 
 
 def transition(
@@ -160,8 +175,8 @@ def _dispatch_next(
         session.execute(
             text(
                 "INSERT INTO pipeline_tasks "
-                "(id, run_id, document_id, celery_task_id, task_name, queue, status, doc_estado_before) "
-                "VALUES (gen_random_uuid(), :rid, :did, :tid, :tn, :q, 'queued', :before)"
+                "(id, run_id, document_id, celery_task_id, task_name, queue, status, doc_estado_before, segments_before, codes_before) "
+                "VALUES (gen_random_uuid(), :rid, :did, :tid, :tn, :q, 'queued', :before, 0, 0)"
             ),
             {
                 "rid": run_id,
@@ -256,3 +271,165 @@ def _get_texto(session, documento_id: str) -> str:
         meta = row[0] if isinstance(row[0], dict) else {}
         return meta.get("texto_extraido", "")
     return ""
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Project-level transitions (para el selective coding coordinator)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def transition_project(
+    session,
+    proyecto_id: str,
+    from_state: str,
+    to_state: str,
+) -> bool:
+    """Transiciona el estado de un proyecto con optimistic locking.
+
+    Usado por el selective_coding_coordinator para avanzar entre fases.
+    No afecta el pipeline de documentos (transition() tradicional).
+
+    Returns:
+        True si la transición se aplicó, False si otro proceso ya transicionó.
+    """
+    result = session.execute(
+        text(
+            "UPDATE proyectos SET estado = :next WHERE id = :pid AND estado = :current"
+        ),
+        {"next": to_state, "pid": proyecto_id, "current": from_state},
+    )
+    session.commit()
+    if result.rowcount == 0:
+        logger.warning(
+            "Project %s already transitioned from %s (expected %s)",
+            proyecto_id,
+            from_state,
+            to_state,
+        )
+        return False
+    logger.info("Project %s: %s → %s", proyecto_id, from_state, to_state)
+    return True
+
+
+def hitl_gate(
+    session,
+    project_id: str,
+    gate_name: str,
+    proposal: dict,
+    critic_verdict: dict,
+) -> str:
+    """Guarda una decisión HITL pendiente y notifica al frontend.
+
+    REGLA 0.1 — Todo paso de decisión teórica requiere HITL.
+    El pipeline se PAUSA aquí. El coordinator espera a que el investigador
+    decida vía el endpoint POST /projects/{id}/hitl/{gate}/decide.
+
+    Returns:
+        'pending' — la decisión queda a la espera.
+        El resultado real (accepted/modified/rejected) se obtiene
+        consultando hitl_decisions periódicamente.
+    """
+    import json
+
+    session.execute(
+        text(
+            "INSERT INTO hitl_decisions "
+            "(id, project_id, gate_name, proposal, critic_verdict, status) "
+            "VALUES (gen_random_uuid(), :pid, :gate, :prop, :verdict, 'pending')"
+        ),
+        {
+            "pid": project_id,
+            "gate": gate_name,
+            "prop": json.dumps(proposal, ensure_ascii=False),
+            "verdict": json.dumps(critic_verdict, ensure_ascii=False),
+        },
+    )
+    session.commit()
+
+    # Notificar frontend vía Redis pub/sub
+    try:
+        import redis as _redis
+
+        r = _redis.from_url("redis://redis:6379", decode_responses=True)
+        payload = json.dumps(
+            {
+                "type": "hitl_required",
+                "gate": gate_name,
+                "proposal": proposal,
+                "critic_verdict": critic_verdict,
+            },
+            ensure_ascii=False,
+        )
+        r.publish(f"project:{project_id}:events", payload)
+    except Exception as e:
+        logger.warning("Failed to publish hitl_required event: %s", e)
+
+    logger.info(
+        "HITL gate '%s' for project=%s: proposal saved, awaiting researcher decision",
+        gate_name,
+        project_id,
+    )
+    return "pending"
+
+
+def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
+    """Dispara el selective_coding_coordinator cuando todos los docs están sintetizados.
+
+    Análogo a _maybe_trigger_phase_b pero para la transición
+    open coding → selective coding.
+    """
+    import os as _os
+
+    from celery import Celery
+
+    sintetizados = session.execute(
+        text(
+            "SELECT COUNT(*) FROM documentos "
+            "WHERE proyecto_id = :pid AND estado = 'sintetizado'"
+        ),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    total = session.execute(
+        text("SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    if sintetizados < total or total == 0:
+        return None
+
+    step = f"selective_coding_dc_{sintetizados}"
+    already = session.execute(
+        text(
+            "SELECT step FROM processing_states "
+            "WHERE entity_type = 'project' AND entity_id = :pid AND step = :step"
+        ),
+        {"pid": proyecto_id, "step": step},
+    ).fetchone()
+
+    if already:
+        return None
+
+    session.execute(
+        text(
+            "INSERT INTO processing_states (entity_type, entity_id, step) "
+            "VALUES ('project', :pid, :step) ON CONFLICT DO NOTHING"
+        ),
+        {"pid": proyecto_id, "step": step},
+    )
+    session.commit()
+
+    app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+    task = app.send_task(
+        "selective_coding_coordinator",
+        args=[proyecto_id],
+        queue="heavy",
+    )
+
+    logger.info(
+        "Selective coding triggered: project=%s (%d docs sintetizados, task=%s)",
+        proyecto_id,
+        sintetizados,
+        task.id,
+    )
+    return {"next_task": "selective_coding_coordinator", "task_id": task.id}

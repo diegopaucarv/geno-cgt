@@ -21,7 +21,9 @@ class Proyecto(Base, TimestampMixin):
     ruta_de_codificacion: Mapped[str] = mapped_column(
         String(50), default="ABDUCTIVA_CGT"
     )
-    estado: Mapped[str] = mapped_column(String(50), default="ACTIVO")
+    estado: Mapped[str] = mapped_column(String(50), default="collecting")
+    # "collecting" | "coding" | "finding_cc" | "reducing" |
+    # "saturating" | "building_db" | "playground_ready" | "completed"
 
     # Supuesto poblacional configurable por el investigador.
     # Qué intenta resolver continuamente esta población.

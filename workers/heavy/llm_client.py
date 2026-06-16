@@ -460,7 +460,9 @@ class LLMClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            content = response.choices[0].message.content or ""
+            message = response.choices[0].message
+            content = message.content or ""
+            reasoning = getattr(message, "reasoning_content", None)
             content = content.strip()
             # Strip markdown code fences if present
             if content.startswith("```"):
@@ -470,7 +472,10 @@ class LLMClient:
                 if lines and lines[-1].startswith("```"):
                     lines = lines[:-1]
                 content = "\n".join(lines)
-            return json.loads(content)
+            result = json.loads(content)
+            if reasoning:
+                result["_reasoning_content"] = reasoning
+            return result
 
         except json.JSONDecodeError as e:
             if retry:

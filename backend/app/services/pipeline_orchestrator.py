@@ -200,10 +200,6 @@ class PipelineOrchestrator:
         run: PipelineRun,
     ) -> dict | None:
         """Despacha la siguiente tarea según TRANSITIONS y crea PipelineTask."""
-        import os as _os
-
-        from celery import Celery
-
         trans = TRANSITIONS.get(from_state)
         if not trans or not trans["task_name"]:
             return None
@@ -218,18 +214,16 @@ class PipelineOrchestrator:
         )
         self.db.flush()
 
-        # Dispatch Celery task
-        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
-
+        # Dispatch Celery task via shared app instance
         if trans["task_name"] == "segmentar_documento":
             texto = metadatos.get("texto_extraido", "")
-            task = app.send_task(
+            task = celery_app.send_task(
                 trans["task_name"],
                 args=[texto, 1024, "", "TEXTO", "", doc_id],
                 queue=trans["queue"],
             )
         else:
-            task = app.send_task(
+            task = celery_app.send_task(
                 trans["task_name"],
                 args=[doc_id, str(project_id)],
                 queue=trans["queue"],

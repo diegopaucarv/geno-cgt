@@ -82,7 +82,9 @@ class TogetherLLM:
 
         response = self._client.chat.completions.create(**kwargs)
 
-        content = response.choices[0].message.content
+        message = response.choices[0].message
+        content = message.content
+        reasoning = getattr(message, "reasoning_content", None)
         usage = response.usage
 
         self._call_count[endpoint.tier] = self._call_count.get(endpoint.tier, 0) + 1
@@ -95,7 +97,7 @@ class TogetherLLM:
             )
             self._total_cost_est += input_cost + output_cost
 
-        return {
+        result = {
             "content": content,
             "model": endpoint.model_id,
             "tier": endpoint.tier,
@@ -109,6 +111,9 @@ class TogetherLLM:
             "cost_est_input": input_cost if usage else 0,
             "cost_est_output": output_cost if usage else 0,
         }
+        if reasoning:
+            result["reasoning_content"] = reasoning
+        return result
 
     async def chat_stream(
         self,

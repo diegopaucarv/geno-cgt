@@ -28,7 +28,7 @@ class Documento(Base, TimestampMixin):
     # ── Pipeline state ──────────────────────────────
     estado: Mapped[str] = mapped_column(String(50), default="crudo")
     """
-    crudo → segmentando → segmentado → procesando → listo → error
+    crudo → segmentando → segmentado → procesando → listo → sintetizado
     """
 
     # Relaciones

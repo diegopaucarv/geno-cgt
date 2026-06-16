@@ -18,6 +18,9 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 llm = LLMClient()
 
+# Feature flag para modo agencial (activar con AGENTIC_MODE=true)
+AGENTIC_MODE = os.getenv("AGENTIC_MODE", "false").lower() in ("1", "true", "yes")
+
 
 def _get_population_assumption(session, proyecto_id: str) -> str:
     row = session.execute(
@@ -247,12 +250,20 @@ def b2_open_code(proyecto_id: str) -> dict:
         )
 
         # ── Step 3: B2b (PRO) — generar códigos ──
-        b2b_response = _b2b_generate_codes(
-            pop_assumption=pop_assumption,
-            pop_context=pop_ctx[0] if pop_ctx else "",
-            existing_codes=codes_text,
-            indicators_text=indicators_text,
-        )
+        if AGENTIC_MODE:
+            b2b_response = _b2b_generate_codes_agentic(
+                pop_assumption=pop_assumption,
+                pop_context=pop_ctx[0] if pop_ctx else "",
+                existing_codes=codes_text,
+                indicators_text=indicators_text,
+            )
+        else:
+            b2b_response = _b2b_generate_codes(
+                pop_assumption=pop_assumption,
+                pop_context=pop_ctx[0] if pop_ctx else "",
+                existing_codes=codes_text,
+                indicators_text=indicators_text,
+            )
 
         created = 0
         for code in b2b_response.get("codes", []):
@@ -454,19 +465,25 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
             "\n".join(f"- {c[0]}: {c[1]}" for c in codes) if codes else "(sin códigos)"
         )
 
-        response = llm.run_agent(
-            agent_id="b3",
-            variables={
-                "population_assumption": pop_assumption,
-                "population_context": pop_ctx[0] if pop_ctx else "",
-                "processes": processes_text,
-                "codes": codes_text,
-                "existing_hypotheses": hyp_text,
-            },
-            temperature=0.4,
-        )
-
-        raw_hypotheses = response.get("hypotheses", [])
+        if AGENTIC_MODE:
+            raw_hypotheses = b3_generate_hypotheses_agentic(
+                proyecto_id, pop_assumption,
+                pop_ctx[0] if pop_ctx else "",
+                processes_text, codes_text, hyp_text
+            )
+        else:
+            response = llm.run_agent(
+                agent_id="b3",
+                variables={
+                    "population_assumption": pop_assumption,
+                    "population_context": pop_ctx[0] if pop_ctx else "",
+                    "processes": processes_text,
+                    "codes": codes_text,
+                    "existing_hypotheses": hyp_text,
+                },
+                temperature=0.4,
+            )
+            raw_hypotheses = response.get("hypotheses", [])
         filtered = deduplicate_hypotheses(raw_hypotheses, session, proyecto_id)
         created = 0
         reinforced = 0
@@ -496,3 +513,127 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
         }
     finally:
         session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Agentic versions (AGENTIC_MODE=true)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def _b2b_generate_codes_agentic(
+    pop_assumption: str, pop_context: str, existing_codes: str, indicators_text: str
+) -> dict:
+    """B2b agentic: SelfRefinementLoop (Generate -> Critic -> Refine).
+
+    Reemplaza la llamada single-shot _b2b_generate_codes() cuando
+    AGENTIC_MODE=true. Usa PRO para generar y FLASH para evaluar.
+    """
+    import sys as _sys
+    _sys.path.insert(0, "/app")
+    from app.agents.self_refiner import SelfRefinementLoop
+
+    loop = SelfRefinementLoop(
+        agent_id="b2b",
+        llm_client=llm,
+        generate_prompt_id="b2b",
+        critic_prompt_id="code_critic",
+        max_iterations=3,
+        timeout_seconds=300.0,
+    )
+
+    result = loop.run(
+        project_id="b2b_batch",
+        generate_vars={
+            "population_assumption": pop_assumption,
+            "population_context": pop_context,
+            "existing_codes": existing_codes,
+            "indicators": indicators_text,
+        },
+    )
+
+    if result.success:
+        logger.info(
+            "Agentic B2b: %d codes in %d iterations (reasoning=%s)",
+            len(result.data.get("codes", [])),
+            result.iterations,
+            result.had_reasoning,
+        )
+        return result.data
+
+    # Fallback to single-shot on failure
+    logger.warning("Agentic B2b failed: %s. Falling back to single-shot.", result.error)
+    return _b2b_generate_codes(pop_assumption, pop_context, existing_codes, indicators_text)
+
+
+def b3_generate_hypotheses_agentic(
+    proyecto_id: str,
+    pop_assumption: str,
+    pop_context: str,
+    processes_text: str,
+    codes_text: str,
+    hyp_text: str,
+) -> list[dict]:
+    """B3 agentic: ReactRunner con tools para buscar evidencia antes de generar hipotesis.
+
+    Reemplaza la llamada single-shot b3_generate_hypotheses() cuando
+    AGENTIC_MODE=true. El agente puede llamar search_segments, get_code_details,
+    etc. para verificar evidencia antes de hipotetizar.
+    """
+    import sys as _sys
+    _sys.path.insert(0, "/app")
+    from app.agents.react_runner import ReactRunner
+    from app.agents.tool_registry import ToolRegistry
+    from app.agents.tools.db_tools import get_all_codes, get_code_details, get_existing_hypotheses
+    from app.agents.tools.search_tools import search_segments, search_similar_codes
+
+    tools = ToolRegistry()
+    tools.register(search_segments, "search_segments", "Busca segmentos semanticamente en el corpus.")
+    tools.register(get_code_details, "get_code_details", "Obten definicion e incidentes de un codigo.")
+    tools.register(get_all_codes, "get_all_codes", "Lista todos los codigos del proyecto.")
+    tools.register(get_existing_hypotheses, "get_existing_hypotheses", "Lista hipotesis ya generadas.")
+    tools.register(search_similar_codes, "search_similar_codes", "Busca codigos similares (anti-redundancia).")
+
+    runner = ReactRunner(
+        agent_id="b3",
+        llm_client=llm,
+        tool_registry=tools,
+        max_iterations=5,
+        timeout_seconds=300.0,
+    )
+
+    result = runner.run(
+        project_id=proyecto_id,
+        role_description="Eres un generador de hipotesis para Grounded Theory con acceso a herramientas de busqueda.",
+        generate_vars={
+            "population_assumption": pop_assumption,
+            "population_context": pop_context,
+            "processes": processes_text,
+            "codes": codes_text,
+            "existing_hypotheses": hyp_text,
+        },
+    )
+
+    if result.success:
+        logger.info(
+            "Agentic B3: %d hypotheses in %d iterations (reasoning=%s, tool_calls=%d)",
+            len(result.data.get("hypotheses", [])),
+            result.iterations,
+            result.had_reasoning,
+            sum(1 for t in result.trace if t.get("type") == "tool_call"),
+        )
+        return result.data.get("hypotheses", [])
+
+    # Fallback to single-shot on failure
+    logger.warning("Agentic B3 failed: %s. Falling back to single-shot.", result.error)
+    response = llm.run_agent(
+        agent_id="b3",
+        variables={
+            "population_assumption": pop_assumption,
+            "population_context": pop_context,
+            "processes": processes_text,
+            "codes": codes_text,
+            "existing_hypotheses": hyp_text,
+        },
+        temperature=0.4,
+    )
+    return response.get("hypotheses", [])

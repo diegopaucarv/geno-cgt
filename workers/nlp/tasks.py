@@ -7,7 +7,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 from celery import Celery
-from config import DATABASE_URL, REDIS_URL, SEGMENTATION_REINERT, SPACY_MODEL, TEI_URL
+from config import (
+    DATABASE_URL,
+    REDIS_URL,
+    SEGMENTATION_REINERT,
+    SPACY_EXCLUDE,
+    SPACY_MODEL,
+    TEI_URL,
+)
 from contextual_enrichment import build_contextualized_text
 from kombu import Exchange, Queue
 
@@ -174,7 +181,10 @@ def segmentar_documento(
 
     reinert = SEGMENTATION_REINERT
     segmenter = ProgressiveSegmenter(
-        spacy_model=SPACY_MODEL, tei_url=TEI_URL, reinert_micro=reinert
+        spacy_model=SPACY_MODEL,
+        spacy_exclude=SPACY_EXCLUDE,
+        tei_url=TEI_URL,
+        reinert_micro=reinert,
     )
     segmentos = segmenter.segment_text(texto, max_tokens=max_tokens)
 
@@ -312,7 +322,24 @@ def segmentar_documento(
                 cur.close()
                 conn.close()
         except Exception as e:
-            logger.warning("Segmentacion DB fallo: %s", e)
+            logger.error("Segmentacion DB fallo: %s", e)
+            # Mark document as error so pipeline can detect & abort
+            if documento_id:
+                try:
+                    db_url_sa = DATABASE_URL.replace(
+                        "postgresql+asyncpg", "postgresql"
+                    ).replace("postgresql+psycopg2", "postgresql")
+                    from sqlalchemy import create_engine
+                    from sqlalchemy.orm import Session as SASession
+
+                    engine = create_engine(db_url_sa)
+                    with SASession(engine) as s:
+                        from agents.transitions import _to_error
+
+                        _to_error(s, documento_id)
+                except Exception as _e:
+                    logger.error("Failed to mark doc as error: %s", _e)
+            raise  # re-raise so Celery sees the failure
 
     return {
         "num_segmentos": len(segmentos),

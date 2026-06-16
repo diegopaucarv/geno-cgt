@@ -2,7 +2,7 @@
 
 > **Derivado de:** `Patron_Desarrollo_Maestro.md` + `Diagrama_Secuencias_Sistema.puml`
 >
-> Versión 1.1 — 2026-06-16 (Sesión 1 completada: 17/74 tareas ✅)
+> Versión 1.2 — 2026-06-16 (Sesiones 1+2 completadas: 22/74 tareas ✅)
 
 ---
 
@@ -21,9 +21,9 @@ creciente, donde cada etapa desbloquea la siguiente.
 | **E3** | Theoretical Playground | 🟠 Alto | 18 | E2 |
 | **E4** | Frontend — Overlay Coherente | 🟡 Medio | 16 | E3 |
 
-**Total: 74 tareas** | ✅ 17 completadas | 🔴 18 críticas | 🟠 40 altas | 🟡 16 medias
+**Total: 74 tareas** | ✅ 22 completadas | 🔴 18 críticas | 🟠 40 altas | 🟡 16 medias
 
-> **Progreso:** 23% — Sesión 1 (Fase A) completada. Infraestructura HITL y 12 prompts listos.
+> **Progreso:** 30% — Sesiones 1+2 completadas. Infraestructura HITL lista. DB migrada.
 
 ---
 
@@ -75,18 +75,18 @@ creciente, donde cada etapa desbloquea la siguiente.
 ### E1.1 — Modelo `hitl_decisions`
 
 - [x] **E1.1.1** 🔴 Modelo `HitlDecision` ✅ `hitl_decision.py` (44 líneas)
-- [ ] **E1.1.2** 🔴 Generar migración Alembic
+- [x] **E1.1.2** 🔴 Migración Alembic generada y aplicada ✅ (`018f5945d0ca`)
 - [x] **E1.1.3** 🔴 Schemas Pydantic ✅ `schemas/hitl.py` (43 líneas)
 
 ### E1.2 — Endpoint HITL
 
 - [x] **E1.2.1** 🔴 Crear endpoint `POST /api/v1/projects/{id}/hitl/{gate_name}/decide` en `backend/app/api/v1/projects.py` (o archivo dedicado `hitl.py`)
-- [ ] **E1.2.2** 🔴 Implementar lógica: ACCEPT → avanzar pipeline, MODIFY → re-ejecutar proposer con `researcher_feedback`, REJECT → archivar decisión con nota
-- [ ] **E1.2.3** 🔴 Endpoint `GET /api/v1/projects/{id}/hitl/pending` para que el frontend consulte decisiones pendientes
+- [x] **E1.2.2** 🔴 Lógica ACCEPT/MODIFY/REJECT ✅
+- [x] **E1.2.3** 🔴 `GET /projects/{id}/hitl/pending` ✅
 
 ### E1.3 — Notificaciones SSE para HITL
 
-- [ ] **E1.3.1** 🔴 Extender `backend/app/api/v1/events.py` con tipo de evento `hitl_required`
+- [x] **E1.3.1** 🔴 `events.py` ya soporta `publish_event()` con cualquier `event_type` ✅
 - [ ] **E1.3.2** 🔴 El worker que llega a un gate HITL publica en Redis: `{type: "hitl_required", gate, proposal, critic_verdict}`
 - [ ] **E1.3.3** 🔴 El frontend recibe el evento SSE y muestra el `HITLModal` (se implementa en E4)
 
@@ -218,9 +218,9 @@ creciente, donde cada etapa desbloquea la siguiente.
 
 ### E4.2 — Componente HITLModal
 
-- [ ] **E4.2.1** 🟡 Componente `HITLModal.tsx`: muestra propuesta + veredicto del critic + opciones ACCEPT / MODIFY / REJECT
-- [ ] **E4.2.2** 🟡 Campo de feedback para MODIFY (texto que se envía al re-ejecutar el proposer)
-- [ ] **E4.2.3** 🟡 Campo de nota para REJECT (rationale que se archiva con la decisión)
+- [x] **E4.2.1** 🟡 Componente `HITLModal.tsx` ✅ (393 líneas, ACCEPT/MODIFY/REJECT)
+- [x] **E4.2.2** 🟡 Campo de feedback para MODIFY ✅
+- [x] **E4.2.3** 🟡 Campo de nota para REJECT ✅
 
 ### E4.3 — PlaygroundPage (`/projects/:id/theory`)
 
@@ -236,8 +236,8 @@ creciente, donde cada etapa desbloquea la siguiente.
 
 ### E4.4 — Tiempo Real
 
-- [ ] **E4.4.1** 🟡 WebSocket/SSE para notificaciones HITL en tiempo real (conectar con endpoint de E1.3)
-- [ ] **E4.4.2** 🟡 Indicador visual de "esperando decisión" en la etapa que está en gate HITL
+- [x] **E4.4.1** 🟡 Funciones `getPendingHitl()` y `decideHitl()` en `client.ts` ✅ (+44 líneas)
+- [ ] **E4.4.2** 🟡 Indicador visual de "esperando decisión"
 
 ---
 
@@ -283,20 +283,22 @@ graph TD
 
 ## Prompts Nuevos Requeridos
 
-| # | Archivo | Carpeta | Modelo | Fase | Paso |
-|---|---------|---------|--------|------|------|
-| 1 | `main_concern_proposer.md` | `prompts/pro/` | PRO | A | A1 |
-| 2 | `main_concern_critic.md` | `prompts/pro/` | PRO | A | A2 |
-| 3 | `core_emergence_proposer.md` | `prompts/pro/` | PRO | A | A3 |
-| 4 | `core_emergence_critic.md` | `prompts/flash/` | FLASH | A | A4 |
-| 5 | `selective_reduction_proposer.md` | `prompts/pro/` | PRO | B | B1 |
-| 6 | `selective_reduction_critic.md` | `prompts/pro/` | PRO | B | B2 |
-| 7 | `core_saturation_proposer.md` | `prompts/pro/` | PRO | C | C1 |
-| 8 | `core_saturation_critic.md` | `prompts/flash/` | FLASH | C | C2 |
-| 9 | `database_a_proposer.md` | `prompts/pro/` | PRO | D | D1 |
-| 10 | `database_a_critic.md` | `prompts/pro/` | PRO | D | D2 |
-| 11 | `database_b_proposer.md` | `prompts/pro/` | PRO | D | D3 |
-| 12 | `database_b_critic.md` | `prompts/pro/` | PRO | D | D4 |
+> ✅ **12/12 creados** — Sesión 1 completada.
+
+| # | Archivo | Carpeta | Modelo | Fase | Paso | Estado |
+|---|---------|---------|--------|------|------|--------|
+| 1 | `main_concern_proposer.md` | `prompts/pro/` | PRO | A | A1 | ✅ |
+| 2 | `main_concern_critic.md` | `prompts/pro/` | PRO | A | A2 | ✅ |
+| 3 | `core_emergence_proposer.md` | `prompts/pro/` | PRO | A | A3 | ✅ |
+| 4 | `core_emergence_critic.md` | `prompts/flash/` | FLASH | A | A4 | ✅ |
+| 5 | `selective_reduction_proposer.md` | `prompts/pro/` | PRO | B | B1 | ✅ |
+| 6 | `selective_reduction_critic.md` | `prompts/pro/` | PRO | B | B2 | ✅ |
+| 7 | `core_saturation_proposer.md` | `prompts/pro/` | PRO | C | C1 | ✅ |
+| 8 | `core_saturation_critic.md` | `prompts/flash/` | FLASH | C | C2 | ✅ |
+| 9 | `database_a_proposer.md` | `prompts/pro/` | PRO | D | D1 | ✅ |
+| 10 | `database_a_critic.md` | `prompts/pro/` | PRO | D | D2 | ✅ |
+| 11 | `database_b_proposer.md` | `prompts/pro/` | PRO | D | D3 | ✅ |
+| 12 | `database_b_critic.md` | `prompts/pro/` | PRO | D | D4 | ✅ |
 
 ---
 

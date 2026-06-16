@@ -25,8 +25,8 @@ def checkpoint(session, documento_id: str, step: str, status: str) -> None:
     session.execute(
         text(
             "INSERT INTO task_step_checkpoints "
-            "(id, document_id, step_name, status) "
-            "VALUES (gen_random_uuid(), :did, :step, :status)"
+            "(id, document_id, step_name, status, affected_rows) "
+            "VALUES (gen_random_uuid(), :did, :step, :status, '{}'::jsonb)"
         ),
         {"did": documento_id, "step": step, "status": status},
     )

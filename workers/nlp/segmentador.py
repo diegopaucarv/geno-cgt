@@ -7,7 +7,6 @@ from typing import Optional
 
 import numpy as np
 import spacy
-import stanza
 from embedding_client import EmbeddingClient
 from rapidfuzz import fuzz
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -38,22 +37,8 @@ def _free_gpu_memory() -> None:
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
-
-# ── Stanza coref bug-fix ──────────────────────────────────────────────────────
-try:
-    from stanza.models.coref.config import Config as _StanzaCorefCfg
-
-    if not hasattr(_StanzaCorefCfg, "_coref_patched_flag"):
-        _StanzaCorefCfg._coref_original_init = _StanzaCorefCfg.__init__
-
-        def _coref_patched_init(self, *args, **kwargs):
-            kwargs.setdefault("plateau_epochs", 10)
-            _StanzaCorefCfg._coref_original_init(self, *args, **kwargs)
-
-        _StanzaCorefCfg.__init__ = _coref_patched_init
-        _StanzaCorefCfg._coref_patched_flag = True
-        print("[PATCH] Stanza coref Config parcheado correctamente.")
-except ImportError:
+    # ── Stanza coref bug-fix ──────────────────────────────────────────────────────
+    # (moved inside get_stanza() for lazy-load — see below)
     pass
 
 
@@ -237,6 +222,7 @@ class ProgressiveSegmenter:
     def __init__(
         self,
         spacy_model: str = "es_core_news_lg",
+        spacy_exclude: str = "vectors,lemmatizer",
         stanza_lang: str = "es",
         similarity_threshold: float = 0.6,
         max_depth: int = 3,
@@ -257,7 +243,20 @@ class ProgressiveSegmenter:
         self.embedding_client = EmbeddingClient(base_url=tei_url)
 
         # spaCy pipeline — single shared instance
-        self.nlp = spacy.load(spacy_model)
+        if spacy_exclude == "auto":
+            from memory import auto_spacy_exclude, available_memory_gb
+
+            _avail = available_memory_gb()
+            _exclude = auto_spacy_exclude(_avail, spacy_model)
+            logging.info(
+                f"[Init] Auto-detected {_avail:.1f} GB available → spaCy exclude={_exclude}"
+            )
+        else:
+            _exclude = [c.strip() for c in spacy_exclude.split(",") if c.strip()]
+        self.nlp = spacy.load(spacy_model, exclude=_exclude)
+        logging.info(
+            f"[Init] spaCy '{spacy_model}' loaded (excluded: {_exclude or 'none'})"
+        )
         if "conversational_sbd" not in self.nlp.pipe_names:
             self.nlp.add_pipe("conversational_sbd", before="parser")
 
@@ -278,9 +277,31 @@ class ProgressiveSegmenter:
             print(f"[COREF] {msg}")
 
     # ── Stanza lazy-load ──────────────────────────────────────────────────────
-    def get_stanza(self) -> Optional[stanza.Pipeline]:
+    def get_stanza(self) -> Optional["stanza.Pipeline"]:
         if self._stanza_pipeline is None:
+            # Check memory BEFORE loading 2GB Stanza
+            from memory import should_enable_coref
+
+            if not should_enable_coref():
+                self._dprint("✗ RAM insuficiente — coref deshabilitado.")
+                return None
+
             try:
+                import stanza
+
+                # ── Stanza coref bug-fix (patch config) ──
+                from stanza.models.coref.config import Config as _StanzaCorefCfg
+
+                if not hasattr(_StanzaCorefCfg, "_coref_patched_flag"):
+                    _StanzaCorefCfg._coref_original_init = _StanzaCorefCfg.__init__
+
+                    def _coref_patched_init(self_cfg, *args, **kwargs):
+                        kwargs.setdefault("plateau_epochs", 10)
+                        _StanzaCorefCfg._coref_original_init(self_cfg, *args, **kwargs)
+
+                    _StanzaCorefCfg.__init__ = _coref_patched_init
+                    _StanzaCorefCfg._coref_patched_flag = True
+
                 # Stanza pre-descargado en Dockerfile — no llamar download() en runtime
                 self._stanza_pipeline = stanza.Pipeline(
                     self.stanza_lang,
@@ -328,9 +349,13 @@ class ProgressiveSegmenter:
                 clean_sent = sent.text.strip()
                 if len(clean_sent) >= min_chars:
                     sentences.append(clean_sent)
+        except Exception:
+            sentences = []
+            doc = None
         finally:
             self.nlp.max_length = original_max
-            del doc
+            if doc is not None:
+                del doc
 
         logging.info(
             f"[Preprocess] {len(sentences)} oraciones extraídas de {len(text)} caracteres."

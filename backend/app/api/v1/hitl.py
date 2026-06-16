@@ -27,6 +27,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["hitl"])
 
 
+@router.get("/projects/{project_id}/hitl/{gate_name}/detail")
+async def get_hitl_detail(
+    project_id: UUID,
+    gate_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Obtiene la decisión HITL completa (proposal + critic_verdict) para mostrar en el modal."""
+    row = await db.execute(
+        text(
+            "SELECT id, gate_name, proposal, critic_verdict, status, creado_en "
+            "FROM hitl_decisions "
+            "WHERE project_id = :pid AND gate_name = :gate "
+            "ORDER BY creado_en DESC LIMIT 1"
+        ),
+        {"pid": project_id, "gate": gate_name},
+    )
+    decision_row = row.fetchone()
+    if not decision_row:
+        raise HTTPException(404, f"No decision found for gate '{gate_name}'")
+
+    return {
+        "id": str(decision_row[0]),
+        "gate_name": decision_row[1],
+        "proposal": decision_row[2] if isinstance(decision_row[2], dict) else {},
+        "critic_verdict": decision_row[3] if isinstance(decision_row[3], dict) else {},
+        "status": decision_row[4],
+        "created_at": str(decision_row[5]),
+    }
+
+
 @router.get("/projects/{project_id}/hitl/pending")
 async def get_pending_decisions(
     project_id: UUID,
@@ -126,9 +157,23 @@ async def decide_hitl(
     )
     await db.commit()
 
-    # 3. TODO: Si ACCEPT → disparar siguiente fase del coordinator
-    #    Esto se implementa cuando el coordinator exista (E2).
-    #    Por ahora, solo registramos la decisión en la DB.
+    # 3. Re-disparar coordinator para continuar el pipeline
+    if body.decision in ("accept", "modify"):
+        try:
+            from app.core.celery_app import celery_app
+
+            celery_app.send_task(
+                "selective_coding_coordinator",
+                args=[str(project_id)],
+                queue="heavy",
+            )
+            logger.info(
+                "Coordinator re-dispatched for project=%s after %s decision",
+                project_id,
+                body.decision,
+            )
+        except Exception as e:
+            logger.warning("Failed to re-dispatch coordinator: %s", e)
 
     logger.info(
         "HITL decision: gate=%s decision=%s by user=%s",

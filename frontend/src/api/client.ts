@@ -666,3 +666,17 @@ export async function decideHitl(
     },
   );
 }
+
+export async function getHitlDetail(
+  projectId: string,
+  gateName: string,
+): Promise<{
+  id: string;
+  gate_name: string;
+  proposal: Record<string, unknown>;
+  critic_verdict: Record<string, unknown>;
+  status: string;
+  created_at: string;
+}> {
+  return request(`/projects/${projectId}/hitl/${gateName}/detail`);
+}

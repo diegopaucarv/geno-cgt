@@ -11,6 +11,7 @@ from app.api.v1 import (
     documents,
     elaboration,
     events,
+    hitl,
     hypotheses,
     ping,
     pipeline,
@@ -86,3 +87,4 @@ app.include_router(events.router)
 app.include_router(analysis.router)
 app.include_router(theoretical_codes.router)
 app.include_router(elaboration.router)
+app.include_router(hitl.router)

@@ -840,28 +840,106 @@ def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
 )
 def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
     results: dict[str, Any] = {"proyecto_id": proyecto_id}
-    logger.info("B1: Muestreo %s", proyecto_id)
-    results["sampling"] = b1_distill_sampling(proyecto_id)
-    logger.info("B2: Open coding %s", proyecto_id)
-    results["open_coding"] = b2_open_code(proyecto_id)
-    logger.info("B2.5: Grounding %s", proyecto_id)
-    results["grounding"] = b2_5_assign_codes_to_segments(proyecto_id)
 
-    # B17: SaturationCalculator
+    # ── Check abort ──
+    if self._aborted:
+        raise TaskCancelledError()
+
+    s = SessionLocal()
     try:
-        app.send_task("update_saturation", args=[proyecto_id], queue="nlp")
-    except Exception:
-        pass
+        # ── B1: Sampling distiller ──
+        _checkpoint_step(s, proyecto_id, "b1_distill_sampling", "in_progress")
+        logger.info("B1: Muestreo %s", proyecto_id)
+        results["sampling"] = b1_distill_sampling(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b1_distill_sampling", "completed")
 
-    # B18: Prototype cache rebuild
+        # ── B2: Open coding ──
+        if self._aborted:
+            raise TaskCancelledError()
+        _checkpoint_step(s, proyecto_id, "b2_open_code", "in_progress")
+        logger.info("B2: Open coding %s", proyecto_id)
+        results["open_coding"] = b2_open_code(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b2_open_code", "completed")
+
+        # ── B2.5: Grounding ──
+        if self._aborted:
+            raise TaskCancelledError()
+        _checkpoint_step(s, proyecto_id, "b2_5_assign_codes", "in_progress")
+        logger.info("B2.5: Grounding %s", proyecto_id)
+        results["grounding"] = b2_5_assign_codes_to_segments(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b2_5_assign_codes", "completed")
+
+        # ── B17: SaturationCalculator ──
+        try:
+            app.send_task("update_saturation", args=[proyecto_id], queue="nlp")
+        except Exception:
+            pass
+
+        # ── B18: Prototype cache rebuild ──
+        try:
+            __rebuild_cache(proyecto_id)
+        except Exception:
+            pass
+
+        # ── B3: Hypotheses ──
+        if self._aborted:
+            raise TaskCancelledError()
+        _checkpoint_step(s, proyecto_id, "b3_generate_hypotheses", "in_progress")
+        logger.info("B3: Hipotesis %s", proyecto_id)
+        results["hypotheses"] = b3_generate_hypotheses(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b3_generate_hypotheses", "completed")
+
+        # ── Transition all docs: listo → sintetizado ──
+        _transition_docs_to_sintetizado(s, proyecto_id)
+
+        return results
+
+    except TaskCancelledError:
+        _checkpoint_step(s, proyecto_id, "cancelled", "completed")
+        return {"status": "cancelled", "proyecto_id": proyecto_id}
+    except Exception:
+        logger.exception("process_synthesis_agents_b failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+def _checkpoint_step(session, proyecto_id: str, step_name: str, status: str) -> None:
+    """Registra un checkpoint de paso para resumibilidad (REGLA 4)."""
     try:
-        __rebuild_cache(proyecto_id)
+        session.execute(
+            text(
+                "INSERT INTO task_step_checkpoints "
+                "(id, document_id, step_name, status, affected_rows) "
+                "VALUES (gen_random_uuid(), NULL, :step, :status, '{}'::jsonb)"
+            ),
+            {"step": step_name, "status": status},
+        )
+        session.commit()
     except Exception:
-        pass
+        pass  # non-critical
 
-    logger.info("B3: Hipotesis %s", proyecto_id)
-    results["hypotheses"] = b3_generate_hypotheses(proyecto_id)
-    return results
+
+def _transition_docs_to_sintetizado(session, proyecto_id: str) -> int:
+    """Transiciona todos los docs 'listo' del proyecto a 'sintetizado'."""
+    from agents.transitions import _maybe_trigger_selective_coding
+
+    result = session.execute(
+        text(
+            "UPDATE documentos SET estado = 'sintetizado' "
+            "WHERE proyecto_id = :pid AND estado = 'listo'"
+        ),
+        {"pid": proyecto_id},
+    )
+    session.commit()
+    count = result.rowcount
+    if count > 0:
+        logger.info(
+            "Transitioned %d docs to 'sintetizado' for project %s", count, proyecto_id
+        )
+        # Si todos los docs ya están sintetizados, disparar selective coding
+        _maybe_trigger_selective_coding(session, proyecto_id)
+    return count
 
 
 def __rebuild_cache(proyecto_id: str) -> int:
@@ -1532,5 +1610,919 @@ def task_seed_theoretical_codes() -> dict:
         inserted = seed_theoretical_codes(s)
         logger.info("T28: seeded %d theoretical codes", inserted)
         return {"status": "ok", "inserted": inserted}
+    finally:
+        s.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# E2 — Selective Coding Coordinator + Pipeline Tasks
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.task(
+    name="selective_coding_coordinator",
+    base=AbortableTask,
+    bind=True,
+)
+def selective_coding_coordinator(self, proyecto_id: str) -> dict:
+    """
+    Coordinator del pipeline selectivo: Fase A → B → C → D → E.
+
+    Despacha cada fase serialmente con gates HITL entre ellas.
+    Cada fase espera confirmación del investigador antes de avanzar.
+
+    Este coordinator reemplaza al antiguo trigger_selective_elaboration
+    que ejecutaba tareas en paralelo sin HITL (violando R0.1, R0.2, R0.3).
+    """
+    if self._aborted:
+        raise TaskCancelledError()
+
+    s = SessionLocal()
+    try:
+        from agents.transitions import PROJECT_STATES, transition_project
+
+        # ── Determinar punto de entrada ──
+        current = s.execute(
+            text("SELECT estado FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        if not current:
+            return {"status": "error", "reason": "Project not found"}
+        current_state = current[0]
+
+        # ── Fase A: Core Category Detection ──
+        if current_state == "coding":
+            transition_project(s, proyecto_id, "coding", "finding_cc")
+            current_state = "finding_cc"
+
+        if current_state == "finding_cc":
+            result_a = task_main_concern_pipeline(proyecto_id)
+            if result_a.get("status") != "completed":
+                return {"status": "paused", "phase": "A", "gate": "main_concern"}
+
+            result_cc = task_core_emergence_pipeline(proyecto_id)
+            if result_cc.get("status") != "completed":
+                return {"status": "paused", "phase": "A", "gate": "core_emergence"}
+
+            transition_project(s, proyecto_id, "finding_cc", "reducing")
+            current_state = "reducing"
+
+        # ── Fase B: Selective Reduction ──
+        if current_state == "reducing":
+            result_b = task_selective_reduction_pipeline(proyecto_id)
+            if result_b.get("status") != "completed":
+                return {"status": "paused", "phase": "B", "gate": "selective_reduction"}
+
+            transition_project(s, proyecto_id, "reducing", "saturating")
+            current_state = "saturating"
+
+        # ── Fase C: Core Saturation ──
+        if current_state == "saturating":
+            result_c = task_core_saturation_loop(proyecto_id)
+            logger.info(
+                "Fase C (saturation): %d categories processed, %d expansions",
+                result_c.get("categories_processed", 0),
+                result_c.get("total_expansions", 0),
+            )
+            if result_c.get("status") == "completed":
+                transition_project(s, proyecto_id, "saturating", "building_db")
+                current_state = "building_db"
+
+        # ── Fase D: Database A/B ──
+        if current_state == "building_db":
+            result_da = task_database_a_pipeline(proyecto_id)
+            if result_da.get("status") != "completed":
+                return {"status": "paused", "phase": "D", "gate": "database_a"}
+
+            result_db = task_database_b_pipeline(proyecto_id)
+            if result_db.get("status") != "completed":
+                return {"status": "paused", "phase": "D", "gate": "database_b"}
+
+            # ── Fase E: Global Saturation Check ──
+            result_e = task_global_saturation_check(proyecto_id)
+            if result_e.get("status") != "completed":
+                return {"status": "paused", "phase": "E", "gate": "global_saturation"}
+
+            transition_project(s, proyecto_id, "building_db", "playground_ready")
+
+        return {
+            "status": "completed",
+            "project_id": proyecto_id,
+            "final_state": "playground_ready",
+        }
+
+    except TaskCancelledError:
+        return {"status": "cancelled", "proyecto_id": proyecto_id}
+    except Exception:
+        logger.exception("selective_coding_coordinator failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(name="main_concern_pipeline")
+def task_main_concern_pipeline(proyecto_id: str) -> dict:
+    """
+    Fase A, Pasos A1+A2: Main Concern Detection.
+    Proposer (PRO) → Critic (PRO) → HITL gate.
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "main_concern"}
+        if existing and existing[0] == "pending":
+            return {
+                "status": "paused",
+                "gate": "main_concern",
+                "awaiting": "researcher",
+            }
+
+        # Si hay una decisión modified, obtener el feedback para re-ejecutar
+        researcher_feedback = ""
+        if existing and existing[0] == "modified":
+            fb_row = s.execute(
+                text(
+                    "SELECT researcher_feedback FROM hitl_decisions "
+                    "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                    "AND status = 'modified' ORDER BY creado_en DESC LIMIT 1"
+                ),
+                {"pid": proyecto_id},
+            ).fetchone()
+            researcher_feedback = (fb_row[0] or "") if fb_row else ""
+            logger.info(
+                "Re-executing main_concern with feedback: %s", researcher_feedback[:100]
+            )
+
+        # ── Proposer ──
+        codes = s.execute(
+            text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
+            {"pid": proyecto_id},
+        ).fetchall()
+        memos = s.execute(
+            text(
+                "SELECT contenido FROM memos WHERE proyecto_id=:pid "
+                "AND tipo IN ('HIPOTESIS','PROPIEDAD','RELACION')"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        prime_rows = s.execute(
+            text(
+                "SELECT dp.prime_mover, dp.prime_mover_confidence, d.original_filename "
+                "FROM document_processes dp "
+                "JOIN documentos d ON dp.documento_id = d.id "
+                "WHERE dp.proyecto_id = :pid AND dp.prime_mover IS NOT NULL"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        all_codes = "\n".join(f"- {c[0]}: {c[1]}" for c in codes)
+        all_memos = "\n---\n".join(m[0] for m in memos) if memos else "(sin memos)"
+        prime_movers_text = (
+            "\n".join(f"- {r[2]}: {r[0]} (confidence: {r[1]})" for r in prime_rows)
+            if prime_rows
+            else "(sin prime movers)"
+        )
+
+        proposal = llm.run_agent(
+            "main_concern_proposer",
+            variables={
+                "all_codes": all_codes,
+                "all_memos": all_memos,
+                "prime_movers_per_document": prime_movers_text,
+                "researcher_feedback": researcher_feedback,
+            },
+        )
+
+        # ── Critic ──
+        critic = llm.run_agent(
+            "main_concern_critic",
+            variables={
+                "main_concern": proposal.get("main_concern", ""),
+                "all_codes": all_codes,
+                "prime_movers_per_document": prime_movers_text,
+            },
+        )
+
+        # ── HITL gate ──
+        from agents.transitions import hitl_gate
+
+        hitl_gate(s, proyecto_id, "main_concern", proposal, critic)
+
+        return {"status": "paused", "gate": "main_concern", "awaiting": "researcher"}
+
+    except Exception:
+        logger.exception("main_concern_pipeline failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(name="core_emergence_pipeline")
+def task_core_emergence_pipeline(proyecto_id: str) -> dict:
+    """
+    Fase A, Pasos A3+A4: Core Category Emergence.
+    Proposer (PRO) → Critic (FLASH) → HITL gate.
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "core_emergence"}
+        if existing and existing[0] == "pending":
+            return {
+                "status": "paused",
+                "gate": "core_emergence",
+                "awaiting": "researcher",
+            }
+
+        codes = s.execute(
+            text(
+                "SELECT id, nombre, definicion, puntaje_relevancia "
+                "FROM categorias WHERE proyecto_id=:pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        all_codes = "\n".join(f"- [{c[3]}] {c[1]}: {c[2]}" for c in codes)
+
+        stats_rows = s.execute(
+            text(
+                "SELECT c.nombre, COUNT(DISTINCT cs.segmento_id), "
+                "COUNT(DISTINCT s.documento_id) "
+                "FROM categorias c "
+                "LEFT JOIN codigos_segmento cs ON c.id = cs.categoria_id "
+                "LEFT JOIN segmentos s ON cs.segmento_id = s.id "
+                "WHERE c.proyecto_id = :pid GROUP BY c.id, c.nombre "
+                "ORDER BY 2 DESC"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        stats_text = "\n".join(
+            f"- {r[0]}: {r[1]} segmentos en {r[2]} documentos" for r in stats_rows
+        )
+
+        proposal = llm.run_agent(
+            "core_emergence_proposer",
+            variables={"all_codes": all_codes, "code_statistics": stats_text},
+        )
+
+        critic = llm.run_agent(
+            "core_emergence_critic",
+            variables={
+                "core_category_candidates": proposal.get(
+                    "core_category_candidates", []
+                ),
+                "code_incidents": "(ver codigos_segmento)",
+            },
+        )
+
+        from agents.transitions import hitl_gate
+
+        hitl_gate(s, proyecto_id, "core_emergence", proposal, critic)
+
+        return {"status": "paused", "gate": "core_emergence", "awaiting": "researcher"}
+
+    except Exception:
+        logger.exception("core_emergence_pipeline failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(name="selective_reduction_pipeline")
+def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
+    """
+    Fase B, Pasos B1+B2: Selective Reduction.
+    Proposer (PRO) → Critic (PRO) → HITL gate.
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'selective_reduction' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "selective_reduction"}
+        if existing and existing[0] == "pending":
+            return {
+                "status": "paused",
+                "gate": "selective_reduction",
+                "awaiting": "researcher",
+            }
+
+        codes = s.execute(
+            text(
+                "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id=:pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        all_codes = "\n".join(f"- {c[0]}: {c[1]}: {c[2]}" for c in codes)
+
+        cooc_rows = s.execute(
+            text(
+                "SELECT c1.nombre, c2.nombre, COUNT(*) "
+                "FROM codigos_segmento cs1 "
+                "JOIN codigos_segmento cs2 ON cs1.segmento_id = cs2.segmento_id "
+                "JOIN categorias c1 ON cs1.categoria_id = c1.id "
+                "JOIN categorias c2 ON cs2.categoria_id = c2.id "
+                "WHERE c1.proyecto_id = :pid AND c2.proyecto_id = :pid2 "
+                "AND c1.id < c2.id GROUP BY c1.nombre, c2.nombre LIMIT 100"
+            ),
+            {"pid": proyecto_id, "pid2": proyecto_id},
+        ).fetchall()
+        cooc_text = "\n".join(
+            f"- {r[0]} ↔ {r[1]}: {r[2]} co-occurrences" for r in cooc_rows
+        )
+
+        proposal = llm.run_agent(
+            "selective_reduction_proposer",
+            variables={
+                "core_category": "(ver hitl_decisions para core_category aceptada)",
+                "all_codes": all_codes,
+                "code_relationships": cooc_text,
+            },
+        )
+
+        critic = llm.run_agent(
+            "selective_reduction_critic",
+            variables={
+                "reduction_proposal": proposal,
+                "core_category": "(ver hitl_decisions)",
+                "all_codes": all_codes,
+            },
+        )
+
+        from agents.transitions import hitl_gate
+
+        hitl_gate(s, proyecto_id, "selective_reduction", proposal, critic)
+
+        return {
+            "status": "paused",
+            "gate": "selective_reduction",
+            "awaiting": "researcher",
+        }
+
+    except Exception:
+        logger.exception("selective_reduction_pipeline failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(
+    name="core_saturation_loop",
+    base=AbortableTask,
+    bind=True,
+)
+def task_core_saturation_loop(self, proyecto_id: str) -> dict:
+    """
+    Fase C: Core Saturation Loop.
+
+    Itera sobre categorías con score ≥ 4 × documentos del proyecto.
+    Para cada par (cat, doc), ejecuta Proposer→Critic y evalúa si
+    el estado de la categoría se expande.
+
+    Criterio de saturación: did_state_expand=false por 3 iteraciones
+    consecutivas para una misma categoría → HITL gate.
+    """
+    if self._aborted:
+        raise TaskCancelledError()
+
+    s = SessionLocal()
+    try:
+        # ── Obtener categorías con score ≥ 4 ──
+        cats = s.execute(
+            text(
+                "SELECT id, nombre, definicion, version, puntaje_relevancia "
+                "FROM categorias "
+                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 4 "
+                "ORDER BY puntaje_relevancia DESC"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        if not cats:
+            logger.info("No categories with score ≥ 4 for project %s", proyecto_id)
+            return {"status": "completed", "categories_processed": 0}
+
+        # ── Obtener documentos ──
+        docs = s.execute(
+            text(
+                "SELECT id, original_filename FROM documentos WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        results = {"project_id": proyecto_id, "categories": {}}
+        total_expansions = 0
+
+        for cat_row in cats:
+            cat_id = str(cat_row[0])
+            cat_name = cat_row[1]
+            cat_def = cat_row[2] or ""
+            cat_version = cat_row[3] or 1
+
+            # Verificar si ya está saturada (3 iteraciones sin expansión)
+            no_expand_count = s.execute(
+                text(
+                    "SELECT COUNT(*) FROM paradigm_states "
+                    "WHERE code_id = :cid AND did_state_expand = false "
+                    "ORDER BY iteration DESC LIMIT 3"
+                ),
+                {"cid": cat_id},
+            ).fetchone()[0]
+
+            if no_expand_count >= 3:
+                logger.info("Category %s already saturated, skipping", cat_name)
+                results["categories"][cat_name] = {
+                    "status": "saturated",
+                    "iterations_without_expansion": no_expand_count,
+                }
+                continue
+
+            cat_results = {"iterations": 0, "expansions": 0, "status": "processing"}
+
+            for doc_row in docs:
+                if self._aborted:
+                    raise TaskCancelledError()
+
+                doc_id = str(doc_row[0])
+                doc_name = doc_row[1]
+
+                # Obtener un segmento/incidente para esta categoría+documento
+                incident = s.execute(
+                    text(
+                        "SELECT s.texto FROM codigos_segmento cs "
+                        "JOIN segmentos s ON cs.segmento_id = s.id "
+                        "WHERE cs.categoria_id = :cid AND s.documento_id = :did "
+                        "ORDER BY cs.confianza DESC LIMIT 1"
+                    ),
+                    {"cid": cat_id, "did": doc_id},
+                ).fetchone()
+
+                if not incident:
+                    continue
+
+                incident_text = incident[0][:5000]
+
+                # ── C1: Proposer (PRO) ──
+                proposal = llm.run_agent(
+                    "core_saturation_proposer",
+                    variables={
+                        "category_label": cat_name,
+                        "category_definition": cat_def,
+                        "version": str(cat_version),
+                        "current_properties": _get_paradigm_snapshot(s, cat_id),
+                        "document_name": doc_name,
+                        "incident_text": incident_text,
+                    },
+                )
+
+                # ── C2: Critic (FLASH) ──
+                critic = llm.run_agent(
+                    "core_saturation_critic",
+                    variables={
+                        "elaboration_result": proposal,
+                        "category_definition": cat_def,
+                        "paradigm_state": _get_paradigm_snapshot(s, cat_id),
+                        "incident_text": incident_text,
+                    },
+                    tier="FAST",
+                )
+
+                did_expand = proposal.get("did_state_expand", False)
+                cat_results["iterations"] += 1
+
+                if did_expand:
+                    cat_results["expansions"] += 1
+                    total_expansions += 1
+                    no_expand_count = 0
+
+                    # Registrar en paradigm_states
+                    _record_paradigm_state(
+                        s,
+                        cat_id,
+                        proyecto_id,
+                        did_expand=True,
+                        etype=proposal.get("elaboration_type", "expanded"),
+                        snapshot=proposal,
+                        memo=proposal.get("elaboration_note", ""),
+                    )
+
+                    # Actualizar definición si se expandió
+                    expanded_def = proposal.get("expanded_definition", "")
+                    if expanded_def:
+                        s.execute(
+                            text(
+                                "UPDATE categorias SET definicion = :def, "
+                                "version = version + 1 WHERE id = :cid"
+                            ),
+                            {"def": expanded_def, "cid": cat_id},
+                        )
+                        s.commit()
+                        cat_def = expanded_def
+                        cat_version += 1
+                else:
+                    no_expand_count += 1
+                    _record_paradigm_state(
+                        s,
+                        cat_id,
+                        proyecto_id,
+                        did_expand=False,
+                        etype="converges",
+                        snapshot=proposal,
+                        memo="",
+                    )
+
+                # Check saturation criterion
+                if no_expand_count >= 3:
+                    cat_results["status"] = "saturated"
+                    cat_results["iterations_without_expansion"] = no_expand_count
+                    logger.info(
+                        "Category %s saturated after %d iterations without expansion",
+                        cat_name,
+                        no_expand_count,
+                    )
+                    break
+
+            results["categories"][cat_name] = cat_results
+
+        # ── HITL gate si hay categorías saturadas ──
+        saturated_count = sum(
+            1 for c in results["categories"].values() if c.get("status") == "saturated"
+        )
+        if saturated_count > 0:
+            from agents.transitions import hitl_gate
+
+            hitl_gate(
+                s,
+                proyecto_id,
+                "core_saturation",
+                {"saturated_categories": saturated_count, "results": results},
+                {
+                    "verdict": "SAT",
+                    "rationale": f"{saturated_count} categories saturated",
+                },
+            )
+
+        return {
+            "status": "completed",
+            "categories_processed": len(cats),
+            "total_expansions": total_expansions,
+            "results": results,
+        }
+
+    except TaskCancelledError:
+        return {"status": "cancelled", "proyecto_id": proyecto_id}
+    except Exception:
+        logger.exception("core_saturation_loop failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+def _get_paradigm_snapshot(session, code_id: str) -> str:
+    """Obtiene el paradigm_state actual de una categoría como string JSON."""
+    import json as _json
+
+    row = session.execute(
+        text(
+            "SELECT paradigm_snapshot FROM paradigm_states "
+            "WHERE code_id = :cid ORDER BY iteration DESC LIMIT 1"
+        ),
+        {"cid": code_id},
+    ).fetchone()
+    if row and row[0]:
+        return (
+            _json.dumps(row[0], ensure_ascii=False)
+            if isinstance(row[0], dict)
+            else str(row[0])
+        )
+    return "(sin propiedades documentadas)"
+
+
+def _record_paradigm_state(
+    session,
+    code_id: str,
+    proyecto_id: str,
+    did_expand: bool,
+    etype: str,
+    snapshot: dict,
+    memo: str,
+) -> None:
+    """Registra una iteración en paradigm_states."""
+    import json as _json
+
+    current_iter = session.execute(
+        text(
+            "SELECT COALESCE(MAX(iteration), 0) FROM paradigm_states WHERE code_id = :cid"
+        ),
+        {"cid": code_id},
+    ).fetchone()[0]
+
+    session.execute(
+        text(
+            "INSERT INTO paradigm_states "
+            "(id, code_id, proyecto_id, iteration, did_state_expand, "
+            "expansion_type, paradigm_snapshot, integration_memo) "
+            "VALUES (gen_random_uuid(), :cid, :pid, :iter, :exp, :etype, :snap, :memo)"
+        ),
+        {
+            "cid": code_id,
+            "pid": proyecto_id,
+            "iter": current_iter + 1,
+            "exp": did_expand,
+            "etype": etype,
+            "snap": _json.dumps(snapshot, ensure_ascii=False),
+            "memo": memo,
+        },
+    )
+    session.commit()
+
+
+@app.task(name="database_a_pipeline")
+def task_database_a_pipeline(proyecto_id: str) -> dict:
+    """
+    Fase D1+D2: Database A — Nodes planos con entity_type.
+    Proposer (PRO) → Critic (PRO) → HITL gate.
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'database_a' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "database_a"}
+        if existing and existing[0] == "pending":
+            return {"status": "paused", "gate": "database_a", "awaiting": "researcher"}
+
+        # Obtener categorías saturadas
+        cats = s.execute(
+            text(
+                "SELECT id, nombre, definicion, puntaje_relevancia "
+                "FROM categorias WHERE proyecto_id = :pid "
+                "AND COALESCE(puntaje_relevancia, 0) >= 4 "
+                "ORDER BY puntaje_relevancia DESC"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        saturated_cats = "\n".join(f"- [{c[3]}] {c[1]}: {c[2]}" for c in cats)
+
+        proposal = llm.run_agent(
+            "database_a_proposer",
+            variables={
+                "saturated_categories": saturated_cats,
+                "core_category": "(ver hitl_decisions)",
+            },
+        )
+
+        critic = llm.run_agent(
+            "database_a_critic",
+            variables={
+                "nodes": proposal.get("nodes", []),
+                "saturated_categories": saturated_cats,
+            },
+        )
+
+        from agents.transitions import hitl_gate
+
+        hitl_gate(s, proyecto_id, "database_a", proposal, critic)
+
+        return {"status": "paused", "gate": "database_a", "awaiting": "researcher"}
+
+    except Exception:
+        logger.exception("database_a_pipeline failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(name="database_b_pipeline")
+def task_database_b_pipeline(proyecto_id: str) -> dict:
+    """
+    Fase D3+D4: Database B — Edges con relationship_type.
+    Proposer (PRO) → Critic (PRO) → HITL gate.
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'database_b' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "database_b"}
+        if existing and existing[0] == "pending":
+            return {"status": "paused", "gate": "database_b", "awaiting": "researcher"}
+
+        # Obtener nodos (de database_a aceptada)
+        nodes_row = s.execute(
+            text(
+                "SELECT proposal FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'database_a' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        nodes = nodes_row[0] if nodes_row else {}
+        nodes_text = str(nodes)
+
+        # Relaciones conceptuales
+        rels = s.execute(
+            text(
+                "SELECT cr.category_ids, cr.elaboration_status, "
+                "cr.converging_doc_count, tc.name "
+                "FROM conceptual_relationships cr "
+                "JOIN theoretical_codes tc ON cr.theoretical_code_id = tc.id "
+                "WHERE cr.project_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        rels_text = "\n".join(
+            f"- {r[3]}: {r[0]} (status={r[1]}, docs={r[2]})" for r in rels
+        )
+
+        # Hipótesis confirmadas
+        hyps = s.execute(
+            text(
+                "SELECT text, level FROM hypotheses "
+                "WHERE proyecto_id = :pid AND status = 'accepted'"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        hyps_text = (
+            "\n".join(f"- [{r[1]}] {r[0]}" for r in hyps)
+            if hyps
+            else "(sin hipótesis confirmadas)"
+        )
+
+        proposal = llm.run_agent(
+            "database_b_proposer",
+            variables={
+                "nodes": nodes_text,
+                "conceptual_relationships": rels_text,
+                "hypotheses": hyps_text,
+            },
+        )
+
+        critic = llm.run_agent(
+            "database_b_critic",
+            variables={
+                "edges": proposal.get("edges", []),
+                "nodes": nodes_text,
+                "hypotheses": hyps_text,
+            },
+        )
+
+        from agents.transitions import hitl_gate
+
+        hitl_gate(s, proyecto_id, "database_b", proposal, critic)
+
+        return {"status": "paused", "gate": "database_b", "awaiting": "researcher"}
+
+    except Exception:
+        logger.exception("database_b_pipeline failed for %s", proyecto_id)
+        raise
+    finally:
+        s.close()
+
+
+@app.task(name="global_saturation_check")
+def task_global_saturation_check(proyecto_id: str) -> dict:
+    """
+    Fase E: Global Saturation Check.
+
+    Verifica 3 condiciones:
+    1. Todas las categorías con score ≥ 4 están saturadas
+    2. Relaciones inter-categoriales saturadas
+    3. Buffer de residuos revisado
+    """
+    s = SessionLocal()
+    try:
+        existing = s.execute(
+            text(
+                "SELECT status FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'global_saturation' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if existing and existing[0] == "accepted":
+            return {"status": "completed", "gate": "global_saturation"}
+
+        # Condición 1: categorías saturadas
+        cats = s.execute(
+            text(
+                "SELECT id, nombre FROM categorias "
+                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 4"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        saturated = 0
+        unsaturated = []
+        for cat in cats:
+            no_expand = s.execute(
+                text(
+                    "SELECT COUNT(*) FROM paradigm_states "
+                    "WHERE code_id = :cid AND did_state_expand = false "
+                    "ORDER BY iteration DESC LIMIT 3"
+                ),
+                {"cid": str(cat[0])},
+            ).fetchone()[0]
+            if no_expand >= 3:
+                saturated += 1
+            else:
+                unsaturated.append(cat[1])
+
+        # Condición 2: relaciones inter-categoriales
+        rel_count = s.execute(
+            text(
+                "SELECT COUNT(*) FROM conceptual_relationships WHERE project_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()[0]
+
+        # Condición 3: buffer de residuos (memos sin procesar)
+        orphan_memos = s.execute(
+            text(
+                "SELECT COUNT(*) FROM memos "
+                "WHERE proyecto_id = :pid AND tipo = 'HIPOTESIS' "
+                "AND id NOT IN (SELECT COALESCE(memo_id, '00000000-0000-0000-0000-000000000000') FROM elaboration_memos WHERE project_id = :pid2)"
+            ),
+            {"pid": proyecto_id, "pid2": proyecto_id},
+        ).fetchone()[0]
+
+        proposal = {
+            "condition_1_saturated_categories": f"{saturated}/{len(cats)}",
+            "condition_1_unsaturated": unsaturated,
+            "condition_2_relationships": rel_count,
+            "condition_3_orphan_memos": orphan_memos,
+            "all_conditions_met": saturated == len(cats)
+            and rel_count > 0
+            and orphan_memos == 0,
+        }
+
+        from agents.transitions import hitl_gate
+
+        hitl_gate(
+            s,
+            proyecto_id,
+            "global_saturation",
+            proposal,
+            {
+                "verdict": "SAT" if proposal["all_conditions_met"] else "MOD",
+                "rationale": (
+                    "All saturation conditions met"
+                    if proposal["all_conditions_met"]
+                    else f"{len(unsaturated)} categories still unsaturated, "
+                    f"{orphan_memos} orphan memos remaining"
+                ),
+            },
+        )
+
+        return {
+            "status": "completed" if proposal["all_conditions_met"] else "paused",
+            "gate": "global_saturation",
+            "checks": proposal,
+        }
+
+    except Exception:
+        logger.exception("global_saturation_check failed for %s", proyecto_id)
+        raise
     finally:
         s.close()

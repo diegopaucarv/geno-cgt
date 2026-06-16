@@ -107,6 +107,52 @@ async def run_pipeline_stage(
         result["status"] = "ready"
         result["note"] = "Use GET /projects/{pid}/analysis/saturation-gaps"
 
+    # ── Nuevos stages (selective coding coordinator) ──
+    elif stage_name == "find_cc":
+        task = celery_app.send_task(
+            "selective_coding_coordinator",
+            args=[str(project_id)],
+            queue="heavy",
+        )
+        result["task_ids"].append(task.id)
+        result["status"] = "dispatched"
+
+    elif stage_name == "reduce":
+        task = celery_app.send_task(
+            "selective_coding_coordinator",
+            args=[str(project_id)],
+            queue="heavy",
+        )
+        result["task_ids"].append(task.id)
+        result["status"] = "dispatched"
+
+    elif stage_name == "saturate":
+        task = celery_app.send_task(
+            "selective_coding_coordinator",
+            args=[str(project_id)],
+            queue="heavy",
+        )
+        result["task_ids"].append(task.id)
+        result["status"] = "dispatched"
+
+    elif stage_name == "build_db":
+        task = celery_app.send_task(
+            "selective_coding_coordinator",
+            args=[str(project_id)],
+            queue="heavy",
+        )
+        result["task_ids"].append(task.id)
+        result["status"] = "dispatched"
+
+    elif stage_name == "playground":
+        task = celery_app.send_task(
+            "invoke_graph",
+            args=[str(project_id)],
+            queue="heavy",
+        )
+        result["task_ids"].append(task.id)
+        result["status"] = "dispatched"
+
     else:
         raise HTTPException(400, f"Unknown stage: {stage_name}")
 

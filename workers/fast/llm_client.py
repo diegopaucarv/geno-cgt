@@ -502,7 +502,9 @@ class LLMClient:
             if r.status_code != 200:
                 raise Exception(f"HTTP {r.status_code}: {r.text[:300]}")
             data = r.json()
-            content = data["choices"][0]["message"]["content"] or ""
+            message = data["choices"][0]["message"]
+            content = message["content"] or ""
+            reasoning = message.get("reasoning_content")
             content = content.strip()
             # Strip markdown code fences if present
             if content.startswith("```"):
@@ -533,7 +535,10 @@ class LLMClient:
                 flags=_re.DOTALL,
             )
 
-            return json.loads(content)
+            result = json.loads(content)
+            if reasoning:
+                result["_reasoning_content"] = reasoning
+            return result
 
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(

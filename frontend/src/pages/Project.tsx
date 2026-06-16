@@ -9,6 +9,8 @@ import {
   punctuateDocument,
   deleteDocument,
   getPipelineLog,
+  getPendingHitl,
+  decideHitl,
   ping,
   clearToken,
   stopProjectPipeline,
@@ -19,7 +21,9 @@ import {
   Segment,
   PipelineLog,
   DocPipelineLog,
+  HitlPendingItem,
 } from "../api/client";
+import HITLModal from "../components/HITLModal";
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -42,11 +46,14 @@ interface StageDef {
 }
 
 const PIPELINE_STAGES: StageDef[] = [
-  { key: "workers", icon: "🚀", label: "Iniciando workers" },
   { key: "segment", icon: "✂️", label: "Segmentación" },
-  { key: "agents", icon: "🧠", label: "Codificación abierta (agentes IA)" },
-  { key: "categories", icon: "🏷️", label: "Categorización" },
-  { key: "done", icon: "✅", label: "Pipeline completado" },
+  { key: "agents", icon: "🧠", label: "Open Coding (Agentes A)" },
+  { key: "synthesis", icon: "🔗", label: "Síntesis Cross-Doc (Phase B)" },
+  { key: "find_cc", icon: "🎯", label: "Core Category Detection" },
+  { key: "reduce", icon: "✂️", label: "Selective Reduction" },
+  { key: "saturate", icon: "🔄", label: "Core Saturation" },
+  { key: "build_db", icon: "🗄️", label: "Database A/B" },
+  { key: "playground", icon: "🎨", label: "Theoretical Playground" },
 ];
 
 type StageStatus = "pending" | "running" | "done" | "error";
@@ -92,6 +99,11 @@ export default function ProjectDetail() {
   >([]);
   const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── HITL state ──
+  const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
+  const [showHITLModal, setShowHITLModal] = useState(false);
+  const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     if (!id) return;
     getProject(id).then(setProject).catch(console.error);
@@ -103,6 +115,21 @@ export default function ProjectDetail() {
     getPipelineLog(id)
       .then(setPipelineLog)
       .catch(() => {});
+  }, [id]);
+
+  // ── HITL polling ──
+  useEffect(() => {
+    if (!id) return;
+    const poll = setInterval(() => {
+      getPendingHitl(id)
+        .then((items) => {
+          setHitlPending(items);
+          setShowHITLModal(items.length > 0);
+        })
+        .catch(() => {});
+    }, 10000); // poll every 10s
+    hitlPollRef.current = poll;
+    return () => clearInterval(poll);
   }, [id]);
 
   function refreshDocs() {
@@ -299,6 +326,7 @@ export default function ProjectDetail() {
     }
 
     let pipelineOk = false;
+    let pipelineFailed = false;
 
     try {
       const response = await fetch(`/api/v1/projects/${id}/pipeline/run`, {
@@ -352,6 +380,7 @@ export default function ProjectDetail() {
               setPipelineMsg(`❌ Falló: ${errNames || "documento"}`);
               updateStage("segment", "error");
               updateStage("agents", "error");
+              pipelineFailed = true;
               abortRef.current = true;
               break;
             }
@@ -376,21 +405,24 @@ export default function ProjectDetail() {
     }
 
     if (abortRef.current) {
-      // Pipeline was aborted — stop workers + rollback, reset all stages
+      // Stop workers + rollback
       if (logPollRef.current) {
         clearInterval(logPollRef.current);
         logPollRef.current = null;
       }
       await stopProjectPipeline(id!).catch(() => {});
-      resetStages();
-      setPipelineMsg("⏹ Pipeline cancelado — DB restaurada.");
+      if (pipelineFailed) {
+        // Keep error states set during polling
+        updateStage("categories", "error");
+        updateStage("done", "error");
+      } else {
+        resetStages();
+        setPipelineMsg("⏹ Pipeline cancelado — DB restaurada.");
+      }
     } else if (pipelineOk) {
       // Pipeline completed normally
       updateStage("segment", "done");
       updateStage("agents", "done");
-      updateStage("categories", "running");
-      setPipelineMsg("🏷️ Generando categorías…");
-      await new Promise((r) => setTimeout(r, 1000));
       updateStage("categories", "done");
       updateStage("done", "done");
       setPipelineMsg("✅ Pipeline completado.");
@@ -1704,6 +1736,24 @@ export default function ProjectDetail() {
           50% { opacity: 0.5; }
         }
       `}</style>
+
+      {/* ── HITL Modal ── */}
+      {hitlPending.length > 0 && id && (
+        <HITLModal
+          open={showHITLModal}
+          projectId={id}
+          gateName={hitlPending[0].gate_name}
+          proposal={{ pending: hitlPending[0].proposal_summary }}
+          criticVerdict={{ verdict: hitlPending[0].critic_verdict }}
+          onClose={() => setShowHITLModal(false)}
+          onDecided={() => {
+            setShowHITLModal(false);
+            getPendingHitl(id)
+              .then(setHitlPending)
+              .catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }

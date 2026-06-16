@@ -19,27 +19,28 @@
 - [x] `backend/app/agents/plan_executor.py` — PlanExecutor (Plan→Execute→Evaluate)
 - [x] `backend/app/agents/orchestrator.py` — OrchestratorAgent / OrchestratorRuleEngine
 
-### Fase 0b — Corrección reasoning_content (G1, G2) ⚠️ PENDIENTE (no tocar hasta rebuild)
+### Fase 0b — Corrección reasoning_content (G1, G2) ✅
 
-- [ ] `backend/app/core/together_client.py` — `chat()` debe capturar `reasoning_content` (documentado, sin aplicar)
-- [ ] `workers/heavy/llm_client.py` — `_call_llm()` debe capturar `reasoning_content` (documentado, sin aplicar)
-- [ ] `workers/fast/llm_client.py` — `_call_llm()` debe capturar `reasoning_content` (documentado, sin aplicar)
+- [x] `backend/app/core/together_client.py` — `chat()` captura y retorna `reasoning_content`
+- [x] `workers/heavy/llm_client.py` — `_call_llm()` captura y retorna `reasoning_content`
+- [x] `workers/fast/llm_client.py` — `_call_llm()` captura y retorna `reasoning_content`
 
 ---
 
 ## Fase 1 — Self-Refinement Loop (B2)
 
-- [ ] `workers/heavy/agents_b.py` — feature flag `AGENTIC_MODE` + `b2_open_code()` modificado
-- [ ] `workers/heavy/llm_client.py` — `run_self_refinement()`
+- [x] `workers/heavy/agents_b.py` — feature flag `AGENTIC_MODE` + `b2_open_code()` modificado
+- [x] `workers/heavy/agents_b.py` — `_b2b_generate_codes_agentic()` con SelfRefinementLoop
+- [x] `workers/heavy/llm_client.py` — `run_self_refinement()` (via SelfRefinementLoop)
 - [ ] `prompts/deepseek_pro/b2b_generate_codes.md` — sección `[SELF-CRITIC]`
 
 ---
 
 ## Fase 2 — ReAct Agent (B3)
 
-- [ ] `workers/heavy/agents_b.py` — `b3_generate_hypotheses_agentic()`
-- [ ] `workers/heavy/llm_client.py` — `run_react_loop()`
-- [ ] `prompts/deepseek_pro/b3_hypothesis_generator.md` — versión ReAct-aware
+- [x] `workers/heavy/agents_b.py` — `b3_generate_hypotheses_agentic()` con ReactRunner
+- [x] `workers/heavy/llm_client.py` — `run_react_loop()` (via ReactRunner)
+- [x] `prompts/deepseek_pro/b3_hypothesis_generator.md` — ya existía, complementado por `react_hypothesis.md`
 
 ---
 
