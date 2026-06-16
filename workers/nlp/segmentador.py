@@ -796,26 +796,80 @@ class ProgressiveSegmenter:
 
         self._dprint("Fase 2: pasada de merge greedy con van_unidos()...")
         merged_segments = []
+        merged_infos: list[dict] = []  # parallel: info dicts for finalized segments
+        merged_roots: list[
+            set
+        ] = []  # parallel: accumulated roots per finalized segment
         current_seg_info = segments_info[0]
+        current_roots: set[str] = set(
+            self.find_subjects_for_roots(current_seg_info["text"])
+        )
         merges_total = 0
+        lookbacks_total = 0
 
         for i in range(1, len(segments_info)):
             next_seg_info = segments_info[i]
+
+            # ── Direct merge (accumulated roots) ────────────────────────────
             should_merge, _ = self.van_unidos(
-                current_seg_info, next_seg_info, global_chains
+                current_seg_info,
+                next_seg_info,
+                global_chains,
+                precomputed_roots=current_roots,
             )
             if should_merge:
                 current_seg_info["text"] += " " + next_seg_info["text"]
                 current_seg_info["end"] = next_seg_info["end"]
+                next_roots = set(self.find_subjects_for_roots(next_seg_info["text"]))
+                current_roots.update(next_roots)
                 merges_total += 1
-            else:
+                continue
+
+            # ── Lookback: ¿el antecedente está en un segmento ya finalizado? ─
+            absorbed = False
+            if merged_infos:
+                prev_info = merged_infos[-1]
+                prev_roots = merged_roots[-1]
+                if prev_roots:
+                    lb_merge, _ = self.van_unidos(
+                        prev_info,
+                        next_seg_info,
+                        global_chains,
+                        precomputed_roots=prev_roots,
+                    )
+                    if lb_merge:
+                        self._dprint(
+                            f"  ↳ lookback: [{len(merged_segments)}] ← [{i}]  "
+                            f"(antecedente en segmento ya finalizado, absorbiendo digresión)"
+                        )
+                        # Absorb current (digression) into prev
+                        merged_segments[-1] += " " + current_seg_info["text"]
+                        merged_infos[-1]["text"] = merged_segments[-1]
+                        merged_infos[-1]["end"] = current_seg_info["end"]
+                        merged_roots[-1].update(current_roots)
+
+                        # next becomes the new current
+                        current_seg_info = next_seg_info
+                        current_roots = set(
+                            self.find_subjects_for_roots(next_seg_info["text"])
+                        )
+                        absorbed = True
+                        lookbacks_total += 1
+
+            if not absorbed:
+                # Finalize current, start fresh with next
                 merged_segments.append(current_seg_info["text"])
+                merged_infos.append(dict(current_seg_info))
+                merged_roots.append(current_roots)
                 current_seg_info = next_seg_info
+                current_roots = set(
+                    self.find_subjects_for_roots(current_seg_info["text"])
+                )
 
         merged_segments.append(current_seg_info["text"])
 
         self._dprint(
-            f"\nFase 2 completada: {merges_total} merges aplicados. "
+            f"\nFase 2 completada: {merges_total} merges + {lookbacks_total} lookbacks aplicados. "
             f"{len(merged_segments)} UCEs finales (de {len(segments)} originales).\n{'=' * 60}\n"
         )
         return merged_segments
@@ -935,6 +989,7 @@ class ProgressiveSegmenter:
 # A2 — AnchorBasedReconstructor (Hacedor de texto)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class AnchorBasedReconstructor:
     """
     Reconstructor determinista de segmentos usando anclas textuales.
@@ -952,6 +1007,7 @@ class AnchorBasedReconstructor:
     def __init__(self):
         try:
             import spacy
+
             self.nlp = spacy.load("es_core_news_lg")
         except Exception:
             self.nlp = None
@@ -984,7 +1040,8 @@ class AnchorBasedReconstructor:
         else:
             # Fallback sin spaCy: dividir por puntuación
             import re
-            raw_sents = re.split(r'(?<=[.!?])\s+', full_text)
+
+            raw_sents = re.split(r"(?<=[.!?])\s+", full_text)
             sentences = []
             pos = 0
             for s in raw_sents:
@@ -1019,18 +1076,18 @@ class AnchorBasedReconstructor:
             extracted = " ".join(s["text"] for s in sentences[start_sent:end_sent])
             start_char = sentences[start_sent]["start"]
             end_char = (
-                sentences[end_sent - 1]["end"]
-                if end_sent > start_sent
-                else start_char
+                sentences[end_sent - 1]["end"] if end_sent > start_sent else start_char
             )
 
-            results.append({
-                **seg,
-                "text": extracted.strip(),
-                "start_char": start_char,
-                "end_char": end_char,
-                "is_exact_match": is_exact,
-            })
+            results.append(
+                {
+                    **seg,
+                    "text": extracted.strip(),
+                    "start_char": start_char,
+                    "end_char": end_char,
+                    "is_exact_match": is_exact,
+                }
+            )
 
         return results
 
@@ -1045,7 +1102,8 @@ class AnchorBasedReconstructor:
     def _fuzzy_find(self, sentences: list[dict], anchor: str) -> int:
         """Fallback: busca las primeras 5 palabras del ancla, ignora puntuación."""
         import re
-        words = re.findall(r'\w+', anchor.lower())
+
+        words = re.findall(r"\w+", anchor.lower())
         search_terms = words[:5]
         if not search_terms:
             return 0

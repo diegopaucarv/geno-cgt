@@ -160,31 +160,42 @@ class EmergentSampler:
             {"pid": project_id},
         ).fetchall()
 
-        segments_text = "\n---\n".join(
-            f"[{r[0]}] {r[2]}: {r[1][:300]}" for r in all_segments
-        )
+        # Paso 1: escanear corpus con FLASH (en batches de 6 para mantener <2000 chars)
+        BATCH = 6
+        all_matches = []
+        for i in range(0, len(all_segments), BATCH):
+            batch = all_segments[i : i + BATCH]
+            batch_text = "\n---\n".join(f"[{r[0]}] {r[2]}: {r[1][:300]}" for r in batch)
+            flash_result = self.llm.run_agent(
+                "corpus_scanner",
+                variables={
+                    "category_label": cat[0],
+                    "category_definition": cat[1] or "",
+                    "property_name": property_name,
+                    "property_gradient": target_extreme,
+                    "target_extreme": target_extreme,
+                    "segments_text": batch_text,
+                },
+                tier="FAST",
+                temperature=0.1,
+            )
+            matches = flash_result.get("matches", [])
+            all_matches.extend(matches)
 
-        flash_result = self.llm.run_agent(
-            "corpus_scanner",
-            variables={
-                "category_label": cat[0],
-                "category_definition": cat[1] or "",
-                "property_name": property_name,
-                "property_gradient": target_extreme,
-                "target_extreme": target_extreme,
-                "segments_text": segments_text[:8000],
-            },
-            tier="FAST",
-            temperature=0.1,
-        )
+        # Deduplicar por segment_id
+        seen = set()
+        unique_matches = []
+        for m in all_matches:
+            if m["segment_id"] not in seen:
+                seen.add(m["segment_id"])
+                unique_matches.append(m)
 
-        matches = flash_result.get("matches", [])
-        if matches:
+        if unique_matches:
             return SamplingResult(
                 category_id=str(category_id),
                 property_name=property_name,
                 target_extreme=target_extreme,
-                found_incidents=matches,
+                found_incidents=unique_matches,
                 gradient_expanded=False,
                 corpus_gap=False,
             )

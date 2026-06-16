@@ -149,7 +149,7 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
 
         segments = session.execute(
             text(
-                "SELECT texto FROM segmentos WHERE documento_id = :did ORDER BY posicion LIMIT 10"
+                "SELECT texto FROM segmentos WHERE documento_id = :did ORDER BY posicion LIMIT 8"
             ),
             {"did": documento_id},
         ).fetchall()
@@ -192,7 +192,7 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
             variables={
                 "population_assumption": pop_assumption,
                 "previous_process": prev_process,
-                "segments": segments_text[:6000],
+                "segments": segments_text,
                 "task_section": task_section_with_hint,
             },
             temperature=0.3,
@@ -1410,6 +1410,7 @@ def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
 def task_seed_theoretical_codes() -> dict:
     """T28: Seed de 12 codigos teoricos built-in. Idempotente."""
     import sys as _s
+
     _s.path.insert(0, "/app")
     from app.services.theory_seeder import seed_theoretical_codes
     from database import SessionLocal

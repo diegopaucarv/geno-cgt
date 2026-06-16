@@ -44,6 +44,7 @@ export default function ProjectDetail() {
   const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
   const abortRef = useRef(false);
+  const originalTexts = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -99,6 +100,11 @@ export default function ProjectDetail() {
     });
     await new Promise((r) => setTimeout(r, 1500));
     setPunctStatus((prev) => ({ ...prev, [docId]: "⏳ Procesando…" }));
+    // Cache original text before processing
+    const doc = docs.find((d) => d.id === docId);
+    if (doc?.texto_extraido) {
+      originalTexts.current[docId] = doc.texto_extraido;
+    }
     try {
       const res = await punctuateDocument(docId);
       if (abortRef.current) return;
@@ -434,6 +440,37 @@ export default function ProjectDetail() {
                 >
                   {punctRunning === d.id ? "⏹ Cancelar" : "✨ Preprocesar"}
                 </button>
+                {punctRunning !== d.id && originalTexts.current[d.id] && (
+                  <button
+                    onClick={async () => {
+                      const orig = originalTexts.current[d.id];
+                      if (!orig || !confirm("¿Restaurar texto original?"))
+                        return;
+                      await fetch(`/api/v1/documents/${d.id}/undo-punctuate`, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                        },
+                        body: JSON.stringify({ original_text: orig }),
+                      });
+                      delete originalTexts.current[d.id];
+                      setPunctStatus((prev) => ({
+                        ...prev,
+                        [d.id]: "↩ Restaurado",
+                      }));
+                      refreshDocs();
+                      setSegments((prev) => {
+                        const n = { ...prev };
+                        delete n[d.id];
+                        return n;
+                      });
+                    }}
+                    style={{ ...btnSmall, color: "#D29922" }}
+                  >
+                    ↩ Deshacer
+                  </button>
+                )}
                 <button
                   onClick={async () => {
                     if (!confirm("¿Eliminar?")) return;

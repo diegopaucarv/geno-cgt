@@ -336,35 +336,76 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
     if not texto:
         return {"punctuated_text": "", "changes_made": False}
 
-    def _safe_punctuate(raw: str, attempt: int = 0) -> dict:
-        """Llama al punctuator y valida que no haya pérdida de texto (>80%)."""
+    # Pre-corrección: intentar recuperar encoding Latin-1 mal interpretado como UTF-8
+    try:
+        fixed = texto.encode("latin-1", errors="replace").decode(
+            "utf-8", errors="replace"
+        )
+        if fixed.count(chr(65533)) < texto.count(chr(65533)):
+            logger.info(
+                "Punctuator: encoding reparado (%d→%d U+FFFD)",
+                texto.count(chr(65533)),
+                fixed.count(chr(65533)),
+            )
+            texto = fixed
+    except Exception:
+        pass
+
+    logger.info("Punctuator: recibido %d chars. Muestra: %s", len(texto), texto[:80])
+
+    def _safe_punctuate(
+        raw: str, expected_len: int | None = None, attempt: int = 0
+    ) -> dict:
+        """Llama al punctuator y valida integridad del texto."""
         response = llm.run_agent(
             "punctuator",
             variables={"raw_text": raw},
             temperature=0.1,
         )
         out = response.get("punctuated_text", raw)
-        ratio = len(out) / max(len(raw), 1)
-        if ratio < 0.8 and attempt < 2:
-            logger.warning(
-                "Punctuator: texto truncado (%.0f%%). Reintentando (intento %d)…",
-                ratio * 100,
-                attempt + 1,
-            )
-            warn = (
-                "\n\n[ADVERTENCIA CRÍTICA]\n"
-                "El texto de salida NO DEBE ser más corto que el 80%% del original. "
-                "Solo añade puntuación. NO elimines, resumas ni parafrasees NINGÚN contenido. "
-                "Devuelve el texto COMPLETO con la puntuación corregida."
-            )
-            return _safe_punctuate(raw + warn, attempt + 1)
+        # Usar expected_len si se proporciona (bloques con overlap)
+        compare_len = expected_len if expected_len is not None else len(raw)
+        ratio = len(out) / max(compare_len, 1)
+
+        # Guardrail 1: texto truncado (<80%)
         if ratio < 0.8:
-            logger.error(
-                "Punctuator: TRUNCACIÓN IRREVERSIBLE (%.0f%%). Revirtiendo.",
-                ratio * 100,
+            return _handle_bad_output(
+                raw, out, ratio, "TRUNCACIÓN", attempt, expected_len
             )
-            return {"punctuated_text": raw, "changes_made": False}
+
+        # Guardrail 2: alucinación — texto inflado (>120%)
+        if ratio > 1.2:
+            return _handle_bad_output(
+                raw, out, ratio, "INFLADO (posible alucinación)", attempt, expected_len
+            )
+
         return response
+
+    def _handle_bad_output(
+        raw: str,
+        out: str,
+        ratio: float,
+        label: str,
+        attempt: int,
+        expected_len: int | None = None,
+    ) -> dict:
+        logger.warning(
+            "Punctuator: %s (%.0f%%). Intento %d…",
+            label,
+            ratio * 100,
+            attempt + 1,
+        )
+        if attempt >= 2:
+            logger.error("Punctuator: %s IRREVERSIBLE. Revirtiendo.", label)
+            return {"punctuated_text": raw, "changes_made": False}
+        warn = (
+            "\n\n[ADVERTENCIA CRÍTICA]\n"
+            f"La salida es {ratio * 100:.0f}%% del original. "
+            "SOLO añade puntuación y mayúsculas. "
+            "Mantén el texto IDÉNTICO en contenido y longitud. "
+            "Devuelve el texto COMPLETO con la puntuación corregida."
+        )
+        return _safe_punctuate(raw + warn, expected_len, attempt + 1)
 
     # Si el texto es corto, procesar en una sola llamada
     if len(texto) <= max_chars:
@@ -374,7 +415,7 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
             "changes_made": response.get("changes_made", False),
         }
     else:
-        # Texto largo: dividir en bloques por parrafos y procesar iterativamente
+        # Texto largo: dividir en bloques por límites semánticos naturales
         paragraphs = texto.split("\n")
         blocks = []
         current = ""
@@ -384,20 +425,77 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
             else:
                 if current:
                     blocks.append(current.strip())
-                current = p + "\n"
+                # Si el párrafo es más largo que max_chars, buscar el último punto
+                if len(p) > max_chars:
+                    sub = p
+                    while len(sub) > max_chars:
+                        # Buscar el último . o ? o ! antes del límite
+                        cut = max_chars
+                        for sep in [". ", "? ", "! ", ".\n", ".\r"]:
+                            idx = sub.rfind(sep, 0, max_chars)
+                            if idx > max_chars // 2:
+                                cut = idx + len(sep)
+                                break
+                        blocks.append(sub[:cut].strip())
+                        sub = sub[cut:].strip()
+                    current = sub + "\n"
+                else:
+                    current = p + "\n"
         if current:
             blocks.append(current.strip())
 
-        logger.info("Punctuator: %d chars -> %d blocks", len(texto), len(blocks))
+        logger.info(
+            "Punctuator: %d chars -> %d blocks (max_chars=%d)",
+            len(texto),
+            len(blocks),
+            max_chars,
+        )
 
-        punctuated_blocks = []
+        # Procesar bloques en paralelo
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        punctuated_blocks = [""] * len(blocks)
         changes = False
-        for i, block in enumerate(blocks):
-            response = _safe_punctuate(block)
-            out = response.get("punctuated_text", block)
-            punctuated_blocks.append(out)
-            if response.get("changes_made", False):
-                changes = True
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_idx = {}
+            for i, block in enumerate(blocks):
+                # Añadir overlap: últimas 2-3 oraciones del bloque anterior
+                if i > 0:
+                    prev = blocks[i - 1]
+                    # Buscar los últimos 200 chars que empiecen en un límite natural
+                    overlap_start = max(0, len(prev) - 300)
+                    for sep in [". ", "? ", "! ", ".\n"]:
+                        idx = prev.rfind(sep, overlap_start)
+                        if idx >= 0:
+                            overlap_start = idx + len(sep)
+                            break
+                    overlap = prev[overlap_start:]
+                    if overlap:
+                        block = overlap + "\n\n[CONTINÚA AQUÍ]\n\n" + block
+
+                future_to_idx[
+                    executor.submit(_safe_punctuate, block, len(blocks[i]))
+                ] = i
+
+            for future in as_completed(future_to_idx):
+                i = future_to_idx[future]
+                try:
+                    response = future.result()
+                    out = response.get("punctuated_text", blocks[i])
+                    # Quitar overlap del output
+                    if i > 0:
+                        out_parts = out.split("[CONTINÚA AQUÍ]")
+                        if len(out_parts) > 1:
+                            out = out_parts[-1].strip()
+                    punctuated_blocks[i] = out
+                    if response.get("changes_made", False):
+                        changes = True
+                except Exception as e:
+                    logger.warning(
+                        "Punctuator: bloque %d falló: %s. Usando original.", i, e
+                    )
+                    punctuated_blocks[i] = blocks[i]
 
         result = {
             "punctuated_text": "\n\n".join(punctuated_blocks),
@@ -417,6 +515,9 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
 
     # If we have a documento_id and changes were made, update the DB
     if documento_id and result.get("changes_made"):
+        logger.info(
+            "Punctuator: guardando. OUT muestra: %s", result["punctuated_text"][:80]
+        )
         session = SessionLocal()
         try:
             import json as _json

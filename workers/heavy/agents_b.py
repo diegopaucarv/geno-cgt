@@ -134,7 +134,7 @@ def b1_distill_sampling(proyecto_id: str) -> dict:
 def _b2a_extract_indicators(segments_text: str) -> dict:
     """B2a (FLASH): Extrae indicadores de comportamiento de segmentos."""
     return llm.run_agent(
-        agent_id="b2a", variables={"segments": segments_text[:6000]}, temperature=0.2
+        agent_id="b2a", variables={"segments": segments_text}, temperature=0.2
     )
 
 
@@ -231,7 +231,7 @@ def b2_open_code(proyecto_id: str) -> dict:
         # Cargar textos de segmentos que necesitan LLM
         unassigned = session.execute(
             text(
-                "SELECT texto FROM segmentos WHERE id::text = ANY(:ids) ORDER BY posicion LIMIT 10"
+                "SELECT texto FROM segmentos WHERE id::text = ANY(:ids) ORDER BY posicion LIMIT 8"
             ),
             {"ids": needs_llm_ids[:10]},
         ).fetchall()

@@ -51,6 +51,11 @@ _TIER_REPETITION_PENALTY: dict[ModelTier, float] = {
     "PRO": float(os.getenv("MODEL_PRO_REPETITION_PENALTY", "1.0")),
 }
 
+_TIER_FREQUENCY_PENALTY: dict[ModelTier, float] = {
+    "FLASH": float(os.getenv("MODEL_FLASH_FREQUENCY_PENALTY", "1.15")),
+    "PRO": float(os.getenv("MODEL_PRO_FREQUENCY_PENALTY", "0.0")),
+}
+
 _TIER_TOP_P: dict[ModelTier, float] = {
     "FLASH": float(os.getenv("MODEL_FLASH_TOP_P", "0.9")),
     "PRO": float(os.getenv("MODEL_PRO_TOP_P", "1.0")),
@@ -400,26 +405,25 @@ class LLMClient:
             temperature = _TIER_TEMPERATURE[model_tier]
 
         repetition_penalty = _TIER_REPETITION_PENALTY[model_tier]
+        frequency_penalty = _TIER_FREQUENCY_PENALTY[model_tier]
         top_p = _TIER_TOP_P[model_tier]
 
         logger.info(
-            "Agent %s → tier=%s tokens=%d temp=%.2f rep_pen=%.2f top_p=%.2f",
+            "Agent %s → tier=%s tokens=%d temp=%.2f rep_pen=%.2f freq_pen=%.2f top_p=%.2f",
             agent_id,
             model_tier,
             max_tokens,
             temperature,
             repetition_penalty,
+            frequency_penalty,
             top_p,
         )
 
         prompt_template = parsed["prompt"]
-        try:
-            system_prompt = prompt_template.format(**variables)
-        except KeyError as e:
-            logger.error("Missing variable %s for %s", e, agent_id)
-            system_prompt = prompt_template
-            for k, v in variables.items():
-                system_prompt = system_prompt.replace("{" + k + "}", str(v))
+        # Usar reemplazo simple para evitar conflicto con {{ }} del JSON
+        system_prompt = prompt_template
+        for k, v in variables.items():
+            system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
         schema = parsed["schema"]
         model = _TIER_MODELS[model_tier]
@@ -431,6 +435,7 @@ class LLMClient:
             max_tokens,
             temperature,
             repetition_penalty,
+            frequency_penalty,
             top_p,
         )
 
@@ -443,6 +448,7 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         repetition_penalty: float = 1.0,
+        frequency_penalty: float = 0.0,
         top_p: float = 1.0,
         retry: bool = True,
     ) -> dict[str, Any]:
@@ -470,6 +476,7 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
             "repetition_penalty": repetition_penalty,
+            "frequency_penalty": frequency_penalty,
             "top_p": top_p,
         }
         if schema:
@@ -506,12 +513,25 @@ class LLMClient:
                     lines = lines[:-1]
                 content = "\n".join(lines)
 
-            # Try to extract JSON even if mixed with text
+            # Try to extract JSON - find outermost { }
             import re as _re
 
-            json_match = _re.search(r"\{[^{}]*\}", content, _re.DOTALL)
-            if json_match:
-                content = json_match.group(0)
+            # Buscar desde la primera { hasta la última }
+            start = content.find("{")
+            end = content.rfind("}")
+            if start >= 0 and end > start:
+                content = content[start : end + 1]
+
+            # Arreglar newlines no escapados dentro de strings JSON
+            # (modelos pequeños a veces no escapan \n correctamente)
+            content = _re.sub(
+                r'"(.*?)"',
+                lambda m: (
+                    '"' + m.group(1).replace("\n", "\\n").replace("\t", "\\t") + '"'
+                ),
+                content,
+                flags=_re.DOTALL,
+            )
 
             return json.loads(content)
 
@@ -540,6 +560,7 @@ class LLMClient:
                     max_tokens + 512,
                     temperature,
                     repetition_penalty,
+                    frequency_penalty,
                     top_p,
                     retry=False,
                 )

@@ -96,8 +96,29 @@ async def upload_document(
             doc_pdf = fitz.open(stream=file_bytes, filetype="pdf")
             texto_extraido = "\n".join(page.get_text() for page in doc_pdf)
             doc_pdf.close()
+            # Detectar si el texto extraído tiene problemas de encoding
+            if "\ufffd" in texto_extraido:
+                # Intentar pasar a Latin-1 y volver a UTF-8
+                try:
+                    fixed = texto_extraido.encode("latin-1", errors="replace").decode(
+                        "utf-8", errors="replace"
+                    )
+                    if fixed.count("\ufffd") < texto_extraido.count("\ufffd"):
+                        texto_extraido = fixed
+                except Exception:
+                    pass
         elif mime == "text/plain":
-            texto_extraido = file_bytes.decode("utf-8", errors="replace")
+            # Detectar encoding: probar UTF-8, si tiene U+FFFD → Latin-1
+            texto_utf8 = file_bytes.decode("utf-8", errors="replace")
+            if "\ufffd" in texto_utf8:
+                texto_latin1 = file_bytes.decode("latin-1", errors="replace")
+                # Usar el que tenga menos caracteres de reemplazo
+                if texto_latin1.count("\ufffd") < texto_utf8.count("\ufffd"):
+                    texto_extraido = texto_latin1
+                else:
+                    texto_extraido = texto_utf8
+            else:
+                texto_extraido = texto_utf8
         elif "wordprocessingml" in mime:
             from io import BytesIO
 
@@ -328,7 +349,7 @@ async def punctuate_document(
         "punctuate_text",
         kwargs={
             "texto": texto,
-            "max_chars": 8000,
+            "max_chars": 10000,
             "documento_id": str(document_id),
         },
         queue="fast",
@@ -389,7 +410,7 @@ async def process_document(
                 "punctuate_text",
                 kwargs={
                     "texto": texto,
-                    "max_chars": 8000,
+                    "max_chars": 10000,
                     "documento_id": str(document_id),
                 },
                 queue="fast",
@@ -429,6 +450,34 @@ async def process_document(
     await db.commit()
 
     return result
+
+
+@router.post("/{document_id}/undo-punctuate")
+async def undo_punctuate(
+    document_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Restaura el texto original antes de la puntuación."""
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+
+    original = body.get("original_text", "")
+    if not original:
+        raise HTTPException(400, "Se requiere original_text")
+
+    meta = doc.metadatos or {}
+    if isinstance(meta, str):
+        import json as _json
+
+        meta = _json.loads(meta)
+    meta["texto_extraido"] = original
+    meta["texto_puntuado"] = False
+    doc.metadatos = meta
+    await db.commit()
+    return {"status": "restored"}
 
 
 @router.delete("/{document_id}", status_code=204)
