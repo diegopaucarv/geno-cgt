@@ -279,6 +279,30 @@ def segmentar_documento(
                     documento_id,
                     len(segmentos),
                 )
+
+                # Transicionar: NLP terminó → despachar agentes
+                if _proj_id:
+                    try:
+                        from agents.transitions import transition
+
+                        db_url_sa = DATABASE_URL.replace(
+                            "postgresql+asyncpg", "postgresql"
+                        ).replace("postgresql+psycopg2", "postgresql")
+                        from sqlalchemy import create_engine
+                        from sqlalchemy.orm import Session as SASession
+
+                        engine = create_engine(db_url_sa)
+                        with SASession(engine) as s:
+                            transition(
+                                s,
+                                documento_id,
+                                _proj_id,
+                                "segmentado",
+                                "segmentar_documento",
+                                True,
+                            )
+                    except Exception as _e:
+                        logger.warning("Transition failed: %s", _e)
             except Exception:
                 conn.rollback()
                 raise

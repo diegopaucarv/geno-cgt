@@ -540,3 +540,77 @@ export async function refreshSaturationGaps(projectId: string) {
     },
   );
 }
+
+// ── Admin: Pipeline Control ──────────────────────────────────────────
+
+export interface PipelineTaskInfo {
+  task_id: string;
+  document_id?: string;
+  task_name: string;
+  status: string;
+  doc_estado_before?: string;
+}
+
+export async function stopWorker(workerName: "fast" | "heavy" | "nlp") {
+  return request<{ status: string; tasks_revoked: number }>(
+    `/admin/workers/${workerName}/stop`,
+    { method: "POST" },
+  );
+}
+
+export async function killAllWorkers() {
+  return request<{
+    status: string;
+    workers_shutdown: boolean;
+    tasks_revoked: number;
+  }>(`/admin/workers/kill-all`, { method: "POST" });
+}
+
+export async function stopProjectPipeline(projectId: string) {
+  return request<{
+    status: string;
+    run_id: string;
+    tasks_cancelled: number;
+    details: {
+      task_id: string;
+      doc_rolled_back?: string;
+      previous_state?: string;
+    }[];
+  }>(`/admin/projects/${projectId}/stop`, { method: "POST" });
+}
+
+export async function cancelTask(taskId: string) {
+  return request<{
+    status: string;
+    task_id: string;
+    document_rolled_back?: string;
+    previous_state?: string;
+  }>(`/admin/tasks/${taskId}/cancel`, { method: "POST" });
+}
+
+export async function restartTask(taskId: string) {
+  return request<{ status: string; old_task_id: string; new_task_id: string }>(
+    `/admin/tasks/${taskId}/restart`,
+    { method: "POST" },
+  );
+}
+
+export async function resumeTask(taskId: string) {
+  return request<{
+    status: string;
+    old_task_id: string;
+    new_task_id: string;
+    resume_from_step?: string;
+    note?: string;
+  }>(`/admin/tasks/${taskId}/resume`, { method: "POST" });
+}
+
+export async function restartFailedTasks(projectId: string) {
+  return request<{
+    status: string;
+    count: number;
+    tasks: { old_task_id: string; new_task_id: string }[];
+  }>(`/admin/projects/${projectId}/pipeline/restart-failed`, {
+    method: "POST",
+  });
+}

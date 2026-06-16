@@ -202,7 +202,7 @@ def b3_generate_hypotheses_agentic(pid, max_steps=5):
     for step in range(max_steps):
         response = llm.chat(history + [{"role": "user", "content": "Next step?"}])
         
-        parsed = parse_react_output(response)
+        parsed = parse_react_output(response["content"])
         # parsed = {"thought": "...", "action": "search_segments", "action_input": "..."}
         # o parsed = {"thought": "...", "final_answer": {...}}
         
@@ -211,10 +211,32 @@ def b3_generate_hypotheses_agentic(pid, max_steps=5):
         
         # Ejecutar tool
         tool_result = execute_tool(parsed["action"], parsed["action_input"], tools)
+        
+        # ⚠️ CLAVE: Preservar reasoning_content en el historial
+        assistant_msg = {"role": "assistant", "content": response["content"]}
+        if response.get("reasoning_content"):
+            assistant_msg["reasoning_content"] = response["reasoning_content"]
+        history.append(assistant_msg)
         history.append({"role": "user", "content": f"Observation: {tool_result}"})
     
     return {"error": "Max steps reached"}
 ```
+
+> 📌 **Upgrade path — Native Function Calling:** El formato `Thought:/Action:/Action Input:`
+> con parsing de texto (regex) es frágil con modelos de razonamiento que generan `<think>` tags.
+> La alternativa robusta es usar el parámetro `tools` nativo de la API (Together.ai lo soporta):
+> ```python
+> response = client.chat.completions.create(
+>     model="deepseek-ai/DeepSeek-V4-Pro",
+>     messages=history,
+>     tools=[{"type": "function", "function": {"name": "search_segments", ...}}],
+>     tool_choice="auto"
+> )
+> # response.choices[0].message.tool_calls → JSON estructurado garantizado
+> ```
+> Activar con feature flag `AGENTIC_NATIVE_FC=true`. La ventaja: el modelo decide autónomamente
+> si llamar una tool o responder, los argumentos son JSON validado, y el `reasoning_content`
+> se preserva automáticamente entre tool calls.
 
 **System Prompt propuesto para ReAct:**
 ```markdown
@@ -250,11 +272,12 @@ FinalAnswer: {{"hypotheses": [...]}}
 
 **Archivos afectados:**
 - `workers/heavy/agents_b.py` — `b3_generate_hypotheses()` → `b3_generate_hypotheses_agentic()`
-- `workers/heavy/llm_client.py` — nuevo `run_react_loop(agent_id, tools, max_steps)`
+- `workers/heavy/llm_client.py` — nuevo `run_react_loop(agent_id, tools, max_steps)` + **capturar `reasoning_content` en `_call_llm()`**
+- `backend/app/core/together_client.py` — **`chat()` debe retornar `reasoning_content` en el dict de respuesta**
 - `backend/app/services/rag.py` — exponer como tool callable
 - `backend/app/core/tei_client.py` — nuevo método `compare_embeddings()`
 - NUEVO: `backend/app/agents/tools.py` — registro centralizado de tools
-- NUEVO: `backend/app/agents/react_runner.py` — motor genérico de bucle ReAct
+- NUEVO: `backend/app/agents/react_runner.py` — motor genérico de bucle ReAct (con preservación de `reasoning_content`)
 
 ---
 
@@ -279,22 +302,26 @@ def elaborate_relationship_agentic(project_id, category_ids, theoretical_code_id
     """
     Patrón Multi-Agent Debate:
     Proposer → Skeptic → Proposer (rebuttal) → Synthesizer → Final
+    
+    ⚠️ Cada llamada a run_agent debe preservar reasoning_content
+    para que el modelo no pierda el contexto de su reflexión entre fases.
     """
     
-    # Fase 1: Proposer genera relación
+    # Fase 1: Proposer genera relación (PRO — razona)
     proposal = llm.run_agent("relationship_proposer", {
         "categories": get_categories_data(category_ids),
         "theoretical_code": get_theoretical_code(theoretical_code_id),
         "question": question
     })
     
-    # Fase 2: Skeptic busca contraejemplos (con tools)
+    # Fase 2: Skeptic busca contraejemplos (FLASH — más barato, no razona)
     skeptic = llm.run_agent_with_tools("relationship_skeptic", {
         "proposal": proposal,
         "tools": ["search_diverging_segments", "check_property_coverage"]
     })
     
     # Fase 3: Si hay divergencia, Proposer responde
+    #        El modelo recibe su reasoning_content previo + el challenge
     if skeptic.get("diverging_evidence"):
         rebuttal = llm.run_agent("relationship_proposer", {
             **proposal,
@@ -485,6 +512,9 @@ def agentic_search(query, project_id, top_k):
 [ ] Crear backend/app/agents/react_runner.py — Motor ReAct genérico
 [ ] Crear backend/app/agents/base_agent.py — BaseAgent class
 [ ] Añadir AgentLoopLog a models/ (traceabilidad de bucles)
+[ ] ⚠️ CRÍTICO: Modificar together_client.py::chat() → capturar y retornar reasoning_content
+[ ] ⚠️ CRÍTICO: Modificar llm_client.py::_call_llm() → capturar y retornar reasoning_content
+[ ] ⚠️ CRÍTICO: BaseAgent._step() → reinyectar reasoning_content en mensajes assistant del historial
 ```
 
 ### Fase 1 — Self-Refinement (3-4 días, alto impacto/bajo riesgo)
@@ -547,15 +577,15 @@ backend/app/agents/
 
 | Archivo | Cambio |
 |---------|--------|
-| `workers/heavy/agents_b.py` | `b2b_generate_codes()` y `b3_generate_hypotheses()` → versiones agentic |
-| `workers/heavy/llm_client.py` | Nuevo método `run_agentic_loop()` |
+| `workers/heavy/agents_b.py` | `b2b_generate_codes()` y `b3_generate_hypotheses()` → versiones agentic con preservación de `reasoning_content` |
+| `workers/heavy/llm_client.py` | Nuevo método `run_agentic_loop()` + **`_call_llm()` captura `reasoning_content`** |
 | `workers/heavy/tasks.py` | `trigger_selective_elaboration()` → orchestrator-aware |
 | `workers/fast/tasks.py` | `extract_graph_entities()` → opcionalmente agentic |
 | `backend/app/core/workflow.py` | Nuevo nodo `orchestrator_decide` |
-| `backend/app/services/elaboration_engine.py` | `elaborate_relationship()` → multi-agent |
+| `backend/app/services/elaboration_engine.py` | `elaborate_relationship()` → multi-agent con preservación de razonamiento |
 | `backend/app/services/saturation_gap_analyzer.py` | Nueva clase `ReflexiveSaturationMonitor` |
 | `backend/app/services/rag.py` | `agentic_search()` con query expansion |
-| `backend/app/core/together_client.py` | Método `chat_multi_turn()` para conversaciones |
+| `backend/app/core/together_client.py` | **`chat()` retorna `reasoning_content` en el dict** + método `chat_multi_turn()` |
 | `backend/app/core/llm_config.py` | Registrar nuevos `prompt_id` en `PROMPT_TIER_MAP` |
 
 ---
@@ -581,6 +611,7 @@ backend/app/agents/
 | **Degradación de calidad** | Baja | Evaluación A/B con ground truth de proyectos reales |
 | **Latencia percibida** | Alta | Mostrar "thinking..." en frontend, streaming SSE del pensamiento |
 | **Tool hallucination** (inventa tools) | Media | Strict system prompt + validación de tool names |
+| **Pérdida de razonamiento entre turnos** | **Crítica** | **Capturar `reasoning_content` en `together_client.py` y `llm_client.py`, reinyectarlo en cada `assistant` message del historial. Sin esto, DeepSeek V4 Pro divaga, repite acciones y alucina datos al perder el contexto de su propia reflexión.** |
 
 ---
 
@@ -592,5 +623,11 @@ El sistema GT está **notablemente bien posicionado** para adoptar patrones agen
 2. **Proposer/Critic pairs** que son el 50% de un self-refinement loop
 3. **Servicios modulares** (RAG, TEI, DB) fácilmente exponibles como tools
 4. **Separación PRO/FLASH** que permite usar modelo barato para critic y caro para generate
+5. **DeepSeek V4 Pro como modelo PRO** — modelo de razonamiento nativo (RLVR) cuyo `reasoning_content` debe preservarse entre turnos del bucle agencial
 
 La transformación recomendada es **progresiva y con feature flags**, empezando por el self-refinement loop en B2 (máximo impacto, mínimo riesgo) y escalando hacia el orchestrator agent y el multi-agent debate.
+
+> ⚠️ **Precondición crítica:** Antes de implementar cualquier bucle agencial, es obligatorio
+> corregir `together_client.py` y `llm_client.py` para capturar `reasoning_content` de DeepSeek
+> V4 Pro y reinyectarlo en el historial de mensajes. Sin esto, el agente se degrada con cada
+> iteración: divaga, repite acciones, y alucina datos. Ver `Analisis_CoT_Gaps.md` para detalle.

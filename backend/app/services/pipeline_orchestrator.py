@@ -1,0 +1,248 @@
+"""Pipeline Orchestrator — Centralized state machine for document processing.
+
+SOLO este módulo puede:
+- Cambiar el estado de un documento
+- Despachar la siguiente tarea
+- Crear tracking (PipelineTask)
+- Disparar Phase B (con deduplicación)
+
+Los workers NUNCA despachan otras tareas. Solo reportan su resultado
+y el orchestrator decide el siguiente paso.
+
+Race conditions eliminadas vía optimistic locking (UPDATE ... WHERE estado = from_state).
+"""
+
+from __future__ import annotations
+
+import logging
+from uuid import UUID
+
+from app.core.celery_app import celery_app
+from app.models.domain.pipeline_run import PipelineRun, PipelineTask
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════════
+# State machine
+# ═══════════════════════════════════════════════════════════════════════
+
+# Document states and what to dispatch next
+TRANSITIONS: dict[str, dict] = {
+    "crudo": {
+        "next_state": "segmentando",
+        "task_name": "segmentar_documento",
+        "queue": "nlp",
+    },
+    "segmentando": {
+        "next_state": "segmentado",
+        "task_name": None,  # NLP worker updates estado directly
+        "queue": None,
+    },
+    "segmentado": {
+        "next_state": "procesando",
+        "task_name": "process_document_agents_a",
+        "queue": "heavy",
+    },
+    "procesando": {
+        "next_state": "listo",
+        "task_name": None,  # heavy worker updates estado directly
+        "queue": None,
+    },
+    "listo": {
+        "next_state": None,  # terminal
+        "task_name": None,
+        "queue": None,
+    },
+    "error": {
+        "next_state": "crudo",  # reset on retry
+        "task_name": None,
+        "queue": None,
+    },
+}
+
+
+class PipelineOrchestrator:
+    """Centralized dispatcher. Único punto que despacha tareas."""
+
+    def __init__(self, db_session: Session):
+        self.db = db_session
+
+    # ═══════════════════════════════════════════════════════════════
+    # Public API
+    # ═══════════════════════════════════════════════════════════════
+
+    def start_pipeline(self, project_id: UUID, force: bool = False) -> dict:
+        """Entry point: analiza el proyecto y despacha las tareas iniciales.
+
+        Called by POST /pipeline/run
+        """
+        from app.models.domain.document import Documento
+        from app.models.domain.project import Proyecto
+
+        # Verificar proyecto
+        proyecto = self.db.get(Proyecto, project_id)
+        if not proyecto:
+            return {"status": "error", "message": "Proyecto no encontrado"}
+
+        # Obtener docs
+        docs = self.db.execute(
+            text(
+                "SELECT id, estado, metadatos FROM documentos WHERE proyecto_id = :pid"
+            ),
+            {"pid": project_id},
+        ).fetchall()
+
+        if not docs:
+            return {"status": "no_docs", "message": "No hay documentos"}
+
+        # Crear PipelineRun
+        run = PipelineRun(
+            project_id=project_id,
+            status="running",
+            triggered_by="user",
+            summary={"total_docs": len(docs)},
+        )
+        self.db.add(run)
+        self.db.flush()
+
+        # Analizar cada doc y despachar
+        dispatched_segment = 0
+        dispatched_agents = 0
+        skipped = 0
+        task_ids = {"segment": [], "agents": []}
+
+        for row in docs:
+            doc_id = str(row[0])
+            estado = row[1] or "crudo"
+            metadatos = row[2] if isinstance(row[2], dict) else {}
+
+            if force:
+                # Forzar desde cero: limpiar y empezar
+                self._reset_document(doc_id)
+                task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
+                if task:
+                    dispatched_segment += 1
+                    task_ids["segment"].append(
+                        {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                    )
+                continue
+
+            # Chequear estado real
+            n_segs = self._count_segments(doc_id, self.db)
+            n_codes = self._count_codes(doc_id, self.db)
+
+            if n_segs == 0:
+                # Necesita segmentación
+                task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
+                if task:
+                    dispatched_segment += 1
+                    task_ids["segment"].append(
+                        {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                    )
+            elif n_codes == 0:
+                # Ya tiene segmentos, necesita agentes
+                task = self._dispatch("segmentado", doc_id, project_id, metadatos, run)
+                if task:
+                    dispatched_agents += 1
+                    task_ids["agents"].append(
+                        {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                    )
+            else:
+                skipped += 1
+
+        run.summary = {
+            "total_docs": len(docs),
+            "need_segment": dispatched_segment,
+            "need_agents": dispatched_agents,
+            "already_done": skipped,
+        }
+        self.db.commit()
+
+        return {
+            "status": "dispatched",
+            "project_id": str(project_id),
+            "run_id": str(run.id),
+            "summary": run.summary,
+            "task_ids": task_ids,
+        }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Internal
+    # ═══════════════════════════════════════════════════════════════
+
+    def _dispatch(
+        """Resetea un documento a estado crudo (para force=True)."""
+        self.db.execute(
+            text("DELETE FROM segmentos WHERE documento_id = :did"),
+            {"did": doc_id},
+        )
+        self.db.execute(
+            text(
+                "DELETE FROM codigos_segmento WHERE segmento_id IN "
+                "(SELECT id FROM segmentos WHERE documento_id = :did)"
+            ),
+            {"did": doc_id},
+        )
+        self.db.execute(
+            text("UPDATE documentos SET estado = 'crudo' WHERE id = :did"),
+            {"did": doc_id},
+        )
+        self.db.commit()
+
+    @staticmethod
+    def _count_segments(doc_id: str, session=None) -> int:
+        """Cuenta segmentos. Usa la sesión pasada o crea una nueva."""
+        if session is not None:
+            return session.execute(
+                text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
+                {"did": doc_id},
+            ).fetchone()[0]
+        import os as _os
+
+        from sqlalchemy import create_engine
+
+        url = _os.getenv("DATABASE_URL", "").replace(
+            "postgresql+asyncpg://", "postgresql://"
+        )
+        engine = create_engine(url)
+        from sqlalchemy.orm import Session as SyncSession
+
+        with SyncSession(engine) as s:
+            return s.execute(
+                text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
+                {"did": doc_id},
+            ).fetchone()[0]
+
+    @staticmethod
+    def _count_codes(doc_id: str, session=None) -> int:
+        """Cuenta códigos. Usa la sesión pasada o crea una nueva."""
+        if session is not None:
+            return session.execute(
+                text(
+                    "SELECT COUNT(cs.segmento_id) FROM segmentos s "
+                    "JOIN codigos_segmento cs ON cs.segmento_id = s.id "
+                    "WHERE s.documento_id = :did"
+                ),
+                {"did": doc_id},
+            ).fetchone()[0]
+        import os as _os
+
+        from sqlalchemy import create_engine
+
+        url = _os.getenv("DATABASE_URL", "").replace(
+            "postgresql+asyncpg://", "postgresql://"
+        )
+        engine = create_engine(url)
+        from sqlalchemy.orm import Session as SyncSession
+
+        with SyncSession(engine) as s:
+            return s.execute(
+                text(
+                    "SELECT COUNT(cs.segmento_id) FROM segmentos s "
+                    "JOIN codigos_segmento cs ON cs.segmento_id = s.id "
+                    "WHERE s.documento_id = :did"
+                ),
+                {"did": doc_id},
+            ).fetchone()[0]

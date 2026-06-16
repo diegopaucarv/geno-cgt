@@ -23,7 +23,7 @@ class PipelineRun(Base, TimestampMixin):
     # "running" | "completed" | "cancelled" | "failed"
 
     triggered_by: Mapped[str] = mapped_column(String(50), default="user")
-    # "user" | "auto" (triggered by _maybe_trigger_phase_b)
+    # "user" | "auto"
 
     summary: Mapped[dict] = mapped_column(JSONB, default=dict)
     # {total_docs, need_segment, need_agents, already_done}

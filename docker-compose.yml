@@ -205,6 +205,7 @@ services:
           path: ./workers/nlp/Dockerfile
     volumes:
       - ./uploads:/app/uploads
+      - ./backend/app/agents:/app/agents:ro
     command: celery -A tasks worker --queues=nlp --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
@@ -249,6 +250,9 @@ services:
         - action: sync
           path: ./backend/app/prompts
           target: /app/prompts
+        - action: sync
+          path: ./backend/app/agents
+          target: /app/agents
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
@@ -261,6 +265,8 @@ services:
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
     depends_on:
       - pgbouncer
+    volumes:
+      - ./backend/app/agents:/app/agents:ro
 
   frontend:
     image: node:22-alpine

@@ -432,55 +432,16 @@ def a3_make_sense(proyecto_id: str) -> dict:
 
 
 def _ensure_segmented(session, documento_id: str) -> None:
-    """Segmenta el documento con spaCy si no tiene segmentos."""
+    """Verifica que el doc tenga segmentos. Lanza error si no."""
     count = session.execute(
         text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
         {"did": documento_id},
     ).fetchone()[0]
     if count > 0:
         return
-
-    doc_row = session.execute(
-        text("SELECT metadatos FROM documentos WHERE id = :did"),
-        {"did": documento_id},
-    ).fetchone()
-    if not doc_row or not doc_row[0]:
-        return
-
-    metadatos = doc_row[0] if isinstance(doc_row[0], dict) else {}
-    texto = metadatos.get("texto_extraido", "")
-    if not texto:
-        return
-
-    session.execute(
-        text("UPDATE documentos SET estado = 'segmentando' WHERE id = :did"),
-        {"did": documento_id},
+    raise RuntimeError(
+        f"Doc {documento_id} sin segmentos — el orchestrator no debio despachar agentes"
     )
-    session.commit()
-
-    # Segmentation happens in worker-nlp. Poll until segments appear.
-    import time as _time
-
-    for attempt in range(40):
-        count = session.execute(
-            text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
-            {"did": documento_id},
-        ).fetchone()[0]
-        if count > 0:
-            logger.info("Segments ready: doc=%s, count=%d", documento_id, count)
-            # A2: anchor reconstruction
-            full_text = (
-                metadatos.get("texto_extraido", "")
-                if isinstance(metadatos, dict)
-                else ""
-            )
-            if full_text:
-                _anchor_segments(session, documento_id, full_text)
-            return
-        if attempt == 0:
-            logger.info("Waiting for worker-nlp to segment doc=%s...", documento_id)
-        _time.sleep(3)
-    logger.warning("Timeout waiting for segments: doc=%s", documento_id)
 
 
 def _anchor_segments(session, documento_id: str, full_text: str) -> None:
@@ -622,79 +583,8 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
     }
 
 
-def _mark_doc_ready(documento_id: str) -> None:
-    s = SessionLocal()
-    try:
-        s.execute(
-            text("UPDATE documentos SET estado = 'listo' WHERE id = :did"),
-            {"did": documento_id},
-        )
-        s.commit()
-    finally:
-        s.close()
-
-
-def _mark_doc_error(documento_id: str, error_msg: str) -> None:
-    s = SessionLocal()
-    try:
-        s.execute(
-            text("UPDATE documentos SET estado = 'error' WHERE id = :did"),
-            {"did": documento_id},
-        )
-        s.execute(
-            text(
-                "UPDATE documentos SET metadatos = metadatos || jsonb_build_object('pipeline_error', :err) WHERE id = :did"
-            ),
-            {"did": documento_id, "err": error_msg[:500]},
-        )
-        s.commit()
-    finally:
-        s.close()
-
-
-def _maybe_trigger_phase_b(proyecto_id: str) -> None:
-    """B20: Incremental. Solo dispara si hay >= 3 docs NUEVOS desde la ultima Phase B."""
-    s = SessionLocal()
-    try:
-        doc_count = s.execute(
-            text("SELECT COUNT(*) FROM document_processes WHERE proyecto_id = :pid"),
-            {"pid": proyecto_id},
-        ).fetchone()[0]
-
-        if doc_count < 3:
-            return
-
-        last = s.execute(
-            text(
-                "SELECT step FROM processing_states "
-                "WHERE entity_type = 'project' AND entity_id = :pid "
-                "AND step LIKE 'phase_b_dc_%' "
-                "ORDER BY step DESC LIMIT 1"
-            ),
-            {"pid": proyecto_id},
-        ).fetchone()
-        last_count = int(last[0].split("_")[-1]) if last else 0
-
-        new_docs = doc_count - last_count
-        if new_docs < 3:
-            return
-
-        logger.info("Phase B incremental: +%d docs (total=%d)", new_docs, doc_count)
-        process_synthesis_agents_b(proyecto_id)
-
-        s.execute(
-            text(
-                "INSERT INTO processing_states (entity_type, entity_id, step) "
-                "VALUES ('project', :pid, :st) ON CONFLICT DO NOTHING"
-            ),
-            {"pid": proyecto_id, "st": f"phase_b_dc_{doc_count}"},
-        )
-        s.commit()
-    finally:
-        s.close()
-
-
 # ═══════════════════════════════════════════════════════════════════════
+# Agents B — wrappers Celery (implementación en agents_b.py)
 # Pipeline A — con soporte de checkpoint/resume
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -761,11 +651,12 @@ def process_document_agents_a(
     resume_from_step, limpia los pasos "in_progress" y continúa
     desde el primer paso no completado.
     """
-    from app.agents.checkpoint_helpers import (
+    from agents.checkpoint_helpers import (
         checkpoint,
         cleanup_step,
         load_checkpoints,
     )
+    from agents.transitions import transition as transit
 
     results: dict[str, Any] = {"documento_id": documento_id}
     session = SessionLocal()
@@ -814,9 +705,13 @@ def process_document_agents_a(
             )
             checkpoint(session, documento_id, STEP, "completed")
             if "error" in results["population_context"]:
-                _mark_doc_error(
+                transit(
+                    session,
                     documento_id,
-                    str(results["population_context"].get("error", "a1_failed")),
+                    proyecto_id,
+                    "procesando",
+                    "process_document_agents_a",
+                    False,
                 )
                 return results
 
@@ -830,9 +725,13 @@ def process_document_agents_a(
             results["document_process"] = a2_identify_process(documento_id, proyecto_id)
             checkpoint(session, documento_id, STEP, "completed")
             if "error" in results["document_process"]:
-                _mark_doc_error(
+                transit(
+                    session,
                     documento_id,
-                    str(results["document_process"].get("error", "a2_failed")),
+                    proyecto_id,
+                    "procesando",
+                    "process_document_agents_a",
+                    False,
                 )
                 return results
 
@@ -876,11 +775,15 @@ def process_document_agents_a(
             results["sense_making"] = a3_make_sense(proyecto_id)
             checkpoint(session, documento_id, STEP, "completed")
 
-        # ── Mark ready ──
-        _mark_doc_ready(documento_id)
-
-        # ── Maybe trigger Phase B ──
-        _maybe_trigger_phase_b(proyecto_id)
+        # ── Transition: mark ready + maybe trigger Phase B ──
+        transit(
+            session,
+            documento_id,
+            proyecto_id,
+            "procesando",
+            "process_document_agents_a",
+            True,
+        )
 
         return results
 
@@ -890,15 +793,17 @@ def process_document_agents_a(
         )
         return {"status": "cancelled", "documento_id": documento_id}
     except Exception as e:
-        _mark_doc_error(documento_id, str(e))
+        transit(
+            session,
+            documento_id,
+            proyecto_id,
+            "procesando",
+            "process_document_agents_a",
+            False,
+        )
         raise
     finally:
         session.close()
-
-    # Si es el tercer documento (o múltiplo de 3), disparar síntesis B
-    _maybe_trigger_phase_b(proyecto_id)
-
-    return results
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -928,8 +833,12 @@ def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
     return b3_generate_hypotheses(proyecto_id)
 
 
-@app.task(name="process_synthesis_agents_b")
-def process_synthesis_agents_b(proyecto_id: str) -> dict:
+@app.task(
+    name="process_synthesis_agents_b",
+    base=AbortableTask,
+    bind=True,
+)
+def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
     results: dict[str, Any] = {"proyecto_id": proyecto_id}
     logger.info("B1: Muestreo %s", proyecto_id)
     results["sampling"] = b1_distill_sampling(proyecto_id)
@@ -1536,8 +1445,12 @@ def trigger_selective_elaboration(proyecto_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@app.task(name="invoke_graph")
-def invoke_graph(proyecto_id: str, documento_id: str = None) -> dict:
+@app.task(
+    name="invoke_graph",
+    base=AbortableTask,
+    bind=True,
+)
+def invoke_graph(self, proyecto_id: str, documento_id: str = None) -> dict:
     """
     B21: Invoca el StateGraph para un documento (o el proyecto completo).
 

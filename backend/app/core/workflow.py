@@ -97,7 +97,11 @@ class AnalysisState(TypedDict, total=False):
 
 
 def node_segment_and_index(state: AnalysisState) -> AnalysisState:
-    """Node 1: Segmenta y genera embeddings (spaCy + TEI)."""
+    """Node 1: Verifica que el documento tenga segmentos.
+
+    La segmentación real la hace el orchestrator vía Celery.
+    Este nodo solo verifica y espera pasivamente.
+    """
     state["current_step"] = "segment_and_index"
     doc_id = state.get("document_id", "")
     if not doc_id:
@@ -107,15 +111,20 @@ def node_segment_and_index(state: AnalysisState) -> AnalysisState:
 
         _s.path.insert(0, "/app")
         from database import SessionLocal
+        from sqlalchemy import text
 
         s = SessionLocal()
         try:
-            from workers.heavy.tasks import _ensure_segmented
-
-            _ensure_segmented(s, doc_id)
+            count = s.execute(
+                text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
+                {"did": doc_id},
+            ).fetchone()[0]
+            if count > 0:
+                logger.info("Node 1: doc=%s has %d segments", doc_id, count)
+            else:
+                logger.warning("Node 1: doc=%s has no segments yet", doc_id)
         finally:
             s.close()
-        logger.info("Node 1: segmented doc=%s", doc_id)
     except Exception as e:
         logger.warning("Node 1 failed: %s", e)
     return state
