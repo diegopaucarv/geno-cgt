@@ -114,6 +114,7 @@ def transition(
 
 def _to_error(session, documento_id: str) -> None:
     """Marca documento como error."""
+    session.rollback()  # clear any previously aborted transaction
     session.execute(
         text("UPDATE documentos SET estado = 'error' WHERE id = :did"),
         {"did": documento_id},

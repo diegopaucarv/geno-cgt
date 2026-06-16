@@ -172,7 +172,7 @@ class PipelineOrchestrator:
     # Internal
     # ═══════════════════════════════════════════════════════════════
 
-    def _dispatch(
+    def _reset_document(self, doc_id: str):
         """Resetea un documento a estado crudo (para force=True)."""
         self.db.execute(
             text("DELETE FROM segmentos WHERE documento_id = :did"),
@@ -190,6 +190,75 @@ class PipelineOrchestrator:
             {"did": doc_id},
         )
         self.db.commit()
+
+    def _dispatch(
+        self,
+        from_state: str,
+        doc_id: str,
+        project_id: UUID,
+        metadatos: dict,
+        run: PipelineRun,
+    ) -> dict | None:
+        """Despacha la siguiente tarea según TRANSITIONS y crea PipelineTask."""
+        import os as _os
+
+        from celery import Celery
+
+        trans = TRANSITIONS.get(from_state)
+        if not trans or not trans["task_name"]:
+            return None
+
+        # Update document estado (optimistic locking)
+        self.db.execute(
+            text(
+                "UPDATE documentos SET estado = :next "
+                "WHERE id = :did AND estado = :from_st"
+            ),
+            {"next": trans["next_state"], "did": doc_id, "from_st": from_state},
+        )
+        self.db.flush()
+
+        # Dispatch Celery task
+        app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+
+        if trans["task_name"] == "segmentar_documento":
+            texto = metadatos.get("texto_extraido", "")
+            task = app.send_task(
+                trans["task_name"],
+                args=[texto, 1024, "", "TEXTO", "", doc_id],
+                queue=trans["queue"],
+            )
+        else:
+            task = app.send_task(
+                trans["task_name"],
+                args=[doc_id, str(project_id)],
+                queue=trans["queue"],
+            )
+
+        # Create PipelineTask tracking
+        self.db.execute(
+            text(
+                "INSERT INTO pipeline_tasks "
+                "(id, run_id, document_id, celery_task_id, task_name, queue, status, doc_estado_before, segments_before, codes_before) "
+                "VALUES (gen_random_uuid(), :rid, :did, :tid, :tn, :q, 'queued', :before, 0, 0)"
+            ),
+            {
+                "rid": run.id,
+                "did": doc_id,
+                "tid": task.id,
+                "tn": trans["task_name"],
+                "q": trans["queue"],
+                "before": from_state,
+            },
+        )
+        self.db.flush()
+
+        return {
+            "celery_task_id": task.id,
+            "doc_id": doc_id,
+            "task_name": trans["task_name"],
+            "queue": trans["queue"],
+        }
 
     @staticmethod
     def _count_segments(doc_id: str, session=None) -> int:

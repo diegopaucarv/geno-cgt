@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 from celery import Celery
-from config import DATABASE_URL, REDIS_URL, SEGMENTATION_REINERT, TEI_URL
+from config import DATABASE_URL, REDIS_URL, SEGMENTATION_REINERT, SPACY_MODEL, TEI_URL
 from contextual_enrichment import build_contextualized_text
 from kombu import Exchange, Queue
 
@@ -173,7 +173,9 @@ def segmentar_documento(
     from segmentador import ProgressiveSegmenter
 
     reinert = SEGMENTATION_REINERT
-    segmenter = ProgressiveSegmenter(tei_url=TEI_URL, reinert_micro=reinert)
+    segmenter = ProgressiveSegmenter(
+        spacy_model=SPACY_MODEL, tei_url=TEI_URL, reinert_micro=reinert
+    )
     segmentos = segmenter.segment_text(texto, max_tokens=max_tokens)
 
     if documento_id:

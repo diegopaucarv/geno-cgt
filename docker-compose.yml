@@ -215,6 +215,8 @@ services:
       UPLOAD_DIR: /app/uploads
       USE_GPU: ${USE_GPU:-false}
       SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
+      SPACY_MODEL: ${SPACY_MODEL:-es_core_news_lg}
+    mem_limit: 6g
     depends_on:
       pgbouncer:
         condition: service_started
@@ -263,6 +265,7 @@ services:
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       MODEL_FLASH: ${MODEL_FLASH:-google/gemma-4-31B-it}
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
+      PYTHONPATH: /
     depends_on:
       - pgbouncer
     volumes:

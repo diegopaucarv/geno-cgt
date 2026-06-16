@@ -139,6 +139,7 @@ async def get_pipeline_log(
                 "need_segment": 0,
                 "need_agents": 0,
                 "done": 0,
+                "failed": 0,
                 "categories": 0,
                 "playground_ready": False,
             },
@@ -199,7 +200,9 @@ async def get_pipeline_log(
         }
 
         # Determinar qué falta
-        if not has_text:
+        if doc.estado == "error":
+            next_action = "error"
+        elif not has_text:
             next_action = "extract_text"
         elif not n_segs:
             next_action = "segment"
@@ -226,6 +229,16 @@ async def get_pipeline_log(
     docs_need_segment = sum(1 for d in doc_logs if d["next_action"] == "segment")
     docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
     docs_done = sum(1 for d in doc_logs if d["next_action"] == "done")
+    docs_failed = sum(1 for d in doc_logs if d["next_action"] == "error")
+    error_list = [
+        {
+            "document_id": d["document_id"],
+            "filename": d["filename"],
+            "estado": d["estado"],
+        }
+        for d in doc_logs
+        if d["next_action"] == "error"
+    ]
 
     return {
         "project_id": str(project_id),
@@ -235,6 +248,8 @@ async def get_pipeline_log(
             "need_segment": docs_need_segment,
             "need_agents": docs_need_agents,
             "done": docs_done,
+            "failed": docs_failed,
+            "errors": error_list,
             "categories": cat_count,
             "playground_ready": cat_count > 0,
         },

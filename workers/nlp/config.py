@@ -29,6 +29,7 @@ SEGMENTATION_REINERT = os.getenv("SEGMENTATION_REINERT", "false").lower() in (
     "true",
     "yes",
 )
+SPACY_MODEL = os.getenv("SPACY_MODEL", "es_core_news_lg")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 
 # ── Environment ──────────────────────────────────────────────────────

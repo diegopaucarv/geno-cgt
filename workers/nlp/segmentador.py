@@ -117,8 +117,8 @@ class AttentionShiftDetector:
 
 
 class ClassicSegmenter:
-    def __init__(self, embedding_client: EmbeddingClient, spacy_model: str):
-        self.nlp = spacy.load(spacy_model)
+    def __init__(self, embedding_client: EmbeddingClient, nlp: spacy.Language):
+        self.nlp = nlp  # shared instance, no own load
         self.embedding_client = embedding_client
         self.embedding_cache: dict[str, np.ndarray] = {}
 
@@ -256,13 +256,13 @@ class ProgressiveSegmenter:
         # Embedding client → TEI (Voyage-4 ONNX, 1024-dim)
         self.embedding_client = EmbeddingClient(base_url=tei_url)
 
-        # Classic segmenter (also uses TEI via embedding client)
-        self.classicseg = ClassicSegmenter(self.embedding_client, spacy_model)
-
-        # spaCy pipeline
+        # spaCy pipeline — single shared instance
         self.nlp = spacy.load(spacy_model)
         if "conversational_sbd" not in self.nlp.pipe_names:
             self.nlp.add_pipe("conversational_sbd", before="parser")
+
+        # Classic segmenter (shares spaCy instance, uses TEI)
+        self.classicseg = ClassicSegmenter(self.embedding_client, self.nlp)
         if "conversational_sbd" not in self.classicseg.nlp.pipe_names:
             self.classicseg.nlp.add_pipe("conversational_sbd", before="parser")
 
@@ -296,6 +296,15 @@ class ProgressiveSegmenter:
                 )
                 self._stanza_pipeline = None
         return self._stanza_pipeline
+
+    def release_stanza(self) -> None:
+        """Libera Stanza para recuperar RAM antes de embeddings."""
+        if self._stanza_pipeline is not None:
+            del self._stanza_pipeline
+            self._stanza_pipeline = None
+            gc.collect()
+            _free_gpu_memory()
+            print("[COREF] ✓ Stanza descargado — memoria liberada.")
 
     # ── Preprocessing ─────────────────────────────────────────────────────────
     def preprocess_text(self, text: str, min_chars: int = 3) -> list[str]:
@@ -989,6 +998,7 @@ class ProgressiveSegmenter:
 
         print(f"[SegText] Iniciando resolución de correferencias...")
         clustered_segments = self.resolve_coreferences(clustered_segments)
+        self.release_stanza()
         _free_gpu_memory()
         # Clear roots cache between documents to prevent unbounded growth
         self._roots_cache = {}

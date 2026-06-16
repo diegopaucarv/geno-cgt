@@ -80,7 +80,13 @@ export interface DocPipelineLog {
   };
   segments_count: number;
   codes_count: number;
-  next_action: "extract_text" | "segment" | "run_agents" | "done";
+  next_action: "extract_text" | "segment" | "run_agents" | "done" | "error";
+}
+
+export interface PipelineLogError {
+  document_id: string;
+  filename: string;
+  estado: string;
 }
 
 export interface PipelineLog {
@@ -91,6 +97,8 @@ export interface PipelineLog {
     need_segment: number;
     need_agents: number;
     done: number;
+    failed: number;
+    errors: PipelineLogError[];
     categories: number;
     playground_ready: boolean;
   };
@@ -613,4 +621,48 @@ export async function restartFailedTasks(projectId: string) {
   }>(`/admin/projects/${projectId}/pipeline/restart-failed`, {
     method: "POST",
   });
+}
+
+// ── HITL Types ──────────────────────────────────────────────────────
+
+export interface HitlPendingItem {
+  id: string;
+  gate_name: string;
+  proposal_summary: string;
+  critic_verdict: string;
+  created_at: string;
+}
+
+export interface HitlDecisionResponse {
+  id: string;
+  project_id: string;
+  gate_name: string;
+  status: string;
+  researcher_decision: string | null;
+  researcher_note: string | null;
+  decided_at: string | null;
+}
+
+// ── HITL API ────────────────────────────────────────────────────────
+
+export async function getPendingHitl(
+  projectId: string,
+): Promise<HitlPendingItem[]> {
+  return request<HitlPendingItem[]>(`/projects/${projectId}/hitl/pending`);
+}
+
+export async function decideHitl(
+  projectId: string,
+  gateName: string,
+  decision: "accept" | "modify" | "reject",
+  note: string,
+  feedback?: string,
+): Promise<HitlDecisionResponse> {
+  return request<HitlDecisionResponse>(
+    `/projects/${projectId}/hitl/${gateName}/decide`,
+    {
+      method: "POST",
+      body: JSON.stringify({ decision, note, feedback }),
+    },
+  );
 }

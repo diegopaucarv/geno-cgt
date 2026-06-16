@@ -294,16 +294,32 @@ export default function ProjectDetail() {
 
     // Call unified orchestrator (backend handles all docs)
     setPipelineMsg("🎯 Orquestador analizando DB…");
+    if (stageStatuses.segment !== "done") {
+      updateStage("segment", "running");
+    }
+
+    let pipelineOk = false;
 
     try {
-      const res = await fetch(`/api/v1/projects/${id}/pipeline/run`, {
+      const response = await fetch(`/api/v1/projects/${id}/pipeline/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
         body: JSON.stringify({ force: forceAll }),
-      }).then((r) => r.json());
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(
+          `Backend ${response.status}: ${text.slice(0, 200) || response.statusText}`,
+        );
+      }
+
+      const res = await response.json();
+
+      pipelineOk = true;
 
       if (res.status === "no_docs") {
         setPipelineMsg("No hay documentos.");
@@ -312,12 +328,13 @@ export default function ProjectDetail() {
       } else {
         setPipelineMsg(res.message || "Pipeline disparado");
         if (res.summary?.need_segment === 0) updateStage("segment", "done");
-        // Agents done = need_agents is 0 AND segments exist (otherwise agents just haven't started)
-        if (
-          res.summary?.need_agents === 0 &&
-          (res.summary?.need_segment ?? 1) === 0
-        )
-          updateStage("agents", "done");
+        if (res.summary?.need_agents === 0) {
+          if ((res.summary?.need_segment ?? 1) === 0) {
+            updateStage("agents", "done");
+          }
+        } else {
+          updateStage("agents", "running");
+        }
 
         // Poll until complete
         for (let poll = 0; poll < 120 && !abortRef.current; poll++) {
@@ -327,6 +344,18 @@ export default function ProjectDetail() {
             setPipelineLog(status);
           }
           if (status?.summary) {
+            // ── Failure detection ──
+            if (status.summary.failed > 0) {
+              const errNames = (status.summary.errors || [])
+                .map((e: { filename: string }) => e.filename)
+                .join(", ");
+              setPipelineMsg(`❌ Falló: ${errNames || "documento"}`);
+              updateStage("segment", "error");
+              updateStage("agents", "error");
+              abortRef.current = true;
+              break;
+            }
+
             if (status.summary.need_segment === 0)
               updateStage("segment", "done");
             if (
@@ -355,7 +384,7 @@ export default function ProjectDetail() {
       await stopProjectPipeline(id!).catch(() => {});
       resetStages();
       setPipelineMsg("⏹ Pipeline cancelado — DB restaurada.");
-    } else {
+    } else if (pipelineOk) {
       // Pipeline completed normally
       updateStage("segment", "done");
       updateStage("agents", "done");
