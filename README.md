@@ -29,8 +29,8 @@ The system is organized into sequential phases:
 ## ⚙️ Prerequisites
 
 - Docker and Docker Compose (recommended)
-- Python 3.10+ (for local development)
 - A Together.ai API key (free with initial credits)
+- (Optional) Python 3.10+ (for local development)
 
 ---
 
