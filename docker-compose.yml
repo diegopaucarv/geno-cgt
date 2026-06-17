@@ -234,7 +234,8 @@ services:
       SPACY_MODEL: ${SPACY_MODEL:-es_core_news_lg}
       SPACY_EXCLUDE: ${SPACY_EXCLUDE:-auto}
       PYTHONPATH: /app/backend:/app/backend/app
-    # No hard mem_limit — worker-nlp self-regulates via memory.py
+    mem_limit: ${NLP_MEM_LIMIT:-6g}
+    # Stanza coref necesita ~2GB, spaCy lg ~600MB → minimo 4GB, recomendado 6GB
     depends_on:
       pgbouncer:
         condition: service_started

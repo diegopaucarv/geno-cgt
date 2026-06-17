@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 import type { CSSProperties } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
@@ -35,6 +36,7 @@ function PlaygroundInner() {
   const pg = usePlayground();
   const { id } = useParams<{ id: string }>();
   const [newDocsCount, setNewDocsCount] = useState(0);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (id) pg.setProjectId(id);
@@ -84,10 +86,10 @@ function PlaygroundInner() {
             to={`/projects/${id}`}
             style={{ color: "#58A6FF", fontSize: 13, textDecoration: "none" }}
           >
-            ← Proyectos
+            {t("playground.backToProjects")}
           </Link>
           <span style={{ fontSize: 15, fontWeight: 600 }}>
-            Theoretical Playground
+            {t("playground.title")}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -117,7 +119,7 @@ function PlaygroundInner() {
               cursor: "pointer",
             }}
           >
-            Sync gaps
+            {t("playground.syncGaps")}
           </button>
         </div>
       </div>
@@ -136,8 +138,10 @@ function PlaygroundInner() {
           }}
         >
           <span style={{ fontSize: 12, color: "#A371F7" }}>
-            📄 {newDocsCount} documento{newDocsCount > 1 ? "s" : ""} nuevo
-            {newDocsCount > 1 ? "s" : ""} — el análisis puede expandirse
+            {t("playground.newDocsBanner", {
+              n: newDocsCount,
+              s: newDocsCount !== 1 ? "s" : "",
+            })}
           </span>
           <Link
             to={`/projects/${id}`}
@@ -153,7 +157,7 @@ function PlaygroundInner() {
               textDecoration: "none",
             }}
           >
-            Expandir análisis
+            {t("playground.expandAnalysis")}
           </Link>
         </div>
       )}
@@ -185,7 +189,7 @@ function PlaygroundInner() {
 
           {/* Recommendations */}
           <div style={CARD}>
-            <div style={CARD_HEADER}>💡 Recommendations</div>
+            <div style={CARD_HEADER}>{t("playground.recommendations")}</div>
             <div style={{ padding: "0 0 4px 0" }}>
               <RecommendationGuide />
             </div>
@@ -219,7 +223,7 @@ function PlaygroundInner() {
         >
           {/* Detail Panel */}
           <div style={CARD}>
-            <div style={CARD_HEADER}>🔍 Detail</div>
+            <div style={CARD_HEADER}>{t("playground.detail")}</div>
             <div style={{ padding: 4 }}>
               <ElaborationPanel />
             </div>
@@ -246,14 +250,14 @@ function PlaygroundInner() {
             <span style={{ color: "#E6EDF3", fontWeight: 500 }}>
               {pg.blobs.length}
             </span>{" "}
-            categorías
+            {t("playground.categories")}
           </span>
           <span style={{ color: "#21262D" }}>·</span>
           <span>
             <span style={{ color: "#E6EDF3", fontWeight: 500 }}>
               {pg.tendrils.length}
             </span>{" "}
-            relaciones
+            {t("playground.relationships")}
           </span>
           <span style={{ color: "#21262D" }}>·</span>
           <span>
@@ -265,13 +269,15 @@ function PlaygroundInner() {
             >
               {totalGaps}
             </span>{" "}
-            gaps
+            {t("playground.gaps")}
           </span>
           <span style={{ color: "#21262D" }}>·</span>
-          <span>Fase 6b</span>
+          <span>{t("playground.phase6b")}</span>
         </div>
         <span style={{ fontSize: 11, color: "#484F58" }}>
-          {coreBlob ? `Core: ${coreBlob.name}` : "Sin core category"}
+          {coreBlob
+            ? `${t("playground.corePrefix")}${coreBlob.name}`
+            : t("playground.noCoreCategory")}
         </span>
       </div>
 

@@ -1,55 +1,55 @@
 ---
 agent: reduce_synthesis
 tier: PRO
-description: Consolidación inter-documento por código. Paso 2 de Map-Reduce. Produce definición global, propiedades, tipos internos, condiciones y acción sugerida.
+description: Inter-document consolidation by code. Step 2 of Map-Reduce. Produces global definition, properties, internal types, conditions, and suggested action.
 notes:
-  - Se ejecuta una vez por código después de que todos los Map Synthesis para ese código terminan.
-  - Aplica el principio de intercambiabilidad de indicadores de Glaser.
-  - suggested_action guía la Fase 4 (refinamiento de categorías).
+  - Runs once per code after all Map Synthesis for that code finish.
+  - Applies Glaser's principle of interchangeability of indicators.
+  - suggested_action guides Phase 4 (category refinement).
 constraints:
-  - Usa solo los resúmenes proporcionados. No inventes propiedades no observadas.
-  - Nombra propiedades con sustantivos (ej. "intensidad", "frecuencia", "contexto").
-  - La definición global debe ser más abstracta que cualquier resumen individual, pero anclada en los datos.
+  - Use only the provided summaries. Do not invent unobserved properties.
+  - Name properties with nouns (e.g. "intensity", "frequency", "context").
+  - The global definition must be more abstract than any individual summary, but anchored in the data.
 ---
 
 ## System
 
 [ROL]
-Eres un metodólogo senior en Classic Grounded Theory especializado en integración
-cross-document. Aplicas el principio de intercambiabilidad de indicadores de Glaser
-para consolidar categorías a través de múltiples documentos.
+You are a senior methodologist in Classic Grounded Theory specializing in cross-document
+integration. You apply Glaser's principle of interchangeability of indicators
+to consolidate categories across multiple documents.
 
-[OBJETIVO]
-Dado un código y todos sus resúmenes intra-documento, consolida:
+[OBJECTIVE]
+Given a code and all its intra-document summaries, consolidate:
 
-1. DEFINICIÓN GLOBAL — La esencia del patrón de comportamiento: qué procesa, qué resuelve.
-2. PROPIEDADES Y DIMENSIONES — Qué varía, en qué gradientes, con qué evidencia.
-3. TIPOS O PERFILES — Sub-patrones que emergen dentro de la categoría.
-4. CONDICIONES — Bajo qué circunstancias (estructurales o contingentes) se manifiesta.
-5. ACCIÓN SUGERIDA — ¿La categoría es robusta (none), necesita enriquecerse (enrich),
-   subdividirse (subdivide), o dividirse (divide)?
+1. GLOBAL DEFINITION — The essence of the behavioral pattern: what it processes, what it resolves.
+2. PROPERTIES AND DIMENSIONS — What varies, in what gradients, with what evidence.
+3. TYPES OR PROFILES — Sub-patterns that emerge within the category.
+4. CONDITIONS — Under what circumstances (structural or contingent) it manifests.
+5. SUGGESTED ACTION — Is the category robust (none), does it need enrichment (enrich),
+   subdivision (subdivide), or division (divide)?
 
-[MÉTODO]
-- Busca lo común a través de los documentos (intercambiabilidad), no lo específico de cada uno.
-- Las variaciones son dimensiones de la misma propiedad, no categorías separadas,
-  a menos que revelen esencias no intercambiables.
-- Si dos resúmenes describen patrones esencialmente diferentes → sugerir DIVIDE.
-- Si todos los resúmenes convergen con variaciones internas → sugerir ENRICH.
+[METHOD]
+- Look for what is common across documents (interchangeability), not what is specific to each one.
+- Variations are dimensions of the same property, not separate categories,
+  unless they reveal non-interchangeable essences.
+- If two summaries describe essentially different patterns → suggest DIVIDE.
+- If all summaries converge with internal variations → suggest ENRICH.
 
-Usa solo los resúmenes proporcionados. No uses conocimiento externo.
+Use only the provided summaries. Do not use external knowledge.
 
 ## User
 
-[CÓDIGO A CONSOLIDAR]
-Nombre: {code_label}
-Definición actual: {code_definition}
+[CODE TO CONSOLIDATE]
+Name: {code_label}
+Current definition: {code_definition}
 
-[RESÚMENES INTRA-DOCUMENTO]
+[INTRA-DOCUMENT SUMMARIES]
 {intra_document_summaries}
 
-[ESTADÍSTICAS]
-Documentos donde aparece: {doc_count}
-Total segmentos asignados: {segment_count}
+[STATISTICS]
+Documents where it appears: {doc_count}
+Total assigned segments: {segment_count}
 
 ## Output Schema
 
@@ -61,11 +61,11 @@ Total segmentos asignados: {segment_count}
   "properties": {
     "global_definition": {
       "type": "string",
-      "description": "Definición consolidada del código a través de todos los documentos. Más abstracta que los resúmenes individuales pero anclada en los datos."
+      "description": "Consolidated definition of the code across all documents. More abstract than individual summaries but anchored in the data."
     },
     "properties": {
       "type": "array",
-      "description": "Propiedades y dimensiones de la categoría. Array vacío si no se identifican propiedades claras.",
+      "description": "Properties and dimensions of the category. Empty array if no clear properties are identified.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -73,26 +73,26 @@ Total segmentos asignados: {segment_count}
         "properties": {
           "name": {
             "type": "string",
-            "description": "Nombre de la propiedad en sustantivo (ej. 'intensidad', 'frecuencia', 'contexto')."
+            "description": "Name of the property as a noun (e.g. 'intensity', 'frequency', 'context')."
           },
           "description": {
             "type": "string",
-            "description": "Qué varía en esta dimensión y entre qué valores."
+            "description": "What varies in this dimension and between what values."
           },
           "gradient": {
             "type": "string",
-            "description": "Rango de variación. Ej: 'bajo → alto', 'explícito → implícito'. String vacío si no aplica."
+            "description": "Range of variation. E.g.: 'low → high', 'explicit → implicit'. Empty string if not applicable."
           },
           "evidence_doc_count": {
             "type": "integer",
-            "description": "En cuántos documentos se observa evidencia de esta propiedad."
+            "description": "In how many documents evidence of this property is observed."
           }
         }
       }
     },
     "internal_types": {
       "type": "array",
-      "description": "Sub-patrones o perfiles que emergen dentro de la categoría. Array vacío si no hay tipos internos claros.",
+      "description": "Sub-patterns or profiles that emerge within the category. Empty array if no clear internal types.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -100,22 +100,22 @@ Total segmentos asignados: {segment_count}
         "properties": {
           "label": {
             "type": "string",
-            "description": "Etiqueta del tipo o perfil."
+            "description": "Label of the type or profile."
           },
           "description": {
             "type": "string",
-            "description": "Qué distingue a este tipo de los demás dentro de la categoría."
+            "description": "What distinguishes this type from others within the category."
           },
           "distinguishing_property": {
             "type": "string",
-            "description": "Propiedad que diferencia este tipo. String vacío si no hay una propiedad única."
+            "description": "Property that differentiates this type. Empty string if there is no unique property."
           }
         }
       }
     },
     "conditions": {
       "type": "array",
-      "description": "Circunstancias bajo las cuales se manifiesta la categoría. Array vacío si no se identifican condiciones.",
+      "description": "Circumstances under which the category manifests. Empty array if no conditions are identified.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -123,12 +123,12 @@ Total segmentos asignados: {segment_count}
         "properties": {
           "condition": {
             "type": "string",
-            "description": "Descripción de la circunstancia."
+            "description": "Description of the circumstance."
           },
           "type": {
             "type": "string",
             "enum": ["structural", "contingent"],
-            "description": "structural: condición estable del contexto. contingent: condición variable o situacional."
+            "description": "structural: stable context condition. contingent: variable or situational condition."
           }
         }
       }
@@ -136,11 +136,11 @@ Total segmentos asignados: {segment_count}
     "suggested_action": {
       "type": "string",
       "enum": ["none", "enrich", "subdivide", "divide"],
-      "description": "none: categoría robusta. enrich: añadir propiedades/dimensiones. subdivide: crear subcategorías. divide: separar en categorías distintas."
+      "description": "none: robust category. enrich: add properties/dimensions. subdivide: create subcategories. divide: separate into distinct categories."
     },
     "suggested_action_rationale": {
       "type": "string",
-      "description": "Justificación de la acción sugerida, referenciando evidencia de los resúmenes."
+      "description": "Justification of the suggested action, referencing evidence from the summaries."
     }
   }
 }

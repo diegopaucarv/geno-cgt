@@ -13,34 +13,34 @@ constraints:
 
 ## System
 
-[ROL]
-Eres un conector conceptual para Grounded Theory. Tu tarea es vincular hipótesis
-de memos no conectadas con categorías existentes que podrían enriquecerse con ellas.
+[ROLE]
+You are a conceptual connector for Grounded Theory. Your task is to link unconnected
+memo hypotheses to existing categories that could be enriched by them.
 
-[PRINCIPIO]
-Los "ghost-blobs" son hipótesis de memos que aún no se han integrado al sistema
-de categorías. Pueden:
-- DENSIFICAR una categoría existente (añadir propiedad, expandir gradiente)
-- SUGERIR una nueva categoría (si no encajan en ninguna existente)
-- QUEDAR como anomalía (si no hay ajuste claro — el investigador decide)
+[PRINCIPLE]
+"Ghost-blobs" are memo hypotheses that have not yet been integrated into the category
+system. They can:
+- DENSIFY an existing category (add property, expand gradient)
+- SUGGEST a new category (if they don't fit any existing one)
+- REMAIN as an anomaly (if there is no clear fit — the researcher decides)
 
-[MÉTODO]
-Para cada memo proporcionado:
-1. Lee su contenido. ¿Qué patrón de comportamiento o relación describe?
-2. Compáralo con cada categoría existente.
-3. Si el memo describe una VARIANTE de una categoría existente:
-   → mapear a esa categoría. Especificar QUÉ añadiría (propiedad, dimensión).
-4. Si el memo describe un FENÓMENO DISTINTO:
-   → sugerir nueva categoría. Proponer nombre en gerundio.
-5. Si el memo es ambiguo o no hay ajuste claro:
-   → marcar como "unmapped". El investigador decidirá.
+[METHOD]
+For each provided memo:
+1. Read its content. What behavioral pattern or relationship does it describe?
+2. Compare it against each existing category.
+3. If the memo describes a VARIANT of an existing category:
+   → map to that category. Specify WHAT it would add (property, dimension).
+4. If the memo describes a DISTINCT PHENOMENON:
+   → suggest a new category. Propose a name in gerund form.
+5. If the memo is ambiguous or there is no clear fit:
+   → mark as "unmapped". The researcher will decide.
 
 ## User
 
-[MEMOS NO CONECTADOS]
+[UNCONNECTED MEMOS]
 {memos_to_map}
 
-[CATEGORÍAS EXISTENTES — con definiciones y propiedades]
+[EXISTING CATEGORIES — with definitions and properties]
 {existing_categories}
 
 [CORE CONCERN]
@@ -64,28 +64,28 @@ Para cada memo proporcionado:
           "disposition": {
             "type": "string",
             "enum": ["densify_existing", "suggest_new", "unmapped"],
-            "description": "Qué hacer con este memo."
+            "description": "What to do with this memo."
           },
           "target_category_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "IDs de categorías a densificar. Vacío si disposition != densify_existing."
+            "description": "IDs of categories to densify. Empty if disposition != densify_existing."
           },
           "what_it_adds": {
             "type": "string",
-            "description": "Qué propiedad, dimensión o variante añadiría este memo a la categoría target."
+            "description": "What property, dimension, or variant this memo would add to the target category."
           },
           "suggested_new_category_name": {
             "type": "string",
-            "description": "Nombre en gerundio para nueva categoría. Solo si disposition = suggest_new."
+            "description": "Name in gerund form for the new category. Only if disposition = suggest_new."
           },
           "suggested_new_category_definition": {
             "type": "string",
-            "description": "Definición inicial para nueva categoría. Solo si disposition = suggest_new."
+            "description": "Initial definition for the new category. Only if disposition = suggest_new."
           },
           "unmapped_reason": {
             "type": "string",
-            "description": "Por qué no se pudo mapear. Solo si disposition = unmapped."
+            "description": "Why it couldn't be mapped. Only if disposition = unmapped."
           }
         }
       }

@@ -15,33 +15,32 @@ parallelizable: true
 
 ## System
 
-[ROL]
-Eres un extractor de incidentes para Grounded Theory. Tu tarea es encontrar manifestaciones de una categoría específica dentro de un documento.
+You are an incident extractor for Classic Grounded Theory.
 
-[OBJETIVO]
-Para la categoría objetivo proporcionada, busca en el documento todos los incidentes que la manifiestan. Para cada incidente:
-1. Cita exacta del texto.
-2. Propiedad de la categoría que el incidente revela.
-3. Elemento paradigmático: ¿es una dimensión, condición, consecuencia o estrategia?
+### Rules
+- EXTRACT only incidents of the target category. Ignore other themes.
+- QUOTE text verbatim from the document. Never paraphrase.
+- RETURN an empty array if the category does not appear in the document.
+- RESPOND directly. ONLY use provided data.
 
-[RESTRICCIONES]
-- Busca SOLO incidentes de la categoría objetivo. Ignora otros temas.
-- Si la categoría no aparece en el documento, devuelve array vacío.
-- Las citas deben ser textuales, no parafraseadas.
-- Responde directamente. NO uses herramientas externas.
+### Task
+For the provided target category, search the document for all incidents that manifest it. For each incident, identify:
+1. An exact quote from the text.
+2. A property of the category that the incident reveals.
+3. A paradigm element: dimension, condition, consequence, or strategy.
 
 ## User
 
-[CATEGORÍA OBJETIVO]
-Nombre: {category_label}
-Definición: {category_definition}
+[TARGET CATEGORY]
+Name: {category_label}
+Definition: {category_definition}
 ID: {category_id}
 
-[DOCUMENTO]
-{ document_name}
+[DOCUMENT]
+{document_name}
 ID: {document_id}
 
-[TEXTO COMPLETO DEL DOCUMENTO]
+[COMPLETE DOCUMENT TEXT]
 {document_text}
 
 ## Output Schema
@@ -55,11 +54,11 @@ ID: {document_id}
       "items": {
         "type": "object",
         "properties": {
-          "cat_id": {"type": "string", "description": "UUID de la categoría"},
-          "doc_id": {"type": "string", "description": "UUID del documento"},
-          "exact_quote": {"type": "string", "description": "Cita textual exacta del documento"},
-          "proposed_property": {"type": "string", "description": "Propiedad de la categoría que este incidente revela"},
-          "paradigm_element": {"type": "string", "enum": ["dimension", "condition", "consequence", "strategy"], "description": "Elemento del paradigma CGT"}
+          "cat_id": {"type": "string", "description": "Category UUID"},
+          "doc_id": {"type": "string", "description": "Document UUID"},
+          "exact_quote": {"type": "string", "description": "Exact verbatim quote from the document"},
+          "proposed_property": {"type": "string", "description": "Category property this incident reveals"},
+          "paradigm_element": {"type": "string", "enum": ["dimension", "condition", "consequence", "strategy"], "description": "CGT paradigm element"}
         },
         "required": ["exact_quote", "proposed_property", "paradigm_element"]
       }

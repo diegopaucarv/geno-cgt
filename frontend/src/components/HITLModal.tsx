@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { decideHitl, getHitlDetail } from "../api/client";
+import { useI18n } from "../i18n";
 
 interface HITLModalProps {
   open: boolean;
@@ -10,13 +11,13 @@ interface HITLModalProps {
 }
 
 const GATE_LABELS: Record<string, string> = {
-  main_concern: "🎯 Patrón de Interés",
-  core_emergence: "Core Category Emergence",
-  selective_reduction: "Selective Reduction",
-  core_saturation: "Core Saturation",
-  database_a: "Database A — Nodes",
-  database_b: "Database B — Edges",
-  global_saturation: "Global Saturation Check",
+  main_concern: "hitl.gatePatternOfInterest",
+  core_emergence: "hitl.gateCoreEmergence",
+  selective_reduction: "hitl.gateSelectiveReduction",
+  core_saturation: "hitl.gateCoreSaturation",
+  database_a: "hitl.gateDatabaseA",
+  database_b: "hitl.gateDatabaseB",
+  global_saturation: "hitl.gateGlobalSaturation",
 };
 
 const VERDICT_COLORS: Record<string, string> = {
@@ -27,7 +28,12 @@ const VERDICT_COLORS: Record<string, string> = {
   DISAGREE: "#F85149",
 };
 
-function renderProposal(gate: string, p: Record<string, unknown>) {
+type TFunc = (
+  key: string,
+  replacements?: Record<string, string | number>,
+) => string;
+
+function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
   const s: React.CSSProperties = {
     margin: "8px 0 0 0",
     fontSize: 12,
@@ -45,18 +51,18 @@ function renderProposal(gate: string, p: Record<string, unknown>) {
     return (
       <div style={s}>
         <div>
-          <span style={labelStyle}>Patron de Interes: </span>
+          <span style={labelStyle}>{t("hitl.patternOfInterestLabel")}</span>
           <span style={{ ...valStyle, fontSize: 14, fontWeight: 600 }}>
             {(p.main_concern as string) || "?"}
           </span>
         </div>
         <div style={{ marginTop: 4 }}>
-          <span style={labelStyle}>Confianza: </span>
+          <span style={labelStyle}>{t("hitl.confidenceLabel")}</span>
           <span style={valStyle}>{p.confidence as string}</span>
         </div>
         {(p.recurring_problems as string[])?.length > 0 && (
           <div style={{ marginTop: 4 }}>
-            <span style={labelStyle}>Problemas recurrentes:</span>
+            <span style={labelStyle}>{t("hitl.recurringProblems")}</span>
             <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
               {(p.recurring_problems as string[]).map((rp, i) => (
                 <li key={i} style={{ color: "#C9D1D9" }}>
@@ -99,15 +105,21 @@ function renderProposal(gate: string, p: Record<string, unknown>) {
             }}
           >
             <div>
-              <span style={labelStyle}>Candidate {i + 1}: </span>
+              <span style={labelStyle}>
+                {t("hitl.candidateLabel")}
+                {i + 1}:{" "}
+              </span>
               <span style={{ ...valStyle, fontWeight: 600 }}>
                 {c.code_name as string}
               </span>
             </div>
             <div style={{ marginTop: 2, fontSize: 11 }}>
               <span style={{ color: "#8B949E" }}>
-                Centrality: {((c.centrality_score as number) || 0).toFixed(1)} ·
-                Explanatory: {((c.explanatory_power as number) || 0).toFixed(1)}
+                {t("hitl.centrality")}{" "}
+                {((c.centrality_score as number) || 0).toFixed(1)}
+                {" · "}
+                {t("hitl.explanatory")}{" "}
+                {((c.explanatory_power as number) || 0).toFixed(1)}
               </span>
             </div>
             <div style={{ marginTop: 2, color: "#8B949E", fontSize: 11 }}>
@@ -115,8 +127,8 @@ function renderProposal(gate: string, p: Record<string, unknown>) {
             </div>
           </div>
         ))}
-        {p.no_core_detected && (
-          <div style={{ color: "#F85149" }}>⚠️ No core category detected</div>
+        {(p.no_core_detected as boolean) && (
+          <div style={{ color: "#F85149" }}>{t("hitl.noCoreDetected")}</div>
         )}
       </div>
     );
@@ -130,10 +142,14 @@ function renderProposal(gate: string, p: Record<string, unknown>) {
     return (
       <div style={s}>
         <div style={{ display: "flex", gap: 12 }}>
-          <span style={{ color: "#2EA043" }}>✓ {kept.length} kept</span>
-          <span style={{ color: "#D29922" }}>↔ {merged.length} merged</span>
+          <span style={{ color: "#2EA043" }}>
+            ✓ {kept.length} {t("hitl.keptBadge")}
+          </span>
+          <span style={{ color: "#D29922" }}>
+            ↔ {merged.length} {t("hitl.mergedBadge")}
+          </span>
           <span style={{ color: "#F85149" }}>
-            ✗ {discarded.length} discarded
+            ✗ {discarded.length} {t("hitl.discardedBadge")}
           </span>
         </div>
         {discarded.length > 0 && (
@@ -178,6 +194,7 @@ export default function HITLModal({
   onClose,
   onDecided,
 }: HITLModalProps) {
+  const { t } = useI18n();
   const [decision, setDecision] = useState<
     "accept" | "modify" | "reject" | null
   >(null);
@@ -202,7 +219,7 @@ export default function HITLModal({
         setCriticVerdict(detail.critic_verdict || {});
       })
       .catch(() => {
-        setProposal({ error: "Failed to load decision details" });
+        setProposal({ error: t("hitl.failedToLoad") });
         setCriticVerdict({ verdict: "UNKNOWN" });
       })
       .finally(() => setLoading(false));
@@ -263,11 +280,10 @@ export default function HITLModal({
           color: "#E6EDF3",
         }}
       >
-        <h2 style={{ margin: "0 0 4px 0", fontSize: 18 }}>
-          🛑 HITL Decision Required
-        </h2>
+        <h2 style={{ margin: "0 0 4px 0", fontSize: 18 }}>{t("hitl.title")}</h2>
         <p style={{ margin: "0 0 16px 0", color: "#8B949E", fontSize: 13 }}>
-          Gate: <strong>{GATE_LABELS[gateName] || gateName}</strong>
+          {t("hitl.gateLabel")}{" "}
+          <strong>{t(GATE_LABELS[gateName] || gateName)}</strong>
         </p>
 
         {loading ? (
@@ -279,7 +295,7 @@ export default function HITLModal({
               fontSize: 14,
             }}
           >
-            Loading decision details...
+            {t("hitl.loadingDetails")}
           </div>
         ) : (
           <>
@@ -296,7 +312,7 @@ export default function HITLModal({
               <span
                 style={{ fontWeight: 700, fontSize: 14, color: verdictColor }}
               >
-                Critic Verdict: {verdict}
+                {t("hitl.criticVerdict")} {verdict}
               </span>
               {rationale && (
                 <p
@@ -313,7 +329,7 @@ export default function HITLModal({
               {suggestions.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   <strong style={{ fontSize: 12, color: "#D29922" }}>
-                    Suggestions:
+                    {t("hitl.suggestions")}
                   </strong>
                   <ul
                     style={{
@@ -339,19 +355,20 @@ export default function HITLModal({
                   }}
                 >
                   <span style={{ color: "#8B949E" }}>
-                    Grounding: {(grounding * 100).toFixed(0)}%
+                    {t("hitl.grounding")} {(grounding * 100).toFixed(0)}%
                   </span>
                   <span style={{ color: "#8B949E" }}>
-                    Coverage: {((coverage || 0) * 100).toFixed(0)}%
+                    {t("hitl.coverage")} {((coverage || 0) * 100).toFixed(0)}%
                   </span>
                   <span style={{ color: "#8B949E" }}>
-                    Abstraction: {((abstraction || 0) * 100).toFixed(0)}%
+                    {t("hitl.abstraction")}{" "}
+                    {((abstraction || 0) * 100).toFixed(0)}%
                   </span>
                 </div>
               )}
               {agreement !== undefined && (
                 <div style={{ marginTop: 4, fontSize: 12, color: "#8B949E" }}>
-                  Agreement: {agreement.toFixed(0)}%
+                  {t("hitl.agreement")} {agreement.toFixed(0)}%
                 </div>
               )}
             </div>
@@ -369,9 +386,9 @@ export default function HITLModal({
               }}
             >
               <strong style={{ fontSize: 12, color: "#58A6FF" }}>
-                Proposer Output:
+                {t("hitl.proposerOutput")}
               </strong>
-              {renderProposal(gateName, proposal)}
+              {renderProposal(gateName, proposal, t)}
             </div>
 
             {/* Decision buttons */}
@@ -400,10 +417,10 @@ export default function HITLModal({
                   }}
                 >
                   {d === "accept"
-                    ? "✓ ACCEPT"
+                    ? t("hitl.acceptButton")
                     : d === "modify"
-                      ? "✎ MODIFY"
-                      : "✗ REJECT"}
+                      ? t("hitl.modifyButton")
+                      : t("hitl.rejectButton")}
                 </button>
               ))}
             </div>
@@ -418,10 +435,10 @@ export default function HITLModal({
                   marginBottom: 4,
                 }}
               >
-                Note{" "}
+                {t("hitl.noteLabel")}{" "}
                 {decision === "reject"
-                  ? "(required — explain why)"
-                  : "(optional)"}
+                  ? t("hitl.noteRequired")
+                  : t("hitl.noteOptional")}
                 :
               </label>
               <textarea
@@ -430,8 +447,8 @@ export default function HITLModal({
                 rows={2}
                 placeholder={
                   decision === "reject"
-                    ? "Why are you rejecting this proposal?"
-                    : "Any observations for the methodology log..."
+                    ? t("hitl.rejectPlaceholder")
+                    : t("hitl.notePlaceholder")
                 }
                 style={{
                   width: "100%",
@@ -459,14 +476,13 @@ export default function HITLModal({
                     marginBottom: 4,
                   }}
                 >
-                  Feedback for re-execution (what should the proposer do
-                  differently?):
+                  {t("hitl.feedbackLabel")}
                 </label>
                 <textarea
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   rows={3}
-                  placeholder="Be specific: what should change in the proposal?"
+                  placeholder={t("hitl.feedbackPlaceholder")}
                   style={{
                     width: "100%",
                     padding: "8px 12px",
@@ -499,7 +515,7 @@ export default function HITLModal({
                   cursor: "pointer",
                 }}
               >
-                Cancel
+                {t("hitl.cancelButton")}
               </button>
               <button
                 onClick={handleSubmit}
@@ -519,7 +535,7 @@ export default function HITLModal({
                   cursor: !decision || submitting ? "not-allowed" : "pointer",
                 }}
               >
-                {submitting ? "Submitting..." : "Submit Decision"}
+                {submitting ? t("hitl.submitting") : t("hitl.submitButton")}
               </button>
             </div>
           </>

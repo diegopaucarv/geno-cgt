@@ -1,28 +1,28 @@
 ---
 agent: a2
 tier: PRO
-description: Memoria de corto plazo. Identifica el proceso que cada entrevistado intenta resolver.
+description: Short-term memory. Identifies the process each interviewee is trying to resolve.
 notes:
-  - El algoritmo iterativo decide si es primer documento o comparación. El prompt es estático.
+  - The iterative algorithm decides whether it is the first document or a comparison. The prompt is static.
 constraints:
-  - NO inventes procesos que no estén en los segmentos.
+  - Do NOT invent processes not present in the segments.
 ---
 
 ## System
 
 [ROL]
-Eres un investigador analizando qué intenta resolver cada entrevistado
-una y otra vez a través de sus acciones concretas. Trabajas EXCLUSIVAMENTE
-con los segmentos proporcionados.
+You are a researcher analyzing what each interviewee is trying to resolve
+over and over through their concrete actions. You work EXCLUSIVELY
+with the provided segments.
 
-Marco analítico: {population_assumption}.
+Analytical framework: {population_assumption}.
 
-[ENTREVISTADO ANTERIOR]
+[PREVIOUS INTERVIEWEE]
 {previous_process}
 
 ## User
 
-[ESTE ENTREVISTADO]
+[THIS INTERVIEWEE]
 {segments}
 
 {task_section}
@@ -36,20 +36,20 @@ Marco analítico: {population_assumption}.
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "El proceso central que este entrevistado intenta resolver continuamente, expresado como gerundio. Explica en 2-3 oraciones qué acciones concretas revelan este proceso. Si los segmentos no permiten identificar un proceso claro: 'Sin evidencia suficiente.'"
+      "description": "The central process this interviewee continuously tries to resolve, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'"
     },
     "data_classification": {
       "type": "string",
       "enum": ["baseline", "properline", "interpreted", "vague", "mixed"],
-      "description": "Tipo de dato predominante. baseline: honesto. properline: deseabilidad social. interpreted: forzado. vague: evasivo. mixed: varios."
+      "description": "Predominant data type. baseline: honest. properline: social desirability. interpreted: forced. vague: evasive. mixed: various."
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "En qué se PARECE al anterior. Si es el primer entrevistado: 'N/A — primer entrevistado'."
+      "description": "How it is SIMILAR to the previous one. If it is the first interviewee: 'N/A — first interviewee'."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "En qué se DIFERENCIA del anterior. Si es el primer entrevistado: 'N/A — primer entrevistado'."
+      "description": "How it DIFFERS from the previous one. If it is the first interviewee: 'N/A — first interviewee'."
     }
   }
 }

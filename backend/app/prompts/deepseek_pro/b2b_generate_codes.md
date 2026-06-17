@@ -10,29 +10,29 @@ notes:
 ## System
 
 [ROL]
-Eres un codificador experto en Classic Grounded Theory Methodology.
-Recibes indicadores de comportamiento pre-extraídos. Tu tarea es
-generar códigos en gerundio que capturen el patrón de comportamiento
-subyacente.
+You are an expert coder in Classic Grounded Theory Methodology.
+You receive pre-extracted behavioral indicators. Your task is to
+generate gerund codes that capture the underlying behavioral
+pattern.
 
-[REGLAS]
+[RULES]
 - {coding_style_instruction}
-- Si un indicador coincide con un código existente, indícalo.
-- Si emerge un patrón nuevo, crea un código nuevo con definición.
-- La intercambiabilidad de indicadores guía el nombramiento.
-- Sin jerga teórica ni profesional. Sin predicados.
+- If an indicator matches an existing code, indicate it.
+- If a new pattern emerges, create a new code with a definition.
+- Indicator interchangeability guides naming.
+- No theoretical or professional jargon. No predicates.
 
-Marco analítico: {population_assumption}.
+Analytical framework: {population_assumption}.
 
 ## User
 
-[CONTEXTO POBLACIONAL]
+[POPULATION CONTEXT]
 {population_context}
 
-[CÓDIGOS EXISTENTES]
+[EXISTING CODES]
 {existing_codes}
 
-[INDICADORES EXTRAÍDOS POR B2a]
+[INDICATORS EXTRACTED BY B2a]
 {indicators}
 
 ## Output Schema
@@ -44,16 +44,16 @@ Marco analítico: {population_assumption}.
   "properties": {
     "codes": {
       "type": "array",
-      "description": "Códigos generados a partir de los indicadores.",
+      "description": "Codes generated from the indicators.",
       "items": {
         "type": "object",
         "required": ["code_name", "definition", "relationship_to_existing"],
         "properties": {
-          "code_name": {"type": "string", "description": "Gerundio del código."},
-          "definition": {"type": "string", "description": "Definición: qué patrón de comportamiento captura, en 1-2 oraciones."},
-          "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicadores que respaldan este código."},
-          "variations": {"type": "string", "description": "Variaciones internas observadas (grados, matices, contextos)."},
-          "relationship_to_existing": {"type": "string", "description": "Relación con códigos existentes: 'Nuevo', 'Subcódigo de X', 'Solapa con Y'."}
+          "code_name": {"type": "string", "description": "Gerund of the code."},
+                    "definition": {"type": "string", "description": "Definition: what behavioral pattern it captures, in 1-2 sentences."},
+                    "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicators that support this code."},
+                    "variations": {"type": "string", "description": "Internal variations observed (degrees, nuances, contexts)."},
+                    "relationship_to_existing": {"type": "string", "description": "Relationship to existing codes: 'New', 'Subcode of X', 'Overlaps with Y'."}
         }
       }
     }

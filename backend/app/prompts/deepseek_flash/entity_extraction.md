@@ -16,27 +16,27 @@ parallelizable: true
 ## System
 
 [ROL]
-Eres un extractor de entidades y relaciones para análisis cualitativo. Tu tarea es identificar elementos estructurados en un segmento de texto.
+You are an entity and relation extractor for qualitative analysis. Your task is to identify structured elements in a text segment.
 
-[OBJETIVO]
-Extrae:
-1. ENTIDADES — Personas, organizaciones, conceptos clave, eventos mencionados.
-2. RELACIONES — Vínculos entre entidades con tipo y justificación breve.
+[OBJECTIVE]
+Extract:
+1. ENTITIES — People, organizations, key concepts, mentioned events.
+2. RELATIONS — Links between entities with type and brief justification.
 
-[RESTRICCIONES]
-- Extrae solo lo que aparece explícitamente en el texto.
-- Cada entidad debe tener name y type.
-- Cada relación debe conectar dos entidades del mismo segmento.
-- Si no hay entidades claras, devuelve arrays vacíos.
-- Responde directamente. NO uses herramientas externas.
-- NO intentes buscar información adicional.
+[CONSTRAINTS]
+- Extract only what explicitly appears in the text.
+- Each entity must have name and type.
+- Each relation must connect two entities from the same segment.
+- If there are no clear entities, return empty arrays.
+- Answer directly. Do NOT use external tools.
+- Do NOT attempt to search for additional information.
 
 ## User
 
-[SEGMENTO]
+[SEGMENT]
 {segment_text}
 
-[ID DEL SEGMENTO]
+[SEGMENT ID]
 {segment_id}
 
 ## Output Schema
@@ -45,27 +45,27 @@ Extrae:
 {
   "type": "object",
   "properties": {
-    "segment_id": {"type": "string", "description": "UUID del segmento analizado"},
-    "entities": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {"type": "string", "description": "Nombre de la entidad"},
-          "type": {"type": "string", "enum": ["person", "organization", "concept", "event", "location", "other"], "description": "Tipo de entidad"}
+    "segment_id": {"type": "string", "description": "UUID of the analyzed segment"},
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string", "description": "Name of the entity"},
+              "type": {"type": "string", "enum": ["person", "organization", "concept", "event", "location", "other"], "description": "Type of entity"}
+            },
+            "required": ["name", "type"]
+          }
         },
-        "required": ["name", "type"]
-      }
-    },
-    "relations": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "source": {"type": "string", "description": "Nombre exacto de la entidad origen"},
-          "target": {"type": "string", "description": "Nombre exacto de la entidad destino"},
-          "relation_type": {"type": "string", "enum": ["causes", "conditions", "consequences", "co-occurs_with", "opposes", "is_part_of", "is_a"], "description": "Tipo de relación"},
-          "rationale": {"type": "string", "description": "Justificación breve basada en el texto"}
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": {"type": "string", "description": "Exact name of the source entity"},
+              "target": {"type": "string", "description": "Exact name of the target entity"},
+              "relation_type": {"type": "string", "enum": ["causes", "conditions", "consequences", "co-occurs_with", "opposes", "is_part_of", "is_a"], "description": "Type of relation"},
+              "rationale": {"type": "string", "description": "Brief justification based on the text"}
         },
         "required": ["source", "target", "relation_type"]
       }

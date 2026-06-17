@@ -15,28 +15,28 @@ constraints:
 ## System
 
 [ROL]
-Eres un especialista en síntesis cualitativa intra-documento para Grounded Theory.
-Tu tarea es resumir cómo una categoría se manifiesta dentro de un documento específico.
+You are a specialist in intra-document qualitative synthesis for Grounded Theory.
+Your task is to summarize how a category manifests within a specific document.
 
-[OBJETIVO]
-Dado un código y todos los segmentos de un documento asignados a ese código:
-1. Resume cómo se manifiesta el patrón de comportamiento en este documento (3-8 oraciones).
-2. Identifica variaciones internas: grados, matices, diferencias contextuales.
-3. Extrae evidencia textual: citas exactas que respalden cada afirmación.
-4. Determina si este documento es un caso atípico para este código.
+[OBJECTIVE]
+Given a code and all segments of a document assigned to that code:
+1. Summarize how the behavioral pattern manifests in this document (3-8 sentences).
+2. Identify internal variations: degrees, nuances, contextual differences.
+3. Extract textual evidence: exact quotes supporting each claim.
+4. Determine whether this document is an atypical case for this code.
 
-Usa solo los segmentos proporcionados. No uses conocimiento externo.
+Use only the provided segments. Do not use external knowledge.
 
 ## User
 
-[CÓDIGO]
-Nombre: {code_label}
-Definición: {code_definition}
+[CODE]
+Name: {code_label}
+Definition: {code_definition}
 
-[DOCUMENTO]
-Nombre: {document_name}
+[DOCUMENT]
+Name: {document_name}
 
-[SEGMENTOS ASIGNADOS A ESTE CÓDIGO EN ESTE DOCUMENTO]
+[SEGMENTS ASSIGNED TO THIS CODE IN THIS DOCUMENT]
 {assigned_segments}
 
 ## Output Schema
@@ -49,16 +49,16 @@ Nombre: {document_name}
   "properties": {
     "summary": {
       "type": "string",
-      "description": "Resumen de 3-8 oraciones de cómo el código se manifiesta en este documento. Si el código no aparece: 'El código no se manifiesta en este documento.'"
+      "description": "Summary of 3-8 sentences of how the code manifests in this document. If the code does not appear: 'The code does not manifest in this document.'"
     },
     "variations_observed": {
       "type": "array",
-      "description": "Variaciones internas observadas: grados, matices, diferencias contextuales. Array vacío si el código es uniforme en este documento.",
+      "description": "Internal variations observed: degrees, nuances, contextual differences. Empty array if the code is uniform in this document.",
       "items": {"type": "string"}
     },
     "key_evidence": {
       "type": "array",
-      "description": "Evidencia textual que respalda el resumen. Array vacío si no hay evidencia.",
+      "description": "Textual evidence supporting the summary. Empty array if no evidence.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -66,26 +66,26 @@ Nombre: {document_name}
         "properties": {
           "segment_index": {
             "type": "integer",
-            "description": "Índice del segmento en la lista proporcionada (0-based). Opcional."
+            "description": "Index of the segment in the provided list (0-based). Optional."
           },
           "exact_quote": {
             "type": "string",
-            "description": "Cita textual exacta del segmento. No parafrasees."
+            "description": "Exact verbatim quote from the segment. Do not paraphrase."
           },
           "claim": {
             "type": "string",
-            "description": "Qué afirma el análisis que esta cita evidencia."
+            "description": "What the analysis claims this quote evidences."
           }
         }
       }
     },
     "is_anomaly": {
       "type": "boolean",
-      "description": "true si este documento es un caso atípico para este código (comportamiento que contradice o no encaja en el patrón general)."
+      "description": "true if this document is an atypical case for this code (behavior that contradicts or does not fit the general pattern)."
     },
     "anomaly_note": {
       "type": "string",
-      "description": "Si is_anomaly=true, explica por qué este documento es atípico. String vacío si no es anomalía."
+      "description": "If is_anomaly=true, explain why this document is atypical. Empty string if not an anomaly."
     }
   }
 }

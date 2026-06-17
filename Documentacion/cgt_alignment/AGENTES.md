@@ -7,7 +7,21 @@
 ## Leyenda
 
 | Símbolo | Significado |
-|---------|-------------|
+|
+## Patrón de Traducción
+
+> **Ver:** `TranslationPattern.md` para el diseño completo.
+>
+> **Regla:** System prompt en inglés (🇬🇧). Output en idioma del usuario (🇪🇸/🇬🇧/🇩🇪/🇵🇹). El LLM traduce.
+>
+> | Símbolo | Significado |
+> |---------|-------------|
+> | 🇬🇧 SYS | System prompt en inglés. DeepSeek razona en inglés, Nemotron rinde mejor. |
+> | 🇪🇸 OUT | Output en idioma del usuario (configurable vía `proyectos.language`). |
+> | 🌐 NEUTRAL | Códigos de sistema (SAT, MOD, baseline_data). Language-neutral. |
+> | 📄 SRC | Texto fuente en idioma original del documento. Nunca se traduce. |
+
+---------|-------------|
 | 🟣 PRO | Modelo de razonamiento profundo. Outputs multi-párrafo. Síntesis, generación, análisis cualitativo complejo. |
 | 🟡 FLASH | Modelo rápido. Outputs de hasta ~1 párrafo. Tareas estructuradas: clasificación, evaluación, extracción simple. |
 | ⚙️ ALG | Algorítmico (sin LLM). Regex, heurísticas, SQL, embedding math. |
@@ -20,19 +34,19 @@
 
 ## Fase A: Open Coding (por documento)
 
-| Agente | Tier | Estado | Prompt | Input | Output | Corre | Consume | Alimenta |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output | Corre | Consume | Alimenta |
 |--------|------|--------|--------|-------|--------|-------|---------|----------|
-| `population_generalizer` | 🟡 FLASH | 🔴 | `deepseek_flash/population_generalizer.md` | `raw_population_description` | `{generalized_population, spatial_frame, temporal_frame}` | Al crear proyecto | Población cruda del investigador | `proyectos.population_assumption` |
-| `glaser_data_classifier` | ⚙️+🟡 FLASH | 🟡 | `deepseek_flash/glaser_data_classifier.md` | `segmento.texto`, `interview_type` | `{data_type, rationale, confidence}` | Por segmento, pre-codificación | Solo el segmento | `segmentos.tipo_dato_glaser` → A1 |
-| `incident_extractor` | 🟡 FLASH | 🔴 | `deepseek_flash/incident_extractor.md` | `segmento.texto` (baseline), `object_of_study`, `coding_style` | `{jot, what_is_this_about, what_category, what_is_happening, participants_pattern, confidence, keep_moving}` | Por segmento baseline | NADA (aislado) | `extracted_incidents` → B1 |
-| `core_pattern_extractor` | 🟣 PRO | 🔴 | `deepseek_pro/incident_extractor.md` (per-doc) | `incidents[]` del documento, `object_of_study` | `{pattern_description, evidence_quotes[], confidence}` | Por documento | Solo incidentes del doc actual | `document_processes.pattern_of_interest` → A4 |
-| `core_pattern_verifier` | 🟣 PRO | 🔴 | `deepseek_pro/core_pattern_verifier.md` | `pattern_of_interests[]` (últimos 3 docs), `population_context` | `{convergence_assessment, converging[], diverging[], recommendation}` | Cada 3 documentos | Patrones individuales de A2 | 🛑 HITL gate |
-| `a1_population_context` | 🟣 PRO | 🟡 | `deepseek_pro/a1_population_context.md` | `segmentos` del doc, `population_context` anterior | `{surprising_details, language_patterns, data_production_context}` | Por documento | Segmentos del doc actual + contexto acumulado | `population_contexts` |
-| `a2_process_identifier` | 🟣 PRO | 🟡 | `deepseek_pro/a2_process_identifier.md` | `segmentos` del doc, `object_of_study` | `{process_description, similarity_to_previous}` | Por documento | Segmentos del doc | `document_processes` |
+| `population_generalizer` | 🟡 FLASH | 🔴 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_flash/population_generalizer.md` | `raw_population_description` | `{generalized_population, spatial_frame, temporal_frame}` | Al crear proyecto | Población cruda del investigador | `proyectos.population_assumption` |
+| `glaser_data_classifier` | ⚙️+🟡 FLASH | 🟡 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_flash/glaser_data_classifier.md` | `segmento.texto`, `interview_type` | `{data_type, rationale, confidence}` | Por segmento, pre-codificación | Solo el segmento | `segmentos.tipo_dato_glaser` → A1 |
+| `incident_extractor` | 🟡 FLASH | 🔴 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_flash/incident_extractor.md` | `segmento.texto` (baseline), `object_of_study`, `coding_style` | `{jot, what_is_this_about, what_category, what_is_happening, participants_pattern, confidence, keep_moving}` | Por segmento baseline | NADA (aislado) | `extracted_incidents` → B1 |
+| `core_pattern_extractor` | 🟣 PRO | 🔴 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_pro/incident_extractor.md` (per-doc) | `incidents[]` del documento, `object_of_study` | `{pattern_description, evidence_quotes[], confidence}` | Por documento | Solo incidentes del doc actual | `document_processes.pattern_of_interest` → A4 |
+| `core_pattern_verifier` | 🟣 PRO | 🔴 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_pro/core_pattern_verifier.md` | `pattern_of_interests[]` (últimos 3 docs), `population_context` | `{convergence_assessment, converging[], diverging[], recommendation}` | Cada 3 documentos | Patrones individuales de A2 | 🛑 HITL gate |
+| `a1_population_context` | 🟣 PRO | 🟡 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_pro/a1_population_context.md` | `segmentos` del doc, `population_context` anterior | `{surprising_details, language_patterns, data_production_context}` | Por documento | Segmentos del doc actual + contexto acumulado | `population_contexts` |
+| `a2_process_identifier` | 🟣 PRO | 🟡 | 🇬🇧 SYS | 🇪🇸 OUT | `deepseek_pro/a2_process_identifier.md` | `segmentos` del doc, `object_of_study` | `{process_description, similarity_to_previous}` | Por documento | Segmentos del doc | `document_processes` |
 
 ## Fase B: Síntesis Cross-Document
 
-| Agente | Tier | Estado | Prompt | Input | Output | Corre | Consume | Alimenta |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output | Corre | Consume | Alimenta |
 |--------|------|--------|--------|-------|--------|-------|---------|----------|
 | `incident_comparator` (B1) | 🟣 PRO | 🔴 | `deepseek_pro/incident_comparator.md` | `extracted_incidents[]` de TODOS los docs | `{incident_groups[], ungrouped[]}` | ≥3 docs listos | Solo incidentes. NO ve categorías. | `incident_groups` → B2 |
 | `pattern_labeler` (B2) | 🟣 PRO | 🔴 | `deepseek_pro/pattern_labeler.md` | `incident_groups[]` de B1, `object_of_study` | `{proposed_labels[], anomalies[]}` | Después de B1 | Solo grupos de B1 | B3 (critic) |
@@ -41,7 +55,7 @@
 
 ## Fase 5b-A: Core Category Detection (Selective Coding)
 
-| Agente | Tier | Estado | Prompt | Input | Output | Corre | Consume | Alimenta |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output | Corre | Consume | Alimenta |
 |--------|------|--------|--------|-------|--------|-------|---------|----------|
 | `main_concern_proposer` | 🟣 PRO | 🟡 | `deepseek_pro/main_concern_proposer.md` | `categorias[]`, `memos[]`, `population_context` | `{candidates[] (gerundio, rationale, supporting_codes, orphan_patterns)}` | Inicio de selective coding | Sistema completo de categorías + memos | 🛑 HITL gate |
 | `main_concern_critic` | 🟣 PRO | 🟡 | `deepseek_pro/main_concern_critic.md` | `candidates[]` del proposer | `{evaluations[] (verdict: SAT\|MOD\|FORCED, grounding, coverage, abstraction)}` | Después del proposer | Candidatos del proposer | 🛑 HITL gate |
@@ -50,14 +64,14 @@
 
 ## Fase 5b-B: Selective Reduction
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `selective_reduction_proposer` | 🟣 PRO | 🟡 | `deepseek_pro/selective_reduction_proposer.md` | `categorias[]`, `pattern_of_interest` | `{kept[], merged[], discarded[] (con rationale)}` |
 | `selective_reduction_critic` | 🟣 PRO | 🟡 | `deepseek_pro/selective_reduction_critic.md` | `reduction_plan` del proposer | `{evaluations[] (false_positives, false_negatives)}` |
 
 ## Fase 5b-C: Core Saturation Loop
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `core_saturation_proposer` | 🟣 PRO | 🔴 | `deepseek_pro/core_saturation_proposer.md` | `categoria.paradigm_state`, `incidentes_nuevos[]` del doc | `{expansions[] (propiedad\|dimension\|condicion\|consecuencia)}` |
 | `core_saturation_critic` | 🟡 FLASH | 🔴 | `deepseek_flash/core_saturation_critic.md` | `expansions[]` + `paradigm_state` actual | `{verdict: SAT\|MOD\|FORCED, did_state_expand}` |
@@ -68,7 +82,7 @@
 
 ## Fase 5b-D: Database A/B
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `database_a_proposer` | 🟣 PRO | 🟡 | `deepseek_pro/database_a_proposer.md` | `categorias[]` saturadas, `core_category` | `{nodes[] (label, entity_type, definition, is_core)}` |
 | `database_a_critic` | 🟣 PRO | 🟡 | `deepseek_pro/database_a_critic.md` | `nodes[]` del proposer | `{verdict, issues[]}` |
@@ -77,7 +91,7 @@
 
 ## Theoretical Playground (Fase 6b)
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `conceptual_elaborator` | 🟣 PRO | 🟢 | `deepseek_pro/conceptual_elaborator.md` | `blob_a`, `blob_b`, `theoretical_code` | `{converging_evidence[], diverging_evidence[], relationship}` |
 | `memo_theoretical_tagger` | 🟡 FLASH | 🔴 | `deepseek_flash/memo_theoretical_tagger.md` | `memo.contenido` | `{family_affinities[{family, score}]}` |
@@ -87,7 +101,7 @@
 
 ## Fase 6a: Redacción Natural
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `natural_writer` | 🟣 PRO | 🔴 | `deepseek_pro/natural_writer.md` | `memos[]` ordenados (sorting group) | `{draft, citations[], concepts[]}` |
 | `writing_critic` | 🟣 PRO | 🔴 | `deepseek_pro/writing_critic.md` | `draft`, `memos[]` fuente | `{verdict: SAT\|MOD\|FORCED, issues[{type, location, suggestion}]}` |
@@ -95,14 +109,14 @@
 
 ## Fase 6c: Diálogo con Literatura
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `literature_comparer` | 🟣 PRO | 🔴 | `deepseek_pro/literature_comparer.md` | `teoría` (cats + hyps + props), `literature_fragments[]` | `{table[{category, extends, modifies, integrates, transcends}]}` |
 | `literature_critic` | 🟣 PRO | 🔴 | `deepseek_pro/literature_critic.md` | `comparison_table` | `{verdict, issues[]}` |
 
 ## Fase 6d: Aplicabilidad
 
-| Agente | Tier | Estado | Prompt | Input | Output |
+| Agente | Tier | Estado | Sys | Out | Prompt | Input | Output |
 |--------|------|--------|--------|-------|--------|
 | `applicability_engine` | 🟣 PRO | 🔴 | `deepseek_pro/applicability_engine.md` | `teoría` completa | `{control_variables[], access_variables[], guidelines[], implications[]}` |
 | `applicability_critic` | 🟣 PRO | 🔴 | `deepseek_pro/applicability_critic.md` | `guidelines[]`, `teoría` | `{verdict, issues[]}` |

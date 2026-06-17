@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
+import spacy
 from app.db.database import get_db
 from app.models.domain.category import Categoria
 from app.models.domain.document import Documento
@@ -17,6 +18,77 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+# ── spaCy model (lazy-loaded) ──────────────────────────────────────────
+
+_nlp: "spacy.Language | None" = None
+
+
+def _get_nlp() -> "spacy.Language":
+    """Lazy-load the Spanish spaCy model."""
+    global _nlp
+    if _nlp is None:
+        _nlp = spacy.load("es_core_news_lg")
+    return _nlp
+
+
+# ── Spanish equivalents for canonical object_of_study types ──
+
+_OOS_SPANISH_MAP: dict[str, str] = {
+    "concern": "preocupación",
+    "emotion": "emoción",
+    "behavior": "comportamiento",
+    "discourse": "discurso",
+    "identity": "identidad",
+}
+
+# ── Similarity thresholds ──
+
+_SUGGEST_THRESHOLD = 0.5  # if similarity > this, suggest the canonical type
+_ACCEPT_THRESHOLD = 0.3  # if similarity < this to ALL types, accept as custom
+
+
+def _validate_custom_label_with_spacy(
+    custom_label: str,
+) -> dict:
+    """
+    Run spaCy semantic similarity between custom_label and the 5 canonical types
+    (using their Spanish equivalents).
+
+    Returns a dict with:
+        - suggestion: canonical type to suggest (or None)
+        - similarities: {canonical_type: similarity_score}
+        - accepted: bool (True if custom label is distinct enough)
+    """
+    if not custom_label or not custom_label.strip():
+        return {"suggestion": None, "similarities": {}, "accepted": True}
+
+    nlp = _get_nlp()
+    label_doc = nlp(custom_label.strip())
+
+    similarities: dict[str, float] = {}
+    for canonical, spanish in _OOS_SPANISH_MAP.items():
+        canonical_doc = nlp(spanish)
+        sim = label_doc.similarity(canonical_doc)
+        similarities[canonical] = round(float(sim), 4)
+
+    # Check for suggestion: is custom_label similar to any canonical type?
+    max_sim = max(similarities.values()) if similarities else 0.0
+    suggestion: str | None = None
+    if max_sim > _SUGGEST_THRESHOLD:
+        # Find the canonical type with highest similarity
+        suggestion = max(similarities, key=lambda k: similarities[k])
+
+    # Accept if below threshold to ALL types (truly distinct)
+    accepted = max_sim < _ACCEPT_THRESHOLD
+
+    return {
+        "suggestion": suggestion,
+        "similarities": similarities,
+        "accepted": accepted,
+        "max_similarity": round(max_sim, 4),
+    }
+
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -34,6 +106,15 @@ DEFAULT_MUTATION_POLICY: dict[str, str] = {
 }
 
 VALID_MUTATION_LEVELS = {"auto", "suggest", "require_approval", "locked"}
+
+VALID_OBJECTS_OF_STUDY = {
+    "concern",
+    "emotion",
+    "behavior",
+    "discourse",
+    "identity",
+    "custom",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -89,10 +170,51 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    proyecto = Proyecto(**body.model_dump(), creador_id=current_user.id)
+    data = body.model_dump()
+    oos = data.get("object_of_study", "concern")
+    if oos and oos not in VALID_OBJECTS_OF_STUDY:
+        raise HTTPException(
+            400,
+            f"object_of_study invalido: '{oos}'. "
+            f"Valores permitidos: {', '.join(sorted(VALID_OBJECTS_OF_STUDY))}",
+        )
+    data["object_of_study"] = oos or "concern"
+
+    # ── spaCy validation for custom object_of_study ──
+    custom_label = body.custom_label
+    spacy_result: dict | None = None
+    if oos == "custom" and custom_label and custom_label.strip():
+        try:
+            spacy_result = _validate_custom_label_with_spacy(custom_label)
+            logger.info(
+                "spaCy custom_label validation: label=%r suggestion=%s max_sim=%.4f",
+                custom_label,
+                spacy_result.get("suggestion"),
+                spacy_result.get("max_similarity", 0),
+            )
+        except Exception as e:
+            logger.warning("spaCy validation failed for custom_label: %s", e)
+            spacy_result = {
+                "suggestion": None,
+                "similarities": {},
+                "accepted": True,
+                "max_similarity": 0.0,
+            }
+
+    proyecto = Proyecto(**data, creador_id=current_user.id)
     db.add(proyecto)
     await db.commit()
     await db.refresh(proyecto)
+
+    # ── Store custom_label + spaCy result in population_assumption ──
+    if oos == "custom" and custom_label and custom_label.strip():
+        pop = proyecto.population_assumption or {}
+        pop["custom_label"] = custom_label.strip()
+        if spacy_result:
+            pop["custom_label_spacy"] = spacy_result
+        proyecto.population_assumption = pop
+        await db.commit()
+        await db.refresh(proyecto)
 
     # ── F1.2: population_generalizer (FLASH, single-shot) ──
     raw_pop = body.supuesto_poblacional
@@ -104,6 +226,13 @@ async def create_project(
 
             template = PROMPT_REGISTRY["population_generalizer"]
             messages = template.build_messages(raw_population_description=raw_pop)
+            # Forzar JSON: Gemma Flash no respeta response_format, necesita instruccion explicita
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "Responde EXCLUSIVAMENTE en formato JSON, sin markdown, sin explicacion adicional.",
+                }
+            )
             model = get_model_for_prompt("population_generalizer")
 
             llm = TogetherLLM()
@@ -111,10 +240,38 @@ async def create_project(
                 llm.chat,
                 model=model,
                 messages=messages,
-                response_format=template.output_schema,
             )
 
-            content = json.loads(response.get("content", "{}"))
+            # Parse JSON from text (gemma flash no soporta response_format JSON schema)
+            raw_content = response.get("content", "{}")
+            content = {}
+            try:
+                content = json.loads(raw_content)
+            except json.JSONDecodeError:
+                import re
+
+                matches = list(
+                    re.finditer(
+                        r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", raw_content, re.DOTALL
+                    )
+                )
+                for m in matches:
+                    try:
+                        content = json.loads(m.group(0))
+                        break
+                    except json.JSONDecodeError:
+                        continue
+
+            # Mapear keys en espanol → ingles (Gemma a veces responde en espanol)
+            KEY_MAP = {
+                "population_generalizada": "generalized_population",
+                "poblacion_generalizada": "generalized_population",
+                "marco_espacial": "spatial_frame",
+                "marco_temporal": "temporal_frame",
+                "confianza": "confidence",
+                "justificacion": "rationale",
+            }
+            content = {KEY_MAP.get(k, k): v for k, v in content.items()}
 
             # Merge with any existing population_assumption
             current = proyecto.population_assumption or {}
@@ -193,6 +350,7 @@ async def update_population_assumption(
         "spatial_frame",
         "population_description",
         "gerundio_esperado",
+        "custom_label",
     }
     update_data = {k: v for k, v in body.items() if k in allowed_keys}
 
@@ -200,6 +358,36 @@ async def update_population_assumption(
         raise HTTPException(
             400, "No se recibieron campos válidos para population_assumption"
         )
+
+    # ── spaCy validation for custom_label ──
+    if "custom_label" in update_data:
+        cl = update_data["custom_label"]
+        resolved_oos = update_data.get(
+            "object_of_study",
+            proyecto.population_assumption.get(
+                "object_of_study", proyecto.object_of_study
+            )
+            if proyecto.population_assumption
+            else proyecto.object_of_study,
+        )
+        if resolved_oos == "custom" and cl and str(cl).strip():
+            try:
+                spacy_result = _validate_custom_label_with_spacy(str(cl))
+                logger.info(
+                    "spaCy custom_label validation (pop-assumption): label=%r suggestion=%s",
+                    cl,
+                    spacy_result.get("suggestion"),
+                )
+                update_data["custom_label_spacy"] = spacy_result
+            except Exception as e:
+                logger.warning(
+                    "spaCy validation failed for custom_label (pop-assumption): %s", e
+                )
+        elif resolved_oos != "custom":
+            # Clear spacy data if not custom
+            update_data.pop("custom_label_spacy", None)
+            current_extra = proyecto.population_assumption or {}
+            current_extra.pop("custom_label_spacy", None)
 
     # Record history for each changed key
     current = proyecto.population_assumption or {}
@@ -216,6 +404,26 @@ async def update_population_assumption(
 
     current.update(update_data)
     proyecto.population_assumption = current
+
+    # ── F0.3.5: Sync object_of_study to dedicated column ──
+    if "object_of_study" in update_data:
+        oos = update_data["object_of_study"]
+        if oos not in VALID_OBJECTS_OF_STUDY:
+            raise HTTPException(
+                400,
+                f"object_of_study invalido: '{oos}'. "
+                f"Valores permitidos: {', '.join(sorted(VALID_OBJECTS_OF_STUDY))}",
+            )
+        if oos != proyecto.object_of_study:
+            proyecto.object_of_study = oos
+            # Reset pipeline state if pattern type changes
+            if proyecto.estado not in ("collecting", "coding"):
+                proyecto.estado = "coding"
+                logger.info(
+                    "Project %s: object_of_study changed via pop-assumption, resetting to 'coding'",
+                    proyecto.id,
+                )
+
     await db.commit()
     await db.refresh(proyecto)
     return {
@@ -308,6 +516,94 @@ async def get_project_config_history(
             for e in entries
         ],
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F0.6: Nemotrón — Research Question endpoints
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/{project_id}/research-question")
+async def get_research_question(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Returns the stored research question for a project.
+
+    The research question is stored in population_assumption.research_question
+    after the Nemotrón agent generates it.
+    """
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    pa = proyecto.population_assumption or {}
+    rq_data = pa.get("research_question")
+
+    if not rq_data:
+        return {
+            "project_id": str(project_id),
+            "research_question": None,
+            "operational_question": None,
+            "rationale": None,
+            "key_dimensions": None,
+            "generated_at": None,
+            "message": "No research question generated yet. Use POST .../generate to create one.",
+        }
+
+    return {
+        "project_id": str(project_id),
+        **rq_data,
+    }
+
+
+@router.post("/{project_id}/research-question/generate")
+async def generate_research_question(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Triggers the Nemotrón agent to generate a formal CGT research question.
+
+    Dispatches the research_question_builder Celery task to the heavy queue.
+    Returns the task_id for polling.
+    """
+    from app.core.celery_app import celery_app
+
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    # Verify project has population assumption data
+    pa = proyecto.population_assumption or {}
+    pop_desc = pa.get("population_description", "")
+    if not pop_desc or not pop_desc.strip():
+        # Fallback: use supuesto_poblacional
+        if not proyecto.supuesto_poblacional:
+            raise HTTPException(
+                400,
+                "El proyecto no tiene population_description ni supuesto_poblacional. "
+                "Configure la población antes de generar la pregunta de investigación.",
+            )
+
+    task = celery_app.send_task(
+        "research_question_builder",
+        args=[str(project_id)],
+        queue="heavy",
+    )
+
+    return {
+        "status": "dispatched",
+        "project_id": str(project_id),
+        "task_id": task.id,
+        "message": "Research question generation dispatched. Use GET .../research-question to check results.",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Config endpoints — lectura y política de mutaciones (continuación)
+# ═══════════════════════════════════════════════════════════════════════
 
 
 @router.put("/{project_id}/config/mutation-policy")
@@ -418,9 +714,63 @@ async def update_project(
         raise HTTPException(404, "Proyecto no encontrado")
 
     updatable = {"nombre", "supuesto_poblacional", "object_of_study"}
+    pattern_changed = False
+    new_oos = body.get("object_of_study")
     for key, value in body.items():
         if key in updatable and value is not None:
+            if key == "object_of_study" and value not in VALID_OBJECTS_OF_STUDY:
+                raise HTTPException(
+                    400,
+                    detail=f"object_of_study invalido: '{value}'. "
+                    f"Valores permitidos: {', '.join(sorted(VALID_OBJECTS_OF_STUDY))}",
+                )
+            if key == "object_of_study" and value != proyecto.object_of_study:
+                pattern_changed = True
             setattr(proyecto, key, value)
+
+    # ── Handle custom_label: spaCy validation + JSONB sync ──
+    custom_label = body.get("custom_label")
+    if custom_label is not None:
+        resolved_oos = new_oos if new_oos is not None else proyecto.object_of_study
+        if resolved_oos == "custom" and custom_label and str(custom_label).strip():
+            # Run spaCy validation
+            try:
+                spacy_result = _validate_custom_label_with_spacy(str(custom_label))
+                logger.info(
+                    "spaCy custom_label validation (update): label=%r suggestion=%s max_sim=%.4f",
+                    custom_label,
+                    spacy_result.get("suggestion"),
+                    spacy_result.get("max_similarity", 0),
+                )
+            except Exception as e:
+                logger.warning(
+                    "spaCy validation failed for custom_label (update): %s", e
+                )
+                spacy_result = {
+                    "suggestion": None,
+                    "similarities": {},
+                    "accepted": True,
+                    "max_similarity": 0.0,
+                }
+            # Store in population_assumption
+            pop = proyecto.population_assumption or {}
+            pop["custom_label"] = str(custom_label).strip()
+            pop["custom_label_spacy"] = spacy_result
+            proyecto.population_assumption = pop
+        elif resolved_oos != "custom":
+            # Clear custom_label if object_of_study is no longer "custom"
+            pop = proyecto.population_assumption or {}
+            pop.pop("custom_label", None)
+            pop.pop("custom_label_spacy", None)
+            proyecto.population_assumption = pop
+
+    # ── F0.3.5: Si cambia el tipo de patron, reiniciar pipeline ──
+    if pattern_changed and proyecto.estado not in ("collecting", "coding"):
+        proyecto.estado = "coding"
+        logger.info(
+            "Project %s: object_of_study changed, resetting state to 'coding'",
+            proyecto.id,
+        )
 
     await db.commit()
     await db.refresh(proyecto)

@@ -15,49 +15,49 @@ constraints:
 
 ## System
 
-[ROL]
-Eres un codificador selectivo en Classic Grounded Theory. Tu tarea es comparar
-un nuevo incidente contra una categoría existente y ELABORAR la relación.
+[ROLE]
+You are a selective coder in Classic Grounded Theory. Your task is to compare
+a new incident against an existing category and ELABORATE the relationship.
 
-[PRINCIPIO]
-No "testeas" si el incidente pertenece a la categoría. Elaboras CÓMO se relaciona:
+[PRINCIPLE]
+You do not "test" whether the incident belongs to the category. You elaborate HOW it relates:
 
-- **CONVERGE**: el incidente es un ejemplo más del patrón. Especifica qué propiedad
-  confirma y en qué punto del gradiente se ubica.
-- **DIVERGE (dimensión)**: el incidente muestra el mismo patrón pero en un grado
-  o contexto nuevo. → Expande el gradiente de una propiedad existente.
-- **DIVERGE (propiedad)**: el incidente revela un aspecto del patrón no capturado
-  por las propiedades actuales. → Añade nueva propiedad o dimensión.
-- **DIVERGE (condición)**: el incidente revela una circunstancia bajo la cual
-  el patrón se manifiesta de forma distinta. → Añade nueva condición.
-- **DIVERGE (fuerte)**: el incidente sugiere que hay DOS patrones distintos donde
-  antes se veía uno. → Sugiere SUBDIVIDE o DIVIDE.
+- **CONVERGES**: the incident is another example of the pattern. Specify which property
+  it confirms and at which point on the gradient it sits.
+- **DIVERGES (dimension)**: the incident shows the same pattern but at a new degree
+  or context. → Expands the gradient of an existing property.
+- **DIVERGES (property)**: the incident reveals an aspect of the pattern not captured
+  by the current properties. → Add new property or dimension.
+- **DIVERGES (condition)**: the incident reveals a circumstance under which
+  the pattern manifests differently. → Add new condition.
+- **DIVERGES (strong)**: the incident suggests there are TWO distinct patterns where
+  previously only one was seen. → Suggest SUBDIVIDE or DIVIDE.
 
-[MÉTODO]
-1. Compara el incidente contra CADA propiedad de la categoría.
-2. Determina si converge (misma propiedad, mismo gradiente) o diverge.
-3. Si diverge, especifica QUÉ expande y CÓMO.
-4. Si la expansión es sustancial, propone una definición actualizada.
-5. Si la divergencia sugiere dos patrones distintos, recomienda acción.
-6. Si la definición cambió significativamente, sugiere renombre.
+[METHOD]
+1. Compare the incident against EACH property of the category.
+2. Determine whether it converges (same property, same gradient) or diverges.
+3. If it diverges, specify WHAT it expands and HOW.
+4. If the expansion is substantial, propose an updated definition.
+5. If the divergence suggests two distinct patterns, recommend action.
+6. If the definition changed significantly, suggest a rename.
 
-[REGLAS]
-- NO uses conocimiento externo. Solo el incidente y la categoría proporcionados.
-- Si el incidente es ambiguo, prefiere "converges" sobre una divergencia forzada.
-- Las propiedades se nombran con sustantivos (ej. "intensidad", "contexto").
+[RULES]
+- Do NOT use external knowledge. Only the provided incident and category.
+- If the incident is ambiguous, prefer "converges" over a forced divergence.
+- Properties are named with nouns (e.g., "intensity", "context").
 - {coding_style_instruction}
-- Un renombre solo se sugiere si la definición cambió SUSTANCIALMENTE.
+- A rename is only suggested if the definition changed SUBSTANTIALLY.
 
 ## User
 
-[CATEGORÍA]
-Nombre: {category_label}
-Definición actual (v{version}): {category_definition}
-Propiedades actuales: {current_properties}
+[CATEGORY]
+Name: {category_label}
+Current definition (v{version}): {category_definition}
+Current properties: {current_properties}
 
-[NUEVO INCIDENTE]
-Documento: {document_name}
-Texto: {incident_text}
+[NEW INCIDENT]
+Document: {document_name}
+Text: {incident_text}
 
 ## Output Schema
 
@@ -70,48 +70,48 @@ Texto: {incident_text}
     "elaboration_type": {
       "type": "string",
       "enum": ["converges", "diverges_dimension", "diverges_property", "diverges_condition", "diverges_strong"],
-      "description": "converges=confirma propiedades existentes. diverges_dimension=expande gradiente. diverges_property=añade propiedad. diverges_condition=revela condición. diverges_strong=sugiere subdividir."
+      "description": "converges=confirms existing properties. diverges_dimension=expands gradient. diverges_property=adds property. diverges_condition=reveals condition. diverges_strong=suggests subdividing."
     },
     "description": {
       "type": "string",
-      "description": "Descripción narrativa de cómo el incidente se relaciona con la categoría. Qué revela, qué confirma, qué expande."
+      "description": "Narrative description of how the incident relates to the category. What it reveals, confirms, or expands."
     },
     "expanded_definition": {
       "type": "string",
-      "description": "Nueva definición propuesta SI la elaboración la expande. String vacío si no cambia."
+      "description": "New proposed definition IF the elaboration expands it. Empty string if unchanged."
     },
     "new_or_expanded_properties": {
       "type": "array",
-      "description": "Propiedades nuevas o expandidas. Array vacío si elaboration_type=converges.",
+      "description": "New or expanded properties. Empty array if elaboration_type=converges.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["name"],
         "properties": {
-          "name": {"type": "string", "description": "Nombre de la propiedad en sustantivo."},
-          "gradient": {"type": "string", "description": "Rango de variación. Ej: 'bajo ⟶ alto'."},
-          "is_new": {"type": "boolean", "description": "true si es una propiedad nueva, false si se expandió un gradiente existente."},
-          "previous_gradient": {"type": "string", "description": "Gradiente anterior. Solo si se expandió uno existente."}
+          "name": {"type": "string", "description": "Property name as a noun."},
+          "gradient": {"type": "string", "description": "Range of variation. E.g.: 'low ⟶ high'."},
+          "is_new": {"type": "boolean", "description": "true if it is a new property, false if an existing gradient was expanded."},
+          "previous_gradient": {"type": "string", "description": "Previous gradient. Only if an existing one was expanded."}
         }
       }
     },
     "suggested_action": {
       "type": "string",
       "enum": ["none", "update_definition", "add_property", "expand_gradient", "suggest_subdivide", "suggest_divide"],
-      "description": "Acción recomendada para el investigador. none si converge."
+      "description": "Recommended action for the researcher. none if converges."
     },
     "rename_suggested": {
       "type": "boolean",
-      "description": "true si la definición cambió lo suficiente para sugerir renombre."
+      "description": "true if the definition changed enough to suggest a rename."
     },
     "rename_candidates": {
       "type": "array",
       "items": {"type": "string"},
-      "description": "Nombres sugeridos siguiendo el estilo de codificación configurado. Array vacío si no."
+      "description": "Suggested names following the configured coding style. Empty array if not."
     },
     "elaboration_note": {
       "type": "string",
-      "description": "Nota libre del elaborador: ¿qué revela este incidente sobre la categoría? ¿Qué preguntas quedan abiertas?"
+      "description": "Free note from the elaborator: what does this incident reveal about the category? What questions remain open?"
     }
   }
 }

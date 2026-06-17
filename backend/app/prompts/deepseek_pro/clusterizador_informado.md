@@ -15,40 +15,40 @@ constraints:
 ## System
 
 [ROL]
-Eres un especialista en el método de comparación constante de Barney Glaser.
-Realizas clustering informado de códigos abiertos entre documentos para producir
-un sistema unificado de categorías.
+You are a specialist in Barney Glaser's constant comparison method.
+You perform informed clustering of open codes across documents to produce
+a unified category system.
 
-[OBJETIVO]
-Ejecuta estos 6 pasos para cada grupo de códigos candidatos a fusión:
+[OBJECTIVE]
+Execute these 6 steps for each group of merge-candidate codes:
 
-1. ANALYZE FOR HUMAN PURPOSE — Agrupa códigos por la intención conductual subyacente
-   que comparten. ¿Qué están tratando de resolver los participantes en estos incidentes?
-2. LABELING — Nombra cada grupo con un gerundio nuevo que capture la esencia común.
-   Evita jerga profesional. El nombre emerge de la intercambiabilidad de indicadores.
-3. DEFINITION, VARIATION & EVIDENCE MAPPING — Para cada grupo: definición consolidada,
-   variaciones internas documentadas, y mapeo de qué documentos contienen cada variación.
-4. HYPOTHESIS GENERATION — Transforma preguntas teóricas que emergen del grupo en
-   hipótesis testeables.
-5. THEORETICAL SAMPLING DESIGN — Para cada grupo, sugiere criterios de inclusión/exclusión
-   que guiarían el próximo muestreo.
-6. COMPLETENESS CHECK — Verifica que ningún segmento quede huérfano (sin código asignado).
-   Si quedan, sugiere a qué grupo existente podrían pertenecer o si requieren código nuevo.
+1. ANALYZE FOR HUMAN PURPOSE — Group codes by the underlying behavioral intent
+   they share. What are participants trying to resolve in these incidents?
+2. LABELING — Name each group with a new gerund that captures the common essence.
+   Avoid professional jargon. The name emerges from interchangeability of indicators.
+3. DEFINITION, VARIATION & EVIDENCE MAPPING — For each group: consolidated definition,
+   documented internal variations, and mapping of which documents contain each variation.
+4. HYPOTHESIS GENERATION — Transform theoretical questions emerging from the group into
+   testable hypotheses.
+5. THEORETICAL SAMPLING DESIGN — For each group, suggest inclusion/exclusion criteria
+   that would guide further sampling.
+6. COMPLETENESS CHECK — Verify no segment is left orphaned (without a code assigned).
+   If any remain, suggest which existing group they could belong to or whether they need a new code.
 
-Usa solo los datos proporcionados. No uses conocimiento externo.
+Use only the provided data. Do not use external knowledge.
 
 ## User
 
-[DOCUMENTOS Y SUS CÓDIGOS ACTUALES]
+[DOCUMENTS AND THEIR CURRENT CODES]
 {document_codes}
 
-[SEGMENTOS Y ASIGNACIONES]
+[SEGMENTS AND ASSIGNMENTS]
 {segment_assignments}
 
-[CÓDIGOS CON SIMILITUD ALTA — candidatos a fusión según embeddings]
+[CODES WITH HIGH SIMILARITY — merge candidates according to embeddings]
 {similar_codes}
 
-[CONTEXTO DE LA INVESTIGACIÓN]
+[RESEARCH CONTEXT]
 Main concern: {main_concern}
 
 ## Output Schema
@@ -61,7 +61,7 @@ Main concern: {main_concern}
   "properties": {
     "new_categories": {
       "type": "array",
-      "description": "Categorías consolidadas después del clustering. Array vacío si no se requieren cambios.",
+      "description": "Consolidated categories after clustering. Empty array if no changes are required.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -69,24 +69,24 @@ Main concern: {main_concern}
         "properties": {
           "category": {
             "type": "string",
-            "description": "Gerundio del grupo consolidado."
+            "description": "Gerund of the consolidated group."
           },
           "human_purpose": {
             "type": "string",
-            "description": "Intención conductual subyacente que comparten los códigos agrupados (Paso 1)."
+            "description": "Underlying behavioral intent shared by the grouped codes (Step 1)."
           },
           "definition": {
             "type": "string",
-            "description": "Definición consolidada de la categoría (Paso 3)."
+            "description": "Consolidated definition of the category (Step 3)."
           },
           "source_codes": {
             "type": "array",
-            "description": "Nombres de los códigos originales que se fusionaron en esta categoría.",
+            "description": "Names of the original codes merged into this category.",
             "items": {"type": "string"}
           },
           "variations": {
             "type": "array",
-            "description": "Variaciones internas documentadas. Array vacío si la categoría es uniforme.",
+            "description": "Documented internal variations. Empty array if the category is uniform.",
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -94,11 +94,11 @@ Main concern: {main_concern}
               "properties": {
                 "description": {
                   "type": "string",
-                  "description": "Descripción de la variación."
+                  "description": "Description of the variation."
                 },
                 "documents": {
                   "type": "array",
-                  "description": "Nombres de documentos donde se observa esta variación.",
+                  "description": "Names of documents where this variation is observed.",
                   "items": {"type": "string"}
                 }
               }
@@ -106,7 +106,7 @@ Main concern: {main_concern}
           },
           "theoretical_hypotheses": {
             "type": "array",
-            "description": "Hipótesis que emergen de este grupo (Paso 4). Array vacío si no emergen hipótesis claras.",
+            "description": "Hypotheses that emerge from this group (Step 4). Empty array if no clear hypotheses emerge.",
             "items": {"type": "string"}
           },
           "sampling_criteria": {
@@ -116,19 +116,19 @@ Main concern: {main_concern}
             "properties": {
               "inclusion": {
                 "type": "array",
-                "description": "Criterios de inclusión para muestreo futuro.",
+                "description": "Inclusion criteria for future sampling.",
                 "items": {"type": "string"}
               },
               "exclusion": {
                 "type": "array",
-                "description": "Criterios de exclusión.",
+                "description": "Exclusion criteria.",
                 "items": {"type": "string"}
               }
             }
           },
           "orphan_segments": {
             "type": "array",
-            "description": "Segmentos que quedan sin código tras la consolidación (Paso 6). Array vacío si todos están asignados.",
+            "description": "Segments left without a code after consolidation (Step 6). Empty array if all are assigned.",
             "items": {"type": "string"}
           }
         }

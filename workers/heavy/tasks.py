@@ -31,6 +31,22 @@ from llm_client import LLMClient
 logger = logging.getLogger(__name__)
 
 
+# ── Translation Pattern (T1): leer idioma del proyecto ──
+def _set_language_from_project(session, proyecto_id: str) -> str:
+    """Lee proyectos.language y configura el LLMClient. Retorna el idioma."""
+    try:
+        row = session.execute(
+            text("SELECT language FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        lang = row[0] if row and row[0] else "es"
+        LLMClient.set_user_language(lang)
+        return lang
+    except Exception:
+        LLMClient.set_user_language("es")
+        return "es"
+
+
 # ── Pipeline log streaming ──────────────────────
 
 
@@ -744,6 +760,7 @@ def process_document_agents_a(
 
     results: dict[str, Any] = {"documento_id": documento_id}
     session = SessionLocal()
+    _set_language_from_project(session, proyecto_id)
 
     try:
         _pipeline_log_to(proyecto_id)
@@ -770,9 +787,60 @@ def process_document_agents_a(
             checkpoint(session, documento_id, STEP, "in_progress")
             _ensure_segmented(session, documento_id)
             # F2.1: Pre-clasificar tipo de dato Glaser para cada segmento
-            _classify_glaser_types_for_doc(
-                session, documento_id, use_llm_fallback=False
-            )
+            _classify_glaser_types_for_doc(session, documento_id, use_llm_fallback=True)
+            checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Step 0.5: F2.2 — Extract incidents per baseline segment (FLASH) ──
+        STEP = "extract_incidents"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("F2.2: Extrayendo incidentes doc %s", documento_id)
+            try:
+                from incident_extractor import extract_incident as _extract_inc
+
+                baseline_segs = session.execute(
+                    text(
+                        "SELECT id FROM segmentos WHERE documento_id = :did "
+                        "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL)"
+                    ),
+                    {"did": documento_id},
+                ).fetchall()
+                n = 0
+                for (sid,) in baseline_segs:
+                    if self._aborted:
+                        raise TaskCancelledError()
+                    try:
+                        _extract_inc(str(sid), proyecto_id)
+                        n += 1
+                    except Exception as e:
+                        logger.warning(
+                            "Incident extraction failed for seg %s: %s", sid, e
+                        )
+                results["incidents_extracted"] = n
+                logger.info("F2.2: %d incidentes extraidos doc %s", n, documento_id)
+            except Exception as e:
+                logger.warning("Incident extraction batch failed: %s", e)
+                results["incidents_extracted"] = 0
+            checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Step 0.6: F2.4 — Extract core pattern per document (PRO) ──
+        STEP = "extract_core_pattern"
+        if self._aborted:
+            raise TaskCancelledError()
+        if STEP not in completed and results.get("incidents_extracted", 0) > 0:
+            checkpoint(session, documento_id, STEP, "in_progress")
+            logger.info("F2.4: Extrayendo patron central doc %s", documento_id)
+            try:
+                from pattern_extractor import extract_core_pattern as _extract_cp
+
+                cp_result = _extract_cp(documento_id, proyecto_id)
+                results["core_pattern"] = cp_result
+                logger.info("F2.4: Patron central extraido doc %s", documento_id)
+            except Exception as e:
+                logger.warning("Core pattern extraction failed: %s", e)
+                results["core_pattern"] = None
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Update estado → procesando ──
@@ -1081,6 +1149,7 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         raise TaskCancelledError()
 
     s = SessionLocal()
+    _set_language_from_project(s, proyecto_id)
     try:
         _pipeline_log_to(proyecto_id)
         logger.info("🔗 Phase B iniciado — proyecto=%s", proyecto_id)
@@ -1558,9 +1627,16 @@ def task_a07_build_evidence_map(proyecto_id: str) -> dict:
 
 @app.task(name="a14_find_main_concern")
 def task_a14_main_concern(proyecto_id: str) -> dict:
-    """A14: 3 preguntas GT -> main_concern. Usa main_concern_proposer.md."""
+    """A14: Core pattern detection. Usa main_concern_proposer.md."""
     s = SessionLocal()
     try:
+        # F0.3.5: Leer object_of_study para parametrizar el tipo de patron
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
             {"pid": proyecto_id},
@@ -1597,6 +1673,8 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
                 "all_codes": all_codes,
                 "all_memos": all_memos,
                 "prime_movers_per_document": prime_movers_text,
+                "researcher_feedback": "",
+                "object_of_study": object_of_study,
             },
         )
         return {
@@ -1698,6 +1776,109 @@ def task_a16_interchangeability(code_id: str, proyecto_id: str) -> dict:
             "rationale": response.get("rationale", ""),
             "suggested_action": response.get("suggested_action", ""),
         }
+    finally:
+        s.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F0.6: Nemotrón — Research Question Builder (PRO, executeOnce)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.task(name="research_question_builder")
+def task_research_question_builder(proyecto_id: str) -> dict:
+    """F0.6: Generates formal CGT research question from population assumption.
+
+    Reads population_description, object_of_study, generalized_population,
+    spatial_frame, temporal_frame, and coding_styles from the DB. Calls the
+    PRO model with the research_question_builder prompt. Stores the result in
+    proyectos.population_assumption under key 'research_question'.
+
+    Runs ONCE or on-demand (not automatic).
+    """
+    s = SessionLocal()
+    try:
+        # Read population_assumption JSONB
+        row = s.execute(
+            text(
+                "SELECT population_assumption, object_of_study "
+                "FROM proyectos WHERE id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if not row:
+            return {"error": "Proyecto no encontrado", "proyecto_id": proyecto_id}
+
+        pa = row[0] or {}
+        object_of_study = row[1] or pa.get("object_of_study", "concern")
+
+        population_description = pa.get("population_description", "")
+        generalized_population = pa.get("generalized_population", "")
+        spatial_frame = pa.get("spatial_frame", "")
+        temporal_frame = pa.get("temporal_frame", "")
+        coding_styles_list = pa.get("coding_styles", ["gerundio", "in_vivo"])
+        coding_styles = (
+            ", ".join(coding_styles_list)
+            if isinstance(coding_styles_list, list)
+            else str(coding_styles_list)
+        )
+
+        logger.info(
+            "research_question_builder: proyecto=%s oos=%s pop=%s",
+            proyecto_id[:8],
+            object_of_study,
+            population_description[:60] if population_description else "(sin desc)",
+        )
+
+        response = llm.run_agent(
+            "research_question_builder",
+            variables={
+                "object_of_study": object_of_study,
+                "population_description": population_description or "(not specified)",
+                "generalized_population": generalized_population or "(not specified)",
+                "spatial_frame": spatial_frame or "(not specified)",
+                "temporal_frame": temporal_frame or "(not specified)",
+                "coding_styles": coding_styles,
+            },
+        )
+
+        # ── Store result in population_assumption JSONB ──
+        result_data = {
+            "research_question": response.get("research_question", ""),
+            "operational_question": response.get("operational_question", ""),
+            "rationale": response.get("rationale", ""),
+            "key_dimensions": response.get("key_dimensions", []),
+            "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+
+        # Merge into existing population_assumption
+        updated_pa = dict(pa)
+        updated_pa["research_question"] = result_data
+
+        s.execute(
+            text(
+                "UPDATE proyectos SET population_assumption = :pa::jsonb "
+                "WHERE id = :pid"
+            ),
+            {"pa": json.dumps(updated_pa), "pid": proyecto_id},
+        )
+        s.commit()
+
+        logger.info(
+            "research_question_builder: stored for proyecto=%s rq=%s",
+            proyecto_id[:8],
+            result_data["research_question"][:80]
+            if result_data["research_question"]
+            else "(empty)",
+        )
+
+        return result_data
+
+    except Exception:
+        s.rollback()
+        logger.exception("research_question_builder failed for %s", proyecto_id[:8])
+        raise
     finally:
         s.close()
 
@@ -1950,6 +2131,7 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
         raise TaskCancelledError()
 
     s = SessionLocal()
+    _set_language_from_project(s, proyecto_id)
     try:
         from agents.transitions import PROJECT_STATES, transition_project
 
@@ -2082,6 +2264,13 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             )
 
         # ── Proposer ──
+        # F0.3.5: Leer object_of_study para parametrizar el tipo de patron
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
             {"pid": proyecto_id},
@@ -2118,6 +2307,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "all_memos": all_memos,
                 "prime_movers_per_document": prime_movers_text,
                 "researcher_feedback": researcher_feedback,
+                "object_of_study": object_of_study,
             },
         )
 
@@ -2128,6 +2318,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "main_concern": proposal.get("main_concern", ""),
                 "all_codes": all_codes,
                 "prime_movers_per_document": prime_movers_text,
+                "object_of_study": object_of_study,
             },
         )
 

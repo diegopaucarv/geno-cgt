@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useI18n } from "../i18n";
 
 async function register(nombre: string, correo: string, password: string) {
   const res = await fetch("/api/v1/auth/register", {
@@ -15,6 +16,7 @@ async function register(nombre: string, correo: string, password: string) {
 }
 
 export default function Register() {
+  const { t } = useI18n();
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
@@ -35,10 +37,10 @@ export default function Register() {
 
   return (
     <div style={{ maxWidth: 400, margin: "100px auto", padding: 24 }}>
-      <h1>GT · Crear cuenta</h1>
+      <h1>{t("auth.registerTitle")}</h1>
       <form onSubmit={handleSubmit}>
         <input
-          placeholder="Nombre"
+          placeholder={t("auth.namePlaceholder")}
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           required
@@ -46,7 +48,7 @@ export default function Register() {
         />
         <input
           type="email"
-          placeholder="Correo"
+          placeholder={t("auth.emailPlaceholder")}
           value={correo}
           onChange={(e) => setCorreo(e.target.value)}
           required
@@ -54,7 +56,7 @@ export default function Register() {
         />
         <input
           type="password"
-          placeholder="Contraseña"
+          placeholder={t("auth.passwordPlaceholder")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -63,7 +65,7 @@ export default function Register() {
         />
         {error && <p style={{ color: "red" }}>{error}</p>}
         <button type="submit" style={{ width: "100%", padding: 10 }}>
-          Crear cuenta
+          {t("auth.registerButton")}
         </button>
       </form>
       <button
@@ -81,10 +83,10 @@ export default function Register() {
           cursor: "pointer",
         }}
       >
-        🚀 Crear demo (demo@gt.com / demo123)
+        {t("auth.demoButton")}
       </button>
       <p style={{ marginTop: 16, textAlign: "center" }}>
-        ¿Ya tienes cuenta? <Link to="/login">Inicia sesión</Link>
+        {t("auth.hasAccount")} <Link to="/login">{t("auth.loginLink")}</Link>
       </p>
     </div>
   );

@@ -266,6 +266,9 @@ export async function listProjects() {
 export async function createProject(body: {
   nombre: string;
   ruta_de_codificacion?: string;
+  supuesto_poblacional?: string;
+  object_of_study?: string;
+  custom_label?: string;
 }) {
   return request<Project>("/projects", {
     method: "POST",
@@ -283,6 +286,7 @@ export async function updateProject(
     nombre?: string;
     supuesto_poblacional?: string;
     object_of_study?: string;
+    custom_label?: string;
   },
 ) {
   return request<Project>(`/projects/${id}`, {
@@ -349,6 +353,43 @@ export async function updatePopulationAssumption(
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+// ── Research Question (Nemotrón / F0.6) ──────────────────────────────
+
+export interface KeyDimension {
+  dimension: string;
+  rationale: string;
+}
+
+export interface ResearchQuestionResponse {
+  project_id: string;
+  research_question: string | null;
+  operational_question: string | null;
+  rationale: string | null;
+  key_dimensions: KeyDimension[] | null;
+  generated_at: string | null;
+  message?: string;
+}
+
+export interface GenerateResearchQuestionResponse {
+  status: string;
+  project_id: string;
+  task_id: string;
+  message: string;
+}
+
+export async function getResearchQuestion(projectId: string) {
+  return request<ResearchQuestionResponse>(
+    `/projects/${projectId}/research-question`,
+  );
+}
+
+export async function generateResearchQuestion(projectId: string) {
+  return request<GenerateResearchQuestionResponse>(
+    `/projects/${projectId}/research-question/generate`,
+    { method: "POST" },
+  );
 }
 
 // ── Documents ───────────────────────────────────────────────────────

@@ -1,15 +1,25 @@
 import { usePlayground } from "./PlaygroundContext";
+import { useI18n } from "../../i18n";
 
 export default function RecommendationGuide() {
   const pg = usePlayground();
+  const { t } = useI18n();
   const recs = pg.recommendations;
 
   const grouped: Record<string, typeof recs> = {
-    "Conexiones sugeridas": recs.filter((r) => r.action_type === "connect"),
-    "Ghost-blobs": recs.filter((r) => r.action_type === "absorb_ghost"),
-    "Renombres sugeridos": recs.filter((r) => r.action_type === "rename"),
-    "Zonas de neblina": recs.filter((r) => r.action_type === "sample"),
-    Tensiones: recs.filter((r) => r.action_type === "resolve_tension"),
+    [t("theory.suggestedConnections")]: recs.filter(
+      (r) => r.action_type === "connect",
+    ),
+    [t("theory.ghostBlobs")]: recs.filter(
+      (r) => r.action_type === "absorb_ghost",
+    ),
+    [t("theory.suggestedRenames")]: recs.filter(
+      (r) => r.action_type === "rename",
+    ),
+    [t("theory.fogZones")]: recs.filter((r) => r.action_type === "sample"),
+    [t("theory.tensions")]: recs.filter(
+      (r) => r.action_type === "resolve_tension",
+    ),
   };
 
   return (
@@ -26,7 +36,8 @@ export default function RecommendationGuide() {
                 textTransform: "uppercase",
               }}
             >
-              ▼ {label} ({items.length})
+              {t("theory.expandIndicator")}
+              {label} ({items.length})
             </div>
             {items.slice(0, 3).map((r, i) => (
               <div key={i} style={itemStyle}>
@@ -39,10 +50,10 @@ export default function RecommendationGuide() {
                   {r.description}
                 </div>
                 {r.action_type === "connect" && (
-                  <button style={actionBtn}>[→]</button>
+                  <button style={actionBtn}>{t("theory.connectAction")}</button>
                 )}
                 {r.action_type === "rename" && (
-                  <button style={actionBtn}>[✦]</button>
+                  <button style={actionBtn}>{t("theory.renameAction")}</button>
                 )}
               </div>
             ))}
@@ -59,7 +70,7 @@ export default function RecommendationGuide() {
             textAlign: "center",
           }}
         >
-          Sin recomendaciones aún.
+          {t("theory.noRecommendations")}
         </div>
       )}
     </div>

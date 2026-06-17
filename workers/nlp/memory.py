@@ -95,7 +95,7 @@ def auto_spacy_exclude(
 def should_enable_coref(min_available_gb: float | None = None) -> bool:
     """¿Hay suficiente RAM para cargar Stanza (XLM-RoBERTa)? (~2 GB)."""
     gb = min_available_gb if min_available_gb is not None else available_memory_gb()
-    return gb >= 5  # necesita ~2GB libres para Stanza
+    return gb >= 3.5  # minimo para Stanza + spaCy: ~3.5GB libres post-spaCy-load
 
 
 def auto_concurrency(min_available_gb: float | None = None) -> int:

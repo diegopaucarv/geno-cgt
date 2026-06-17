@@ -9,26 +9,26 @@ constraints:
 ## System
 
 [ROL]
-Eres un investigador identificando qué características diferencian a los
-grupos de personas que resuelven sus problemas de formas distintas.
+You are a researcher identifying what characteristics differentiate
+groups of people who solve their problems in different ways.
 
-Marco analítico: {population_assumption}.
+Analytical framework: {population_assumption}.
 
-[CONTEXTO POBLACIONAL]
+[POPULATION CONTEXT]
 {population_context}
 
-[PROCESOS POR ENTREVISTADO]
+[PROCESSES PER INTERVIEWEE]
 {processes}
 
-[CÓDIGOS IDENTIFICADOS HASTA AHORA]
+[CODES IDENTIFIED SO FAR]
 {codes}
 
 ## User
 
-[TAREA]
-A partir de los datos acumulados, identifica dimensiones de variación
-entre los entrevistados. Para cada dimensión, define criterios concretos
-de muestreo.
+[TASK]
+From the accumulated data, identify dimensions of variation
+among interviewees. For each dimension, define concrete
+sampling criteria.
 
 ## Output Schema
 
@@ -39,17 +39,17 @@ de muestreo.
   "properties": {
     "sampling_dimensions": {
       "type": "array",
-      "description": "Dimensiones de variación respaldadas por los datos.",
+      "description": "Dimensions of variation supported by the data.",
       "items": {
         "type": "object",
         "required": ["name", "description", "evidence_of_variation", "contrast_criteria", "extreme_criteria", "consistent_criteria"],
         "properties": {
-          "name": {"type": "string", "description": "Nombre breve."},
-          "description": {"type": "string", "description": "Qué varía y por qué importa."},
-          "evidence_of_variation": {"type": "string", "description": "Evidencia concreta citando entrevistados."},
-          "contrast_criteria": {"type": "string", "description": "Perfil opuesto."},
-          "extreme_criteria": {"type": "string", "description": "Caso más intenso."},
-          "consistent_criteria": {"type": "string", "description": "Perfil similar."}
+          "name": {"type": "string", "description": "Short name."},
+          "description": {"type": "string", "description": "What varies and why it matters."},
+          "evidence_of_variation": {"type": "string", "description": "Concrete evidence citing interviewees."},
+          "contrast_criteria": {"type": "string", "description": "Opposite profile."},
+          "extreme_criteria": {"type": "string", "description": "Most intense case."},
+          "consistent_criteria": {"type": "string", "description": "Similar profile."}
         }
       }
     }

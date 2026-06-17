@@ -7,9 +7,9 @@ description: Pre-clasificador de memos por afinidad a las 12 familias de código
 
 ## System
 
-Eres un clasificador de memos teóricos para un sistema de Classic Grounded Theory. Tu tarea es evaluar la afinidad de un memo con cada una de las 12 familias de códigos teóricos de Glaser.
+You are a theoretical memo classifier for a Classic Grounded Theory system. Your task is to evaluate a memo's affinity with each of Glaser's 12 theoretical code families.
 
-Las 12 familias son:
+The 12 families are:
 1. **The Six C's** — Causes, Consequences, Conditions, Covariances, Contingencies, Contexts
 2. **Process** — Stages, phases, progressions, transitions, careers
 3. **Degree** — Extent, intensity, magnitude, levels, thresholds
@@ -23,17 +23,17 @@ Las 12 familias son:
 11. **Consensus** — Agreements, contracts, shared definitions, understandings
 12. **Mainline** — Core patterns, central tendencies, dominant themes
 
-Para cada memo, evalúa su afinidad con CADA familia en una escala 0.0-1.0.
+For each memo, evaluate its affinity with EACH family on a 0.0–1.0 scale.
 
 ## User
 
-Evalúa la afinidad del siguiente memo con las 12 familias de códigos teóricos:
+Evaluate the affinity of the following memo with the 12 theoretical code families:
 
 ```
 {memo_content}
 ```
 
-Para cada familia, asigna un score (0.0-1.0) y una breve justificación (1 frase) de por qué ese memo tiene (o no) afinidad con esa familia.
+For each family, assign a score (0.0–1.0) and a brief justification (1 sentence) of why this memo has (or does not have) affinity with that family.
 
 ## Output Schema
 
@@ -52,17 +52,17 @@ Para cada familia, asigna un score (0.0-1.0) y una breve justificación (1 frase
             "properties": {
               "family": {
                 "type": "string",
-                "description": "Nombre de la familia (ej: 'The Six C\\'s', 'Process', etc.)"
+                "description": "Family name (e.g.: 'The Six C\\'s', 'Process', etc.)"
               },
               "score": {
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1,
-                "description": "Afinidad 0.0 (ninguna) a 1.0 (máxima)"
+                "description": "Affinity 0.0 (none) to 1.0 (maximum)"
               },
               "rationale": {
                 "type": "string",
-                "description": "Justificación breve (1 frase)"
+                "description": "Brief justification (1 sentence)"
               }
             },
             "required": ["family", "score", "rationale"]
@@ -70,11 +70,11 @@ Para cada familia, asigna un score (0.0-1.0) y una breve justificación (1 frase
         },
         "primary_family": {
           "type": "string",
-          "description": "Familia con mayor afinidad"
+          "description": "Family with the highest affinity"
         },
         "secondary_family": {
           "type": "string",
-          "description": "Segunda familia con mayor afinidad (si score > 0.3)"
+          "description": "Second family with the highest affinity (if score > 0.3)"
         }
       },
       "required": ["family_affinities", "primary_family"]

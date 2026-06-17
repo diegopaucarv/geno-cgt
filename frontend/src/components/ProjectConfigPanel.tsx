@@ -5,10 +5,14 @@ import {
   getProjectConfigHistory,
   updateMutationPolicy,
   updatePopulationAssumption,
+  getResearchQuestion,
+  generateResearchQuestion,
   type ProjectConfig,
   type ConfigHistoryEntry,
   type ConfigSuggestion,
+  type ResearchQuestionResponse,
 } from "../api/client";
+import { useI18n } from "../i18n";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -20,55 +24,55 @@ interface Props {
 
 type TabKey = "config" | "history" | "suggestions" | "policy";
 
-/* ── Label maps ────────────────────────────────────────────────────── */
+/* ── Key maps (backend field / trigger / level → i18n key) ────────── */
 
-const FIELD_LABELS: Record<string, string> = {
-  "population_assumption.population_description": "Descripción poblacional",
-  "population_assumption.temporal_frame": "Marco temporal",
-  "population_assumption.spatial_frame": "Marco espacial",
-  "population_assumption.object_of_study": "Objeto de estudio",
-  "population_assumption.gerundio_esperado": "Gerundio esperado",
-  "population_description": "Descripción poblacional",
-  temporal_frame: "Marco temporal",
-  spatial_frame: "Marco espacial",
-  object_of_study: "Objeto de estudio",
-  pattern_of_interest: "Patrón de interés",
-  coding_styles: "Estilos de codificación",
-  gerundio_esperado: "Gerundio esperado",
-  segmentation_config: "Segmentación",
+const FIELD_KEYS: Record<string, string> = {
+  "population_assumption.population_description":
+    "projectConfig.fieldPopulationDescription",
+  "population_assumption.temporal_frame": "projectConfig.fieldTimeframe",
+  "population_assumption.spatial_frame": "projectConfig.fieldSpatialScope",
+  "population_assumption.object_of_study": "projectConfig.fieldStudyObject",
+  "population_assumption.gerundio_esperado":
+    "projectConfig.fieldExpectedGerund",
+  population_description: "projectConfig.fieldPopulationDescription",
+  temporal_frame: "projectConfig.fieldTimeframe",
+  spatial_frame: "projectConfig.fieldSpatialScope",
+  object_of_study: "projectConfig.fieldStudyObject",
+  pattern_of_interest: "projectConfig.fieldPatternOfInterest",
+  coding_styles: "projectConfig.fieldCodingStyles",
+  gerundio_esperado: "projectConfig.fieldExpectedGerund",
+  segmentation_config: "projectConfig.fieldSegmentation",
 };
 
-const LEVEL_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  auto: { label: "Automático", icon: "⚡", color: "#3FB950" },
-  suggest: { label: "Sugerir", icon: "💡", color: "#D29922" },
-  require_approval: { label: "Requiere aprobación", icon: "🛑", color: "#F85149" },
-  locked: { label: "Bloqueado", icon: "🔒", color: "#8B949E" },
+const LEVEL_KEYS: Record<string, { key: string; color: string }> = {
+  auto: { key: "projectConfig.auto", color: "#3FB950" },
+  suggest: { key: "projectConfig.suggest", color: "#D29922" },
+  require_approval: { key: "projectConfig.requireApproval", color: "#F85149" },
+  locked: { key: "projectConfig.locked", color: "#8B949E" },
 };
 
-const TRIGGER_LABELS: Record<string, string> = {
-  user: "👤 Investigador",
-  system: "🤖 Sistema",
-  population_generalizer: "🤖 Population Generalizer",
-  core_pattern_verifier: "🤖 Core Pattern Verifier",
+const TRIGGER_KEYS: Record<string, string> = {
+  user: "projectConfig.sourceResearcher",
+  system: "projectConfig.sourceSystem",
+  population_generalizer: "projectConfig.sourcePopulationGeneralizer",
+  core_pattern_verifier: "projectConfig.sourceCorePatternVerifier",
 };
 
-function triggerLabel(t: string) {
-  return TRIGGER_LABELS[t] || `🤖 ${t}`;
+/* ── Helpers (receive t so they can translate) ─────────────────────── */
+
+function triggerLabel(t: (key: string) => string, trig: string) {
+  return t(TRIGGER_KEYS[trig] || trig);
 }
 
-function fieldLabel(f: string) {
-  return FIELD_LABELS[f] || f;
+function fieldLabel(t: (key: string) => string, f: string) {
+  return t(FIELD_KEYS[f] || f);
 }
 
-function levelBadge(level: string | null) {
+function levelBadge(t: (key: string) => string, level: string | null) {
   if (!level) return null;
-  const info = LEVEL_LABELS[level];
+  const info = LEVEL_KEYS[level];
   if (!info) return null;
-  return (
-    <span style={{ color: info.color, fontSize: 11 }}>
-      {info.icon} {info.label}
-    </span>
-  );
+  return <span style={{ color: info.color, fontSize: 11 }}>{t(info.key)}</span>;
 }
 
 function tryParseJson(v: string | null): string {
@@ -82,11 +86,11 @@ function tryParseJson(v: string | null): string {
   }
 }
 
-function timeAgo(iso: string | null): string {
+function timeAgo(t: (key: string) => string, iso: string | null): string {
   if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
   const sec = Math.floor(diff / 1000);
-  if (sec < 60) return "ahora";
+  if (sec < 60) return t("projectConfig.timeAgoNow");
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m`;
   const h = Math.floor(min / 60);
@@ -248,7 +252,13 @@ const BTN_REJECT: CSSProperties = {
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
-export default function ProjectConfigPanel({ open, projectId, onClose }: Props) {
+export default function ProjectConfigPanel({
+  open,
+  projectId,
+  onClose,
+}: Props) {
+  const { t } = useI18n();
+
   const [tab, setTab] = useState<TabKey>("config");
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [history, setHistory] = useState<ConfigHistoryEntry[]>([]);
@@ -259,6 +269,12 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
 
   // Editable policy state
   const [policy, setPolicy] = useState<Record<string, string>>({});
+
+  // ── Research Question state ──
+  const [rqData, setRqData] = useState<ResearchQuestionResponse | null>(null);
+  const [rqLoading, setRqLoading] = useState(false);
+  const [rqMsg, setRqMsg] = useState("");
+  const [rqGenerating, setRqGenerating] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -275,11 +291,19 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
     getProjectConfigHistory(projectId)
       .then((h) => setHistory(h.entries || []))
       .catch(() => {});
+
+    // ── Fetch research question ──
+    setRqLoading(true);
+    setRqMsg("");
+    getResearchQuestion(projectId)
+      .then((rq) => setRqData(rq))
+      .catch(() => {})
+      .finally(() => setRqLoading(false));
   }, [open, projectId]);
 
-  function switchTab(t: TabKey) {
-    setTab(t);
-    if (t === "history") {
+  function switchTab(tab: TabKey) {
+    setTab(tab);
+    if (tab === "history") {
       getProjectConfigHistory(projectId)
         .then((h) => setHistory(h.entries || []))
         .catch(() => {});
@@ -296,7 +320,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
     setSaveMsg("");
     try {
       await updateMutationPolicy(projectId, policy);
-      setSaveMsg("✅ Política guardada");
+      setSaveMsg(t("projectConfig.policySaved"));
       // Refresh config
       const c = await getProjectConfig(projectId);
       setConfig(c);
@@ -308,6 +332,26 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
     }
   }
 
+  async function handleGenerateResearchQuestion() {
+    setRqGenerating(true);
+    setRqMsg("");
+    try {
+      await generateResearchQuestion(projectId);
+      setRqMsg(t("projectConfig.generateSuccess"));
+      // Poll for result after a short delay
+      setTimeout(async () => {
+        try {
+          const rq = await getResearchQuestion(projectId);
+          setRqData(rq);
+        } catch {}
+      }, 8000);
+    } catch (e: any) {
+      setRqMsg("❌ " + (e.message || t("projectConfig.generateError")));
+    } finally {
+      setRqGenerating(false);
+    }
+  }
+
   async function handleAcceptSuggestion(s: ConfigSuggestion) {
     // Apply the suggestion by calling the appropriate endpoint
     try {
@@ -316,7 +360,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
         const val = JSON.parse(s.new_value);
         await updatePopulationAssumption(projectId, { [key]: val });
       }
-      setSaveMsg("✅ Sugerencia aplicada");
+      setSaveMsg(t("projectConfig.suggestionApplied"));
       // Refresh
       const c = await getProjectConfig(projectId);
       setConfig(c);
@@ -333,88 +377,203 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
   /* ── Render helpers ──────────────────────────────────────────── */
 
   const renderConfigTab = () => {
-    if (!config) return <p style={{ color: "#8B949E" }}>Cargando…</p>;
+    if (!config)
+      return <p style={{ color: "#8B949E" }}>{t("common.loading")}</p>;
 
     const pa = config.population_assumption || {};
     const seg = config.config_segmentacion || {};
 
     return (
       <div>
-        <SectionTitle title="📋 Configuración General" />
+        <SectionTitle title={t("projectConfig.generalConfig")} />
+        <FieldRow label={t("projectConfig.fieldName")} value={config.nombre} />
         <FieldRow
-          label="Nombre"
-          value={config.nombre}
-        />
-        <FieldRow
-          label="Estado"
+          label={t("projectConfig.fieldStatus")}
           value={config.estado}
         />
         <FieldRow
-          label="Ruta de codificación"
+          label={t("projectConfig.fieldCodingPath")}
           value={config.ruta_de_codificacion}
         />
 
-        <SectionTitle title="🧬 Configuración Epistemológica" />
+        <SectionTitle title={t("projectConfig.epistemologicalConfig")} />
         <FieldRow
-          label="Supuesto poblacional"
+          label={t("projectConfig.fieldPopulationAssumption")}
           value={config.supuesto_poblacional || "—"}
         />
         <FieldRow
-          label="Objeto de estudio"
+          label={t("projectConfig.fieldStudyObject")}
           value={config.object_of_study}
         />
         <FieldRow
-          label="Descripción poblacional"
+          label={t("projectConfig.fieldPopulationDescription")}
           value={pa.population_description || "—"}
         />
         <FieldRow
-          label="Marco temporal"
+          label={t("projectConfig.fieldTimeframe")}
           value={pa.temporal_frame || "—"}
         />
         <FieldRow
-          label="Marco espacial"
+          label={t("projectConfig.fieldSpatialScope")}
           value={pa.spatial_frame || "—"}
         />
         <FieldRow
-          label="Gerundio esperado"
-          value={pa.gerundio_esperado || "— (emergerá después de A14)"}
+          label={t("projectConfig.fieldExpectedGerund")}
+          value={pa.gerundio_esperado || t("projectConfig.defaultGerund")}
         />
 
-        <SectionTitle title="🎨 Estilos de Codificación" />
+        {/* ── Research Question (Nemotrón) ── */}
+        <SectionTitle title={t("projectConfig.researchQuestionSection")} />
+        {rqLoading ? (
+          <p style={{ color: "#8B949E", fontSize: 12, padding: "8px 0" }}>
+            {t("common.loading")}
+          </p>
+        ) : rqData?.research_question ? (
+          <>
+            <FieldRow
+              label={t("projectConfig.fieldResearchQuestion")}
+              value={rqData.research_question || "—"}
+            />
+            <FieldRow
+              label={t("projectConfig.fieldOperationalQuestion")}
+              value={rqData.operational_question || "—"}
+            />
+            {rqData.rationale && (
+              <FieldRow
+                label={t("projectConfig.fieldRQRationale")}
+                value={rqData.rationale || "—"}
+              />
+            )}
+            {rqData.key_dimensions && rqData.key_dimensions.length > 0 && (
+              <FieldRow
+                label={t("projectConfig.fieldKeyDimensions")}
+                value={rqData.key_dimensions
+                  .map((d: any) => d.dimension)
+                  .join(", ")}
+              />
+            )}
+            {rqData.generated_at && (
+              <FieldRow
+                label={t("projectConfig.fieldGeneratedAt")}
+                value={new Date(rqData.generated_at).toLocaleString()}
+              />
+            )}
+            {/* Regenerate button */}
+            {!rqGenerating && (
+              <div style={{ padding: "8px 0" }}>
+                <button
+                  onClick={handleGenerateResearchQuestion}
+                  style={{ ...BTN_SECONDARY, fontSize: 11 }}
+                >
+                  {t("projectConfig.generateButton")}
+                </button>
+                {rqMsg && (
+                  <p
+                    style={{
+                      color: rqMsg.startsWith("✅") ? "#3FB950" : "#F85149",
+                      fontSize: 12,
+                      marginTop: 8,
+                    }}
+                  >
+                    {rqMsg}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ padding: "8px 0" }}>
+            <p
+              style={{
+                color: "#8B949E",
+                fontSize: 12,
+                margin: "0 0 8px 0",
+              }}
+            >
+              {t("projectConfig.noResearchQuestion")}
+            </p>
+            <p
+              style={{
+                color: "#6E7681",
+                fontSize: 11,
+                margin: "0 0 10px 0",
+                lineHeight: 1.5,
+              }}
+            >
+              {t("projectConfig.noResearchQuestionHelp")}
+            </p>
+            <button
+              onClick={handleGenerateResearchQuestion}
+              disabled={rqGenerating}
+              style={{
+                ...BTN_PRIMARY,
+                opacity: rqGenerating ? 0.6 : 1,
+                cursor: rqGenerating ? "not-allowed" : "pointer",
+              }}
+            >
+              {rqGenerating
+                ? t("projectConfig.generating")
+                : t("projectConfig.generateButton")}
+            </button>
+            {rqMsg && (
+              <p
+                style={{
+                  color: rqMsg.startsWith("✅") ? "#3FB950" : "#F85149",
+                  fontSize: 12,
+                  marginTop: 8,
+                }}
+              >
+                {rqMsg}
+              </p>
+            )}
+          </div>
+        )}
+
+        <SectionTitle title={t("projectConfig.codingStylesSection")} />
         <FieldRow
-          label="Instrucción compilada"
+          label={t("projectConfig.fieldCompiledInstruction")}
           value={config.coding_style_instruction || "—"}
         />
         <FieldRow
-          label="Estilos activos"
+          label={t("projectConfig.fieldActiveStyles")}
           value={
             Array.isArray(pa.coding_styles)
               ? pa.coding_styles.join(", ")
-              : "gerundio, in_vivo (default)"
+              : t("projectConfig.defaultCodingStyles")
           }
         />
 
-        <SectionTitle title="✂️ Segmentación" />
+        <SectionTitle title={t("projectConfig.segmentationSection")} />
         <FieldRow
-          label="Window size"
-          value={seg.window_size != null ? String(seg.window_size) : "3 (default)"}
-        />
-        <FieldRow
-          label="Similarity threshold"
+          label={t("projectConfig.fieldWindowSize")}
           value={
-            seg.similarity_threshold != null
-              ? String(seg.similarity_threshold)
-              : "0.75 (default)"
+            seg.window_size != null
+              ? String(seg.window_size)
+              : t("projectConfig.defaultWindowSize")
           }
         />
         <FieldRow
-          label="Max tokens"
-          value={seg.max_tokens != null ? String(seg.max_tokens) : "1024 (default)"}
+          label={t("projectConfig.fieldSimilarityThreshold")}
+          value={
+            seg.similarity_threshold != null
+              ? String(seg.similarity_threshold)
+              : t("projectConfig.defaultSimilarityThreshold")
+          }
         />
         <FieldRow
-          label="Reinert micro"
+          label={t("projectConfig.fieldMaxTokens")}
           value={
-            seg.reinert_micro != null ? String(seg.reinert_micro) : "true (default)"
+            seg.max_tokens != null
+              ? String(seg.max_tokens)
+              : t("projectConfig.defaultMaxTokens")
+          }
+        />
+        <FieldRow
+          label={t("projectConfig.fieldReinertMicro")}
+          value={
+            seg.reinert_micro != null
+              ? String(seg.reinert_micro)
+              : t("projectConfig.defaultReinertMicro")
           }
         />
       </div>
@@ -425,7 +584,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
     if (history.length === 0) {
       return (
         <p style={{ color: "#484F58", textAlign: "center", padding: 40 }}>
-          Sin cambios registrados aún.
+          {t("projectConfig.noChanges")}
         </p>
       );
     }
@@ -433,10 +592,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
     return (
       <div>
         {history.map((entry) => (
-          <div
-            key={entry.id}
-            style={HISTORY_ENTRY}
-          >
+          <div key={entry.id} style={HISTORY_ENTRY}>
             <div
               style={{
                 display: "flex",
@@ -446,15 +602,17 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#E6EDF3" }}>
-                  {fieldLabel(entry.field)}
+                <span
+                  style={{ fontSize: 12, fontWeight: 600, color: "#E6EDF3" }}
+                >
+                  {fieldLabel(t, entry.field)}
                 </span>
                 {entry.mutation_level && (
-                  <span>{levelBadge(entry.mutation_level)}</span>
+                  <span>{levelBadge(t, entry.mutation_level)}</span>
                 )}
               </div>
               <span style={{ fontSize: 10, color: "#484F58" }}>
-                {timeAgo(entry.timestamp)}
+                {timeAgo(t, entry.timestamp)}
               </span>
             </div>
 
@@ -467,11 +625,12 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               }}
             >
               <span style={{ color: "#8B949E" }}>
-                {triggerLabel(entry.triggered_by)}
+                {triggerLabel(t, entry.triggered_by)}
               </span>
               {entry.confidence != null && (
                 <span style={{ color: "#484F58" }}>
-                  confianza: {(entry.confidence * 100).toFixed(0)}%
+                  {t("projectConfig.confidenceLabel")}
+                  {(entry.confidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
@@ -485,7 +644,9 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ color: "#484F58", marginBottom: 2 }}>Anterior</div>
+                <div style={{ color: "#484F58", marginBottom: 2 }}>
+                  {t("projectConfig.columnPrevious")}
+                </div>
                 <code
                   style={{
                     display: "block",
@@ -499,11 +660,15 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
                     overflow: "auto",
                   }}
                 >
-                  {entry.old_value ? tryParseJson(entry.old_value) : "(creación)"}
+                  {entry.old_value
+                    ? tryParseJson(entry.old_value)
+                    : t("projectConfig.creationPlaceholder")}
                 </code>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ color: "#484F58", marginBottom: 2 }}>Nuevo</div>
+                <div style={{ color: "#484F58", marginBottom: 2 }}>
+                  {t("projectConfig.columnNew")}
+                </div>
                 <code
                   style={{
                     display: "block",
@@ -550,11 +715,10 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
       return (
         <div style={{ textAlign: "center", padding: 40 }}>
           <p style={{ color: "#484F58", fontSize: 13 }}>
-            💡 Sin sugerencias pendientes
+            {t("projectConfig.noSuggestions")}
           </p>
           <p style={{ color: "#484F58", fontSize: 11, marginTop: 4 }}>
-            Los agentes propondrán cambios aquí cuando la política de mutación
-            esté en modo "suggest" para algún campo.
+            {t("projectConfig.noSuggestionsHelp")}
           </p>
         </div>
       );
@@ -580,20 +744,23 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#D29922" }}>
-                  💡 {fieldLabel(s.field)}
+                <span
+                  style={{ fontSize: 12, fontWeight: 600, color: "#D29922" }}
+                >
+                  💡 {fieldLabel(t, s.field)}
                 </span>
               </div>
               <span style={{ fontSize: 10, color: "#484F58" }}>
-                {timeAgo(s.timestamp)}
+                {timeAgo(t, s.timestamp)}
               </span>
             </div>
 
             <div style={{ fontSize: 11, color: "#8B949E", marginTop: 4 }}>
-              {triggerLabel(s.triggered_by)}
+              {triggerLabel(t, s.triggered_by)}
               {s.confidence != null && (
                 <span style={{ marginLeft: 8, color: "#484F58" }}>
-                  confianza: {(s.confidence * 100).toFixed(0)}%
+                  {t("projectConfig.confidenceLabel")}
+                  {(s.confidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
@@ -607,11 +774,15 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ color: "#484F58", marginBottom: 2 }}>Actual</div>
+                <div style={{ color: "#484F58", marginBottom: 2 }}>
+                  {t("projectConfig.columnCurrent")}
+                </div>
                 <code style={codeStyle}>{tryParseJson(s.old_value)}</code>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ color: "#484F58", marginBottom: 2 }}>Propuesto</div>
+                <div style={{ color: "#484F58", marginBottom: 2 }}>
+                  {t("projectConfig.columnProposed")}
+                </div>
                 <code style={{ ...codeStyle, color: "#D29922" }}>
                   {tryParseJson(s.new_value)}
                 </code>
@@ -648,13 +819,13 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
                   /* TODO: reject suggestion endpoint */
                 }}
               >
-                Rechazar
+                {t("projectConfig.rejectButton")}
               </button>
               <button
                 style={BTN_ACCEPT}
                 onClick={() => handleAcceptSuggestion(s)}
               >
-                Aceptar
+                {t("projectConfig.acceptButton")}
               </button>
             </div>
           </div>
@@ -678,9 +849,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
             lineHeight: 1.6,
           }}
         >
-          Define qué puede modificar el sistema automáticamente y qué requiere
-          tu aprobación. Los cambios en política quedan registrados en el
-          historial.
+          {t("projectConfig.policyHelp")}
         </p>
 
         <div
@@ -696,17 +865,25 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
             return (
               <>
                 <div style={{ fontSize: 12, color: "#E6EDF3" }}>
-                  {fieldLabel(key)}
+                  {fieldLabel(t, key)}
                 </div>
                 <select
                   value={current}
                   onChange={(e) => handlePolicyChange(key, e.target.value)}
                   style={selectStyle}
                 >
-                  <option value="auto">⚡ Auto</option>
-                  <option value="suggest">💡 Sugerir</option>
-                  <option value="require_approval">🛑 Requiere aprobación</option>
-                  <option value="locked">🔒 Bloqueado</option>
+                  <option value="auto">
+                    {t("projectConfig.policyLevelAuto")}
+                  </option>
+                  <option value="suggest">
+                    {t("projectConfig.policyLevelSuggest")}
+                  </option>
+                  <option value="require_approval">
+                    {t("projectConfig.policyLevelRequireApproval")}
+                  </option>
+                  <option value="locked">
+                    {t("projectConfig.policyLevelLocked")}
+                  </option>
                 </select>
               </>
             );
@@ -735,10 +912,11 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            {saving ? "Guardando…" : "Guardar política"}
+            {saving ? t("projectConfig.saving") : t("projectConfig.savePolicy")}
           </button>
         </div>
 
+        {/* Legend */}
         <div
           style={{
             marginTop: 20,
@@ -749,11 +927,11 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
           }}
         >
           <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 8 }}>
-            📖 Leyenda de niveles:
+            {t("projectConfig.legendTitle")}
           </div>
-          {Object.entries(LEVEL_LABELS).map(([key, info]) => (
+          {Object.entries(LEVEL_KEYS).map(([lvl, info]) => (
             <div
-              key={key}
+              key={lvl}
               style={{
                 fontSize: 11,
                 color: "#C9D1D9",
@@ -762,17 +940,15 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
                 gap: 8,
               }}
             >
-              <span style={{ color: info.color }}>
-                {info.icon} {info.label}
-              </span>
+              <span style={{ color: info.color }}>{t(info.key)}</span>
               <span style={{ color: "#484F58" }}>
-                {key === "auto"
-                  ? "— El sistema aplica cambios sin preguntar"
-                  : key === "suggest"
-                    ? "— El sistema propone, no bloquea el pipeline"
-                    : key === "require_approval"
-                      ? "— El sistema bloquea el pipeline hasta que apruebes"
-                      : "— Solo el investigador puede modificar este campo"}
+                {lvl === "auto"
+                  ? t("projectConfig.legendAuto")
+                  : lvl === "suggest"
+                    ? t("projectConfig.legendSuggest")
+                    : lvl === "require_approval"
+                      ? t("projectConfig.legendRequireApproval")
+                      : t("projectConfig.legendLocked")}
               </span>
             </div>
           ))}
@@ -794,7 +970,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
             minHeight: 300,
           }}
         >
-          <p style={{ color: "#8B949E" }}>Cargando configuración…</p>
+          <p style={{ color: "#8B949E" }}>{t("projectConfig.loading")}</p>
         </div>
       </div>
     );
@@ -811,9 +987,12 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
             minHeight: 300,
           }}
         >
-          <p style={{ color: "#F85149" }}>Error: {error}</p>
+          <p style={{ color: "#F85149" }}>
+            {t("projectConfig.errorPrefix")}
+            {error}
+          </p>
           <button style={BTN_SECONDARY} onClick={onClose}>
-            Cerrar
+            {t("projectConfig.closeButton")}
           </button>
         </div>
       </div>
@@ -827,7 +1006,7 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
         <div style={HEADER}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 16, fontWeight: 600, color: "#E6EDF3" }}>
-              ⚙️ Configuración del Proyecto
+              {t("projectConfig.title")}
             </span>
             <span
               style={{
@@ -859,10 +1038,10 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
         <div style={TAB_ROW}>
           {(
             [
-              ["config", "📋 Config"],
-              ["history", "📜 Historial"],
-              ["suggestions", "💡 Sugerencias"],
-              ["policy", "🔐 Política"],
+              ["config", t("projectConfig.tabConfig")],
+              ["history", t("projectConfig.tabHistory")],
+              ["suggestions", t("projectConfig.tabSuggestions")],
+              ["policy", t("projectConfig.tabPolicy")],
             ] as [TabKey, string][]
           ).map(([key, label]) => (
             <button
@@ -907,13 +1086,13 @@ export default function ProjectConfigPanel({ open, projectId, onClose }: Props) 
         <div style={FOOTER}>
           <span style={{ fontSize: 11, color: "#484F58", flex: 1 }}>
             {tab === "history"
-              ? `${history.length} cambios registrados`
+              ? `${history.length}${t("projectConfig.footerChanges")}`
               : tab === "suggestions"
-                ? `${config?.pending_suggestions?.length || 0} sugerencias pendientes`
-                : `Estado: ${config?.estado || "—"}`}
+                ? `${config?.pending_suggestions?.length || 0}${t("projectConfig.footerSuggestions")}`
+                : `${t("projectConfig.footerStatus")}${config?.estado || "—"}`}
           </span>
           <button style={BTN_SECONDARY} onClick={onClose}>
-            Cerrar
+            {t("projectConfig.closeButton")}
           </button>
         </div>
       </div>

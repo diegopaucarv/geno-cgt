@@ -5,6 +5,7 @@ import {
   getEntityTypeColors,
   type MemoTypeItem,
 } from "../api/client";
+import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -38,12 +39,12 @@ const FAMILY_COLORS: Record<
 };
 
 const FAMILY_LABELS: Record<string, string> = {
-  descriptive_data: "📋 Descriptiva",
-  inductive_data: "🔍 Inductiva a datos",
-  inductive_concepts: "🧠 Inductiva a conceptos",
-  elaborative: "🔬 Elaborativa",
-  evaluative: "⚖️ Evaluativa",
-  structural: "🏗️ Estructural",
+  descriptive_data: "memo.descriptive",
+  inductive_data: "memo.inductiveData",
+  inductive_concepts: "memo.inductiveConcepts",
+  elaborative: "memo.elaborative",
+  evaluative: "memo.evaluative",
+  structural: "memo.structural",
 };
 
 function getFamilyColor(family: string) {
@@ -324,6 +325,7 @@ export function MemoCard({
   onMemoModified?: () => void;
   entityTypes: EntityTypeInfo[];
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -422,7 +424,7 @@ export function MemoCard({
             fontWeight: 500,
           }}
         >
-          {getFamilyLabel(memo)}
+          {t(getFamilyLabel(memo))}
         </span>
         <span
           style={{
@@ -437,7 +439,7 @@ export function MemoCard({
             fontWeight: 500,
           }}
         >
-          {memo.user_created ? "👤 Manual" : "🤖 IA"}
+          {memo.user_created ? t("memo.manual") : t("memo.ai")}
         </span>
         <span
           style={{
@@ -456,7 +458,7 @@ export function MemoCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm("¿Eliminar este output? Es permanente.")) {
+            if (confirm(t("memo.deleteOutputConfirm"))) {
               onDelete(memo.id);
             }
           }}
@@ -470,7 +472,7 @@ export function MemoCard({
             cursor: "pointer",
             opacity: 0.7,
           }}
-          title="Eliminar permanentemente"
+          title={t("memo.deletePermanentlyTitle")}
         >
           ✕
         </button>
@@ -519,7 +521,7 @@ export function MemoCard({
             ))}
           {Object.keys(memo.data).length > 3 && (
             <span style={{ fontSize: 10, color: "#58A6FF", marginTop: 4 }}>
-              +{Object.keys(memo.data).length - 3} más
+              {t("memo.moreCount", { n: Object.keys(memo.data).length - 3 })}
             </span>
           )}
         </div>
@@ -637,8 +639,10 @@ export function MemoCard({
                     fontWeight: 500,
                   }}
                 >
-                  Guardar
-                  {editValue.length <= 120 ? " (Enter)" : " (Ctrl+Enter)"}
+                  {t("common.save")}
+                  {editValue.length <= 120
+                    ? ` ${t("memo.saveShortcut")}`
+                    : ` ${t("memo.saveShortcutCtrl")}`}
                 </button>
                 <button
                   onClick={() => setEditingField(null)}
@@ -652,7 +656,7 @@ export function MemoCard({
                     cursor: "pointer",
                   }}
                 >
-                  Cancelar (Esc)
+                  {t("memo.cancelShortcut")}
                 </button>
               </div>
             </div>
@@ -704,6 +708,7 @@ export function DeleteByTypeButton({
   label?: string;
   onDeleted: () => void;
 }) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -713,14 +718,14 @@ export function DeleteByTypeButton({
       await deleteMemosByType(projectId, tipo);
       onDeleted();
     } catch (e: any) {
-      alert(e.message || "Error al eliminar");
+      alert(e.message || t("memo.deleteError"));
     } finally {
       setDeleting(false);
       setConfirming(false);
     }
   };
 
-  const btnLabel = label || `Eliminar memos "${tipo}"`;
+  const btnLabel = label || t("memo.deleteMemosOfType", { type: tipo });
 
   if (!confirming) {
     return (
@@ -729,7 +734,7 @@ export function DeleteByTypeButton({
           e.stopPropagation();
           setConfirming(true);
         }}
-        title={`Eliminar todos los memos de tipo "${tipo}"`}
+        title={t("memo.deleteAllMemosOfTypeTitle", { type: tipo })}
         style={{
           padding: "3px 8px",
           borderRadius: 999,
@@ -741,7 +746,7 @@ export function DeleteByTypeButton({
           marginLeft: 4,
         }}
       >
-        🗑 {btnLabel}
+        {t("memo.deleteButtonIcon")} {btnLabel}
       </button>
     );
   }
@@ -761,7 +766,7 @@ export function DeleteByTypeButton({
         color: "#F85149",
       }}
     >
-      <span>Eliminar todos de "{tipo}"?</span>
+      <span>{t("memo.confirmDeleteType", { type: tipo })}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -780,7 +785,7 @@ export function DeleteByTypeButton({
           opacity: deleting ? 0.6 : 1,
         }}
       >
-        {deleting ? "..." : "Si"}
+        {deleting ? t("memo.deleting") : t("memo.confirmYes")}
       </button>
       <button
         onClick={(e) => {
@@ -797,7 +802,7 @@ export function DeleteByTypeButton({
           cursor: "pointer",
         }}
       >
-        No
+        {t("memo.confirmNo")}
       </button>
     </span>
   );
@@ -826,6 +831,7 @@ export function MemoHistory({
   originalPrompt,
   onMemoModified,
 }: MemoHistoryProps) {
+  const { t } = useI18n();
   const [entityTypes, setEntityTypes] = useState<EntityTypeInfo[]>([]);
 
   useEffect(() => {
@@ -868,7 +874,7 @@ export function MemoHistory({
             fontWeight: activeFilter === "all" ? 600 : 400,
           }}
         >
-          Todos
+          {t("memo.filterAll")}
         </button>
         {entityTypes.map((t) => {
           const isActive = activeFilter === t.key;
@@ -908,7 +914,7 @@ export function MemoHistory({
             fontSize: 12,
           }}
         >
-          Sin memos aún. Ejecutá el pipeline para ver resultados.
+          {t("memo.noMemos")}
         </div>
       ) : (
         filtered.map((memo) => (

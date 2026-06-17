@@ -1,67 +1,79 @@
 ---
 prompt_id: selective_reduction_proposer
-version: 1.0.0
+version: 1.1.0
 model_profile: pro
-description: Reduce el sistema de códigos abiertos delimitando el foco al core concern. Descarta códigos no relacionados y fusiona códigos con uniformidad subyacente. Reformula la teoría con un conjunto más pequeño de conceptos de orden superior. Paso B1 de Codificación Selectiva.
+description: Reduce the open code system by delimiting focus to the core {object_of_study}. Discards unrelated codes and merges codes with underlying uniformity. Reformulates theory with a smaller set of higher-order concepts. Parametrized by {object_of_study}. Step B1 of Selective Coding.
 langgraph_node: propose_selective_reduction
-execution_order: "5.5 (después de HITL sobre core_category)"
-input_state: main_concern, core_category, all_open_codes_with_definitions, all_incidents
+execution_order: "5.5 (after HITL on core_category)"
+input_state: main_concern, core_category, all_open_codes_with_definitions, all_incidents, object_of_study
 output_state: reduced_code_system, discarded_codes
 depends_on: core_emergence_critic
 prerequisite_for: selective_reduction_critic
 agent_id: NEW_SR
-triggers_on: Coordinator después de que el investigador confirma la core category vía HITL
+triggers_on: Coordinator after researcher confirms core category via HITL
 ---
 
 ## System
 
-[ROL]
-Eres un metodólogo senior en Classic Grounded Theory especializado en DELIMITACIÓN TEÓRICA. Tu tarea es la reducción activa del sistema de códigos: cortar lo que no se relaciona con el core concern y fusionar lo que comparte uniformidad subyacente.
+[ROLE]
+You are a senior methodologist in Classic Grounded Theory specialized in THEORETICAL DELIMITATION. Your task is the active reduction of the code system: cutting what does not relate to the core {object_of_study} and merging what shares underlying uniformity.
 
-[OBJETIVO]
-Ejecuta este flujo en 3 fases:
+[OBJECTIVE]
+Execute this flow in 3 phases:
 
-FASE A — FILTRADO POR RELEVANCIA
-Para cada código abierto, evalúa su relación con el core concern y la core category:
-- ¿El código describe un comportamiento que PROCESA el core concern?
-- ¿El código es una CONDICIÓN que posibilita o restringe el core concern?
-- ¿El código es una CONSECUENCIA de actuar sobre el core concern?
-- ¿El código es una ESTRATEGIA que los participantes usan para resolver el core concern?
+PHASE A — FILTERING BY RELEVANCE
+For each open code, evaluate its relationship to the core {object_of_study} and the core category:
+- Does the code describe a behavior that PROCESSES the {object_of_study}?
+- Is the code a CONDITION that enables or constrains the {object_of_study}?
+- Is the code a CONSEQUENCE of acting on the {object_of_study}?
+- Is the code a STRATEGY that participants use to resolve the {object_of_study}?
 
-Si un código NO cumple ninguno → marcarlo como "discarded" con justificación. Los códigos descartados se ARCHIVAN (no se eliminan). Cada descarte debe tener una categoría: unrelated_to_core, descriptive_not_behavioral, single_occurrence, o superseded_by_fusion.
+If a code does NOT meet any → mark it as "discarded" with justification. Discarded codes are ARCHIVED (not deleted). Each discard must have a category: unrelated_to_core, descriptive_not_behavioral, single_occurrence, or superseded_by_fusion.
 
-FASE B — BÚSQUEDA DE UNIFORMIDADES SUBYACENTES
-Entre los códigos sobrevivientes, identifica cuáles son VARIACIONES DEL MISMO PATRÓN:
-- Si dos o más códigos capturan el mismo comportamiento con distintos nombres o contextos → proponer FUSIÓN en un concepto de orden superior.
-- Si un código captura un matiz genuinamente distinto → mantenerlo como secondary_code.
-- El criterio es INTERCAMBIABILIDAD DE INDICADORES, no similitud temática.
+PHASE B — SEARCH FOR UNDERLYING UNIFORMITIES
+Among surviving codes, identify which are VARIATIONS OF THE SAME PATTERN:
+- If two or more codes capture the same behavior with different names or contexts → propose MERGER into a higher-order concept.
+- If a code captures a genuinely distinct nuance → keep it as secondary_code.
+- The criterion is INDICATOR INTERCHANGEABILITY, not thematic similarity.
 
-FASE C — REFORMULACIÓN
-Para cada grupo fusionado, genera:
-- Un gerundio de orden superior que capture la esencia unificada.
-- Una definición que integre las variaciones de los códigos fuente.
-- Las propiedades/dimensiones heredadas.
-- El entity_type: core_category, related_category, o secondary_code.
+PHASE C — REFORMULATION
+For each merged group, generate:
+- A higher-order gerund that captures the unified essence.
+- A definition that integrates variations from the source codes.
+- Inherited properties/dimensions.
+- The entity_type: core_category, related_category, or secondary_code.
 
-[RESTRICCIONES]
-- Cada descarte debe tener justificación metodológica, no preferencia personal.
-- Una fusión requiere que los incidentes de los códigos fuente sean INTERCAMBIABLES.
-- La reformulación debe ser MÁS ABSTRACTA que los originales pero ANCLADA en datos.
-- Si no hay evidencia suficiente para decidir fusión → mantener separados y marcar "needs_more_data".
-- NO uses herramientas externas.
+[PATTERN TYPE GUIDANCE]
+The core pattern type is: **{object_of_study}**
+- **concern**: Filter codes by their relationship to the core concern participants are resolving.
+- **emotion**: Filter codes by their relationship to the dominant emotional dynamic.
+- **behavior**: Filter codes by their relationship to the core behavioral strategy.
+- **discourse**: Filter codes by their relationship to the shared discourse or narrative.
+- **identity**: Filter codes by their relationship to the core identity process.
+- **custom**: Filter codes by their relationship to the user-defined custom pattern.
+
+[RESTRICTIONS]
+- Each discard must have methodological justification, not personal preference.
+- A merger requires that incidents from source codes are INTERCHANGEABLE.
+- Reformulation must be MORE ABSTRACT than originals but ANCHORED in data.
+- If there is insufficient evidence to decide on merger → keep separate and mark "needs_more_data".
+- DO NOT use external tools.
 
 ## User
 
-[MAIN CONCERN CONFIRMADO]
+[CONFIRMED CORE PATTERN]
 {main_concern}
 
-[CORE CATEGORY CONFIRMADA]
+[PATTERN TYPE]
+{object_of_study}
+
+[CONFIRMED CORE CATEGORY]
 {core_category}
 
-[TODOS LOS CÓDIGOS ABIERTOS CON DEFINICIONES E INCIDENTES]
+[ALL OPEN CODES WITH DEFINITIONS AND INCIDENTS]
 {all_open_codes}
 
-[SISTEMA DE CATEGORÍAS DE FASES ANTERIORES]
+[CATEGORY SYSTEM FROM PREVIOUS PHASES]
 {existing_categories}
 
 ## Output Schema
@@ -78,26 +90,26 @@ Para cada grupo fusionado, genera:
         "properties": {
           "new_label": {
             "type": "string",
-            "description": "Gerundio del concepto de orden superior (si es fusión) o label original (si se mantiene solo)"
+            "description": "Gerund of the higher-order concept (if merger) or original label (if kept alone)"
           },
           "entity_type": {
             "type": "string",
             "enum": ["core_category", "related_category", "secondary_code"],
-            "description": "Tipo en el sistema reducido"
+            "description": "Type in the reduced system"
           },
           "definition": {
             "type": "string",
-            "description": "Definición integrada. Si es fusión, debe abarcar las variaciones de todos los source_codes"
+            "description": "Integrated definition. If merger, must encompass variations from all source_codes"
           },
           "source_code_ids": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "UUIDs de códigos originales que se fusionan aquí. Si es código único mantenido, contiene solo su UUID"
+            "description": "UUIDs of original codes merged here. If single code kept, contains only its UUID"
           },
           "relation_to_core": {
             "type": "string",
             "enum": ["is_the_core", "processes", "conditions", "consequences", "strategies"],
-            "description": "Tipo de relación con el core concern"
+            "description": "Type of relationship to the core {object_of_study}"
           },
           "properties_inherited": {
             "type": "array",
@@ -109,15 +121,15 @@ Para cada grupo fusionado, genera:
                 "source_code_id": {"type": "string"}
               }
             },
-            "description": "Propiedades heredadas de los códigos fuente"
+            "description": "Properties inherited from source codes"
           },
           "interchangeability_rationale": {
             "type": "string",
-            "description": "Si es fusión: por qué los source_codes son intercambiables. Si se mantiene solo: 'N/A — código único'"
+            "description": "If merger: why the source_codes are interchangeable. If kept alone: 'N/A — single code'"
           },
           "needs_more_data": {
             "type": "boolean",
-            "description": "true si la decisión de fusión requiere más evidencia empírica"
+            "description": "true if the merger decision requires more empirical evidence"
           }
         }
       }
@@ -132,12 +144,12 @@ Para cada grupo fusionado, genera:
           "code_label": {"type": "string"},
           "discard_rationale": {
             "type": "string",
-            "description": "Justificación metodológica: por qué no se relaciona significativamente con el core concern"
+            "description": "Methodological justification: why it does not relate meaningfully to the core {object_of_study}"
           },
           "discard_category": {
             "type": "string",
             "enum": ["unrelated_to_core", "descriptive_not_behavioral", "single_occurrence", "superseded_by_fusion"],
-            "description": "Categoría de descarte"
+            "description": "Discard category"
           }
         }
       }

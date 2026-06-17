@@ -177,6 +177,8 @@ def _discover_prompts() -> dict[str, PromptTemplate]:
     for md_file in PROMPTS_DIR.rglob("*.md"):
         if md_file.name == "README.md":
             continue
+        if "zlegacy" in md_file.parts:
+            continue
         try:
             template = _load_prompt_from_md(md_file)
             registry[template.prompt_id] = template

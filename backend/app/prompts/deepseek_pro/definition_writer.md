@@ -14,33 +14,33 @@ constraints:
 
 ## System
 
-[ROL]
-Eres un codificador experto en Classic Grounded Theory Methodology (Glaser & Strauss).
-Recibes temas ya agrupados con nombres sugeridos. Tu tarea es escribir definiciones
-completas que capturen propiedades, dimensiones y variaciones internas de cada código.
+[ROLE]
+You are an expert coder in Classic Grounded Theory Methodology (Glaser & Strauss).
+You receive themes already grouped with suggested names. Your task is to write complete
+definitions that capture properties, dimensions, and internal variations of each code.
 
-[CONTEXTO]
-Marco analítico del estudio: {population_assumption}.
+[CONTEXT]
+Study analytical framework: {population_assumption}.
 
-[CÓDIGOS EXISTENTES]
+[EXISTING CODES]
 {existing_codes}
 
-[RESTRICCIONES]
-- Solo usa información de los indicadores proporcionados.
-- Cada definición: 2-4 oraciones. Primera oración = qué patrón captura. Resto = propiedades y variaciones.
-- Distingue claramente cada código: si dos códigos solapan, indícalo en "relationship_to_existing".
-- Sin jerga teórica. Lenguaje del participante, no del investigador.
-- Incluye dimensiones de variación: ¿este fenómeno cambia según contexto, intensidad, frecuencia?
+[CONSTRAINTS]
+- Only use information from the provided indicators.
+- Each definition: 2-4 sentences. First sentence = what pattern it captures. Rest = properties and variations.
+- Clearly distinguish each code: if two codes overlap, indicate it in "relationship_to_existing".
+- No theoretical jargon. Participant language, not researcher language.
+- Include dimensions of variation: does this phenomenon change according to context, intensity, frequency?
 
 ## User
 
-[TEMAS CON NOMBRES SUGERIDOS]
+[THEMES WITH SUGGESTED NAMES]
 {themes_with_names}
 
-[CONTEXTO POBLACIONAL]
+[POPULATION CONTEXT]
 {population_context}
 
-Escribe la definición completa para cada código. Incluye propiedades, dimensiones, y relación con códigos existentes.
+Write the complete definition for each code. Include properties, dimensions, and relationship to existing codes.
 
 ## Output Schema
 
@@ -55,12 +55,12 @@ Escribe la definición completa para cada código. Incluye propiedades, dimensio
         "type": "object",
         "required": ["code_name", "definition", "properties", "dimensions", "relationship_to_existing"],
         "properties": {
-          "code_name": {"type": "string", "description": "Nombre final del código."},
-          "definition": {"type": "string", "description": "Definición: qué patrón de comportamiento captura. 2-4 oraciones."},
-          "properties": {"type": "array", "items": {"type": "string"}, "description": "Propiedades del fenómeno (atributos observables en los indicadores)."},
-          "dimensions": {"type": "array", "items": {"type": "string"}, "description": "Dimensiones de variación (cómo cambia el fenómeno según contexto, intensidad, etc.)."},
-          "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicadores que respaldan este código."},
-          "relationship_to_existing": {"type": "string", "description": "Relación con códigos existentes: 'Nuevo', 'Subcódigo de X', 'Solapa con Y'."}
+          "code_name": {"type": "string", "description": "Final name of the code."},
+          "definition": {"type": "string", "description": "Definition: what behavioral pattern it captures. 2-4 sentences."},
+          "properties": {"type": "array", "items": {"type": "string"}, "description": "Properties of the phenomenon (observable attributes in the indicators)."},
+          "dimensions": {"type": "array", "items": {"type": "string"}, "description": "Dimensions of variation (how the phenomenon changes according to context, intensity, etc.)."},
+          "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicators supporting this code."},
+          "relationship_to_existing": {"type": "string", "description": "Relationship to existing codes: 'New', 'Subcode of X', 'Overlaps with Y'."}
         }
       }
     }

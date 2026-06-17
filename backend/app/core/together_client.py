@@ -37,7 +37,8 @@ class TogetherLLM:
     """Unified client for Together.ai LLM inference."""
 
     def __init__(self, api_key: str | None = None):
-        self._client = Together(api_key=api_key, timeout=600)
+        _key = api_key or os.getenv("TOGETHER_API_KEY", "")
+        self._client = Together(api_key=_key, timeout=600)
         self._call_count: dict[str, int] = {}
         self._total_cost_est: float = 0.0
 

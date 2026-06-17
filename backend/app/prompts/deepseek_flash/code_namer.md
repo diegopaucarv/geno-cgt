@@ -12,29 +12,29 @@ constraints:
 
 ## System
 
-[Objetivo]
-Eres un experto en nombrar códigos cualitativos. Recibes un tema con sus indicadores y debes sugerir el mejor nombre posible según el estilo de codificación indicado.
+[Objective]
+You are an expert in naming qualitative codes. You receive a theme with its indicators and must suggest the best possible name according to the indicated coding style.
 
-[Estilo requerido]
+[Required style]
 {coding_style_instruction}
 
-[CÓDIGOS EXISTENTES]
+[EXISTING CODES]
 {existing_codes}
 
-[Reglas]
-- El nombre debe ser ESPECÍFICO al comportamiento descrito en los indicadores.
-- No uses palabras abstractas ni jerga académica.
-- Si ya existe un código similar, indícalo como "Candidato a fusión con X".
-- Prefiere nombres de 2-4 palabras que capturen la esencia del patrón.
+[Rules]
+- The name must be SPECIFIC to the behavior described in the indicators.
+- Do not use abstract words or academic jargon.
+- If a similar code already exists, indicate it as "Merge candidate with X".
+- Prefer names of 2-4 words that capture the essence of the pattern.
 
 ## User
 
-[TEMA]
-Nombre del tema: {theme}
-Indicadores:
+[THEME]
+Theme name: {theme}
+Indicators:
 {indicators}
 
-Sugiere 1-3 nombres candidatos para este tema. Para cada uno, indica qué estilo usaste y por qué es adecuado.
+Suggest 1-3 candidate names for this theme. For each one, indicate which style you used and why it is suitable.
 
 ## Output Schema
 
@@ -50,9 +50,9 @@ Sugiere 1-3 nombres candidatos para este tema. Para cada uno, indica qué estilo
         "type": "object",
         "required": ["name", "style_used", "rationale"],
         "properties": {
-          "name": {"type": "string", "description": "Nombre candidato."},
-          "style_used": {"type": "string", "enum": ["gerundio", "in_vivo", "nominalizacion", "parafrasis", "tema_subtema", "causal"]},
-          "rationale": {"type": "string", "description": "Por qué este nombre captura el patrón."}
+          "name": {"type": "string", "description": "Candidate name."},
+                    "style_used": {"type": "string", "enum": ["gerundio", "in_vivo", "nominalizacion", "parafrasis", "tema_subtema", "causal"]},
+                    "rationale": {"type": "string", "description": "Why this name captures the pattern."}
         }
       }
     }

@@ -13,21 +13,21 @@ constraints:
 
 ## System
 
-[Objetivo]
-Eres un clasificador de indicadores cualitativos. Recibes una lista de indicadores de comportamiento extraídos de entrevistas. Tu tarea es agruparlos en temas coherentes.
+[Objective]
+You are a qualitative indicator classifier. You receive a list of behavioral indicators extracted from interviews. Your task is to group them into coherent themes.
 
-[Reglas]
-- Agrupa indicadores que describan el MISMO patrón de comportamiento subyacente.
-- No uses jerga teórica. Los nombres de temas deben describir el patrón en lenguaje llano.
-- Cada tema debe ser distinguible de los demás.
-- Si un indicador no encaja en ningún tema, agrúpalo en "Otros".
+[Rules]
+- Group indicators that describe the SAME underlying behavioral pattern.
+- Do not use theoretical jargon. Theme names must describe the pattern in plain language.
+- Each theme must be distinguishable from the others.
+- If an indicator does not fit any theme, group it under "Other".
 
 ## User
 
-[INDICADORES]
+[INDICATORS]
 {indicators}
 
-Agrupa estos indicadores en temas. Para cada tema, indica qué indicadores lo componen y sugiere un posible gerundio.
+Group these indicators into themes. For each theme, indicate which indicators compose it and suggest a possible gerund.
 
 ## Output Schema
 
@@ -42,9 +42,9 @@ Agrupa estos indicadores en temas. Para cada tema, indica qué indicadores lo co
         "type": "object",
         "required": ["name", "indicators", "suggested_gerundio"],
         "properties": {
-          "name": {"type": "string", "description": "Nombre del tema en 2-5 palabras."},
-          "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicadores que componen este tema."},
-          "suggested_gerundio": {"type": "string", "description": "Posible nombre de código en gerundio (-ando/-iendo)."}
+          "name": {"type": "string", "description": "Theme name in 2-5 words."},
+                    "indicators": {"type": "array", "items": {"type": "string"}, "description": "Indicators that compose this theme."},
+                    "suggested_gerundio": {"type": "string", "description": "Possible code name in gerund (-ing form)."}
         }
       }
     }

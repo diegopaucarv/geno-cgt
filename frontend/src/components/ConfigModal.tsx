@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { getToken, clearToken } from "../api/client";
+import { useI18n } from "../i18n";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -75,17 +76,17 @@ const OVERLAY: React.CSSProperties = {
 const MODAL: React.CSSProperties = {
   background: "#161B22",
   border: "1px solid #30363D",
-  borderRadius: 12,
-  width: 680,
+  borderRadius: 14,
+  width: 800,
+  height: 600,
   maxHeight: "85vh",
-  overflow: "hidden",
   display: "flex",
   flexDirection: "column",
-  boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+  boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
 };
 
 const HEADER: React.CSSProperties = {
-  padding: "14px 20px",
+  padding: "12px 20px",
   borderBottom: "1px solid #21262D",
   display: "flex",
   justifyContent: "space-between",
@@ -93,29 +94,53 @@ const HEADER: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const TAB_ROW: React.CSSProperties = {
+const MAIN_ROW: React.CSSProperties = {
   display: "flex",
-  borderBottom: "1px solid #21262D",
-  padding: "0 20px",
+  flex: 1,
+  overflow: "hidden",
+};
+
+// ── Sidebar ──
+
+const SIDEBAR: React.CSSProperties = {
+  width: 200,
   flexShrink: 0,
-  overflowX: "auto",
+  borderRight: "1px solid #21262D",
+  padding: "10px 0",
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
 };
 
-const TAB: React.CSSProperties = {
-  padding: "8px 14px",
-  fontSize: 12,
+const NAV_ITEM: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "10px 16px",
+  margin: "0 6px",
+  borderRadius: 8,
+  fontSize: 13,
   cursor: "pointer",
-  borderBottom: "2px solid transparent",
-  background: "none",
   color: "#8B949E",
+  background: "transparent",
+  border: "none",
+  textAlign: "left",
   transition: "all 0.15s",
-  whiteSpace: "nowrap",
+  width: "calc(100% - 12px)",
 };
 
-const TAB_ACTIVE: React.CSSProperties = {
-  ...TAB,
+const NAV_ITEM_ACTIVE: React.CSSProperties = {
+  ...NAV_ITEM,
   color: "#E6EDF3",
-  borderBottom: "2px solid #A371F7",
+  background: "#A371F712",
+  fontWeight: 600,
+};
+
+const NAV_ICON: React.CSSProperties = {
+  fontSize: 16,
+  width: 24,
+  textAlign: "center",
+  flexShrink: 0,
 };
 
 const BODY: React.CSSProperties = {
@@ -247,11 +272,12 @@ const FLOAT_BTN: React.CSSProperties = {
 /* ── Floating Button ───────────────────────────────────────────────── */
 
 export function ConfigButton({ onClick }: { onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       onClick={onClick}
       style={FLOAT_BTN}
-      title="Configuración"
+      title={t("config.configTooltip")}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "scale(1.08)";
       }}
@@ -432,8 +458,10 @@ function ToggleField({
 
 function EnvOverrideBadge({
   overrides,
+  blockedLabel,
 }: {
   overrides: Record<string, string>;
+  blockedLabel: string;
 }) {
   const keys = Object.keys(overrides);
   if (keys.length === 0) return null;
@@ -449,7 +477,8 @@ function EnvOverrideBadge({
         border: "1px solid #D2992233",
       }}
     >
-      ⚠ Bloqueado por env: {keys.join(", ")}
+      {blockedLabel}
+      {keys.join(", ")}
     </div>
   );
 }
@@ -462,6 +491,7 @@ interface Props {
 }
 
 export default function ConfigModal({ open, onClose }: Props) {
+  const { t, language, setLanguage } = useI18n();
   const [tab, setTab] = useState<
     "llm" | "segmentation" | "cgt" | "system" | "session"
   >("llm");
@@ -485,7 +515,7 @@ export default function ConfigModal({ open, onClose }: Props) {
     setError("");
     try {
       const res = await fetch("/api/v1/config");
-      if (!res.ok) throw new Error("Backend no disponible");
+      if (!res.ok) throw new Error(t("config.backendUnavailable"));
       const data: FullConfig = await res.json();
       setConfig(data);
       setLlm(data.llm);
@@ -497,7 +527,7 @@ export default function ConfigModal({ open, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchSession = useCallback(async () => {
     if (!token) {
@@ -569,20 +599,23 @@ export default function ConfigModal({ open, onClose }: Props) {
       });
       const data = await res.json();
       if (res.ok) {
-        setSaveMsg(data.message || "✅ Guardado");
+        setSaveMsg(data.message || t("config.saved"));
         if (data.blocked_by_env) {
           setSaveMsg(
-            (data.message || "Guardado") +
-              " — algunas variables bloqueadas por env.",
+            (data.message || t("config.savedMessage")) +
+              t("config.savedBlockedMessage"),
           );
         }
         // Refresh config to get updated values
         await fetchConfig();
       } else {
-        setSaveMsg("❌ " + (data.detail || "Error al guardar"));
+        setSaveMsg(
+          t("config.saveErrorPrefix") +
+            (data.detail || t("config.saveErrorFallback")),
+        );
       }
     } catch (e: any) {
-      setSaveMsg("❌ " + e.message);
+      setSaveMsg(t("config.saveErrorPrefix") + e.message);
     } finally {
       setSaving(false);
     }
@@ -610,7 +643,7 @@ export default function ConfigModal({ open, onClose }: Props) {
         <div style={HEADER}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 600, color: "#E6EDF3" }}>
-              ⚙ Configuración
+              {t("config.title")}
             </span>
             {config && (
               <span style={envBadge(config.system.environment)}>
@@ -632,355 +665,415 @@ export default function ConfigModal({ open, onClose }: Props) {
           </button>
         </div>
 
-        {/* ── Tabs ── */}
-        <div style={TAB_ROW}>
-          {(
-            [
-              ["llm", "🧠 LLM"],
-              ["segmentation", "📝 Segmentación"],
-              ["cgt", "📐 CGT"],
-              ["system", "💻 Sistema"],
-              ["session", token ? "🔐 Sesión" : "🔓 Sesión"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              style={tab === k ? TAB_ACTIVE : TAB}
-              onClick={() => setTab(k)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* ── Main row: Sidebar + Content ── */}
+        <div style={MAIN_ROW}>
+          {/* ── Sidebar ── */}
+          <div style={SIDEBAR}>
+            {(
+              [
+                [
+                  "session",
+                  token ? "🔐" : "🔓",
+                  token
+                    ? t("config.tabSession")
+                    : t("config.tabSessionLoggedOut"),
+                ],
+                ["system", "💻", t("config.tabSystem")],
+                ["llm", "🧠", t("config.tabLLM")],
+                ["segmentation", "📝", t("config.tabSegmentation")],
+                ["cgt", "📐", t("config.tabCGT")],
+              ] as const
+            ).map(([k, icon, label]) => (
+              <button
+                key={k}
+                style={tab === k ? NAV_ITEM_ACTIVE : NAV_ITEM}
+                onClick={() => setTab(k)}
+              >
+                <span style={NAV_ICON}>{icon}</span>
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {/* ── Body ── */}
-        <div style={BODY}>
-          {loading && (
-            <p style={{ color: "#8B949E", fontSize: 13 }}>Cargando…</p>
-          )}
-          {error && <p style={{ color: "#F85149", fontSize: 13 }}>{error}</p>}
+          {/* ── Body ── */}
+          <div style={BODY}>
+            {loading && (
+              <p style={{ color: "#8B949E", fontSize: 13 }}>
+                {t("config.loading")}
+              </p>
+            )}
+            {error && <p style={{ color: "#F85149", fontSize: 13 }}>{error}</p>}
 
-          {/* ─── LLM ──────────────────────────────────────────── */}
-          {tab === "llm" && llm && (
-            <>
-              <div style={SECT}>
-                <div style={SECT_TITLE}>Modelo PRO (razonamiento profundo)</div>
-                <TextField
-                  label="Model ID"
-                  value={llm.model_pro}
-                  onChange={(v) => setLlm({ ...llm, model_pro: v })}
-                  mono
-                />
-                <NumberField
-                  label="Max tokens"
-                  value={llm.model_pro_max_tokens}
-                  onChange={(v) => setLlm({ ...llm, model_pro_max_tokens: v })}
-                  min={256}
-                  max={65536}
-                />
-                <NumberField
-                  label="Temperature"
-                  value={llm.model_pro_temperature}
-                  onChange={(v) => setLlm({ ...llm, model_pro_temperature: v })}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                />
-                <EnvOverrideBadge overrides={llm.env_overrides} />
-              </div>
-              <div style={SECT}>
-                <div style={SECT_TITLE}>Modelo FLASH (extracción rápida)</div>
-                <TextField
-                  label="Model ID"
-                  value={llm.model_flash}
-                  onChange={(v) => setLlm({ ...llm, model_flash: v })}
-                  mono
-                />
-                <NumberField
-                  label="Max tokens"
-                  value={llm.model_flash_max_tokens}
-                  onChange={(v) =>
-                    setLlm({ ...llm, model_flash_max_tokens: v })
-                  }
-                  min={256}
-                  max={65536}
-                />
-                <NumberField
-                  label="Temperature"
-                  value={llm.model_flash_temperature}
-                  onChange={(v) =>
-                    setLlm({ ...llm, model_flash_temperature: v })
-                  }
-                  min={0}
-                  max={2}
-                  step={0.05}
-                />
-                <NumberField
-                  label="Repetition penalty"
-                  value={llm.model_flash_repetition_penalty}
-                  onChange={(v) =>
-                    setLlm({ ...llm, model_flash_repetition_penalty: v })
-                  }
-                  min={0}
-                  max={2}
-                  step={0.05}
-                />
-                <NumberField
-                  label="Top P"
-                  value={llm.model_flash_top_p}
-                  onChange={(v) => setLlm({ ...llm, model_flash_top_p: v })}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                />
-                <EnvOverrideBadge overrides={llm.env_overrides} />
-              </div>
-            </>
-          )}
-
-          {/* ─── Segmentation ──────────────────────────────────── */}
-          {tab === "segmentation" && seg && (
-            <div style={SECT}>
-              <div style={SECT_TITLE}>Pipeline de segmentación NLP</div>
-              <SelectField
-                label="Modo"
-                value={seg.mode}
-                options={[
-                  { value: "spacy", label: "spaCy (reglas lingüísticas)" },
-                  {
-                    value: "progressive",
-                    label: "Progressive (frases + merge)",
-                  },
-                  {
-                    value: "reinert",
-                    label: "Reinert (clustering estadístico)",
-                  },
-                ]}
-                onChange={(v) => setSeg({ ...seg, mode: v })}
-              />
-              <ToggleField
-                label="Usar método Reinert (segmentación por co-ocurrencias)"
-                value={seg.reinert}
-                onChange={(v) => setSeg({ ...seg, reinert: v })}
-              />
-              <TextField
-                label="Modelo spaCy"
-                value={seg.spacy_model}
-                onChange={(v) => setSeg({ ...seg, spacy_model: v })}
-                mono
-              />
-              <NumberField
-                label="Concurrencia NLP"
-                value={seg.nlp_concurrency}
-                onChange={(v) => setSeg({ ...seg, nlp_concurrency: v })}
-                min={1}
-                max={8}
-              />
-              <EnvOverrideBadge overrides={seg.env_overrides} />
-            </div>
-          )}
-
-          {/* ─── CGT ───────────────────────────────────────────── */}
-          {tab === "cgt" && cgt && (
-            <>
-              <div style={SECT}>
-                <div style={SECT_TITLE}>Estilos de codificación (Saldaña)</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {cgt.available_styles.map((s) => {
-                    const active = cgt.coding_styles.includes(s.key);
-                    return (
-                      <button
-                        key={s.key}
-                        onClick={() => {
-                          const next = active
-                            ? cgt.coding_styles.filter((k) => k !== s.key)
-                            : [...cgt.coding_styles, s.key];
-                          setCgt({
-                            ...cgt,
-                            coding_styles: next.length ? next : ["gerundio"],
-                          });
-                        }}
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                          fontSize: 11,
-                          border: active
-                            ? "1px solid #A371F7"
-                            : "1px solid #21262D",
-                          background: active ? "#A371F718" : "transparent",
-                          color: active ? "#A371F7" : "#8B949E",
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                        }}
-                        title={s.saldana_category}
-                      >
-                        {s.name} {active ? "✓" : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-                <EnvOverrideBadge overrides={cgt.env_overrides} />
-              </div>
-              <div style={SECT}>
-                <div style={SECT_TITLE}>Metodología CGT</div>
-                <SelectField
-                  label="Objeto de estudio"
-                  value={cgt.object_of_study}
-                  options={[
-                    {
-                      value: "concern",
-                      label: "Concern (preocupación principal)",
-                    },
-                    { value: "emotion", label: "Emotion (emoción)" },
-                    { value: "behavior", label: "Behavior (comportamiento)" },
-                    { value: "discourse", label: "Discourse (discurso)" },
-                    { value: "identity", label: "Identity (identidad)" },
-                    { value: "custom", label: "Custom (personalizado)" },
-                  ]}
-                  onChange={(v) => setCgt({ ...cgt, object_of_study: v })}
-                />
-                <TextareaField
-                  label="Hipótesis poblacional (population assumption)"
-                  value={cgt.population_assumption}
-                  onChange={(v) => setCgt({ ...cgt, population_assumption: v })}
-                  rows={4}
-                />
-                <EnvOverrideBadge overrides={cgt.env_overrides} />
-              </div>
-            </>
-          )}
-
-          {/* ─── System ────────────────────────────────────────── */}
-          {tab === "system" && sys && (
-            <div style={SECT}>
-              <div style={SECT_TITLE}>Sistema y despliegue</div>
-              <SelectField
-                label="Entorno"
-                value={sys.environment}
-                options={[
-                  { value: "dev", label: "Desarrollo (dev)" },
-                  { value: "staging", label: "Staging" },
-                  { value: "prod", label: "Producción (prod)" },
-                ]}
-                onChange={(v) => setSys({ ...sys, environment: v })}
-              />
-              <SelectField
-                label="Modo de orquestación"
-                value={sys.orchestration_mode}
-                options={[
-                  { value: "celery", label: "Celery (workers distribuidos)" },
-                  { value: "sync", label: "Síncrono (sin workers)" },
-                ]}
-                onChange={(v) => setSys({ ...sys, orchestration_mode: v })}
-              />
-              <ToggleField
-                label="Usar GPU (TEI embeddings)"
-                value={sys.use_gpu}
-                onChange={(v) => setSys({ ...sys, use_gpu: v })}
-              />
-              <EnvOverrideBadge overrides={sys.env_overrides} />
-
-              {config && Object.keys(config._runtime_overrides).length > 0 && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: 10,
-                    background: "#0D1117",
-                    borderRadius: 6,
-                    border: "1px solid #21262D",
-                  }}
-                >
-                  <div style={{ ...SECT_TITLE, color: "#484F58" }}>
-                    Overrides activos (runtime.json)
-                  </div>
-                  {Object.entries(config._runtime_overrides).map(([k, v]) => (
-                    <div
-                      key={k}
-                      style={{
-                        fontSize: 11,
-                        fontFamily: "monospace",
-                        color: "#8B949E",
-                        padding: "1px 0",
-                      }}
-                    >
-                      <span style={{ color: "#A371F7" }}>{k}</span> = {v}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ─── Session ────────────────────────────────────────── */}
-          {tab === "session" && (
-            <>
-              {!token ? (
-                <div style={{ textAlign: "center", padding: "30px 0" }}>
-                  <p style={{ fontSize: 36, marginBottom: 12 }}>🔓</p>
-                  <p style={{ color: "#8B949E", fontSize: 13 }}>
-                    No has iniciado sesión.
-                  </p>
-                </div>
-              ) : (
+            {/* ─── LLM ──────────────────────────────────────────── */}
+            {tab === "llm" && llm && (
+              <>
                 <div style={SECT}>
-                  <div style={SECT_TITLE}>Usuario</div>
-                  {user ? (
-                    <>
-                      <div style={{ ...FIELD }}>
-                        <span style={LABEL}>User ID</span>
-                        <code style={{ fontSize: 12, color: "#E6EDF3" }}>
-                          {user.user_id.slice(0, 12)}…
-                        </code>
-                      </div>
-                      {user.email && (
-                        <div style={FIELD}>
-                          <span style={LABEL}>Email</span>
-                          <span style={{ fontSize: 13, color: "#E6EDF3" }}>
-                            {user.email}
-                          </span>
-                        </div>
-                      )}
-                      {user.name && (
-                        <div style={FIELD}>
-                          <span style={LABEL}>Nombre</span>
-                          <span style={{ fontSize: 13, color: "#E6EDF3" }}>
-                            {user.name}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p style={{ color: "#8B949E", fontSize: 13 }}>Cargando…</p>
-                  )}
-                  <div style={{ ...FIELD, marginTop: 12 }}>
-                    <span style={LABEL}>Token JWT</span>
+                  <div style={SECT_TITLE}>{t("config.modelPro")}</div>
+                  <TextField
+                    label={t("config.modelId")}
+                    value={llm.model_pro}
+                    onChange={(v) => setLlm({ ...llm, model_pro: v })}
+                    mono
+                  />
+                  <NumberField
+                    label={t("config.maxTokens")}
+                    value={llm.model_pro_max_tokens}
+                    onChange={(v) =>
+                      setLlm({ ...llm, model_pro_max_tokens: v })
+                    }
+                    min={256}
+                    max={65536}
+                  />
+                  <NumberField
+                    label={t("config.temperature")}
+                    value={llm.model_pro_temperature}
+                    onChange={(v) =>
+                      setLlm({ ...llm, model_pro_temperature: v })
+                    }
+                    min={0}
+                    max={2}
+                    step={0.05}
+                  />
+                  <EnvOverrideBadge
+                    overrides={llm.env_overrides}
+                    blockedLabel={t("config.blockedByEnv")}
+                  />
+                </div>
+                <div style={SECT}>
+                  <div style={SECT_TITLE}>{t("config.modelFlash")}</div>
+                  <TextField
+                    label={t("config.modelId")}
+                    value={llm.model_flash}
+                    onChange={(v) => setLlm({ ...llm, model_flash: v })}
+                    mono
+                  />
+                  <NumberField
+                    label={t("config.maxTokens")}
+                    value={llm.model_flash_max_tokens}
+                    onChange={(v) =>
+                      setLlm({ ...llm, model_flash_max_tokens: v })
+                    }
+                    min={256}
+                    max={65536}
+                  />
+                  <NumberField
+                    label={t("config.temperature")}
+                    value={llm.model_flash_temperature}
+                    onChange={(v) =>
+                      setLlm({ ...llm, model_flash_temperature: v })
+                    }
+                    min={0}
+                    max={2}
+                    step={0.05}
+                  />
+                  <NumberField
+                    label={t("config.repetitionPenalty")}
+                    value={llm.model_flash_repetition_penalty}
+                    onChange={(v) =>
+                      setLlm({ ...llm, model_flash_repetition_penalty: v })
+                    }
+                    min={0}
+                    max={2}
+                    step={0.05}
+                  />
+                  <NumberField
+                    label={t("config.topP")}
+                    value={llm.model_flash_top_p}
+                    onChange={(v) => setLlm({ ...llm, model_flash_top_p: v })}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                  />
+                  <EnvOverrideBadge
+                    overrides={llm.env_overrides}
+                    blockedLabel={t("config.blockedByEnv")}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ─── Segmentation ──────────────────────────────────── */}
+            {tab === "segmentation" && seg && (
+              <div style={SECT}>
+                <div style={SECT_TITLE}>{t("config.segmentationPipeline")}</div>
+                <SelectField
+                  label={t("config.mode")}
+                  value={seg.mode}
+                  options={[
+                    { value: "spacy", label: t("config.modeSpaCy") },
+                    {
+                      value: "progressive",
+                      label: t("config.modeProgressive"),
+                    },
+                    {
+                      value: "reinert",
+                      label: t("config.modeReinert"),
+                    },
+                  ]}
+                  onChange={(v) => setSeg({ ...seg, mode: v })}
+                />
+                <ToggleField
+                  label={t("config.useReinert")}
+                  value={seg.reinert}
+                  onChange={(v) => setSeg({ ...seg, reinert: v })}
+                />
+                <TextField
+                  label={t("config.spacyModel")}
+                  value={seg.spacy_model}
+                  onChange={(v) => setSeg({ ...seg, spacy_model: v })}
+                  mono
+                />
+                <NumberField
+                  label={t("config.nlpConcurrency")}
+                  value={seg.nlp_concurrency}
+                  onChange={(v) => setSeg({ ...seg, nlp_concurrency: v })}
+                  min={1}
+                  max={8}
+                />
+                <EnvOverrideBadge
+                  overrides={seg.env_overrides}
+                  blockedLabel={t("config.blockedByEnv")}
+                />
+              </div>
+            )}
+
+            {/* ─── CGT ───────────────────────────────────────────── */}
+            {tab === "cgt" && cgt && (
+              <>
+                <div style={SECT}>
+                  <div style={SECT_TITLE}>{t("config.codingStyles")}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {cgt.available_styles.map((s) => {
+                      const active = cgt.coding_styles.includes(s.key);
+                      return (
+                        <button
+                          key={s.key}
+                          onClick={() => {
+                            const next = active
+                              ? cgt.coding_styles.filter((k) => k !== s.key)
+                              : [...cgt.coding_styles, s.key];
+                            setCgt({
+                              ...cgt,
+                              coding_styles: next.length ? next : ["gerundio"],
+                            });
+                          }}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            fontSize: 11,
+                            border: active
+                              ? "1px solid #A371F7"
+                              : "1px solid #21262D",
+                            background: active ? "#A371F718" : "transparent",
+                            color: active ? "#A371F7" : "#8B949E",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          title={s.saldana_category}
+                        >
+                          {s.name} {active ? "✓" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <EnvOverrideBadge
+                    overrides={cgt.env_overrides}
+                    blockedLabel={t("config.blockedByEnv")}
+                  />
+                </div>
+                <div style={SECT}>
+                  <div style={SECT_TITLE}>{t("config.cgtMethodology")}</div>
+                  <SelectField
+                    label={t("config.studyObject")}
+                    value={cgt.object_of_study}
+                    options={[
+                      {
+                        value: "concern",
+                        label: t("config.concern"),
+                      },
+                      { value: "emotion", label: t("config.emotion") },
+                      { value: "behavior", label: t("config.behavior") },
+                      { value: "discourse", label: t("config.discourse") },
+                      { value: "identity", label: t("config.identity") },
+                      { value: "custom", label: t("config.custom") },
+                    ]}
+                    onChange={(v) => setCgt({ ...cgt, object_of_study: v })}
+                  />
+                  <TextareaField
+                    label={t("config.populationAssumption")}
+                    value={cgt.population_assumption}
+                    onChange={(v) =>
+                      setCgt({ ...cgt, population_assumption: v })
+                    }
+                    rows={4}
+                  />
+                  <EnvOverrideBadge
+                    overrides={cgt.env_overrides}
+                    blockedLabel={t("config.blockedByEnv")}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ─── System ────────────────────────────────────────── */}
+            {tab === "system" && sys && (
+              <div style={SECT}>
+                <div style={SECT_TITLE}>{t("config.systemDeployment")}</div>
+                <SelectField
+                  label={t("config.environment")}
+                  value={sys.environment}
+                  options={[
+                    { value: "dev", label: t("config.envDev") },
+                    { value: "staging", label: t("config.envStaging") },
+                    { value: "prod", label: t("config.envProd") },
+                  ]}
+                  onChange={(v) => setSys({ ...sys, environment: v })}
+                />
+                <SelectField
+                  label={t("config.orchestrationMode")}
+                  value={sys.orchestration_mode}
+                  options={[
+                    { value: "celery", label: t("config.orchCelery") },
+                    { value: "sync", label: t("config.orchSync") },
+                  ]}
+                  onChange={(v) => setSys({ ...sys, orchestration_mode: v })}
+                />
+                <ToggleField
+                  label={t("config.useGPU")}
+                  value={sys.use_gpu}
+                  onChange={(v) => setSys({ ...sys, use_gpu: v })}
+                />
+                <EnvOverrideBadge
+                  overrides={sys.env_overrides}
+                  blockedLabel={t("config.blockedByEnv")}
+                />
+
+                {config &&
+                  Object.keys(config._runtime_overrides).length > 0 && (
                     <div
                       style={{
-                        padding: 6,
+                        marginTop: 12,
+                        padding: 10,
                         background: "#0D1117",
-                        borderRadius: 4,
+                        borderRadius: 6,
                         border: "1px solid #21262D",
-                        fontSize: 10,
-                        fontFamily: "monospace",
-                        color: "#484F58",
-                        wordBreak: "break-all",
-                        maxHeight: 40,
-                        overflow: "hidden",
                       }}
                     >
-                      {token.slice(0, 50)}…
+                      <div style={{ ...SECT_TITLE, color: "#484F58" }}>
+                        {t("config.activeOverrides")}
+                      </div>
+                      {Object.entries(config._runtime_overrides).map(
+                        ([k, v]) => (
+                          <div
+                            key={k}
+                            style={{
+                              fontSize: 11,
+                              fontFamily: "monospace",
+                              color: "#8B949E",
+                              padding: "1px 0",
+                            }}
+                          >
+                            <span style={{ color: "#A371F7" }}>{k}</span> = {v}
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* ─── Session ────────────────────────────────────────── */}
+            {tab === "session" && (
+              <>
+                {!token ? (
+                  <div style={{ textAlign: "center", padding: "30px 0" }}>
+                    <p style={{ fontSize: 36, marginBottom: 12 }}>🔓</p>
+                    <p style={{ color: "#8B949E", fontSize: 13 }}>
+                      {t("config.notLoggedIn")}
+                    </p>
+                  </div>
+                ) : (
+                  <div style={SECT}>
+                    <div style={SECT_TITLE}>{t("config.userSection")}</div>
+                    {user ? (
+                      <>
+                        <div style={{ ...FIELD }}>
+                          <span style={LABEL}>{t("config.userId")}</span>
+                          <code style={{ fontSize: 12, color: "#E6EDF3" }}>
+                            {user.user_id.slice(0, 12)}…
+                          </code>
+                        </div>
+                        {user.email && (
+                          <div style={FIELD}>
+                            <span style={LABEL}>{t("config.email")}</span>
+                            <span style={{ fontSize: 13, color: "#E6EDF3" }}>
+                              {user.email}
+                            </span>
+                          </div>
+                        )}
+                        {user.name && (
+                          <div style={FIELD}>
+                            <span style={LABEL}>{t("config.name")}</span>
+                            <span style={{ fontSize: 13, color: "#E6EDF3" }}>
+                              {user.name}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p style={{ color: "#8B949E", fontSize: 13 }}>
+                        {t("config.loading")}
+                      </p>
+                    )}
+                    {/* ── Language selector ── */}
+                    <div style={{ ...FIELD, marginTop: 12 }}>
+                      <span style={LABEL}>{t("config.language")}</span>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value as any)}
+                        style={{
+                          ...INPUT,
+                          width: "100%",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="en">{t("config.langEn")}</option>
+                        <option value="es">{t("config.langEs")}</option>
+                        <option value="de">{t("config.langDe")}</option>
+                        <option value="pt">{t("config.langPt")}</option>
+                      </select>
+                    </div>
+                    <div style={{ ...FIELD, marginTop: 12 }}>
+                      <span style={LABEL}>{t("config.jwtToken")}</span>
+                      <div
+                        style={{
+                          padding: 6,
+                          background: "#0D1117",
+                          borderRadius: 4,
+                          border: "1px solid #21262D",
+                          fontSize: 10,
+                          fontFamily: "monospace",
+                          color: "#484F58",
+                          wordBreak: "break-all",
+                          maxHeight: 40,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {token.slice(0, 50)}…
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                      <button onClick={handleLogout} style={BTN_DANGER}>
+                        {t("config.signOut")}
+                      </button>
                     </div>
                   </div>
-                  <div style={{ marginTop: 16 }}>
-                    <button onClick={handleLogout} style={BTN_DANGER}>
-                      Cerrar sesión
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
+        {/* /MAIN_ROW */}
 
         {/* ── Footer ── */}
         <div style={FOOTER}>
@@ -1001,7 +1094,7 @@ export default function ConfigModal({ open, onClose }: Props) {
                 color: "#8B949E",
               }}
             >
-              Cerrar
+              {t("config.closeButton")}
             </button>
             {tab !== "session" && (
               <button
@@ -1009,7 +1102,7 @@ export default function ConfigModal({ open, onClose }: Props) {
                 disabled={saving}
                 style={BTN_PRIMARY}
               >
-                {saving ? "Guardando…" : "💾 Guardar"}
+                {saving ? t("common.saving") : t("config.saveButton")}
               </button>
             )}
           </div>

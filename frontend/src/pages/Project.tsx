@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useI18n } from "../i18n";
 import {
   getProject,
   listDocuments,
@@ -17,6 +18,7 @@ import {
   clearToken,
   stopProjectPipeline,
   restartFailedTasks,
+  updateProject,
   Project,
   Document,
   Category,
@@ -56,15 +58,19 @@ interface StageDef {
 }
 
 const PIPELINE_STAGES: StageDef[] = [
-  { key: "segment", icon: "✂️", label: "Segmentación" },
-  { key: "agents", icon: "🧠", label: "Open Coding (Agentes A)" },
-  { key: "synthesis", icon: "🔗", label: "Síntesis Cross-Doc (Phase B)" },
-  { key: "maturity", icon: "🔍", label: "Verificando madurez" },
-  { key: "find_cc", icon: "🎯", label: "Patrón de Interés + Core Cat." },
-  { key: "reduce", icon: "✂️", label: "Selective Reduction" },
-  { key: "saturate", icon: "🔄", label: "Core Saturation" },
-  { key: "build_db", icon: "🗄️", label: "Database A/B" },
-  { key: "playground", icon: "🎨", label: "Theoretical Playground" },
+  { key: "segment", icon: "✂️", label: "project.stageSegmentation" },
+  { key: "agents", icon: "🧠", label: "project.stageOpenCoding" },
+  { key: "synthesis", icon: "🔗", label: "project.stageCrossDoc" },
+  { key: "maturity", icon: "🔍", label: "project.stageVerifyingMaturity" },
+  { key: "find_cc", icon: "🎯", label: "project.stagePatternOfInterest" },
+  { key: "reduce", icon: "✂️", label: "project.stageSelectiveReduction" },
+  { key: "saturate", icon: "🔄", label: "project.stageCoreSaturation" },
+  { key: "build_db", icon: "🗄️", label: "project.stageDatabaseA" },
+  {
+    key: "playground",
+    icon: "🎨",
+    label: "project.stageTheoreticalPlayground",
+  },
 ];
 
 type StageStatus = "pending" | "running" | "done" | "error";
@@ -75,6 +81,7 @@ type ViewMode = "original" | "segmented";
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [project, setProject] = useState<Project | null>(null);
   const [docs, setDocs] = useState<Document[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
@@ -127,6 +134,13 @@ export default function ProjectDetail() {
   const [showHITLModal, setShowHITLModal] = useState(false);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
+
+  // ── Experimental Mode ──
+  const [expModeOpen, setExpModeOpen] = useState(false);
+  const [switchingPattern, setSwitchingPattern] = useState(false);
+  const [selectedOOS, setSelectedOOS] = useState<string>("");
+  const [customLabel, setCustomLabel] = useState("");
+
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -147,6 +161,18 @@ export default function ProjectDetail() {
       })
       .catch((e) => console.error("agent-memos failed:", e));
   }, [id]);
+
+  // ── Sync experimental mode state from project ──
+  useEffect(() => {
+    if (!project) return;
+    setSelectedOOS(project.object_of_study || "concern");
+    const pa = project.population_assumption;
+    const label =
+      pa && typeof pa === "object" && "custom_label" in pa
+        ? String((pa as any).custom_label)
+        : "";
+    setCustomLabel(label);
+  }, [project]);
 
   // ── Derive stage statuses from pipeline log on load ──
   useEffect(() => {
@@ -320,7 +346,10 @@ export default function ProjectDetail() {
   async function handlePunctuate(docId: string) {
     if (punctRunning === docId) {
       abortRef.current = true;
-      setPunctStatus((prev) => ({ ...prev, [docId]: "⏹ Cancelado" }));
+      setPunctStatus((prev) => ({
+        ...prev,
+        [docId]: t("project.preprocessingCancelled"),
+      }));
       setPunctRunning(null);
       await fetch("/api/v1/admin/workers/fast/stop", {
         method: "POST",
@@ -334,13 +363,19 @@ export default function ProjectDetail() {
     const auth = `Bearer ${localStorage.getItem("access_token")}`;
     abortRef.current = false;
     setPunctRunning(docId);
-    setPunctStatus((prev) => ({ ...prev, [docId]: "⏳ Arrancando worker…" }));
+    setPunctStatus((prev) => ({
+      ...prev,
+      [docId]: t("project.preprocessingStarting"),
+    }));
     await fetch("/api/v1/admin/workers/fast/start", {
       method: "POST",
       headers: { Authorization: auth },
     });
     await new Promise((r) => setTimeout(r, 1500));
-    setPunctStatus((prev) => ({ ...prev, [docId]: "⏳ Procesando…" }));
+    setPunctStatus((prev) => ({
+      ...prev,
+      [docId]: t("project.preprocessingProcessing"),
+    }));
     const doc = docs.find((d) => d.id === docId);
     if (doc?.texto_extraido) {
       originalTexts.current[docId] = doc.texto_extraido;
@@ -349,7 +384,10 @@ export default function ProjectDetail() {
       const res = await punctuateDocument(docId);
       if (abortRef.current) return;
       if (res.status === "ok" && (res as any).changes_made) {
-        setPunctStatus((prev) => ({ ...prev, [docId]: "✅ Mejorada" }));
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingImproved"),
+        }));
         refreshDocs();
         setSegments((prev) => {
           const n = { ...prev };
@@ -357,24 +395,33 @@ export default function ProjectDetail() {
           return n;
         });
       } else if (res.status === "ok") {
-        setPunctStatus((prev) => ({ ...prev, [docId]: "✅ OK" }));
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingOK"),
+        }));
       } else {
         setPunctStatus((prev) => ({
           ...prev,
-          [docId]: "❌ " + (res.message || "Error"),
+          [docId]:
+            t("project.preprocessingError") +
+            (res.message || t("project.preprocessingErrorFallback")),
         }));
       }
     } catch (err: any) {
       if (!abortRef.current)
-        setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + err.message }));
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingError") + err.message,
+        }));
     } finally {
       if (abortRef.current)
-        setPunctStatus((prev) => ({ ...prev, [docId]: "⏹ Cancelado" }));
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingCancelled"),
+        }));
       setPunctRunning(null);
     }
   }
-
-  // ── Stage restart ──────────────────────────────
 
   function findLastCompletedIdx(): number {
     let last = -1;
@@ -458,7 +505,7 @@ export default function ProjectDetail() {
       headers: { Authorization: `Bearer ${token}` },
     });
     setAgentMemos((prev) => prev.filter((m) => m.id !== memoId));
-    showToast("Eliminado permanentemente.");
+    showToast(t("project.memoDeleted"));
   }
 
   async function handleUpdateMemo(
@@ -483,7 +530,7 @@ export default function ProjectDetail() {
       }).catch(() => {});
       return prev.map((m) => (m.id === memoId ? { ...m, data: newData } : m));
     });
-    showToast("Los cambios realizados son permanentes.");
+    showToast(t("project.memoChangesPermanent"));
   }
 
   function showToast(msg: string) {
@@ -501,7 +548,7 @@ export default function ProjectDetail() {
         })
         .catch(() => {});
     }
-    showToast("Modificación aplicada. Memos actualizados.");
+    showToast(t("project.memoModificationApplied"));
   }
 
   // ── Pipeline IA ──────────────────────────────────
@@ -545,11 +592,11 @@ export default function ProjectDetail() {
     if (isContinue) {
       resetStages({ workers: "done", segment: "done" });
       updateStage("agents", "running");
-      setPipelineMsg("Continuando: solo agentes…");
+      setPipelineMsg(t("project.pipelineContinuing"));
     } else {
       resetStages();
       updateStage("workers", "running");
-      setPipelineMsg("Iniciando workers…");
+      setPipelineMsg(t("project.pipelineStarting"));
       await fetch("/api/v1/admin/workers/nlp/start", {
         method: "POST",
         headers: { Authorization: auth },
@@ -588,7 +635,7 @@ export default function ProjectDetail() {
       updateStage("agents", "done");
       updateStage("categories", "done");
       updateStage("done", "done");
-      setPipelineMsg("Todos los documentos ya están procesados.");
+      setPipelineMsg(t("project.pipelineAllProcessed"));
       setPipelineRunning(false);
       if (logPollRef.current) {
         clearInterval(logPollRef.current);
@@ -598,7 +645,7 @@ export default function ProjectDetail() {
     }
 
     // Call unified orchestrator (backend handles all docs)
-    setPipelineMsg("🎯 Orquestador analizando DB…");
+    setPipelineMsg(t("project.pipelineOrchestrator"));
     if (stageStatuses.segment !== "done") {
       updateStage("segment", "running");
     }
@@ -628,11 +675,11 @@ export default function ProjectDetail() {
       pipelineOk = true;
 
       if (res.status === "no_docs") {
-        setPipelineMsg("No hay documentos.");
+        setPipelineMsg(t("project.noDocuments"));
         updateStage("segment", "done");
         updateStage("agents", "done");
       } else {
-        setPipelineMsg(res.message || "Pipeline disparado");
+        setPipelineMsg(res.message || t("project.pipelineTriggered"));
         if (res.summary?.need_segment === 0) updateStage("segment", "done");
         if (res.summary?.need_agents === 0) {
           if ((res.summary?.need_segment ?? 1) === 0) {
@@ -645,7 +692,7 @@ export default function ProjectDetail() {
         // Phase B (synthesis) detection
         if ((res as any).task_ids?.phase_b) {
           updateStage("synthesis", "running");
-          setPipelineMsg("🔗 Phase B: Síntesis cross-documento…");
+          setPipelineMsg(t("project.pipelinePhaseB"));
         }
 
         // Poll until complete
@@ -661,7 +708,10 @@ export default function ProjectDetail() {
               const errNames = (status.summary.errors || [])
                 .map((e: { filename: string }) => e.filename)
                 .join(", ");
-              setPipelineMsg(`❌ Falló: ${errNames || "documento"}`);
+              setPipelineMsg(
+                t("project.pipelineFailed") +
+                  (errNames || t("project.document")),
+              );
               updateStage("segment", "error");
               updateStage("agents", "error");
               updateStage("synthesis", "error");
@@ -684,11 +734,11 @@ export default function ProjectDetail() {
             }
 
             if (status.summary.done === status.summary.total) {
-              setPipelineMsg("✅ Pipeline completado.");
-              break;
+              setPipelineMsg(t("project.pipelineCompleted"));
             }
           }
-          if (poll % 6 === 0) setPipelineMsg(`⏳ Procesando... (${poll * 5}s)`);
+          if (poll % 6 === 0)
+            setPipelineMsg(t("project.pipelineProcessing") + ` (${poll * 5}s)`);
         }
       }
     } catch (e: any) {
@@ -714,7 +764,7 @@ export default function ProjectDetail() {
         ].forEach((k) => updateStage(k, "error"));
       } else {
         resetStages();
-        setPipelineMsg("⏹ Pipeline cancelado — DB restaurada.");
+        setPipelineMsg(t("project.pipelineCancelled"));
       }
     } else if (pipelineOk) {
       // Pipeline completed normally
@@ -723,7 +773,7 @@ export default function ProjectDetail() {
       updateStage("synthesis", "done");
       updateStage("categories", "done");
       updateStage("done", "done");
-      setPipelineMsg("✅ Pipeline completado.");
+      setPipelineMsg(t("project.pipelineCompleted"));
     }
 
     refreshDocs();
@@ -774,6 +824,27 @@ export default function ProjectDetail() {
   function handleLogout() {
     clearToken();
     navigate("/login");
+  }
+
+  async function handleSwitchPattern() {
+    if (!id || !selectedOOS) return;
+    setSwitchingPattern(true);
+    try {
+      const payload: any = { object_of_study: selectedOOS };
+      if (selectedOOS === "custom" && customLabel.trim()) {
+        payload.custom_label = customLabel.trim();
+      }
+      await updateProject(id, payload);
+      // Refresh project data to get updated estado, object_of_study, etc.
+      const updated = await getProject(id);
+      setProject(updated);
+      showToast(t("project.experimentalModeSuccess"));
+      setExpModeOpen(false);
+    } catch (err: any) {
+      showToast(`❌ ${err.message || err}`);
+    } finally {
+      setSwitchingPattern(false);
+    }
   }
 
   // ── Derived state (from real pipeline log) ─────
@@ -854,29 +925,63 @@ export default function ProjectDetail() {
       // Fallback
       switch (doc.estado) {
         case "listo":
-          return { text: "✓ Listo", color: "#3FB950", bg: "#3FB95022" };
+          return {
+            text: t("project.statusReady"),
+            color: "#3FB950",
+            bg: "#3FB95022",
+          };
         case "segmentado":
-          return { text: "✂️ Segmentado", color: "#3FB950", bg: "#3FB95022" };
+          return {
+            text: t("project.statusSegmented"),
+            color: "#3FB950",
+            bg: "#3FB95022",
+          };
         case "error":
-          return { text: "✕ Error", color: "#F85149", bg: "#F8514922" };
+          return {
+            text: t("project.statusError"),
+            color: "#F85149",
+            bg: "#F8514922",
+          };
         default:
-          return { text: "⬜ Crudo", color: "#8B949E", bg: "#8B949E22" };
+          return {
+            text: t("project.statusRaw"),
+            color: "#8B949E",
+            bg: "#8B949E22",
+          };
       }
     }
     // Use real log data
     if (log.steps.agents_done && log.steps.coded)
-      return { text: "✓ Listo", color: "#3FB950", bg: "#3FB95022" };
+      return {
+        text: t("project.statusReady"),
+        color: "#3FB950",
+        bg: "#3FB95022",
+      };
     if (log.steps.segmented && !log.steps.coded)
-      return { text: "✂️ Segmentado", color: "#D29922", bg: "#D2992222" };
+      return {
+        text: t("project.statusSegmented"),
+        color: "#D29922",
+        bg: "#D2992222",
+      };
     if (log.steps.segmented)
-      return { text: "✂️ Segmentado", color: "#3FB950", bg: "#3FB95022" };
+      return {
+        text: t("project.statusSegmented"),
+        color: "#3FB950",
+        bg: "#3FB95022",
+      };
     if (log.steps.text_extracted)
-      return { text: "📄 Con texto", color: "#58A6FF", bg: "#58A6FF22" };
-    return { text: "⬜ Crudo", color: "#8B949E", bg: "#8B949E22" };
+      return {
+        text: t("project.statusWithText"),
+        color: "#58A6FF",
+        bg: "#58A6FF22",
+      };
+    return { text: t("project.statusRaw"), color: "#8B949E", bg: "#8B949E22" };
   }
 
   if (!project)
-    return <p style={{ padding: 40, color: "#8B949E" }}>Cargando…</p>;
+    return (
+      <p style={{ padding: 40, color: "#8B949E" }}>{t("project.loading")}</p>
+    );
 
   const hasCats = cats.length > 0;
 
@@ -909,7 +1014,7 @@ export default function ProjectDetail() {
               to="/projects"
               style={{ color: "#58A6FF", fontSize: 13, textDecoration: "none" }}
             >
-              ← Proyectos
+              ← {t("project.backToProjects")}
             </Link>
             <span style={{ fontSize: 15, fontWeight: 600 }}>
               {project.nombre}
@@ -933,7 +1038,7 @@ export default function ProjectDetail() {
               onClick={handleLogout}
               style={{ ...btnSmall, fontSize: 11 }}
             >
-              Salir
+              {t("project.signOut")}
             </button>
           </div>
         </div>
@@ -953,20 +1058,20 @@ export default function ProjectDetail() {
             }}
           >
             <span style={{ fontSize: 13, color: "#D29922" }}>
-              🛑 Decisión requerida:{" "}
+              🛑 {t("project.decisionRequired")}{" "}
               <strong>
                 {hitlPending[0].gate_name === "main_concern"
-                  ? "Main Concern"
+                  ? t("project.mainConcern")
                   : hitlPending[0].gate_name === "core_emergence"
-                    ? "Core Category"
+                    ? t("project.coreCategory")
                     : hitlPending[0].gate_name === "selective_reduction"
-                      ? "Selective Reduction"
+                      ? t("project.selectiveReduction")
                       : hitlPending[0].gate_name === "core_saturation"
-                        ? "Core Saturation"
+                        ? t("project.coreSaturation")
                         : hitlPending[0].gate_name === "database_a"
-                          ? "Database A — Nodes"
+                          ? t("project.databaseANodes")
                           : hitlPending[0].gate_name === "database_b"
-                            ? "Database B — Edges"
+                            ? t("project.databaseBEdges")
                             : hitlPending[0].gate_name}
               </strong>
             </span>
@@ -983,7 +1088,7 @@ export default function ProjectDetail() {
                 cursor: "pointer",
               }}
             >
-              Resolver
+              {t("project.resolveButton")}
             </button>
           </div>
         )}
@@ -1004,8 +1109,7 @@ export default function ProjectDetail() {
               }}
             >
               <span style={{ fontSize: 13, color: "#2EA043" }}>
-                🎨 Theoretical Playground listo — el modelo teórico está
-                completo
+                {t("project.playgroundReady")}
               </span>
               <Link
                 to={`/projects/${id}/theory`}
@@ -1021,7 +1125,7 @@ export default function ProjectDetail() {
                   textDecoration: "none",
                 }}
               >
-                Entrar
+                {t("project.enterButton")}
               </Link>
             </div>
           )}
@@ -1077,7 +1181,10 @@ export default function ProjectDetail() {
                   border: `1px solid ${docsDone === docs.length && docs.length > 0 ? "#3FB95033" : "#8B949E33"}`,
                 }}
               >
-                ✓ {docsDone} listo{docsDone !== 1 ? "s" : ""}
+                ✓ {docsDone}{" "}
+                {t("project.readyCount")
+                  .replace("{n}", String(docsDone))
+                  .replace("{s}", docsDone !== 1 ? "s" : "")}
               </span>
               {docsNeedSegment > 0 && (
                 <span
@@ -1090,7 +1197,11 @@ export default function ProjectDetail() {
                     border: "1px solid #D2992233",
                   }}
                 >
-                  ✂️ {docsNeedSegment} por segmentar
+                  ✂️ {docsNeedSegment}{" "}
+                  {t("project.toSegmentCount").replace(
+                    "{n}",
+                    String(docsNeedSegment),
+                  )}
                 </span>
               )}
               {docsNeedAgents > 0 && (
@@ -1104,7 +1215,11 @@ export default function ProjectDetail() {
                     border: "1px solid #A371F733",
                   }}
                 >
-                  🧠 {docsNeedAgents} por agentes
+                  🧠 {docsNeedAgents}{" "}
+                  {t("project.toAgentsCount").replace(
+                    "{n}",
+                    String(docsNeedAgents),
+                  )}
                 </span>
               )}
               <span
@@ -1130,7 +1245,9 @@ export default function ProjectDetail() {
                   border: `1px solid ${playgroundReady ? "#3FB95033" : "#D2992233"}`,
                 }}
               >
-                {playgroundReady ? "✅ Playground" : "🔒 Sin cats"}
+                {playgroundReady
+                  ? t("project.playgroundAvailable")
+                  : t("project.playgroundLocked")}
               </span>
             </div>
 
@@ -1162,7 +1279,7 @@ export default function ProjectDetail() {
                     color: globalViewMode === "original" ? "#FFF" : "#8B949E",
                   }}
                 >
-                  📄 Orig
+                  📄 {t("project.showOriginal")}
                 </button>
                 <button
                   onClick={() => {
@@ -1181,19 +1298,14 @@ export default function ProjectDetail() {
                     color: globalViewMode === "segmented" ? "#FFF" : "#8B949E",
                   }}
                 >
-                  ✂️ Seg
+                  ✂️ {t("project.showSegments")}
                 </button>
               </div>
 
               {/* Delete all segments */}
               <button
                 onClick={async () => {
-                  if (
-                    !confirm(
-                      "¿Eliminar TODOS los segmentos del proyecto? Los docs volverán a estado crudo.",
-                    )
-                  )
-                    return;
+                  if (!confirm(t("project.deleteAllSegmentsConfirm"))) return;
                   const auth = `Bearer ${localStorage.getItem("access_token")}`;
                   await fetch(`/api/v1/documents/project/${id}/segments`, {
                     method: "DELETE",
@@ -1205,7 +1317,7 @@ export default function ProjectDetail() {
                     .then(setPipelineLog)
                     .catch(() => {});
                 }}
-                title="Eliminar todos los segmentos y resetear docs"
+                title={t("project.deleteAllSegmentsTitle")}
                 style={{
                   padding: "3px 8px",
                   borderRadius: 6,
@@ -1217,7 +1329,7 @@ export default function ProjectDetail() {
                   opacity: 0.7,
                 }}
               >
-                🗑️ Segs
+                {t("project.deleteSegmentsButton")}
               </button>
 
               {/* Playground link */}
@@ -1228,8 +1340,8 @@ export default function ProjectDetail() {
                 }}
                 title={
                   playgroundReady
-                    ? "Explorar el modelo teórico"
-                    : "Necesitás ejecutar el pipeline primero"
+                    ? t("project.exploreModelTitle")
+                    : t("project.needPipelineFirstTitle")
                 }
                 style={{
                   padding: "3px 10px",
@@ -1244,13 +1356,15 @@ export default function ProjectDetail() {
                   opacity: playgroundReady ? 1 : 0.6,
                 }}
               >
-                {playgroundReady ? "🧪 Playground →" : "🔒 Playground"}
+                {playgroundReady
+                  ? t("project.goPlayground")
+                  : t("project.playgroundLockedShort")}
               </Link>
 
               {/* Project Config button */}
               <button
                 onClick={() => setShowConfigPanel(true)}
-                title="Ver y editar configuración del proyecto"
+                title={t("project.configTitle")}
                 style={{
                   padding: "3px 10px",
                   borderRadius: 6,
@@ -1262,12 +1376,204 @@ export default function ProjectDetail() {
                   cursor: "pointer",
                 }}
               >
-                ⚙️ Config
+                {t("project.configButton")}
               </button>
 
               {/* Status pills inline */}
               {/* Log toggle */}
             </div>
+          </div>
+
+          {/* ── Experimental Mode ─────────────────────── */}
+          <div
+            style={{
+              marginBottom: 20,
+              padding: "14px 16px",
+              background: "#161B22",
+              borderRadius: 10,
+              border: "1px solid #21262D",
+            }}
+          >
+            <div
+              onClick={() => setExpModeOpen(!expModeOpen)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#E6EDF3",
+                }}
+              >
+                {t("project.experimentalMode")}
+              </span>
+              <span style={{ color: "#8B949E", fontSize: 12 }}>
+                {expModeOpen ? "▲" : "▼"}
+              </span>
+            </div>
+            {expModeOpen && (
+              <div style={{ marginTop: 14 }}>
+                {/* Current pattern type display */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 14,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "#8B949E" }}>
+                    {t("project.experimentalModeCurrent")}:
+                  </span>
+                  <span
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      background: "#A371F722",
+                      color: "#A371F7",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: "1px solid #A371F733",
+                    }}
+                  >
+                    {(() => {
+                      const oos = project?.object_of_study || "concern";
+                      const label = t(`config.${oos}`);
+                      const suffixes: Record<string, string> = {
+                        concern: " (preocupación principal)",
+                        emotion: " (emoción recurrente)",
+                        behavior: " (conducta recurrente)",
+                        discourse: " (discurso recurrente)",
+                        identity: " (trabajo identitario)",
+                        custom: ` (${(() => {
+                          const pa = project?.population_assumption;
+                          return pa &&
+                            typeof pa === "object" &&
+                            "custom_label" in pa
+                            ? (pa as any).custom_label || "custom"
+                            : "custom";
+                        })()})`,
+                      };
+                      return label + (suffixes[oos] || "");
+                    })()}
+                  </span>
+                </div>
+
+                {/* Description */}
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "#8B949E",
+                    margin: "0 0 14px 0",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {t("project.experimentalModeDesc")}
+                </p>
+
+                {/* Dropdown */}
+                <div style={{ marginBottom: 10 }}>
+                  <select
+                    value={selectedOOS}
+                    onChange={(e) => setSelectedOOS(e.target.value)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      background: "#0D1117",
+                      border: "1px solid #30363D",
+                      color: "#E6EDF3",
+                      fontSize: 14,
+                      cursor: "pointer",
+                      minWidth: 200,
+                    }}
+                  >
+                    <option value="concern">{t("config.concern")}</option>
+                    <option value="emotion">{t("config.emotion")}</option>
+                    <option value="behavior">{t("config.behavior")}</option>
+                    <option value="discourse">{t("config.discourse")}</option>
+                    <option value="identity">{t("config.identity")}</option>
+                    <option value="custom">{t("config.custom")}</option>
+                  </select>
+                </div>
+
+                {/* Custom label input */}
+                {selectedOOS === "custom" && (
+                  <div style={{ marginBottom: 10 }}>
+                    <input
+                      type="text"
+                      value={customLabel}
+                      onChange={(e) => setCustomLabel(e.target.value)}
+                      placeholder={t("projects.customLabelPlaceholder")}
+                      style={{
+                        width: "100%",
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        background: "#0D1117",
+                        border: "1px solid #30363D",
+                        color: "#E6EDF3",
+                        fontSize: 14,
+                        fontFamily: "monospace",
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Warning */}
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    background: "#D2992218",
+                    border: "1px solid #D2992233",
+                    marginBottom: 12,
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "#D29922" }}>
+                    ⚠️ {t("project.experimentalModeWarning")}
+                  </span>
+                </div>
+
+                {/* Switch button */}
+                <button
+                  onClick={handleSwitchPattern}
+                  disabled={
+                    switchingPattern || selectedOOS === project?.object_of_study
+                  }
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: 6,
+                    border: "none",
+                    background:
+                      switchingPattern ||
+                      selectedOOS === project?.object_of_study
+                        ? "#30363D"
+                        : "#D29922",
+                    color:
+                      switchingPattern ||
+                      selectedOOS === project?.object_of_study
+                        ? "#484F58"
+                        : "#0D1117",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor:
+                      switchingPattern ||
+                      selectedOOS === project?.object_of_study
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {switchingPattern
+                    ? `${t("common.saving")}…`
+                    : t("project.experimentalModeSwitch")}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── Upload ─────────────────────────────────── */}
@@ -1284,7 +1590,7 @@ export default function ProjectDetail() {
                 cursor: "pointer",
               }}
             >
-              📎 Subir documento (PDF, TXT, DOCX)
+              {t("project.uploadDocument")}
               <input
                 type="file"
                 accept=".pdf,.txt,.docx"
@@ -1303,7 +1609,9 @@ export default function ProjectDetail() {
               marginBottom: 12,
             }}
           >
-            <h3 style={{ margin: 0 }}>Documentos ({docs.length})</h3>
+            <h3 style={{ margin: 0 }}>
+              {t("project.documentsHeading", { count: docs.length })}
+            </h3>
             {docs.length > 0 && (
               <button
                 onClick={handleDeleteAllDocs}
@@ -1317,15 +1625,15 @@ export default function ProjectDetail() {
                   padding: "3px 10px",
                   cursor: "pointer",
                 }}
-                title="Eliminar todos los documentos y resetear el pipeline"
+                title={t("project.deleteAllDocsTitle")}
               >
-                🗑 Eliminar todos
+                {t("project.deleteAllDocsButton")}
               </button>
             )}
           </div>
           {docs.length === 0 && (
             <p style={{ color: "#8B949E", fontSize: 13 }}>
-              Sin documentos. Subí un archivo para empezar.
+              {t("project.noDocsMessage")}
             </p>
           )}
           <ul style={{ listStyle: "none", padding: 0 }}>
@@ -1404,15 +1712,17 @@ export default function ProjectDetail() {
                         onClick={() => toggleSegments(d.id)}
                         style={btnSmall}
                       >
-                        {expandedDoc === d.id ? "Ocultar texto" : "Ver texto"}
+                        {expandedDoc === d.id
+                          ? t("project.hideText")
+                          : t("project.showText")}
                       </button>
                       <button
                         onClick={() => handlePunctuate(d.id)}
                         disabled={d.estado !== "crudo" && punctRunning !== d.id}
                         title={
                           d.estado !== "crudo"
-                            ? "No se puede preprocesar después de segmentar"
-                            : "Mejorar puntuación del texto"
+                            ? t("project.cantPreprocessAfterSegment")
+                            : t("project.improvePunctuation")
                         }
                         style={{
                           ...btnSmall,
@@ -1433,16 +1743,17 @@ export default function ProjectDetail() {
                         }}
                       >
                         {punctRunning === d.id
-                          ? "⏹ Cancelar"
-                          : d.estado !== "crudo"
-                            ? "✨ Preprocesar"
-                            : "✨ Preprocesar"}
+                          ? t("project.cancelPreprocess")
+                          : t("project.preprocessButton")}
                       </button>
                       {punctRunning !== d.id && originalTexts.current[d.id] && (
                         <button
                           onClick={async () => {
                             const orig = originalTexts.current[d.id];
-                            if (!orig || !confirm("¿Restaurar texto original?"))
+                            if (
+                              !orig ||
+                              !confirm(t("project.restoreOriginalConfirm"))
+                            )
                               return;
                             await fetch(
                               `/api/v1/documents/${d.id}/undo-punctuate`,
@@ -1458,7 +1769,7 @@ export default function ProjectDetail() {
                             delete originalTexts.current[d.id];
                             setPunctStatus((prev) => ({
                               ...prev,
-                              [d.id]: "↩ Restaurado",
+                              [d.id]: t("project.restored"),
                             }));
                             refreshDocs();
                             setSegments((prev) => {
@@ -1469,18 +1780,18 @@ export default function ProjectDetail() {
                           }}
                           style={{ ...btnSmall, color: "#D29922" }}
                         >
-                          ↩ Deshacer
+                          {t("project.undo")}
                         </button>
                       )}
                       <button
                         onClick={async () => {
-                          if (!confirm("¿Eliminar?")) return;
+                          if (!confirm(t("project.deleteConfirm"))) return;
                           await deleteDocument(d.id);
                           refreshDocs();
                         }}
                         style={{ ...btnSmall, color: "#F85149" }}
                       >
-                        ✕
+                        {t("project.deleteIcon")}
                       </button>
                     </div>
                   </div>
@@ -1499,7 +1810,7 @@ export default function ProjectDetail() {
                           }}
                         >
                           <span style={{ fontSize: 11, color: "#8B949E" }}>
-                            Este documento:
+                            {t("project.thisDocument")}
                           </span>
                           <button
                             onClick={() =>
@@ -1521,7 +1832,7 @@ export default function ProjectDetail() {
                               cursor: "pointer",
                             }}
                           >
-                            Original
+                            {t("project.original")}
                           </button>
                           <button
                             onClick={() =>
@@ -1543,7 +1854,9 @@ export default function ProjectDetail() {
                               cursor: "pointer",
                             }}
                           >
-                            Segmentos ({segments[d.id]?.length || "?"})
+                            {t("project.segmentsCount", {
+                              n: segments[d.id]?.length || "?",
+                            })}
                           </button>
                           {viewModeOverride[d.id] && (
                             <button
@@ -1563,7 +1876,7 @@ export default function ProjectDetail() {
                                 textDecoration: "underline",
                               }}
                             >
-                              usar global
+                              {t("project.useGlobal")}
                             </button>
                           )}
                         </div>
@@ -1588,7 +1901,7 @@ export default function ProjectDetail() {
                             ? segments[d.id]!.map(
                                 (s) => `[${s.posicion}] ${s.texto}`,
                               ).join("\n\n")
-                            : d.texto_extraido || "(sin texto disponible)"
+                            : d.texto_extraido || t("project.noTextAvailable")
                         }
                       />
                     </div>
@@ -1601,10 +1914,12 @@ export default function ProjectDetail() {
           <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
 
           {/* ── Categories ─────────────────────────────── */}
-          <h3 style={{ marginBottom: 12 }}>Categorías ({cats.length})</h3>
+          <h3 style={{ marginBottom: 12 }}>
+            {t("project.categoriesHeading", { count: cats.length })}
+          </h3>
           {cats.length === 0 && (
             <p style={{ color: "#8B949E", fontSize: 13 }}>
-              Sin categorías aún. Ejecutá el Pipeline IA para generarlas.
+              {t("project.noCategories")}
             </p>
           )}
           <ul style={{ listStyle: "none", padding: 0 }}>
@@ -1621,7 +1936,7 @@ export default function ProjectDetail() {
               >
                 <strong>
                   {c.nombre}
-                  {c.es_central && " ⭐"}
+                  {c.es_central && ` ${t("project.centralCategory")}`}
                 </strong>
                 <br />
                 <span style={{ fontSize: 13, color: "#8B949E" }}>
@@ -1697,12 +2012,12 @@ export default function ProjectDetail() {
               }}
             >
               <span style={{ fontSize: 14, fontWeight: 600, color: "#E6EDF3" }}>
-                📝 Historial de Memos
+                {t("project.memoHistory")}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 11, color: "#484F58" }}>
-                  {pipelineLog?.documents?.length || 0} docs ·{" "}
-                  {agentMemos.length} memos
+                  {pipelineLog?.documents?.length || 0} {t("common.docs")} ·{" "}
+                  {agentMemos.length} {t("common.memos")}
                 </span>
                 {!pipelineRunning && (
                   <button
@@ -1718,7 +2033,7 @@ export default function ProjectDetail() {
                       cursor: "pointer",
                     }}
                   >
-                    ➕ Add Memo
+                    {t("project.addMemo")}
                   </button>
                 )}
                 {/* Delete buttons */}
@@ -1733,7 +2048,7 @@ export default function ProjectDetail() {
                   <DeleteByTypeButton
                     projectId={id!}
                     tipo="all"
-                    label="Eliminar todos los memos"
+                    label={t("project.deleteAllMemos")}
                     onDeleted={() => {}}
                   />
                 )}
@@ -1791,7 +2106,7 @@ export default function ProjectDetail() {
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "#8B949E" }}>
-              {showLog ? "📋 Logs" : "🔄 Flujo del Pipeline"}
+              {showLog ? t("project.logsTab") : t("project.flowTab")}
             </span>
             <button
               onClick={() => setShowLog(!showLog)}
@@ -1805,7 +2120,7 @@ export default function ProjectDetail() {
                 cursor: "pointer",
               }}
             >
-              {showLog ? "📊 Diagrama" : "📋 Logs"}
+              {showLog ? t("project.diagramTab") : t("project.logsTab")}
             </button>
             {!pipelineRunning && (
               <>
@@ -1824,7 +2139,7 @@ export default function ProjectDetail() {
                     opacity: docs.length === 0 ? 0.5 : 1,
                   }}
                 >
-                  ▶ Ejecutar Pipeline
+                  {t("project.runPipeline")}
                 </button>
               </>
             )}
@@ -1848,7 +2163,7 @@ export default function ProjectDetail() {
                   cursor: "pointer",
                 }}
               >
-                ⏹
+                {t("project.stopPipeline")}
               </button>
             )}
           </div>
@@ -1886,7 +2201,7 @@ export default function ProjectDetail() {
               }}
             >
               {pipelineLiveLogs.length === 0 && (
-                <span style={{ color: "#484F58" }}>Sin logs aún…</span>
+                <span style={{ color: "#484F58" }}>{t("project.noLogs")}</span>
               )}
               {pipelineLiveLogs.map((l, i) => {
                 const msg = l.msg || "";
@@ -1977,7 +2292,9 @@ export default function ProjectDetail() {
                         } else if (idx < lastDone) {
                           if (
                             !confirm(
-                              `¿Reiniciar desde "${stage.label}"? Se eliminarán datos de etapas posteriores.`,
+                              t("project.restartFromConfirm", {
+                                stage: t(stage.label),
+                              }),
                             )
                           )
                             return;
@@ -2022,9 +2339,9 @@ export default function ProjectDetail() {
                         }}
                       >
                         {status === "done" ? (
-                          "✓"
+                          t("project.stageCheckmark")
                         ) : status === "error" ? (
-                          "✕"
+                          t("project.stageCross")
                         ) : status === "running" ? (
                           <span
                             style={{
@@ -2037,7 +2354,7 @@ export default function ProjectDetail() {
                           />
                         ) : isNextPending ? (
                           <span style={{ color: "#A371F7", fontSize: 12 }}>
-                            ▶
+                            {t("project.stagePlay")}
                           </span>
                         ) : (
                           <span style={{ fontSize: 14 }}>{stage.icon}</span>
@@ -2052,7 +2369,7 @@ export default function ProjectDetail() {
                             lineHeight: 1.3,
                           }}
                         >
-                          {stage.label}
+                          {t(stage.label)}
                         </div>
                       </div>
                     </div>

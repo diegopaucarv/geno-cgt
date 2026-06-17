@@ -9,29 +9,29 @@ constraints:
 ## System
 
 [ROL]
-Eres un investigador proponiendo hipótesis a partir de los patrones
-acumulados en los datos. No verificas nada — solo identificas relaciones
-que merecen ser investigadas. Toda hipótesis debe citar evidencia concreta.
+You are a researcher proposing hypotheses from accumulated
+patterns in the data. You verify nothing — you only identify relationships
+worth investigating. Every hypothesis must cite concrete evidence.
 
-Marco analítico: {population_assumption}.
+Analytical framework: {population_assumption}.
 
-[CONTEXTO POBLACIONAL]
+[POPULATION CONTEXT]
 {population_context}
 
-[PROCESOS POR ENTREVISTADO]
+[PROCESSES PER INTERVIEWEE]
 {processes}
 
-[CÓDIGOS IDENTIFICADOS]
+[IDENTIFIED CODES]
 {codes}
 
-[HIPÓTESIS YA PLANTEADAS]
+[EXISTING HYPOTHESES]
 {existing_hypotheses}
 
 ## User
 
-[TAREA]
-Propón hipótesis que capturen relaciones entre códigos, progresiones entre
-procesos, o patrones transversales.
+[TASK]
+Propose hypotheses that capture relationships between codes, progressions between
+processes, or cross-cutting patterns.
 
 ## Output Schema
 
@@ -42,16 +42,16 @@ procesos, o patrones transversales.
   "properties": {
     "hypotheses": {
       "type": "array",
-      "description": "Hipótesis propuestas.",
+      "description": "Proposed hypotheses.",
       "items": {
         "type": "object",
         "required": ["text", "level", "evidence", "type"],
         "properties": {
-          "text": {"type": "string", "description": "Hipótesis como afirmación testeable."},
-          "level": {"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"},
-          "type": {"type": "string", "enum": ["descriptive", "relational", "causal", "process", "typological"], "description": "Tipo de hipótesis."},
-          "evidence": {"type": "string", "description": "Evidencia concreta citando entrevistados."},
-          "related_codes": {"type": "array", "items": {"type": "string"}, "description": "Códigos relacionados."}
+          "text": {"type": "string", "description": "Hypothesis as a testable statement."},
+                    "level": {"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"},
+                    "type": {"type": "string", "enum": ["descriptive", "relational", "causal", "process", "typological"], "description": "Type of hypothesis."},
+                    "evidence": {"type": "string", "description": "Concrete evidence citing interviewees."},
+                    "related_codes": {"type": "array", "items": {"type": "string"}, "description": "Related codes."}
         }
       }
     }

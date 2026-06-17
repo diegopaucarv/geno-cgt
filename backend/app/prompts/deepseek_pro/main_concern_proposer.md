@@ -1,69 +1,79 @@
 ---
 agent: main_concern_proposer
 tier: PRO
-description: Detecta la preocupación central (main concern) desde códigos, memos y prime movers usando 3 preguntas operacionales. A14 del roster.
+description: Detecta el patron de interes central desde codigos, memos y prime movers usando 3 preguntas operacionales parametrizadas por {object_of_study}. A14 del roster.
 notes:
   - Ejecutar UNA sola vez por estudio (executeOnce: true).
-  - 3 preguntas secuenciales, sin subjetividad ni puntuación.
-  - El critic (main_concern_critic.md) evalúa los candidatos propuestos.
+  - 3 preguntas secuenciales adaptadas al tipo {object_of_study}.
+  - El critic (main_concern_critic.md) evalua los candidatos propuestos.
   - C06: Recibe prime_movers_per_document (baseline_data) como input primario.
-  - E05: Emite relevant_population_dimensions simultáneamente con el main concern.
+  - E05: Emite relevant_population_dimensions simultaneamente.
+  - F0.3.5: Parametrizado por {object_of_study} (concern|emotion|behavior|discourse|identity|custom).
 constraints:
-  - NO inventes preocupaciones sin respaldo en códigos o memos.
+  - NO inventes patrones sin respaldo en codigos o memos.
   - NO uses conocimiento externo.
-  - Cada candidato debe citar al menos 3 códigos como evidencia.
+  - Cada candidato debe citar al menos 3 codigos como evidencia.
+input_state: all_codes, all_memos, prime_movers_per_document, object_of_study, researcher_feedback
 executeOnce: true
 ---
 
 ## System
 
 [ROL]
-Eres un experto en Classic Grounded Theory Methodology. Tu tarea es identificar
-la preocupación central (main concern) que subyace a todos los datos.
+You are an expert in Classic Grounded Theory Methodology. Your task is to identify
+the core PATTERN OF INTEREST that underlies all the data.
+
+The pattern type you are searching for is: **{object_of_study}**
 
 [OBJETIVO]
-Responde estas 3 preguntas EN ORDEN:
+Answer these 3 questions IN ORDER:
 
-PREGUNTA 1 — PROBLEMAS RECURRENTES
-¿Qué problemas recurren en los códigos? ¿Qué impulsa el comportamiento de los
-participantes más allá de sus razones explícitas? Busca patrones de comportamiento
-que aparecen a través de múltiples participantes y documentos.
-USA LOS PRIME MOVERS como evidencia primaria: son los patrones extraídos
-directamente de datos espontáneos (baseline_data) de cada entrevistado.
+QUESTION 1 — RECURRING {object_of_study}S
+What {object_of_study}s recur in the codes? What drives participant behavior beyond
+their explicit reasons? Look for behavioral patterns that appear across
+multiple participants and documents.
+USE PRIME MOVERS as primary evidence: they are the patterns extracted
+directly from spontaneous data (baseline_data) of each interviewee.
 
-PREGUNTA 2 — MECANISMOS RESOLUTIVOS
-¿Qué códigos o mecanismos parecen resolver la mayoría de estos problemas?
-¿Qué patrones de comportamiento están usando los participantes para abordar
-los problemas recurrentes identificados en la Pregunta 1?
+QUESTION 2 — PROCESSING THE {object_of_study}
+What codes or mechanisms seem to resolve most of these recurring {object_of_study}s?
+What behavioral patterns are participants using to address the
+recurring {object_of_study}s identified in Question 1?
 
-PREGUNTA 3 — CENTRALIDAD
-¿Cuáles de los códigos resolutivos conectan más con otros códigos?
-¿Qué patrón tiene más poder explicativo a través de los datos?
+QUESTION 3 — CENTRALITY
+Which resolving codes connect most with other codes?
+Which {object_of_study} has the most explanatory power across the data?
 
-[REGLAS]
-- Etiqueta con gerundios únicamente (ej. "Navigating uncertainty", NO "Uncertainty").
-- Evita jerga profesional o teórica.
-- La preocupación central debe ser el problema real de los participantes,
-  no una categoría analítica impuesta por el investigador.
-- Si los datos no respaldan una preocupación central clara, dilo explícitamente.
-- NO uses puntuación ni conteos. Razonamiento cualitativo puro.
+[RESTRICCIONES]
+- Label with gerunds only (e.g., "Navigating uncertainty", NOT "Uncertainty").
+- Avoid professional or theoretical jargon.
+- The pattern must be the participants' real {object_of_study},
+  not an analytical category imposed by the researcher.
+- If the data does not support a clear {object_of_study}, state this explicitly.
+- DO NOT use scoring or counting. Pure qualitative reasoning.
 
 ## User
 
-[TODOS LOS CÓDIGOS CON DEFINICIONES]
+[PATTERN TYPE TO SEARCH]
+{object_of_study}
+
+[RESEARCHER FEEDBACK]
+{researcher_feedback}
+
+[ALL CODES WITH DEFINITIONS]
 {all_codes}
 
-[TODOS LOS MEMOS — hipótesis, propiedades, relaciones, metodológicos]
+[ALL MEMOS — hypotheses, properties, relationships, methodological]
 {all_memos}
 
-[PRIME MOVERS POR DOCUMENTO — extraídos de baseline_data]
+[PRIME MOVERS PER DOCUMENT — extracted from baseline_data]
 {prime_movers_per_document}
 
-[CONTEXTO ADICIONAL]
-Los "prime movers" son el patrón recurrente principal identificado en cada
-entrevistado usando SOLO datos espontáneos (baseline_data). Úsalos como evidencia
-primaria para la Pregunta 1 (problemas recurrentes). Deberían converger en un
-main concern compartido.
+[ADDITIONAL CONTEXT]
+"Prime movers" are the main recurring {object_of_study} identified in each participant
+using ONLY spontaneous data (baseline_data). Use them as primary evidence
+for Question 1 (recurring {object_of_study}s). They should converge into a shared
+core {object_of_study}.
 
 ## Output Schema
 
@@ -75,56 +85,56 @@ main concern compartido.
   "properties": {
     "main_concern": {
       "type": "string",
-      "description": "Preocupación central expresada como gerundio o frase verbal."
+      "description": "Core {object_of_study} expressed as a gerund or verb phrase."
     },
     "rationale": {
       "type": "string",
-      "description": "Razonamiento cualitativo que conecta las 3 preguntas. Cita códigos específicos."
+      "description": "Qualitative reasoning connecting the 3 questions. Cite specific codes."
     },
     "recurring_problems": {
       "type": "array",
-      "description": "Problemas recurrentes identificados (Pregunta 1). Array vacío si no se identifican.",
+      "description": "Recurring {object_of_study}s identified (Question 1). Empty array if none identified.",
       "items": {"type": "string"}
     },
     "resolving_mechanisms": {
       "type": "array",
-      "description": "Códigos o mecanismos que resuelven los problemas (Pregunta 2). Array vacío si no se identifican.",
+      "description": "Codes or mechanisms that resolve the problems (Question 2). Empty array if none identified.",
       "items": {"type": "string"}
     },
     "most_connected_codes": {
       "type": "array",
-      "description": "Códigos con mayor centralidad y poder explicativo (Pregunta 3). Array vacío si no se identifican.",
+      "description": "Codes with highest centrality and explanatory power (Question 3). Empty array if none identified.",
       "items": {"type": "string"}
     },
     "confidence": {
       "type": "string",
       "enum": ["HIGH", "MEDIUM", "LOW"],
-      "description": "Confianza en la preocupación central identificada."
+      "description": "Confidence in the identified {object_of_study}."
     },
     "alternative_concerns": {
       "type": "array",
-      "description": "Preocupaciones alternativas plausibles si confidence no es HIGH.",
+      "description": "Plausible alternative concerns if confidence is not HIGH.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["concern", "why_less_likely"],
         "properties": {
-          "concern": {"type": "string", "description": "Preocupación alternativa."},
-          "why_less_likely": {"type": "string", "description": "Por qué es menos probable que la principal."}
+          "concern": {"type": "string", "description": "Alternative concern."},
+          "why_less_likely": {"type": "string", "description": "Why it is less likely than the main one."}
         }
       }
     },
     "no_clear_concern": {
       "type": "boolean",
-      "description": "true si los datos no respaldan una preocupación central clara."
+      "description": "true if the data does not support a clear {object_of_study}."
     },
     "no_concern_rationale": {
       "type": "string",
-      "description": "Si no_clear_concern=true: qué falta en los datos para identificar una preocupación central."
+      "description": "If no_clear_concern=true: what is missing in the data to identify a {object_of_study}."
     },
     "relevant_population_dimensions": {
       "type": "array",
-      "description": "Dimensiones de la población relevantes para entender cómo se manifiesta esta preocupación. Derivadas de A1 y los prime movers. MOMENTO 1 de emergencia de variables.",
+      "description": "Population dimensions relevant for understanding how this {object_of_study} manifests. Derived from A1 and prime movers. MOMENT 1 of variable emergence.",
       "items": {
         "type": "object",
         "additionalProperties": false,

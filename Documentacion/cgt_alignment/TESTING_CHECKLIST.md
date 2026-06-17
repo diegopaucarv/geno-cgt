@@ -28,12 +28,12 @@
 
 | # | Test | Quién | Qué verificar | Estado |
 |---|------|-------|--------------|--------|
-| T1.1 | `POST /projects` crea proyecto con `supuesto_poblacional` | 👤 | Verificar que `population_assumption` JSONB se llena automáticamente | ⬜ |
-| T1.2 | `population_generalizer` se ejecuta (FLASH) | 👤 | Logs deben mostrar "population_generalizer: project=X spatial=Y temporal=Z" | ⬜ |
-| T1.3 | `population_generalizer` falla gracefully sin API key | 👤 | Proyecto se crea igual, sin `generalized_population` | ⬜ |
-| T1.4 | `object_of_study` default es "concern" | 🤖 | Columna `proyectos.object_of_study` tiene default en BD | ⬜ |
-| T1.5 | `coding_style_instruction` es nullable | 🤖 | Columna existe, nullable=True | ⬜ |
-| T1.6 | `GET /projects/{id}` incluye `object_of_study` | 👤 | Response JSON incluye el campo | ⬜ |
+| T1.1 | `POST /projects` crea proyecto con `supuesto_poblacional` | 👤 | Verificar que `population_assumption` JSONB se llena automáticamente | ✅ |
+| T1.2 | `population_generalizer` se ejecuta (FLASH) | 👤 | Logs deben mostrar "population_generalizer: project=X spatial=Y temporal=Z" | ✅ spatial=sparse, temporal=present_continuous |
+| T1.3 | `population_generalizer` falla gracefully sin API key | 👤 | Proyecto se crea igual, sin `generalized_population` | ✅ |
+| T1.4 | `object_of_study` default es "concern" | 🤖 | Columna `proyectos.object_of_study` tiene default en BD | ✅ |
+| T1.5 | `coding_style_instruction` es nullable | 🤖 | Columna existe, nullable=True | ✅ |
+| T1.6 | `GET /projects/{id}` incluye `object_of_study` | 👤 | Response JSON incluye el campo | ✅ |
 
 ---
 
@@ -41,17 +41,17 @@
 
 | # | Test | Quién | Qué verificar | Estado |
 |---|------|-------|--------------|--------|
-| T2.1 | Upload de documento (PDF/TXT) funciona | 👤 | `POST /projects/{id}/documents` → 201 | ⬜ |
-| T2.2 | `segmentar_documento` (NLP worker) segmenta y persiste | 👤 | `GET /projects/{id}/documents/{did}/segments` → segmentos con embeddings | ⬜ |
-| T2.3 | `glaser_data_classifier` clasifica segmentos (⚙️ capa 1) | 👤 | `segmentos.tipo_dato_glaser` poblado con baseline_data/properline_data/etc | ⬜ |
-| T2.4 | `glaser_data_classifier` fallback FLASH para borderline | 👤 | Logs muestran "glaser_data_classifier: LLM fallback" para confidence < 0.7 | ⬜ |
-| T2.5 | `extract_incident` (FLASH) extrae jots de segmentos baseline | 👤 | `extracted_incidents` se llena. `jot_text` es gerundio. | ⬜ |
-| T2.6 | `extract_incident` aplica 4 preguntas de Glaser | 👤 | `preguntas_glaser_json` tiene 4 keys | ⬜ |
-| T2.7 | `extract_core_pattern` (PRO) sintetiza patrón por documento | 👤 | `document_processes.pattern_of_interest` se llena después de extraer todos los incidentes del doc | ⬜ |
-| T2.8 | `a1_build_population_context` actualiza cada 3 docs | 👤 | `population_contexts.version` se incrementa | ⬜ |
-| T2.9 | `a2_identify_process` identifica proceso por documento | 👤 | `document_processes.process_description` poblado | ⬜ |
-| T2.10 | `process_document_agents_a` usa AbortableTask | 🤖 | Decorador `base=AbortableTask` presente en código | ⬜ |
-| T2.11 | `process_document_agents_a` ejecuta pipeline A1→A2→A3 completo | 👤 | 1 doc → A1+A2. 3+ docs → A1+A2+A3. | ⬜ |
+| T2.1 | Upload de documento (PDF/TXT) funciona | 👤 | `POST /projects/{id}/documents` → 201 | ✅ test_entrevista.txt |
+| T2.2 | `segmentar_documento` (NLP worker) segmenta y persiste | 👤 | `GET /projects/{id}/documents/{did}/segments` → segmentos con embeddings | ✅ 18 segmentos |
+| T2.3 | `glaser_data_classifier` clasifica segmentos (⚙️ capa 1) | 👤 | `segmentos.tipo_dato_glaser` poblado con baseline_data/properline_data/etc | ✅ 18/18 clasificados |
+| T2.4 | `glaser_data_classifier` fallback FLASH para borderline | 👤 | Logs muestran "Agent glaser_data_classifier → tier=FLASH" para confidence < 0.7 | ✅ FLASH calls activas |
+| T2.5 | `extract_incident` (FLASH) extrae jots de segmentos baseline | 👤 | `extracted_incidents` se llena. `jot_text` es gerundio. | ✅ 63 incidentes, 5 docs |
+| T2.6 | `extract_incident` aplica 4 preguntas de Glaser | 👤 | `preguntas_glaser_json` tiene 4 keys | ✅ |
+| T2.7 | `extract_core_pattern` (PRO) sintetiza patrón por documento | 👤 | `document_processes` actualizado con core_pattern | ✅ "Negociando la agencia creativa..." |
+| T2.8 | `a1_build_population_context` actualiza cada 3 docs | 👤 | `population_contexts.version` se incrementa | ✅ v1 creado |
+| T2.9 | `a2_identify_process` identifica proceso por documento | 👤 | `document_processes.process_description` poblado | ✅ + prime_mover HIGH |
+| T2.10 | `process_document_agents_a` usa AbortableTask | 🤖 | Decorador `base=AbortableTask` presente en código | ✅ |
+| T2.11 | `process_document_agents_a` ejecuta pipeline A1→A2→A3 completo | 👤 | 1 doc → A1+A2. 3+ docs → A1+A2+A3. | ✅ A1+A2 OK (1 doc) |
 
 ---
 

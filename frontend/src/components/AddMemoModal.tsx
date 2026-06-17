@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { getAvailableMemoTypes, createMemo } from "../api/client";
+import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ const INFOBOX: CSSProperties = {
 
 // ── ColorBadge ────────────────────────────────────────────────────────
 
-function ColorBadge(t: MemoType) {
+function ColorBadge(mt: MemoType) {
   const s: CSSProperties = {
     marginTop: 8,
     display: "inline-flex",
@@ -117,10 +118,10 @@ function ColorBadge(t: MemoType) {
     gap: 6,
     padding: "3px 10px",
     borderRadius: 999,
-    background: t.color + "18",
-    border: "1px solid " + t.color + "44",
+    background: mt.color + "18",
+    border: "1px solid " + mt.color + "44",
     fontSize: 10,
-    color: t.color,
+    color: mt.color,
     fontWeight: 600,
   };
   return (
@@ -130,34 +131,34 @@ function ColorBadge(t: MemoType) {
           width: 6,
           height: 6,
           borderRadius: "50%",
-          background: t.color,
+          background: mt.color,
         }}
       >
         {" "}
-        {t.label}
+        {mt.label}
       </span>
     </div>
   );
 }
 
-function InfoBoxCategoria() {
+function InfoBoxCategoria(t: (key: string) => string) {
   return (
     <div style={INFOBOX}>
-      <strong>Se creara:</strong> Una categoria en la tabla de entidades del
-      proyecto.
+      <strong>{t("memo.willCreate")}</strong> {t("memo.categoryInEntityTable")}
       <br />
-      <strong>No se creara:</strong> Asignaciones a segmentos.
+      <strong>{t("memo.willNotCreate")}</strong>{" "}
+      {t("memo.noSegmentAssignments")}
     </div>
   );
 }
 
-function InfoBoxTeorico() {
+function InfoBoxTeorico(t: (key: string) => string) {
   return (
     <div style={INFOBOX}>
-      <strong>Se creara:</strong> Un codigo teorico personalizado disponible en
-      el Playground.
+      <strong>{t("memo.willCreate")}</strong> {t("memo.customTheoreticalCode")}
       <br />
-      <strong>No se creara:</strong> Relaciones conceptuales.
+      <strong>{t("memo.willNotCreate")}</strong>{" "}
+      {t("memo.noConceptualRelations")}
     </div>
   );
 }
@@ -185,6 +186,7 @@ export default function AddMemoModal({
   onClose,
   onCreated,
 }: AddMemoModalProps) {
+  const { t } = useI18n();
   const [types, setTypes] = useState<MemoType[]>([]);
   const [selectedType, setSelectedType] = useState("");
   const [content, setContent] = useState("");
@@ -205,9 +207,9 @@ export default function AddMemoModal({
           setSelectedType(data.available_types[0].key);
         }
       })
-      .catch((e) => setError(e.message || "Error al cargar tipos"))
+      .catch((e) => setError(e.message || t("memo.errorLoadingTypes")))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId, t]);
 
   const handleSubmit = async () => {
     if (!selectedType || !content.trim()) return;
@@ -222,19 +224,19 @@ export default function AddMemoModal({
       onCreated();
       onClose();
     } catch (e: any) {
-      setError(e.message || "Error al guardar");
+      setError(e.message || t("memo.errorSaving"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const selected = types.find((t) => t.key === selectedType);
+  const selected = types.find((mt) => mt.key === selectedType);
 
   if (loading) {
     return (
       <div style={OVERLAY}>
         <div style={CARD}>
-          <span style={{ color: "#8B949E" }}>Cargando...</span>
+          <span style={{ color: "#8B949E" }}>{t("memo.loading")}</span>
         </div>
       </div>
     );
@@ -245,17 +247,17 @@ export default function AddMemoModal({
       <div style={OVERLAY} onClick={onClose}>
         <div style={CARD} onClick={(e) => e.stopPropagation()}>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>
-            🚫 Pipeline en ejecución
+            {t("memo.pipelineRunning")}
           </div>
           <div style={{ fontSize: 13, color: "#8B949E", lineHeight: 1.5 }}>
-            Pausá el pipeline antes de añadir entidades manualmente.
+            {t("memo.pipelineRunningMsg")}
           </div>
           <div style={BUTTON_ROW}>
             <button
               onClick={onClose}
               style={{ ...btnBase, background: "#21262D", color: "#E6EDF3" }}
             >
-              Cerrar
+              {t("memo.closeButton")}
             </button>
           </div>
         </div>
@@ -277,7 +279,7 @@ export default function AddMemoModal({
             gap: 8,
           }}
         >
-          ➕ Add Memo
+          {t("memo.addMemoTitle")}
           <span
             style={{
               fontSize: 10,
@@ -288,20 +290,21 @@ export default function AddMemoModal({
               background: "#21262D",
             }}
           >
-            Etapa: {stage}
+            {t("memo.stageLabel")}
+            {stage}
           </span>
         </div>
 
         {/* Type selector */}
-        <div style={LABEL}>Tipo de entidad</div>
+        <div style={LABEL}>{t("memo.entityType")}</div>
         <select
           style={SELECT}
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value)}
         >
-          {types.map((t) => (
-            <option key={t.key} value={t.key}>
-              {t.icon} {t.label}
+          {types.map((mt) => (
+            <option key={mt.key} value={mt.key}>
+              {mt.icon} {mt.label}
             </option>
           ))}
         </select>
@@ -311,12 +314,12 @@ export default function AddMemoModal({
         {selected && ColorBadge(selected)}
 
         {/* Content */}
-        <div style={LABEL}>Contenido</div>
+        <div style={LABEL}>{t("memo.content")}</div>
         <textarea
           style={TEXTAREA}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Escribí el contenido del memo..."
+          placeholder={t("memo.contentPlaceholder")}
           rows={8}
         />
 
@@ -337,12 +340,12 @@ export default function AddMemoModal({
             checked={isConfidential}
             onChange={(e) => setIsConfidential(e.target.checked)}
           />
-          🔒 Confidencial
+          {t("memo.confidential")}
         </label>
 
         {/* Info box */}
-        {selectedType === "CATEGORIA" && InfoBoxCategoria()}
-        {selectedType === "TEORICO" && InfoBoxTeorico()}
+        {selectedType === "CATEGORIA" && InfoBoxCategoria(t)}
+        {selectedType === "TEORICO" && InfoBoxTeorico(t)}
 
         {/* Error */}
         {error && ErrorBox(error)}
@@ -353,7 +356,7 @@ export default function AddMemoModal({
             onClick={onClose}
             style={{ ...btnBase, background: "#21262D", color: "#E6EDF3" }}
           >
-            Cancelar
+            {t("memo.cancelButton")}
           </button>
           <button
             onClick={handleSubmit}
@@ -365,7 +368,7 @@ export default function AddMemoModal({
               opacity: submitting || !content.trim() ? 0.5 : 1,
             }}
           >
-            {submitting ? "Guardando..." : "Guardar Memo"}
+            {submitting ? t("memo.saving") : t("memo.saveButton")}
           </button>
         </div>
       </div>

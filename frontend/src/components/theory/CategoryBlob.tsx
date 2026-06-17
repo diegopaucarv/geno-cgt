@@ -1,20 +1,34 @@
 import { usePlayground } from "./PlaygroundContext";
-import { getRenameSuggestions, getDefinitionHistory, applyRename } from "../../api/client";
+import {
+  getRenameSuggestions,
+  getDefinitionHistory,
+  applyRename,
+} from "../../api/client";
 import styles from "./CategoryBlob.module.css";
+import { useI18n } from "../../i18n";
 
 interface Props {
   blob: {
-    id: string; name: string; saturation: string; is_core: boolean;
-    relevance: number; version: number;
+    id: string;
+    name: string;
+    saturation: string;
+    is_core: boolean;
+    relevance: number;
+    version: number;
   };
   x: number;
   y: number;
 }
 
 const LAYER_COLORS: Record<string, string> = {
-  core: "#FF6B35", process: "#4ECDC4", conditions: "#45B7D1",
-  variation: "#96CEB4", consequences: "#DDA0DD", action: "#F7DC6F",
-  fusion: "#D3D3D3", undefined: "#E8E8E8",
+  core: "#FF6B35",
+  process: "#4ECDC4",
+  conditions: "#45B7D1",
+  variation: "#96CEB4",
+  consequences: "#DDA0DD",
+  action: "#F7DC6F",
+  fusion: "#D3D3D3",
+  undefined: "#E8E8E8",
 };
 
 function blobRadius(relevance: number, isCore: boolean): number {
@@ -26,6 +40,7 @@ function blobRadius(relevance: number, isCore: boolean): number {
 
 export default function CategoryBlob({ blob, x, y }: Props) {
   const pg = usePlayground();
+  const { t } = useI18n();
   const isSelected = pg.selectedBlob?.id === blob.id;
   const isRenamePending = pg.renameTarget?.id === blob.id;
   const r = blobRadius(blob.relevance, blob.is_core);
@@ -39,7 +54,9 @@ export default function CategoryBlob({ blob, x, y }: Props) {
         getDefinitionHistory(pg.projectId, blob.id),
       ]);
       if (sug.needs_rename) pg.openRename(blob as any);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -47,10 +64,13 @@ export default function CategoryBlob({ blob, x, y }: Props) {
     e.dataTransfer.effectAllowed = "link";
   };
 
-  const stateClass = isRenamePending ? styles.shimmer
-    : isSelected ? styles.selected
-    : blob.saturation === "ABIERTO" ? styles.pulsing
-    : "";
+  const stateClass = isRenamePending
+    ? styles.shimmer
+    : isSelected
+      ? styles.selected
+      : blob.saturation === t("theory.saturationOpen")
+        ? styles.pulsing
+        : "";
 
   return (
     <g
@@ -66,7 +86,10 @@ export default function CategoryBlob({ blob, x, y }: Props) {
         </radialGradient>
         <filter id={`glow-${blob.id}`}>
           <feGaussianBlur stdDeviation="3" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
         </filter>
       </defs>
 
@@ -83,12 +106,24 @@ export default function CategoryBlob({ blob, x, y }: Props) {
       />
 
       {blob.is_core && (
-        <circle r={r + 8} fill="none" stroke={color} strokeWidth="1"
-          strokeDasharray="4 8" opacity="0.3" />
+        <circle
+          r={r + 8}
+          fill="none"
+          stroke={color}
+          strokeWidth="1"
+          strokeDasharray="4 8"
+          opacity="0.3"
+        />
       )}
 
-      <text y={r + 18} textAnchor="middle" fill="#E6EDF3" fontSize="11"
-        fontFamily="Inter, sans-serif" fontWeight={500}>
+      <text
+        y={r + 18}
+        textAnchor="middle"
+        fill="#E6EDF3"
+        fontSize="11"
+        fontFamily="Inter, sans-serif"
+        fontWeight={500}
+      >
         {blob.name.length > 25 ? blob.name.slice(0, 22) + "…" : blob.name}
       </text>
     </g>

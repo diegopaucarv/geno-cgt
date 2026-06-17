@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useI18n } from "../../i18n";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -91,18 +92,12 @@ async function searchRefs(
 // ── Placeholders ──────────────────────────────────────────────────
 
 const PLACEHOLDERS: Record<string, string> = {
-  inductive_data:
-    'Sugerí un cambio a este código... ej: "el gerundio debería ser Desafiando límites"',
-  inductive_concepts:
-    'Sugerí un cambio a esta hipótesis... ej: "debería relacionar también Evadiendo control"',
-  descriptive_data:
-    'Sugerí un cambio a esta descripción... ej: "es más sobre adaptación que negociación"',
-  evaluative:
-    'Sugerí un cambio a esta evaluación... ej: "debería ser SAT porque los indicadores coinciden"',
-  structural:
-    'Sugerí un cambio a este modelo... ej: "esta relación debería ser bidireccional"',
-  elaborative:
-    'Sugerí un cambio a esta elaboración... ej: "este incidente no expande, es variante cubierta"',
+  inductive_data: "theory.placeholderInductiveData",
+  inductive_concepts: "theory.placeholderInductiveConcepts",
+  descriptive_data: "theory.placeholderDescriptiveData",
+  evaluative: "theory.placeholderEvaluative",
+  structural: "theory.placeholderStructural",
+  elaborative: "theory.placeholderElaborative",
 };
 
 // ── Component ─────────────────────────────────────────────────────
@@ -117,6 +112,7 @@ export default function ModificationPanel({
   onClose,
   onApplied,
 }: Props) {
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">(
     "idle",
@@ -254,7 +250,7 @@ export default function ModificationPanel({
         {onClose && (
           <button
             onClick={onClose}
-            title="Cerrar panel"
+            title={t("theory.closePanel")}
             style={{
               background: "transparent",
               border: "1px solid #30363D",
@@ -266,13 +262,15 @@ export default function ModificationPanel({
               flexShrink: 0,
             }}
           >
-            ✕
+            {t("theory.closeIcon")}
           </button>
         )}
         <textarea
           ref={taRef}
           style={inlineInput}
-          placeholder={PLACEHOLDERS[agentFamily] || "Sugerí un cambio..."}
+          placeholder={
+            t(PLACEHOLDERS[agentFamily]) || t("theory.placeholderFallback")
+          }
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
@@ -283,7 +281,7 @@ export default function ModificationPanel({
           disabled={!text.trim() || phase === "loading"}
           onClick={handleVerify}
         >
-          {phase === "loading" ? "..." : "→"}
+          {phase === "loading" ? t("theory.loading") : t("theory.submitArrow")}
         </button>
 
         {/* @-search popup */}
@@ -304,7 +302,9 @@ export default function ModificationPanel({
                 <span
                   style={{ color: "#484F58", fontSize: 10, marginRight: 6 }}
                 >
-                  {item.type === "segment" ? "📄" : "📁"}
+                  {item.type === "segment"
+                    ? t("theory.segmentIcon")
+                    : t("theory.folderIcon")}
                 </span>
                 <span style={{ color: "#E6EDF3", fontSize: 11 }}>
                   {item.label}
@@ -339,7 +339,7 @@ export default function ModificationPanel({
               </div>
               {result.suggested_questions.length > 0 && (
                 <div style={resultSection}>
-                  <div style={label}>Preguntas aceptadas</div>
+                  <div style={label}>{t("theory.acceptedQuestions")}</div>
                   <ul style={qList}>
                     {result.suggested_questions.map((q, i) => (
                       <li key={i} style={qItem}>
@@ -351,7 +351,7 @@ export default function ModificationPanel({
               )}
               <div style={resultActions}>
                 <button style={btnSecondary} onClick={handleReset}>
-                  Cerrar
+                  {t("theory.closeButton")}
                 </button>
               </div>
             </>
@@ -373,7 +373,7 @@ export default function ModificationPanel({
                       result.modified_memo?.nombre ||
                       currentMemo?.code_name ||
                       currentMemo?.nombre ||
-                      "—"}
+                      t("theory.emptyName")}
                   </div>
                   <div
                     style={{ fontSize: 12, color: "#8B949E", lineHeight: 1.5 }}
@@ -382,7 +382,7 @@ export default function ModificationPanel({
                       result.modified_memo?.text ||
                       currentMemo?.definition ||
                       currentMemo?.text ||
-                      "—"}
+                      t("theory.emptyDefinition")}
                   </div>
                 </div>
               </div>
@@ -409,7 +409,7 @@ export default function ModificationPanel({
                   <div
                     style={{ fontSize: 11, color: "#D29922", marginBottom: 4 }}
                   >
-                    ⚠ Impacto
+                    ⚠ {t("theory.impactHeading")}
                   </div>
                   <div
                     style={{ fontSize: 11, color: "#8B949E", lineHeight: 1.4 }}
@@ -430,11 +430,13 @@ export default function ModificationPanel({
                     color: result.recommended ? "#3FB950" : "#F85149",
                   }}
                 >
-                  {result.recommended ? "✓ Recomendado" : "✗ No recomendado"}
+                  {result.recommended
+                    ? t("theory.recommended")
+                    : t("theory.notRecommended")}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button style={btnSecondary} onClick={handleReset}>
-                    Cerrar
+                    {t("theory.closeButton")}
                   </button>
                   {result.evidence_sufficient && (
                     <button
@@ -449,7 +451,9 @@ export default function ModificationPanel({
                       onClick={handleApply}
                       disabled={pipelineRunning}
                     >
-                      {pipelineRunning ? "..." : "Aplicar"}
+                      {pipelineRunning
+                        ? t("theory.loading")
+                        : t("theory.applyButton")}
                     </button>
                   )}
                 </div>

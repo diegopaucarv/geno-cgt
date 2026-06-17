@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getPipelineDecisions } from "../../api/client";
+import { useI18n } from "../../i18n";
 
 interface PipelineDecisions {
   project_id: string;
@@ -29,58 +30,21 @@ const GATE_ICONS: Record<string, string> = {
 };
 
 const GATE_LABELS: Record<string, string> = {
-  main_concern: "Main Concern",
-  core_emergence: "Core Category",
-  selective_reduction: "Selective Reduction",
-  core_saturation: "Saturation",
-  database_a: "Database A — Nodes",
-  database_b: "Database B — Edges",
-  global_saturation: "Global Check",
+  main_concern: "theory.gateMainConcern",
+  core_emergence: "theory.gateCoreCategory",
+  selective_reduction: "theory.gateSelectiveReduction",
+  core_saturation: "theory.gateSaturation",
+  database_a: "theory.gateDatabaseA",
+  database_b: "theory.gateDatabaseB",
+  global_saturation: "theory.gateGlobalCheck",
 };
-
-function formatProposal(gate: string, p: Record<string, unknown>): string {
-  if (gate === "main_concern") {
-    return `"${(p.main_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
-  }
-  if (gate === "core_emergence") {
-    const candidates = p.core_category_candidates as
-      | Array<Record<string, unknown>>
-      | undefined;
-    if (candidates && candidates.length > 0) {
-      return candidates.map((c) => c.code_name as string).join(", ");
-    }
-    return "?";
-  }
-  if (gate === "selective_reduction") {
-    const kept = (p.kept_codes as string[]) || [];
-    const merged = (p.merged_codes as Array<Record<string, unknown>>) || [];
-    const discarded =
-      (p.discarded_codes as Array<Record<string, unknown>>) || [];
-    return `${kept.length} kept, ${merged.length} merged, ${discarded.length} discarded`;
-  }
-  if (gate === "core_saturation") {
-    const sc = p.saturated_categories as number | undefined;
-    return sc ? `${sc} categories saturated` : "?";
-  }
-  if (gate === "database_a") {
-    const nodes = (p.nodes as Array<Record<string, unknown>>) || [];
-    return `${nodes.length} nodes`;
-  }
-  if (gate === "database_b") {
-    const edges = (p.edges as Array<Record<string, unknown>>) || [];
-    return `${edges.length} edges`;
-  }
-  if (gate === "global_saturation") {
-    return (p.all_conditions_met as boolean) ? "✅ All met" : "⚠️ Pending";
-  }
-  return JSON.stringify(p).slice(0, 80);
-}
 
 export default function PlaygroundDataPanel({
   projectId,
 }: {
   projectId: string;
 }) {
+  const { t } = useI18n();
   const [data, setData] = useState<PipelineDecisions | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -90,6 +54,46 @@ export default function PlaygroundDataPanel({
       .then(setData)
       .catch(() => {});
   }, [projectId]);
+
+  function formatProposal(gate: string, p: Record<string, unknown>): string {
+    if (gate === "main_concern") {
+      return `"${(p.main_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
+    }
+    if (gate === "core_emergence") {
+      const candidates = p.core_category_candidates as
+        | Array<Record<string, unknown>>
+        | undefined;
+      if (candidates && candidates.length > 0) {
+        return candidates.map((c) => c.code_name as string).join(", ");
+      }
+      return "?";
+    }
+    if (gate === "selective_reduction") {
+      const kept = (p.kept_codes as string[]) || [];
+      const merged = (p.merged_codes as Array<Record<string, unknown>>) || [];
+      const discarded =
+        (p.discarded_codes as Array<Record<string, unknown>>) || [];
+      return `${kept.length}${t("theory.keptSuffix")}, ${merged.length}${t("theory.mergedSuffix")}, ${discarded.length}${t("theory.discardedSuffix")}`;
+    }
+    if (gate === "core_saturation") {
+      const sc = p.saturated_categories as number | undefined;
+      return sc ? `${sc}${t("theory.categoriesSaturatedSuffix")}` : "?";
+    }
+    if (gate === "database_a") {
+      const nodes = (p.nodes as Array<Record<string, unknown>>) || [];
+      return `${nodes.length}${t("theory.nodesSuffix")}`;
+    }
+    if (gate === "database_b") {
+      const edges = (p.edges as Array<Record<string, unknown>>) || [];
+      return `${edges.length}${t("theory.edgesSuffix")}`;
+    }
+    if (gate === "global_saturation") {
+      return (p.all_conditions_met as boolean)
+        ? t("theory.allMet")
+        : t("theory.pending");
+    }
+    return JSON.stringify(p).slice(0, 80);
+  }
 
   if (!data || data.decisions.length === 0) return null;
 
@@ -120,10 +124,10 @@ export default function PlaygroundDataPanel({
         onClick={() => setCollapsed(!collapsed)}
       >
         <span style={{ fontWeight: 600, color: "#E6EDF3", fontSize: 13 }}>
-          📋 Pipeline Decisions
+          📋 {t("theory.pipelineDecisions")}
         </span>
         <span style={{ color: "#8B949E", fontSize: 16 }}>
-          {collapsed ? "▸" : "▾"}
+          {collapsed ? t("theory.collapsed") : t("theory.expanded")}
         </span>
       </div>
 
@@ -143,7 +147,7 @@ export default function PlaygroundDataPanel({
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span>{GATE_ICONS[d.gate] || "📌"}</span>
                 <span style={{ color: "#E6EDF3", fontWeight: 500 }}>
-                  {GATE_LABELS[d.gate] || d.gate}
+                  {t(GATE_LABELS[d.gate]) || d.gate}
                 </span>
                 <span
                   style={{
@@ -176,7 +180,7 @@ export default function PlaygroundDataPanel({
               <div
                 style={{ fontWeight: 500, color: "#E6EDF3", marginBottom: 4 }}
               >
-                🔄 Saturation Status
+                🔄 {t("theory.saturationStatus")}
               </div>
               {Object.entries(data.saturation).map(([name, s]) => (
                 <div
@@ -196,8 +200,8 @@ export default function PlaygroundDataPanel({
                     }}
                   >
                     {s.saturated
-                      ? `✓ saturated (${s.no_expansion_count})`
-                      : `${s.no_expansion_count}/3`}
+                      ? `${t("theory.saturatedPrefix")} (${s.no_expansion_count})`
+                      : `${s.no_expansion_count}${t("theory.saturationDenominator")}`}
                   </span>
                 </div>
               ))}

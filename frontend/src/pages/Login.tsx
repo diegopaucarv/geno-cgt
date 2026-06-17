@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login } from "../api/client";
+import { useI18n } from "../i18n";
 
 export default function Login() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,11 +23,11 @@ export default function Login() {
 
   return (
     <div style={{ maxWidth: 400, margin: "100px auto", padding: 24 }}>
-      <h1>GT · Grounded Theory</h1>
+      <h1>{t("auth.loginTitle")}</h1>
       <form onSubmit={handleSubmit}>
         <input
           type="email"
-          placeholder="Correo"
+          placeholder={t("auth.emailPlaceholder")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -33,7 +35,7 @@ export default function Login() {
         />
         <input
           type="password"
-          placeholder="Contraseña"
+          placeholder={t("auth.passwordPlaceholder")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -41,11 +43,12 @@ export default function Login() {
         />
         {error && <p style={{ color: "red" }}>{error}</p>}
         <button type="submit" style={{ width: "100%", padding: 10 }}>
-          Ingresar
+          {t("auth.loginButton")}
         </button>
       </form>
       <p style={{ marginTop: 16, textAlign: "center" }}>
-        ¿Sin cuenta? <Link to="/register">Regístrate</Link>
+        {t("auth.noAccount")}{" "}
+        <Link to="/register">{t("auth.registerLink")}</Link>
       </p>
     </div>
   );

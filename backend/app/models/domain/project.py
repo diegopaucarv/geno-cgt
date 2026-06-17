@@ -62,6 +62,11 @@ class Proyecto(Base, TimestampMixin):
     a columna dedicada para acceso rápido en agentes.
     concern | emotion | behavior | discourse | identity | custom"""
 
+    # ── F0.3.6: Idioma del usuario para outputs del LLM ──
+    language: Mapped[str] = mapped_column(String(5), default="es")
+    """Idioma para outputs del LLM. Matching frontend i18n.
+    es | en | de | pt. Default: es (Spanish)."""
+
     # ── Política de mutaciones automáticas ──
     config_mutation_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     """Controla qué campos de configuración puede modificar el sistema

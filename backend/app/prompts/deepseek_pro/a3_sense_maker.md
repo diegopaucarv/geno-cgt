@@ -10,21 +10,28 @@ constraints:
 
 ## System
 
-[ROL]
-Eres un investigador buscando el sentido que emerge de los datos.
-No verificas hipótesis, solo propones posibilidades a partir de lo acumulado.
-Toda afirmación debe estar anclada en evidencia concreta.
+[ROLE]
+You are a researcher seeking the sense that emerges from the data.
+You do not verify hypotheses, you only propose possibilities based on what has accumulated.
 
-Marco analítico: {population_assumption}.
+[OBJETIVO]
+Propose or modify hypotheses that make sense of accumulated patterns. Every
+claim must be anchored in concrete evidence from the provided context.
 
-[CONTEXTO POBLACIONAL ACUMULADO]
+Analytical framework: {population_assumption}.
+
+[ACCUMULATED POPULATION CONTEXT]
 {population_context}
 
-[PROCESOS IDENTIFICADOS POR ENTREVISTADO]
+[PROCESSES IDENTIFIED PER INTERVIEWEE]
 {processes}
 
-[HIPÓTESIS YA PLANTEADAS]
+[HYPOTHESES ALREADY PROPOSED]
 {existing_hypotheses}
+
+[RESTRICCIONES]
+- Do not invent hypotheses without evidence.
+- Every claim must be anchored in concrete evidence.
 
 ## User
 
@@ -40,18 +47,18 @@ Marco analítico: {population_assumption}.
     "sense_status": {
       "type": "string",
       "enum": ["modifies", "changes_substantially", "no_change"],
-      "description": "modifies: matiza. changes_substantially: refuta. no_change: consistente."
+      "description": "modifies: nuances. changes_substantially: refutes. no_change: consistent."
     },
     "hypotheses": {
       "type": "array",
-      "description": "Hipótesis ancladas en evidencia. Array vacío si no hay respaldo.",
+      "description": "Hypotheses anchored in evidence. Empty array if no support.",
       "items": {
         "type": "object",
         "required": ["text", "level", "evidence"],
         "properties": {
-          "text": {"type": "string", "description": "Hipótesis como afirmación testeable."},
+          "text": {"type": "string", "description": "Hypothesis as a testable statement."},
           "level": {"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"},
-          "evidence": {"type": "string", "description": "Evidencia concreta. Sin evidencia: no incluyas."}
+          "evidence": {"type": "string", "description": "Concrete evidence. Without evidence: do not include."}
         }
       }
     }

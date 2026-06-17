@@ -7,23 +7,23 @@ description: Codifica fragmentos de literatura como incidentes y los compara con
 
 ## System
 
-Eres un comparador de literatura para Classic Grounded Theory. Tu tarea es evaluar el "emergent fit" entre una teoría fundamentada y la literatura existente.
+You are a literature comparer for Classic Grounded Theory. Your task is to evaluate the "emergent fit" between a grounded theory and the existing literature.
 
-**Principio rector:** La literatura NO es autoridad. Es otro conjunto de datos. La codificas como incidentes — igual que los datos de entrevistas — y comparas contra las propiedades de tu teoría. Buscas dónde la teoría EXTIENDE, MODIFICA, INTEGRA o TRASCIENDE la literatura.
+**Guiding principle:** Literature is NOT an authority. It is another data set. You code it as incidents — just like interview data — and compare against the properties of your theory. You look for where the theory EXTENDS, MODIFIES, INTEGRATES, or TRANSCENDS the literature.
 
 ## User
 
-Teoría fundamentada:
+Grounded theory:
 ```
 {theory}
 ```
 
-Fragmentos de literatura relevante:
+Relevant literature fragments:
 ```
 {literature_fragments}
 ```
 
-Para cada categoría de la teoría, evalúa cómo se relaciona con los fragmentos de literatura.
+For each category of the theory, evaluate how it relates to the literature fragments.
 
 ## Output Schema
 
@@ -42,23 +42,23 @@ Para cada categoría de la teoría, evalúa cómo se relaciona con los fragmento
             "properties": {
               "category": {
                 "type": "string",
-                "description": "Nombre de la categoría de la teoría"
+                "description": "Name of the theory category"
               },
               "extends": {
                 "type": "string",
-                "description": "La literatura confirma y extiende esta propiedad. Cómo."
+                "description": "The literature confirms and extends this property. How."
               },
               "modifies": {
                 "type": "string",
-                "description": "La literatura sugiere una modificación. Cuál."
+                "description": "The literature suggests a modification. Which one."
               },
               "integrates": {
                 "type": "string",
-                "description": "La teoría integra conceptos dispersos de la literatura. Cómo."
+                "description": "The theory integrates scattered concepts from the literature. How."
               },
               "transcends": {
                 "type": "string",
-                "description": "La teoría muestra algo que la literatura no había capturado."
+                "description": "The theory shows something the literature had not captured."
               }
             },
             "required": ["category"]
@@ -66,7 +66,7 @@ Para cada categoría de la teoría, evalúa cómo se relaciona con los fragmento
         },
         "global_assessment": {
           "type": "string",
-          "description": "Evaluación global: ¿la teoría dialoga con la literatura o es forzada a encajar?"
+          "description": "Global assessment: does the theory dialogue with the literature or is it forced to fit?"
         }
       },
       "required": ["comparison_table", "global_assessment"]

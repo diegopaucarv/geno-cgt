@@ -70,13 +70,20 @@ class RecommendationItem(BaseModel):
 
 ProjectResponse = response_schema(Proyecto)
 
-ProjectCreate = create_input_schema(
+_BaseProjectCreate = create_input_schema(
     Proyecto,
     exclude={
         "estado",
         "creador_id",  # se asigna automáticamente del usuario autenticado
     },
 )
+
+
+class ProjectCreate(_BaseProjectCreate):
+    """Schema for project creation with optional custom_label for spaCy validation."""
+
+    custom_label: str | None = None
+
 
 # ── Document ──────────────────────────────────────────────────────────
 

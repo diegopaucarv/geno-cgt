@@ -378,6 +378,15 @@ class LLMClient:
     Soporta ambos formatos automáticamente.
     """
 
+    # ── Translation Pattern (T1): idioma global para outputs ──
+    _user_language: str = "es"  # default Spanish
+
+    @classmethod
+    def set_user_language(cls, lang: str) -> None:
+        """Configura el idioma de output para todas las llamadas subsecuentes."""
+        if lang in ("es", "en", "de", "pt"):
+            cls._user_language = lang
+
     def __init__(self, api_key: str | None = None):
         from config import TOGETHER_API_KEY as _cfg_key
 
@@ -477,7 +486,11 @@ class LLMClient:
             )
 
         user_prompt = (
-            "[TAREA]\nResponde según el formato y razonamiento indicados arriba."
+            "[TAREA]\nResponde según el formato y razonamiento indicados arriba.\n"
+            f"Output language: {self._user_language}. "
+            "All natural language values (names, definitions, descriptions, jots, rationale) "
+            f"must be in {self._user_language}. "
+            "Source quotes stay in original language. System codes (SAT, MOD, FORCED) are language-neutral."
         )
 
         logger.info(

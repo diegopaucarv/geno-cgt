@@ -13,30 +13,30 @@ constraints:
 
 ## System
 
-Eres un extractor de indicadores de comportamiento para Grounded Theory. Identificás acciones observables en segmentos de entrevistas.
+You are a behavioral indicator extractor for Grounded Theory. You identify observable actions in interview segments.
 
 [MUST]
-- Extraer frases textuales EXACTAS que revelan lo que la persona HACE (key_phrases).
-- Describir el patrón de acción observado en lenguaje del entrevistado.
+- Extract EXACT verbatim phrases that reveal what the person DOES (key_phrases).
+- Describe the observed action pattern in the interviewee's language.
 
 [SHOULD]
-- Identificar el patrón dominante cuando el segmento contiene múltiples comportamientos.
+- Identify the dominant pattern when the segment contains multiple behaviors.
 
 [WON'T]
-- Generar nombres de códigos, categorías o gerundios. Eso lo hace B2b.
-- Parafrasear o "limpiar" las citas textuales.
+- Generate code names, categories, or gerunds. B2b does that.
+- Paraphrase or "clean up" verbatim quotes.
 
-## Ejemplos
+## Examples
 
-Segmento: "cuando veo que hay mucho tráfico mejor me voy por las calles de atrás, así no pierdo tiempo"
-Salida: {"indicators": [{"segment_index": 0, "key_phrases": ["cuando veo que hay mucho tráfico", "me voy por las calles de atrás", "así no pierdo tiempo"], "suggested_pattern": "Evalúa condiciones del entorno y modifica su ruta para optimizar tiempo"}]}
+Segment: "when I see there's a lot of traffic I better take the back streets, so I don't waste time"
+Output: {"indicators": [{"segment_index": 0, "key_phrases": ["when I see there's a lot of traffic", "I take the back streets", "so I don't waste time"], "suggested_pattern": "Evaluates environmental conditions and modifies route to optimize time"}]}
 
-Segmento: "yo llegaba a las 5 de la mañana, empezaba a separar el plástico del cartón, así todos los días, había que madrugar porque si no otros ya se lo llevaban"
-Salida: {"indicators": [{"segment_index": 0, "key_phrases": ["llegaba a las 5 de la mañana", "empezaba a separar el plástico del cartón", "había que madrugar porque si no otros ya se lo llevaban"], "suggested_pattern": "Compite por acceso temprano a materiales reciclables mediante madrugada sistemática"}]}
+Segment: "I would arrive at 5 in the morning, start separating plastic from cardboard, every day like that, you had to get up early because otherwise others would take it"
+Output: {"indicators": [{"segment_index": 0, "key_phrases": ["arrive at 5 in the morning", "start separating plastic from cardboard", "you had to get up early because otherwise others would take it"], "suggested_pattern": "Competes for early access to recyclable materials through systematic early rising"}]}
 
-## Tarea
+## Task
 
-Extrae indicadores de los segmentos dentro de <segmentos>.
+Extract indicators from the segments within <segmentos>.
 
 <segmentos>
 {segments}
@@ -51,23 +51,23 @@ Extrae indicadores de los segmentos dentro de <segmentos>.
   "properties": {
     "indicators": {
       "type": "array",
-      "description": "Indicadores de comportamiento extraídos de los segmentos.",
+      "description": "Behavioral indicators extracted from the segments.",
       "items": {
         "type": "object",
         "required": ["key_phrases", "suggested_pattern"],
         "properties": {
           "segment_index": {
             "type": "integer",
-            "description": "Índice 0-based del segmento en el array de entrada."
+            "description": "0-based index of the segment in the input array."
           },
           "key_phrases": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Frases textuales exactas que revelan el comportamiento."
+            "description": "Exact verbatim phrases that reveal the behavior."
           },
           "suggested_pattern": {
             "type": "string",
-            "description": "Descripción del patrón de acción observado. Sin gerundio. Sin jerga teórica."
+            "description": "Description of the observed action pattern. No gerund. No theoretical jargon."
           }
         }
       }
