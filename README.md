@@ -1,6 +1,4 @@
-================================================================================
 README — ESPAÑOL
-================================================================================
 
 # Geno: un sistema automatizado de teoría fundamentada
 
@@ -170,9 +168,7 @@ Si encontrás errores al levantar el sistema, verificá que:
 - Tu `TOGETHER_API_KEY` sea válida y tenga créditos disponibles.
 - Los puertos 8000, 5432, 6379 y 9000 no estén ocupados.
 
-================================================================================
 README — ENGLISH
-================================================================================
 
 # Geno: an automated grounded theory system
 
@@ -342,9 +338,7 @@ If you encounter errors when starting the system, verify that:
 - Your `TOGETHER_API_KEY` is valid and has available credits.
 - Ports 8000, 5432, 6379, and 9000 are not occupied.
 
-================================================================================
 README — PORTUGUÊS
-================================================================================
 
 # Geno: um sistema automatizado de teoria fundamentada
 
