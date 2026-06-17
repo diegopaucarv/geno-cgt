@@ -148,9 +148,7 @@ If you encounter errors when starting the system, verify that:
 
 ---
 
-# GT — Pipeline de Teoria Fundamentada (Grounded Theory)
-
-**Sistema automatizado para análise qualitativa baseado na Teoria Fundamentada (CGT)**  
+# Geno: um sistema automatizado de teoria fundamentada 
 *Apresentado no ALAS 2026*
 
 Este pipeline orquestra agentes LLM (via Together.ai) e workers especializados para processar documentos, extrair incidentes, sintetizar padrões e gerar teoria a partir de dados qualitativos, seguindo o método da Teoria Fundamentada.
@@ -178,8 +176,8 @@ O sistema é organizado em fases sequenciais:
 ## ⚙️ Pré-requisitos
 
 - Docker e Docker Compose (recomendado)
-- Python 3.10+ (para desenvolvimento local)
 - Uma chave de API da [Together.ai](https://together.ai) (gratuita com créditos iniciais)
+- (Optativo) Python 3.10+ (para desenvolvimento local)
 
 ---
 
@@ -297,9 +295,7 @@ Se encontrar erros ao iniciar o sistema, verifique se:
 
 ---
 
-# GT — Pipeline de Teoría Fundamentada (Grounded Theory)
-
-**Sistema automatizado para análisis cualitativo basado en la Teoría Fundamentada (CGT)**  
+# Geno: un sistema automatizado de teoria fundamentada 
 *Presentado en ALAS 2026*
 
 Este pipeline orquesta agentes LLM (vía Together.ai) y workers especializados para procesar documentos, extraer incidentes, sintetizar patrones y generar teoría desde datos cualitativos, siguiendo el método de la Teoría Fundamentada.
@@ -327,8 +323,8 @@ El sistema se organiza en fases secuenciales:
 ## ⚙️ Requisitos previos
 
 - Docker y Docker Compose (recomendado)
-- Python 3.10+ (para desarrollo local)
 - Una clave de API de [Together.ai](https://together.ai) (gratuita con créditos iniciales)
+- (Opcional) Python 3.10+ (para desarrollo local)
 
 ---
 
