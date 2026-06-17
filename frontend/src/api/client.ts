@@ -1,6 +1,6 @@
 const API_BASE = "/api/v1";
 
-function getToken(): string | null {
+export function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 

@@ -437,7 +437,9 @@ Estos ítems no están en el checklist actual pero se recomienda agregarlos:
 | **E4** | **Plan de rollback para migraciones de BD.** Las tablas nuevas (`extracted_incidents`, `incident_comparisons`, `incident_groups`) deben tener migraciones reversibles (`downgrade()`). | Fase 0 | 🟡 | Alembic autogenerate ya produce `downgrade()`. Verificar que funcionen antes de aplicar en producción. |
 | **E5** | **Seed de datos de prueba.** Crear un script `scripts/seed_test_data.py` que inserte 3 documentos con segmentos, incidentes, y categorías mock para validar el pipeline end-to-end sin depender de datos reales. | Fase 0 | 🟢 | Acelera el desarrollo y testing de las Fases 2-5. |
 | **E6** | **Métricas de costo por fase.** Agregar tracking de tokens consumidos y costo estimado por fase del pipeline (ya existe `agent_loop_logs.total_tokens` y `total_cost_est`). Extender a nivel de proyecto. | Fase 3 | 🟢 | Permite al investigador ver el costo acumulado de su proyecto. El modelo de datos ya lo soporta parcialmente. |
-| **E7** | **Health check endpoint para workers.** Agregar `GET /api/v1/ping/workers` que verifique que NLP, Heavy, y Fast workers están respondiendo (ya existe `ping.py` — extender). | Fase 3 | 🟢 | Facilita debugging cuando un worker no procesa tareas. |
+| **E7** | **Health check endpoint para workers.** Agregar `GET /api/v1/ping/workers` que verifique que NLP, Heavy, y Fast workers están respondiendo. | Fase 3 | 🟢 | Facilita debugging. |
+| **E8** | **ContextWindowManager hibrido (Map-Reduce + ReAct).** Tool algoritmica Map-Reduce. Batches divergentes activan ReAct con search_segments + compare_tools. Diseno en 6-ContextWindowManager.md. | Fase 3 | 🟡 | Sin esto, B1 (125K pares) satura contexto. |
+| **F0.8** | **Sistema de Historial Git-like.** Tabla generica entity_versions + version_evidence para 5 entidades. Timeline en frontend con hover/click a incidentes. HITL envia historial completo al LLM para cascade effects. | Fase 3 | 🟡 | Reemplaza category_definition_versions. Habilita F6.2 trazabilidad. |
 
 ---
 
@@ -448,5 +450,6 @@ Estos documentos no son items del checklist pero contienen diseños detallados r
 | Documento | Referenciado por | Contenido |
 |-----------|-----------------|-----------|
 | `AGENTES.md` | F0.6 | Registro canonico de 38 agentes con tiers, estados, inputs/outputs, prompts |
-| `6-ContextWindowManager.md` | F2.3.1, F2.3.2 | Diseno de tool algoritmica Map-Reduce para escalar procesamiento sin saturar contexto IA (resuelve C6) |
+| `6-ContextWindowManager.md` | F2.3.1, F2.3.2, E8 | Diseno de tool Map-Reduce + hibrido ReAct para batches divergentes (resuelve C6) |
+| `7-GitLikeVersioning.md` | F0.8 | Sistema git-like: entity_versions + version_evidence para 5 entidades. Cascade evaluation FLASH. API y frontend. |
 | `TECH_DEBT.md` | F0.7 | Deuda tecnica de parametros hardcodeados (extraido de 1-Refaccion 10) |

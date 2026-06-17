@@ -1,0 +1,47 @@
+#!/bin/sh
+# ═══════════════════════════════════════════════════════════════════════
+# Pre-commit hook: bloquea commits que contengan patrones de secretos.
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Instalación:
+#   cp scripts/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+
+RED="\033[0;31m"
+NC="\033[0m"
+
+# Patrones de secretos comunes
+PATTERNS=(
+  "tgp_v1_[A-Za-z0-9_-]{20,}"        # Together.ai API key
+  "sk-[a-zA-Z0-9]{20,}"              # OpenAI / similar keys
+  "AKIA[0-9A-Z]{16}"                 # AWS Access Key
+  "eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"  # JWT token
+)
+
+STAGED=$(git diff --cached --name-only)
+
+for FILE in $STAGED; do
+  # Saltar este script y .env.example
+  case "$FILE" in
+    .env.example|scripts/pre-commit|.github/*) continue ;;
+  esac
+
+  for PATTERN in "${PATTERNS[@]}"; do
+    if git diff --cached "$FILE" | grep -qE "$PATTERN" 2>/dev/null; then
+      echo "${RED}❌ SECRETO DETECTADO en $FILE${NC}"
+      echo "   Patrón: $PATTERN"
+      echo "   ⚠️  Usa variables de entorno o GitHub Secrets."
+      echo "   Si es un falso positivo, usa: git commit --no-verify"
+      exit 1
+    fi
+  done
+done
+
+# ── Bloquear .env ────────────────────────────────────────────────────
+if echo "$STAGED" | grep -q '^\.env$'; then
+  echo "${RED}❌ No se permite commitear .env${NC}"
+  echo "   Está en .gitignore. Si necesitas forzarlo: git add -f .env"
+  exit 1
+fi
+
+exit 0

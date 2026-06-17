@@ -1,3 +1,6 @@
+import asyncio
+import json
+import logging
 from uuid import UUID
 
 from app.db.database import get_db
@@ -10,6 +13,8 @@ from app.services.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -35,6 +40,59 @@ async def create_project(
     db.add(proyecto)
     await db.commit()
     await db.refresh(proyecto)
+
+    # ── F1.2: population_generalizer (FLASH, single-shot) ──
+    raw_pop = body.supuesto_poblacional
+    if raw_pop and raw_pop.strip():
+        try:
+            from app.core.llm_config import get_model_for_prompt
+            from app.core.together_client import TogetherLLM
+            from app.prompts import PROMPT_REGISTRY
+
+            template = PROMPT_REGISTRY["population_generalizer"]
+            messages = template.build_messages(raw_population_description=raw_pop)
+            model = get_model_for_prompt("population_generalizer")
+
+            llm = TogetherLLM()
+            response = await asyncio.to_thread(
+                llm.chat,
+                model=model,
+                messages=messages,
+                response_format=template.output_schema,
+            )
+
+            content = json.loads(response.get("content", "{}"))
+
+            # Merge with any existing population_assumption
+            current = proyecto.population_assumption or {}
+            current["population_description"] = raw_pop
+            current["generalized_population"] = content.get(
+                "generalized_population", ""
+            )
+            current["spatial_frame"] = content.get("spatial_frame", "sparse")
+            current["temporal_frame"] = content.get(
+                "temporal_frame", "present_continuous"
+            )
+            current["generalizer_confidence"] = content.get("confidence", 0.5)
+            current["generalizer_rationale"] = content.get("rationale", "")
+            proyecto.population_assumption = current
+
+            await db.commit()
+            await db.refresh(proyecto)
+            logger.info(
+                "population_generalizer: project=%s spatial=%s temporal=%s",
+                proyecto.id,
+                current.get("spatial_frame"),
+                current.get("temporal_frame"),
+            )
+        except Exception as e:
+            logger.warning(
+                "population_generalizer failed for project=%s: %s",
+                proyecto.id,
+                e,
+            )
+            # Non-blocking: project is created even if generalizer fails
+
     return proyecto
 
 

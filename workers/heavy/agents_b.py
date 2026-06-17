@@ -6,11 +6,7 @@ import json
 import logging
 import os
 
-from algorithmic_checks import (
-    deduplicate_hypotheses,
-    filter_empty_dimensions,
-    prescreen_segments_against_codes,
-)
+from algorithmic_checks import deduplicate_hypotheses
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -84,65 +80,48 @@ def _get_coding_style_instruction(session, proyecto_id: str) -> str:
 
 
 def b1_distill_sampling(proyecto_id: str) -> dict:
-    session = SessionLocal()
+    """DEPRECATED since F2.3 — use b1_compare_incidents() from comparator.py instead.
+
+    Legacy sampling distiller. Kept for backward compatibility only.
+    VIOLATION: This function sees categorias (existing codes), which the CGT
+    comparator should NOT see. The new b1_compare_incidents() only reads
+    extracted_incidents, never categories.
+
+    REDIRECT: Calls b1_compare_incidents() and returns a legacy-compatible result.
+    """
+    import warnings
+
+    warnings.warn(
+        "b1_distill_sampling is deprecated. Use b1_compare_incidents() from "
+        "comparator.py instead. Redirecting automatically.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    # ── F4.1.1: Redirect to new B1 comparator ──
+    from comparator import b1_compare_incidents
+
     try:
-        pop_assumption = _get_population_assumption(session, proyecto_id)
-        pop_ctx = session.execute(
-            text(
-                "SELECT surprising_details FROM population_contexts WHERE proyecto_id = :pid ORDER BY version DESC LIMIT 1"
-            ),
-            {"pid": proyecto_id},
-        ).fetchone()
-        processes = session.execute(
-            text(
-                "SELECT process_description FROM document_processes WHERE proyecto_id = :pid ORDER BY creado_en"
-            ),
-            {"pid": proyecto_id},
-        ).fetchall()
-        codes = session.execute(
-            text("SELECT nombre, definicion FROM categorias WHERE proyecto_id = :pid"),
-            {"pid": proyecto_id},
-        ).fetchall()
-        processes_text = "\n".join(
-            f"Doc {i + 1}: {p[0]}" for i, p in enumerate(processes)
+        result = b1_compare_incidents(proyecto_id)
+        logger.info(
+            "b1_distill_sampling redirected to b1_compare_incidents: %s", result
         )
-        codes_text = (
-            "\n".join(f"- {c[0]}: {c[1]}" for c in codes) if codes else "(sin códigos)"
-        )
-
-        response = llm.run_agent(
-            agent_id="b1",
-            variables={
-                "population_assumption": pop_assumption,
-                "population_context": pop_ctx[0] if pop_ctx else "",
-                "processes": processes_text,
-                "codes": codes_text,
-            },
-            temperature=0.4,
-        )
-
-        memo_count = 0
-        for dim in response.get("sampling_dimensions", []):
-            content = f"Dimensión: {dim.get('name')}\n{dim.get('description')}\nContraste: {dim.get('contrast_criteria')}\nExtremos: {dim.get('extreme_criteria')}\nConsistentes: {dim.get('consistent_criteria')}"
-            session.execute(
-                text(
-                    "INSERT INTO memos (id, proyecto_id, autor_id, tipo, estado, contenido, hash_tema, es_confidencial) VALUES (gen_random_uuid(), :pid, (SELECT creador_id FROM proyectos WHERE id=:pid2), 'MUESTREO', 'ABIERTO', :content, NULL, false)"
-                ),
-                {"pid": proyecto_id, "pid2": proyecto_id, "content": content},
-            )
-            memo_count += 1
-
-        raw_dimensions = response.get("sampling_dimensions", [])
-        filtered_dimensions = filter_empty_dimensions(raw_dimensions)
-        discarded = len(raw_dimensions) - len(filtered_dimensions)
-        session.commit()
         return {
-            "sampling_dimensions": filtered_dimensions,
-            "dimensions_discarded": discarded,
-            "memos_created": memo_count,
+            "sampling_dimensions": [],
+            "dimensions_discarded": 0,
+            "memos_created": 0,
+            "redirected_to": "b1_compare_incidents",
+            "comparator_result": result,
         }
-    finally:
-        session.close()
+    except Exception as e:
+        logger.error("b1_distill_sampling redirect failed: %s", e)
+        # ── Fallback: return empty result for backward compatibility ──
+        return {
+            "sampling_dimensions": [],
+            "dimensions_discarded": 0,
+            "memos_created": 0,
+            "redirect_error": str(e),
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -151,7 +130,18 @@ def b1_distill_sampling(proyecto_id: str) -> dict:
 
 
 def _b2a_extract_indicators(segments_text: str) -> dict:
-    """B2a (FLASH): Extrae indicadores de comportamiento de segmentos."""
+    """DEPRECATED since F4.1 — B2a (FLASH): Extrae indicadores de comportamiento de segmentos.
+
+    This helper was used by the legacy b2_open_code() pipeline. The new architecture
+    uses b2_label_groups() from labeler.py instead.
+    """
+    import warnings
+
+    warnings.warn(
+        "_b2a_extract_indicators is deprecated. Use b2_label_groups() from labeler.py instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return llm.run_agent(
         agent_id="b2a", variables={"segments": segments_text}, temperature=0.2
     )
@@ -160,7 +150,18 @@ def _b2a_extract_indicators(segments_text: str) -> dict:
 def _b2b_generate_codes(
     pop_assumption: str, pop_context: str, existing_codes: str, indicators_text: str
 ) -> dict:
-    """B2b (PRO): Genera códigos en gerundio a partir de indicadores pre-extraídos."""
+    """DEPRECATED since F4.1 — B2b (PRO): Generate codes from pre-extracted indicators.
+
+    This helper was used by the legacy b2_open_code() pipeline. The new architecture
+    uses b2_label_groups() from labeler.py instead.
+    """
+    import warnings
+
+    warnings.warn(
+        "_b2b_generate_codes is deprecated. Use b2_label_groups() from labeler.py instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return llm.run_agent(
         agent_id="b2b",
         variables={
@@ -174,7 +175,10 @@ def _b2b_generate_codes(
 
 
 def _enrich_codes_with_evidence(codes: list[dict], proyecto_id: str) -> list[dict]:
-    """Post-B2b enrichment: busca evidencia documental para cada código vía RAG.
+    """DEPRECATED since F4.1 — Post-B2b enrichment: busca evidencia documental para cada código vía RAG.
+
+    This helper was used by the legacy b2_open_code() pipeline. The new architecture
+    uses b2_label_groups() from labeler.py instead.
 
     Para cada código generado por B2b:
       1. Usa nombre + definición como query
@@ -192,6 +196,13 @@ def _enrich_codes_with_evidence(codes: list[dict], proyecto_id: str) -> list[dic
         Lista de códigos enriquecidos con puntaje_relevancia y evidence.
     """
     import sys as _sys
+    import warnings
+
+    warnings.warn(
+        "_enrich_codes_with_evidence is deprecated. Use b2_label_groups() from labeler.py instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     _sys.path.insert(0, "/app")
     from app.agents.tools.search_tools import search_segments
@@ -262,158 +273,48 @@ def _enrich_codes_with_evidence(codes: list[dict], proyecto_id: str) -> list[dic
 
 
 def b2_open_code(proyecto_id: str) -> dict:
+    """DEPRECATED since F2.3 — use b2_label_groups() from labeler.py instead.
+
+    Legacy open coding pipeline. Kept for reference only.
+    VIOLATION: This function does everything (extract indicators, generate codes,
+    critique) in one monolithic call. The new architecture splits this into:
+      - comparator.py::b1_compare_incidents() — compares incidents
+      - labeler.py::b2_label_groups() — labels groups with SelfRefinement loop
+      - label_critic.py::b3_critique_labels() — critiques labels (FLASH)
     """
-    Pipeline B2 completo:
-    1. Pattern 1: pre-filtra segmentos contra códigos existentes (auto-asigna >0.85)
-    2. B2a (FLASH): extrae indicadores de comportamiento
-    3. B2b (PRO): genera códigos a partir de indicadores
-    """
-    session = SessionLocal()
+    import warnings
+
+    warnings.warn(
+        "b2_open_code is deprecated. Use b2_label_groups() from labeler.py instead. "
+        "Redirecting automatically.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    # ── F4.1.2: Redirect to new B2 labeler ──
+    from labeler import b2_label_groups
+
     try:
-        pop_assumption = _get_population_assumption(session, proyecto_id)
-        pop_ctx = session.execute(
-            text(
-                "SELECT surprising_details FROM population_contexts WHERE proyecto_id = :pid ORDER BY version DESC LIMIT 1"
-            ),
-            {"pid": proyecto_id},
-        ).fetchone()
-        existing_codes = session.execute(
-            text("SELECT nombre, definicion FROM categorias WHERE proyecto_id = :pid"),
-            {"pid": proyecto_id},
-        ).fetchall()
-        codes_text = (
-            "\n".join(f"- {c[0]}: {c[1]}" for c in existing_codes)
-            if existing_codes
-            else "(sin códigos)"
-        )
-
-        # ── Step 1: Pattern 1 — pre-filtrar (C05: baseline_data primero) ──
-        unassigned_ids = session.execute(
-            text(
-                "SELECT s.id FROM segmentos s JOIN documentos d ON s.documento_id = d.id "
-                "WHERE d.proyecto_id = :pid "
-                "AND s.id NOT IN (SELECT segmento_id FROM codigos_segmento) "
-                "ORDER BY CASE WHEN s.tipo_dato_glaser = 'baseline_data' THEN 0 "
-                "WHEN s.tipo_dato_glaser IS NULL THEN 1 ELSE 2 END, s.posicion LIMIT 20"
-            ),
-            {"pid": proyecto_id},
-        ).fetchall()
-        unassigned_id_list = [str(r[0]) for r in unassigned_ids]
-
-        prescreen = prescreen_segments_against_codes(
-            unassigned_id_list, session, proyecto_id
-        )
-        auto_assigned = 0
-        for item in prescreen["auto_assign"]:
-            session.execute(
-                text(
-                    "INSERT INTO codigos_segmento (segmento_id, categoria_id, estado, confianza, origen) VALUES (:sid, :cid, 'asignado', :conf, 'ia') ON CONFLICT DO NOTHING"
-                ),
-                {
-                    "sid": item["segment_id"],
-                    "cid": item["code_id"],
-                    "conf": item["score"],
-                },
-            )
-            auto_assigned += 1
-        if auto_assigned:
-            session.commit()
-            logger.info("Auto-asignados %d segmentos", auto_assigned)
-
-        needs_llm_ids = list(prescreen["needs_new_code"])
-        if prescreen["needs_confirmation"]:
-            needs_llm_ids.extend(
-                item["segment_id"] for item in prescreen["needs_confirmation"]
-            )
-
-        if not needs_llm_ids:
-            session.commit()
-            return {
-                "codes_created": 0,
-                "codes": [],
-                "auto_assigned": auto_assigned,
-                "b2a_indicators": 0,
-            }
-
-        # Cargar textos de segmentos que necesitan LLM
-        unassigned = session.execute(
-            text(
-                "SELECT texto FROM segmentos WHERE id::text = ANY(:ids) ORDER BY posicion LIMIT 8"
-            ),
-            {"ids": needs_llm_ids[:10]},
-        ).fetchall()
-        segments_text = "\n---\n".join(r[0] for r in unassigned) if unassigned else ""
-
-        # ── Step 2: B2a (FLASH) — extraer indicadores ──
-        b2a_response = _b2a_extract_indicators(segments_text)
-        indicators_list = b2a_response.get("indicators", [])
-        indicators_text = (
-            json.dumps(indicators_list, indent=2, ensure_ascii=False)
-            if indicators_list
-            else segments_text[:4000]
-        )
-
-        # ── Step 3: B2b (PRO) — generar códigos ──
-        if AGENTIC_MODE:
-            b2b_response = _b2b_generate_codes_agentic(
-                pop_assumption=pop_assumption,
-                pop_context=pop_ctx[0] if pop_ctx else "",
-                existing_codes=codes_text,
-                indicators_text=indicators_text,
-            )
-        else:
-            b2b_response = _b2b_generate_codes(
-                pop_assumption=pop_assumption,
-                pop_context=pop_ctx[0] if pop_ctx else "",
-                existing_codes=codes_text,
-                indicators_text=indicators_text,
-            )
-
-        # ── Step 4: Enrich codes with documentary evidence (RAG search) ──
-        raw_codes = b2b_response.get("codes", [])
-        if raw_codes:
-            enriched_codes = _enrich_codes_with_evidence(raw_codes, proyecto_id)
-            avg_relevance = sum(
-                c.get("puntaje_relevancia", 0) for c in enriched_codes
-            ) / max(len(enriched_codes), 1)
-            logger.info(
-                "Evidence enrichment: %d codes, avg relevance=%.1f docs",
-                len(enriched_codes),
-                avg_relevance,
-            )
-        else:
-            enriched_codes = []
-
-        created = 0
-        for code in enriched_codes:
-            name = code.get("code_name", "").strip()
-            definition = (code.get("definition") or "").strip()
-            if not name or not definition:
-                continue
-            relevance = code.get("puntaje_relevancia", 0)
-            session.execute(
-                text(
-                    "INSERT INTO categorias (id, proyecto_id, nombre, definicion, version, estado_saturacion, puntaje_relevancia, es_central) "
-                    "VALUES (gen_random_uuid(), :pid, :name, :def, 1, 'ABIERTO', :relevance, false)"
-                ),
-                {
-                    "pid": proyecto_id,
-                    "name": name,
-                    "def": definition,
-                    "relevance": relevance,
-                },
-            )
-            created += 1
-        session.commit()
-
+        result = b2_label_groups(proyecto_id)
+        logger.info("b2_open_code redirected to b2_label_groups: %s", result)
         return {
-            "codes_created": created,
-            "codes": enriched_codes,
-            "auto_assigned": auto_assigned,
-            "b2a_indicators": len(indicators_list),
+            "codes_created": result.get("labels_created", 0),
+            "codes": [],
+            "auto_assigned": 0,
+            "b2a_indicators": 0,
+            "redirected_to": "b2_label_groups",
+            "labeler_result": result,
         }
-    finally:
-        session.close()
+    except Exception as e:
+        logger.error("b2_open_code redirect failed: %s", e)
+        # ── Fallback: return empty result for backward compatibility ──
+        return {
+            "codes_created": 0,
+            "codes": [],
+            "auto_assigned": 0,
+            "b2a_indicators": 0,
+            "redirect_error": str(e),
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -571,7 +472,26 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def b3_generate_hypotheses(proyecto_id: str) -> dict:
+def b3_generate_hypotheses(
+    proyecto_id: str, incident_groups_json: str | None = None
+) -> dict:
+    """Generate hypotheses from categories + labeled incident_groups.
+
+    Updated F2.3: Also reads labeled incident_groups (from B2 labeler) in addition
+    to traditional categorias. This ensures hypotheses can reference the new
+    incident-based categories.
+
+    Updated F4.1.3: Accepts optional incident_groups_json parameter that, when
+    provided, takes priority over the DB query for labeled incident_groups.
+    This allows callers (e.g., tasks.py) to pass pre-fetched groups from B2's
+    output, avoiding redundant DB queries.
+
+    Args:
+        proyecto_id: UUID of the project.
+        incident_groups_json: Optional JSON string of labeled incident groups
+            (list of dicts with 'label' and 'definition' keys). When provided,
+            these are used instead of querying the DB for labeled groups.
+    """
     session = SessionLocal()
     try:
         pop_assumption = _get_population_assumption(session, proyecto_id)
@@ -593,10 +513,59 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
             ),
             {"pid": proyecto_id},
         ).fetchall()
+
+        # ── F2.3: Include both categorias and labeled incident_groups ──
         codes = session.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
+
+        # ── F4.1.3: Use incident_groups_json if provided, otherwise query DB ──
+        if incident_groups_json:
+            try:
+                labeled_groups_raw = json.loads(incident_groups_json)
+                # Convert JSON objects to (label, definition) tuples
+                labeled_groups = [
+                    (g.get("label"), g.get("definition"))
+                    for g in labeled_groups_raw
+                    if isinstance(g, dict)
+                ]
+                logger.info(
+                    "b3_generate_hypotheses: using %d groups from incident_groups_json",
+                    len(labeled_groups),
+                )
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(
+                    "b3_generate_hypotheses: invalid incident_groups_json, "
+                    "falling back to DB: %s",
+                    e,
+                )
+                labeled_groups = session.execute(
+                    text(
+                        "SELECT label, definition FROM incident_groups "
+                        "WHERE proyecto_id = :pid AND status = 'labeled' "
+                        "AND label IS NOT NULL"
+                    ),
+                    {"pid": proyecto_id},
+                ).fetchall()
+        else:
+            # Also read labeled incident_groups as additional "categories"
+            labeled_groups = session.execute(
+                text(
+                    "SELECT label, definition FROM incident_groups "
+                    "WHERE proyecto_id = :pid AND status = 'labeled' AND label IS NOT NULL"
+                ),
+                {"pid": proyecto_id},
+            ).fetchall()
+
+        # Merge both sources
+        all_codes = list(codes)  # (nombre, definicion) tuples
+        for lg in labeled_groups:
+            if lg[0] and lg[1]:  # label, definition
+                # Avoid duplicates if already in categorias
+                if not any(c[0] == lg[0] for c in all_codes):
+                    all_codes.append((lg[0], lg[1]))
+
         processes_text = "\n".join(
             f"Doc {i + 1}: {p[0]}" for i, p in enumerate(processes)
         )
@@ -606,7 +575,9 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
             else "(sin hipótesis)"
         )
         codes_text = (
-            "\n".join(f"- {c[0]}: {c[1]}" for c in codes) if codes else "(sin códigos)"
+            "\n".join(f"- {c[0]}: {c[1]}" for c in all_codes)
+            if all_codes
+            else "(sin códigos)"
         )
 
         if AGENTIC_MODE:
@@ -670,12 +641,22 @@ def b3_generate_hypotheses(proyecto_id: str) -> dict:
 def _b2b_generate_codes_agentic(
     pop_assumption: str, pop_context: str, existing_codes: str, indicators_text: str
 ) -> dict:
-    """B2b agentic: SelfRefinementLoop (Generate -> Critic -> Refine).
+    """DEPRECATED since F4.1 — B2b agentic: SelfRefinementLoop (Generate -> Critic -> Refine).
+
+    This helper was used by the legacy b2_open_code() pipeline. The new architecture
+    uses b2_label_groups() from labeler.py instead, which has its own SelfRefinement loop.
 
     Reemplaza la llamada single-shot _b2b_generate_codes() cuando
     AGENTIC_MODE=true. Usa PRO para generar y FLASH para evaluar.
     """
     import sys as _sys
+    import warnings
+
+    warnings.warn(
+        "_b2b_generate_codes_agentic is deprecated. Use b2_label_groups() from labeler.py instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     _sys.path.insert(0, "/app")
     from app.agents.self_refiner import SelfRefinementLoop

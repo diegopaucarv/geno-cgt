@@ -328,6 +328,41 @@ MOCK_RESPONSES: dict[str, dict] = {
             }
         ]
     },
+    "incident_comparator": {
+        "comparisons": [
+            {
+                "incident_a_id": "00000000-0000-0000-0000-000000000001",
+                "incident_b_id": "00000000-0000-0000-0000-000000000002",
+                "are_interchangeable": True,
+                "rationale": "[MOCK]",
+                "similarity_score": 0.85,
+            }
+        ],
+        "groups": [
+            {
+                "incident_ids": [
+                    "00000000-0000-0000-0000-000000000001",
+                    "00000000-0000-0000-0000-000000000002",
+                ],
+                "common_pattern": "[MOCK]",
+            }
+        ],
+        "ungrouped": [],
+    },
+    "pattern_labeler": {
+        "proposed_labels": [
+            {
+                "group_index": 0,
+                "label": "Negociando limites",
+                "definition": "[MOCK]",
+                "properties": [],
+                "supporting_incidents": ["00000000-0000-0000-0000-000000000001"],
+                "relationship_to_existing": "Nuevo",
+            }
+        ],
+        "anomalies": [],
+    },
+    "label_critic": {"all_valid": True, "issues": []},
 }
 
 

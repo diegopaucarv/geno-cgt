@@ -464,6 +464,55 @@ def _ensure_segmented(session, documento_id: str) -> None:
     )
 
 
+def _classify_glaser_types_for_doc(
+    session, documento_id: str, use_llm_fallback: bool = False
+) -> int:
+    """F2.1: Clasifica todos los segmentos de un documento con preclassify_glaser.
+
+    Layer 1 (algorithmic) siempre corre. Layer 2 (FLASH) solo si
+    use_llm_fallback=True y la confianza algorítmica es < 0.7.
+
+    Persiste el resultado en segmentos.tipo_dato_glaser.
+
+    Returns:
+        Número de segmentos clasificados.
+    """
+    segments = session.execute(
+        text(
+            "SELECT id, texto FROM segmentos "
+            "WHERE documento_id = :did ORDER BY posicion"
+        ),
+        {"did": documento_id},
+    ).fetchall()
+
+    if not segments:
+        return 0
+
+    classified = 0
+    for seg_id, seg_text in segments:
+        result = preclassify_glaser(
+            seg_text,
+            use_llm_fallback=use_llm_fallback,
+            llm_client=llm if use_llm_fallback else None,
+        )
+        glaser_type = result.get("glaser_data_type")
+        if glaser_type:
+            session.execute(
+                text("UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"),
+                {"tipo": glaser_type, "sid": str(seg_id)},
+            )
+            classified += 1
+
+    session.commit()
+    logger.info(
+        "Glaser pre-classification: %d/%d segments classified (doc=%s)",
+        classified,
+        len(segments),
+        documento_id,
+    )
+    return classified
+
+
 def _anchor_segments(session, documento_id: str, full_text: str) -> None:
     """A2: Calcula first_10, start_char, end_char para cada segmento."""
     import re as _re
@@ -720,6 +769,10 @@ def process_document_agents_a(
         if STEP not in completed:
             checkpoint(session, documento_id, STEP, "in_progress")
             _ensure_segmented(session, documento_id)
+            # F2.1: Pre-clasificar tipo de dato Glaser para cada segmento
+            _classify_glaser_types_for_doc(
+                session, documento_id, use_llm_fallback=False
+            )
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Update estado → procesando ──
@@ -843,9 +896,10 @@ def process_document_agents_a(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Agentes B — wrappers Celery (implementación en agents_b.py)
+# Agentes B — wrappers Celery (F2.3: Comparator / Labeler / Critic)
 # ═══════════════════════════════════════════════════════════════════════
 
+# ── Legacy imports (deprecated — keep for reference) ──
 from agents_b import (
     b1_distill_sampling,
     b2_5_assign_codes_to_segments,
@@ -853,20 +907,132 @@ from agents_b import (
     b3_generate_hypotheses,
 )
 
+# ── New F2.3 agent imports ──
+from comparator import b1_compare_incidents
+from label_critic import b3_critique_labels
+from labeler import b2_label_groups
 
-@app.task(name="b1_distill_sampling")
+# ── Legacy tasks (deprecated — kept for backward compatibility) ──
+
+
+@app.task(name="b1_distill_sampling")  # DEPRECATED: use b1_compare_incidents instead
 def task_b1_distill_sampling(proyecto_id: str) -> dict:
     return b1_distill_sampling(proyecto_id)
 
 
-@app.task(name="b2_open_code")
+@app.task(name="b2_open_code")  # DEPRECATED: use b2_label_groups instead
 def task_b2_open_code(proyecto_id: str) -> dict:
     return b2_open_code(proyecto_id)
 
 
-@app.task(name="b3_generate_hypotheses")
+@app.task(name="b3_generate_hypotheses")  # DEPRECATED: use b3_critique_labels instead
 def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
     return b3_generate_hypotheses(proyecto_id)
+
+
+# ── New F2.3 tasks ──
+
+
+@app.task(name="b1_compare_incidents")
+def task_b1_compare_incidents(proyecto_id: str, incremental: bool = False) -> dict:
+    return b1_compare_incidents(proyecto_id, incremental)
+
+
+@app.task(name="b2_label_groups")
+def task_b2_label_groups(proyecto_id: str) -> dict:
+    return b2_label_groups(proyecto_id)
+
+
+@app.task(name="b3_critique_labels")
+def task_b3_critique_labels(groups_json: str, labels_json: str) -> dict:
+    return b3_critique_labels(groups_json, labels_json)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F2.2 / F2.4 — Incident Extractor + Core Pattern Extractor
+# ═══════════════════════════════════════════════════════════════════════
+
+from incident_extractor import extract_incident as _extract_incident_impl
+from pattern_extractor import extract_core_pattern as _extract_core_pattern_impl
+
+
+@app.task(name="extract_incident")
+def task_extract_incident(segment_id: str, proyecto_id: str) -> dict:
+    """F2.2: Extrae un incidente por segmento con las 4 preguntas de Glaser (FLASH)."""
+    return _extract_incident_impl(segment_id, proyecto_id)
+
+
+@app.task(name="extract_core_pattern")
+def task_extract_core_pattern(documento_id: str, proyecto_id: str) -> dict:
+    """F2.4: Sintetiza el patrón central de un documento a partir de sus incidentes (PRO)."""
+    return _extract_core_pattern_impl(documento_id, proyecto_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F5.4 — Literature Dialogue
+# ═══════════════════════════════════════════════════════════════════════
+
+from literature import compare_literature as _compare_literature_impl
+from literature import critique_literature_dialogue as _critique_literature_impl
+
+
+@app.task(name="literature_comparer")
+def task_literature_comparer(proyecto_id: str, literature_fragments: list[str]) -> dict:
+    """F5.4: Compara fragmentos de literatura contra la teoría fundamentada (PRO)."""
+    return _compare_literature_impl(proyecto_id, literature_fragments)
+
+
+@app.task(name="literature_critic")
+def task_literature_critic(comparison_table: dict) -> dict:
+    """F5.4: Evalúa si el diálogo con literatura fuerza coincidencias o trata la literatura como autoridad (PRO)."""
+    return _critique_literature_impl(comparison_table)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F5.5 — Applicability
+# ═══════════════════════════════════════════════════════════════════════
+
+from applicability import critique_applicability as _critique_applicability_impl
+from applicability import generate_applicability as _generate_applicability_impl
+
+
+@app.task(name="applicability_engine")
+def task_applicability_engine(proyecto_id: str) -> dict:
+    """F5.5: Genera directrices de aplicabilidad desde la teoría fundamentada (PRO)."""
+    return _generate_applicability_impl(proyecto_id)
+
+
+@app.task(name="applicability_critic")
+def task_applicability_critic(directrices: dict) -> dict:
+    """F5.5: Evalúa si las directrices de aplicabilidad son genuinas, accesibles y modificables (PRO)."""
+    return _critique_applicability_impl(directrices)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F5.3 / Fase 6a — Redacción Natural: Writer + Critic + Gap Feeler
+# ═══════════════════════════════════════════════════════════════════════
+
+from writer import critique_section as _critique_section_impl
+from writer import feel_gaps as _feel_gaps_impl
+from writer import write_section as _write_section_impl
+
+
+@app.task(name="natural_writer")
+def task_natural_writer(sorting_group_id: str, proyecto_id: str) -> dict:
+    """F5.3: Redacta una sección teórica desde memos ordenados (PRO)."""
+    return _write_section_impl(sorting_group_id, proyecto_id)
+
+
+@app.task(name="writing_critic")
+def task_writing_critic(draft: str, memo_ids: list[str], proyecto_id: str) -> dict:
+    """F5.3: Evalúa un borrador contra reglas CGT (PRO)."""
+    return _critique_section_impl(draft, memo_ids, proyecto_id)
+
+
+@app.task(name="gap_feeler")
+def task_gap_feeler(draft: str, project_id: str) -> list[dict]:
+    """F5.3: Monitorea escritura en background detectando huecos (FLASH, non-blocking)."""
+    return _feel_gaps_impl(draft, project_id)
 
 
 @app.task(
@@ -875,6 +1041,17 @@ def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
     bind=True,
 )
 def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
+    """F2.3 Pipeline: Comparator (B1) → Labeler (B2 + Critic B3 loop) → Grounding → Hypotheses.
+
+    New flow (post-F2.3 refactor):
+      1. B1: incident_comparator (PRO) — compares extracted_incidents, creates groups
+      2. B2: pattern_labeler (PRO + FLASH critic) — labels groups with SelfRefinement
+      3. B2.5: assign codes to segments (grounding, RAG evidence)
+      4. B17: update saturation
+      5. B18: rebuild prototype cache
+      6. B3: generate hypotheses (updated to use incident_groups)
+      7. Transition all docs: listo → sintetizado
+    """
     results: dict[str, Any] = {"proyecto_id": proyecto_id}
 
     # ── Check abort ──
@@ -886,21 +1063,23 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         _pipeline_log_to(proyecto_id)
         logger.info("🔗 Phase B iniciado — proyecto=%s", proyecto_id)
 
-        # ── B1: Sampling distiller ──
-        _checkpoint_step(s, proyecto_id, "b1_distill_sampling", "in_progress")
-        logger.info("B1: Muestreo %s", proyecto_id)
-        results["sampling"] = b1_distill_sampling(proyecto_id)
-        _checkpoint_step(s, proyecto_id, "b1_distill_sampling", "completed")
-
-        # ── B2: Open coding ──
+        # ── F2.3 B1: Incident Comparator (PRO, 1-pass) ──
         if self._aborted:
             raise TaskCancelledError()
-        _checkpoint_step(s, proyecto_id, "b2_open_code", "in_progress")
-        logger.info("B2: Open coding %s", proyecto_id)
-        results["open_coding"] = b2_open_code(proyecto_id)
-        _checkpoint_step(s, proyecto_id, "b2_open_code", "completed")
+        _checkpoint_step(s, proyecto_id, "b1_compare_incidents", "in_progress")
+        logger.info("B1: Comparando incidentes %s", proyecto_id)
+        results["comparator"] = b1_compare_incidents(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b1_compare_incidents", "completed")
 
-        # ── B2.5: Grounding ──
+        # ── F2.3 B2: Pattern Labeler (PRO + SelfRefinement loop) ──
+        if self._aborted:
+            raise TaskCancelledError()
+        _checkpoint_step(s, proyecto_id, "b2_label_groups", "in_progress")
+        logger.info("B2: Etiquetando grupos %s", proyecto_id)
+        results["labeler"] = b2_label_groups(proyecto_id)
+        _checkpoint_step(s, proyecto_id, "b2_label_groups", "completed")
+
+        # ── B2.5: Grounding (assign codes to segments + RAG evidence) ──
         if self._aborted:
             raise TaskCancelledError()
         _checkpoint_step(s, proyecto_id, "b2_5_assign_codes", "in_progress")
@@ -920,7 +1099,7 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         except Exception:
             pass
 
-        # ── B3: Hypotheses ──
+        # ── B3: Hypotheses (updated to use incident_groups) ──
         if self._aborted:
             raise TaskCancelledError()
         _checkpoint_step(s, proyecto_id, "b3_generate_hypotheses", "in_progress")
@@ -1834,11 +2013,15 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
         s.close()
 
 
-@app.task(name="main_concern_pipeline")
+@app.task(
+    name="main_concern_pipeline",
+    base=AbortableTask,
+)
 def task_main_concern_pipeline(proyecto_id: str) -> dict:
     """
     Fase A, Pasos A1+A2: Main Concern Detection.
     Proposer (PRO) → Critic (PRO) → HITL gate.
+    Llamado desde selective_coding_coordinator (directo) o via Celery.
     """
     s = SessionLocal()
     try:
@@ -1940,11 +2123,15 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         s.close()
 
 
-@app.task(name="core_emergence_pipeline")
+@app.task(
+    name="core_emergence_pipeline",
+    base=AbortableTask,
+)
 def task_core_emergence_pipeline(proyecto_id: str) -> dict:
     """
     Fase A, Pasos A3+A4: Core Category Emergence.
     Proposer (PRO) → Critic (FLASH) → HITL gate.
+    Llamado desde selective_coding_coordinator (directo) o via Celery.
     """
     s = SessionLocal()
     try:
@@ -2019,11 +2206,15 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
         s.close()
 
 
-@app.task(name="selective_reduction_pipeline")
+@app.task(
+    name="selective_reduction_pipeline",
+    base=AbortableTask,
+)
 def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
     """
     Fase B, Pasos B1+B2: Selective Reduction.
     Proposer (PRO) → Critic (PRO) → HITL gate.
+    Llamado desde selective_coding_coordinator (directo) o via Celery.
     """
     s = SessionLocal()
     try:
@@ -2104,6 +2295,165 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
         s.close()
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# F4.2 — 4-Signal Saturation Panel helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+# Default minimum properties target (used when not configured per-project)
+_MIN_PROPS_TARGET = 15
+
+
+def _compute_saturation_panel(session, code_id: str, proyecto_id: str) -> dict:
+    """
+    Computa las 4 señales de saturación para una categoría.
+
+    Señal 1 — Matemática: rolling_std desde saturation_metrics.
+    Señal 2 — Cualitativa: ventana deslizante de 5 paradigm_states.
+    Señal 3 — Cobertura: propiedades documentadas en paradigm_snapshot.
+    Señal 4 — Integración: conceptual_relationships vinculados.
+
+    Devuelve el dict listo para saturation_panel_json.
+    """
+    from datetime import datetime, timezone
+
+    panel = {
+        "matematica": {"rolling_std": None, "status": "unknown"},
+        "cualitativa": {"paradigm_window": [], "stable_since": 0, "status": "unknown"},
+        "cobertura": {
+            "propiedades_cubiertas": 0,
+            "total_propiedades": _MIN_PROPS_TARGET,
+            "pct": 0.0,
+        },
+        "integracion": {"relaciones_documentadas": 0, "suficiente": False},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # ── Señal 1: Matemática (rolling_std) ──
+    math_row = session.execute(
+        text(
+            "SELECT rolling_std, saturation_status FROM saturation_metrics "
+            "WHERE code_id = :cid"
+        ),
+        {"cid": code_id},
+    ).fetchone()
+
+    if math_row:
+        rolling_std = float(math_row[0]) if math_row[0] is not None else None
+        panel["matematica"]["rolling_std"] = (
+            round(rolling_std, 4) if rolling_std is not None else None
+        )
+        # stable = rolling_std <= 0.3 (baja variabilidad)
+        if rolling_std is not None and rolling_std <= 0.3:
+            panel["matematica"]["status"] = "stable"
+        elif rolling_std is not None:
+            panel["matematica"]["status"] = "unstable"
+        else:
+            panel["matematica"]["status"] = "no_data"
+    else:
+        panel["matematica"]["status"] = "no_data"
+
+    # ── Señal 2: Cualitativa (paradigm window) ──
+    ps_rows = session.execute(
+        text(
+            "SELECT did_state_expand FROM paradigm_states "
+            "WHERE code_id = :cid ORDER BY iteration DESC LIMIT 5"
+        ),
+        {"cid": code_id},
+    ).fetchall()
+
+    paradigm_window = [bool(r[0]) for r in ps_rows]
+    panel["cualitativa"]["paradigm_window"] = paradigm_window
+
+    # Count consecutive False from the most recent
+    stable_since = 0
+    for expanded in paradigm_window:
+        if not expanded:
+            stable_since += 1
+        else:
+            break
+    panel["cualitativa"]["stable_since"] = stable_since
+
+    # stable = all last 5 are False (no expansion)
+    if len(paradigm_window) >= 5 and all(not x for x in paradigm_window):
+        panel["cualitativa"]["status"] = "stable"
+    elif stable_since >= 3:
+        panel["cualitativa"]["status"] = "approaching"
+    else:
+        panel["cualitativa"]["status"] = "unstable"
+
+    # ── Señal 3: Cobertura (paradigm_snapshot properties) ──
+    snap_row = session.execute(
+        text(
+            "SELECT paradigm_snapshot FROM paradigm_states "
+            "WHERE code_id = :cid ORDER BY iteration DESC LIMIT 1"
+        ),
+        {"cid": code_id},
+    ).fetchone()
+
+    props_covered = 0
+    if snap_row and snap_row[0]:
+        snap = snap_row[0] if isinstance(snap_row[0], dict) else {}
+        for key in ("dimensions", "conditions", "consequences", "strategies"):
+            arr = snap.get(key, [])
+            if isinstance(arr, list):
+                props_covered += len(arr)
+
+    panel["cobertura"]["propiedades_cubiertas"] = props_covered
+    # Use project config if available, else default
+    config_row = session.execute(
+        text("SELECT config_segmentacion FROM proyectos WHERE id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()
+    total_target = _MIN_PROPS_TARGET
+    if config_row and config_row[0] and isinstance(config_row[0], dict):
+        total_target = config_row[0].get("min_paradigm_properties", _MIN_PROPS_TARGET)
+    panel["cobertura"]["total_propiedades"] = total_target
+    panel["cobertura"]["pct"] = round(min(1.0, props_covered / max(1, total_target)), 3)
+
+    # ── Señal 4: Integración (conceptual_relationships) ──
+    rel_row = session.execute(
+        text(
+            "SELECT COUNT(*) FROM conceptual_relationships "
+            "WHERE project_id = :pid "
+            "AND category_ids @> to_jsonb(ARRAY[:cid::text])"
+        ),
+        {"pid": proyecto_id, "cid": code_id},
+    ).fetchone()
+
+    rel_count = int(rel_row[0]) if rel_row else 0
+    panel["integracion"]["relaciones_documentadas"] = rel_count
+    panel["integracion"]["suficiente"] = rel_count >= 1
+
+    return panel
+
+
+def _update_saturation_panel(session, code_id: str, panel: dict) -> None:
+    """Actualiza categorias.saturation_panel_json con el panel calculado."""
+    import json as _json
+
+    session.execute(
+        text("UPDATE categorias SET saturation_panel_json = :panel WHERE id = :cid"),
+        {
+            "panel": _json.dumps(panel, ensure_ascii=False),
+            "cid": code_id,
+        },
+    )
+    session.commit()
+
+
+def _check_all_signals_stable(panel: dict) -> bool:
+    """Devuelve True si las 4 señales sugieren saturación/estabilidad."""
+    return (
+        panel["matematica"]["status"] == "stable"
+        and panel["cualitativa"]["status"] == "stable"
+        and panel["cobertura"]["pct"] >= 0.8
+        and panel["integracion"]["suficiente"] is True
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+
+
 @app.task(
     name="core_saturation_loop",
     base=AbortableTask,
@@ -2111,14 +2461,19 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
 )
 def task_core_saturation_loop(self, proyecto_id: str) -> dict:
     """
-    Fase C: Core Saturation Loop.
+    Fase C: Core Saturation Loop con Panel de 4 Señales (F4.2).
 
-    Itera sobre categorías con score ≥ 4 × documentos del proyecto.
-    Para cada par (cat, doc), ejecuta Proposer→Critic y evalúa si
-    el estado de la categoría se expande.
+    Antes de cada llamada LLM (Proposer→Critic) se evalúan 4 señales
+    de saturación para decidir si la categoría ya está saturada:
 
-    Criterio de saturación: did_state_expand=false por 3 iteraciones
-    consecutivas para una misma categoría → HITL gate.
+    1. Matemática (rolling_std) — SQL gratis
+    2. Cualitativa (paradigm window 5) — SQL barato
+    3. Cobertura (propiedades del paradigma) — JSONB parse
+    4. Integración (conceptual_relationships) — SQL COUNT
+
+    LLM solo se invoca cuando las 4 señales sugieren estabilidad.
+    TheoSampler (F4.2.3) se activa si did_state_expand=False por 3
+    iteraciones consecutivas Y cobertura < 80%.
     """
     if self._aborted:
         raise TaskCancelledError()
@@ -2150,6 +2505,8 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
 
         results = {"project_id": proyecto_id, "categories": {}}
         total_expansions = 0
+        theosampler_activations = 0
+        theosampler_called_this_run = False  # rate-limit per loop run
 
         for cat_row in cats:
             cat_id = str(cat_row[0])
@@ -2157,25 +2514,78 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             cat_def = cat_row[2] or ""
             cat_version = cat_row[3] or 1
 
-            # Verificar si ya está saturada (3 iteraciones sin expansión)
-            no_expand_count = s.execute(
-                text(
-                    "SELECT COUNT(*) FROM paradigm_states "
-                    "WHERE code_id = :cid AND did_state_expand = false "
-                    "ORDER BY iteration DESC LIMIT 3"
-                ),
-                {"cid": cat_id},
-            ).fetchone()[0]
+            # ── F4.2: Compute 4-signal saturation panel ──
+            panel = _compute_saturation_panel(s, cat_id, proyecto_id)
+            _update_saturation_panel(s, cat_id, panel)
 
-            if no_expand_count >= 3:
-                logger.info("Category %s already saturated, skipping", cat_name)
+            logger.info(
+                "Category %s panel: math=%s qual=%s cov=%.2f int=%s",
+                cat_name,
+                panel["matematica"]["status"],
+                panel["cualitativa"]["status"],
+                panel["cobertura"]["pct"],
+                panel["integracion"]["suficiente"],
+            )
+
+            # ── F4.2: Decision gate ──
+            # LLM (Proposer→Critic) solo se invoca cuando las 4 senales
+            # sugieren estabilidad. Si alguna senal dice "inestable",
+            # saltamos el LLM: la senal barata ya nos dice el estado.
+            all_stable = _check_all_signals_stable(panel)
+            consecutive_no_expand = panel["cualitativa"]["stable_since"]
+            coverage_pct = panel["cobertura"]["pct"]
+
+            # ── F4.2.3: TheoSampler activation ──
+            # Trigger if: did_state_expand=False for 3+ consecutive AND coverage < 80%
+            if (
+                consecutive_no_expand >= 3
+                and coverage_pct < 0.8
+                and not theosampler_called_this_run
+            ):
+                logger.info(
+                    "F4.2.3 TheoSampler: %s (stable=%d, coverage=%.2f)",
+                    cat_name,
+                    consecutive_no_expand,
+                    coverage_pct,
+                )
+                try:
+                    task_a06_theoretical_sample(proyecto_id)
+                    theosampler_activations += 1
+                    theosampler_called_this_run = True
+                except Exception as e:
+                    logger.warning("TheoSampler failed for %s: %s", cat_name, e)
+
+            if not all_stable:
+                # Signals say NOT saturated → skip expensive LLM
+                logger.info(
+                    "Category %s NOT saturated (math=%s qual=%s cov=%.2f int=%s) — skipping LLM",
+                    cat_name,
+                    panel["matematica"]["status"],
+                    panel["cualitativa"]["status"],
+                    coverage_pct,
+                    panel["integracion"]["suficiente"],
+                )
                 results["categories"][cat_name] = {
-                    "status": "saturated",
-                    "iterations_without_expansion": no_expand_count,
+                    "status": "processing",
+                    "panel": panel,
+                    "llm_skipped": True,
                 }
                 continue
 
-            cat_results = {"iterations": 0, "expansions": 0, "status": "processing"}
+            # All 4 signals suggest stability → invoke LLM for definitive confirmation
+            logger.info(
+                "Category %s: all 4 signals stable — invoking LLM confirmation",
+                cat_name,
+            )
+
+            cat_results = {
+                "iterations": 0,
+                "expansions": 0,
+                "status": "processing",
+                "panel": panel,
+            }
+            no_expand_streak = consecutive_no_expand
+            panel_iterations = 1
 
             for doc_row in docs:
                 if self._aborted:
@@ -2183,6 +2593,38 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
 
                 doc_id = str(doc_row[0])
                 doc_name = doc_row[1]
+
+                # ── F4.2: Recompute panel before each doc iteration ──
+                if panel_iterations > 1:
+                    panel = _compute_saturation_panel(s, cat_id, proyecto_id)
+                    _update_saturation_panel(s, cat_id, panel)
+
+                panel_iterations += 1
+
+                # If signals no longer stable → category destabilized, stop LLM calls
+                if not _check_all_signals_stable(panel):
+                    cat_results["panel"] = panel
+                    cat_results["note"] = "signals_destabilized"
+                    logger.info(
+                        "Category %s: signals no longer stable, pausing LLM calls",
+                        cat_name,
+                    )
+                    break
+
+                # F4.2.3: TheoSampler re-check
+                if (
+                    panel["cualitativa"]["stable_since"] >= 3
+                    and panel["cobertura"]["pct"] < 0.8
+                    and not theosampler_called_this_run
+                ):
+                    try:
+                        task_a06_theoretical_sample(proyecto_id)
+                        theosampler_activations += 1
+                        theosampler_called_this_run = True
+                    except Exception as e:
+                        logger.warning(
+                            "TheoSampler re-activation failed for %s: %s", cat_name, e
+                        )
 
                 # Obtener un segmento/incidente para esta categoría+documento
                 incident = s.execute(
@@ -2231,7 +2673,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                 if did_expand:
                     cat_results["expansions"] += 1
                     total_expansions += 1
-                    no_expand_count = 0
+                    no_expand_streak = 0
 
                     # Registrar en paradigm_states
                     _record_paradigm_state(
@@ -2258,7 +2700,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         cat_def = expanded_def
                         cat_version += 1
                 else:
-                    no_expand_count += 1
+                    no_expand_streak += 1
                     _record_paradigm_state(
                         s,
                         cat_id,
@@ -2269,17 +2711,22 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         memo="",
                     )
 
-                # Check saturation criterion
-                if no_expand_count >= 3:
+                # Traditional saturation criterion (fallback)
+                if no_expand_streak >= 3:
                     cat_results["status"] = "saturated"
-                    cat_results["iterations_without_expansion"] = no_expand_count
+                    cat_results["iterations_without_expansion"] = no_expand_streak
                     logger.info(
                         "Category %s saturated after %d iterations without expansion",
                         cat_name,
-                        no_expand_count,
+                        no_expand_streak,
                     )
                     break
 
+            # Final panel update for this category
+            panel = _compute_saturation_panel(s, cat_id, proyecto_id)
+            _update_saturation_panel(s, cat_id, panel)
+            if cat_results.get("status") == "saturated":
+                cat_results["panel"] = panel
             results["categories"][cat_name] = cat_results
 
         # ── HITL gate si hay categorías saturadas ──
@@ -2304,6 +2751,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             "status": "completed",
             "categories_processed": len(cats),
             "total_expansions": total_expansions,
+            "theosampler_activations": theosampler_activations,
             "results": results,
         }
 

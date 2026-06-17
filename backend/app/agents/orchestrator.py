@@ -101,23 +101,40 @@ class OrchestratorRuleEngine:
     # ── Heuristicas para casos ambiguos ───────────────────────────
 
     def _resolve_after_reduce(self, state: dict[str, Any]) -> str:
-        """Despues de reduce_synthesize: ¿buscar core concern o seguir generando?
+        """Despues de reduce_synthesize: verificar maturity gate antes de seguir.
 
-        Heuristica:
-        - Si ya tenemos main_concern → generar hipotesis
-        - Si tenemos >= 3 codigos → buscar core concern
-        - Si tenemos < 3 codigos → seguir generando (batch_code)
+        Heuristica (F1.4 — maturity_gate deterministico):
+        - Si el maturity gate NO pasa → pausar, mostrar que falta
+        - Si pasa y tenemos main_concern → generate_hypotheses
+        - Si pasa y tenemos >= 3 codigos → find_core_concern
+        - Si pasa y < 3 codigos → batch_code (seguir generando)
         """
+        # F1.4: verificar maturity gate antes de decidir
+        gate = self._maturity_gate(state)
+        if not gate.get("passed"):
+            logger.info(
+                "Orchestrator: maturity gate NOT passed — missing: %s",
+                [m["condition"] for m in gate.get("missing", [])],
+            )
+            return "hitl_gap_review"  # Pausar: el investigador ve qué falta
+
         if state.get("main_concern"):
-            logger.info("Orchestrator: main_concern found → generate_hypotheses")
+            logger.info(
+                "Orchestrator: maturity gate OK + main_concern → generate_hypotheses"
+            )
             return "generate_hypotheses"
 
         codes_count = len(state.get("new_codes", []))
         if codes_count >= 3:
-            logger.info("Orchestrator: %d codes → find_core_concern", codes_count)
+            logger.info(
+                "Orchestrator: maturity gate OK + %d codes → find_core_concern",
+                codes_count,
+            )
             return "find_core_concern"
 
-        logger.info("Orchestrator: only %d codes → batch_code (need more)", codes_count)
+        logger.info(
+            "Orchestrator: maturity gate OK but only %d codes → batch_code", codes_count
+        )
         return "batch_code"
 
     def _resolve_after_theosampler(self, state: dict[str, Any]) -> str:
@@ -147,6 +164,42 @@ class OrchestratorRuleEngine:
         return "prepare_playground"
 
     # ── Fallback LLM ──────────────────────────────────────────────
+
+    # F1.4: maturity_gate deterministico
+    def _maturity_gate(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Chequeo deterministico de 3 condiciones pre-core-category-detection.
+
+        kb.md 7.2: ≥3 cats saturadas, ≥2 relaciones, ≥3 vinculadas al patron.
+        NO usa LLM.
+        """
+        saturated = state.get("saturated_categories", 0)
+        relationships = state.get("documented_relationships", 0)
+        linked = state.get("categories_linked_to_concern", 0)
+
+        missing = []
+        if saturated < 3:
+            missing.append(
+                {
+                    "condition": "saturated_categories",
+                    "detail": f"{saturated}/3 categorias saturadas",
+                }
+            )
+        if relationships < 2:
+            missing.append(
+                {
+                    "condition": "documented_relationships",
+                    "detail": f"{relationships}/2 relaciones documentadas",
+                }
+            )
+        if linked < 3:
+            missing.append(
+                {
+                    "condition": "categories_linked_to_concern",
+                    "detail": f"{linked}/3 categorias vinculadas al patron",
+                }
+            )
+
+        return {"passed": len(missing) == 0, "missing": missing}
 
     def _llm_fallback(self, current_step: str, state: dict[str, Any]) -> str:
         """Ultimo recurso: preguntar al LLM (FLASH, ~50 tokens)."""

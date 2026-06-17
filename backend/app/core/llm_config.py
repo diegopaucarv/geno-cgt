@@ -109,6 +109,7 @@ PROMPT_TIER_MAP: dict[str, str] = {
     "recode_documents": "flash",
     "resegmenter": "flash",
     "text_cleaner": "flash",
+    "population_generalizer": "flash",
 }
 
 

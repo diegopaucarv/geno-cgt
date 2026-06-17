@@ -641,3 +641,42 @@ def b1_compare_incidents(proyecto_id: str, incremental: bool = False) -> dict:
 5. **Reordenamiento para diversidad.** Si no converge, la segunda iteración reordena los items (interleaving) para que los pares/grupos borderline se comparen en contextos diferentes, forzando una reconsideración.
 
 6. **Tool, no framework.** El `ContextWindowManager` está registrado como tool en `ToolRegistry`. Cualquier agente (ReactRunner, PlanExecutor) puede invocarlo. No requiere modificar la arquitectura de agentes.
+
+---
+
+## 7. Diseno Hibrido: Map-Reduce + ReAct para Batches Divergentes
+
+> **Decision (2026-06-17):** El CWM se mantiene Map-Reduce algoritmico para ~90% de batches. Batches divergentes activan ReAct con `search_segments` + `compare_tools`.
+
+### 7.1 Trade-off
+
+| | Map-Reduce puro | Hibrido |
+|---|---|---|
+| Costo B2 | ~$0.002 | ~$0.003 (prom) |
+| Duplicados | No detecta | Si (cuando diverge) |
+| Evidencia | No busca | Si (cuando diverge) |
+| Latencia | <1s | <1.5s (prom) |
+
+### 7.2 Cuando activar ReAct
+
+| Capa | Activa? | Condicion |
+|------|---------|-----------|
+| B1 comparator | Nunca | Determinista, 1-pass |
+| B2 labeler | En divergencia | Etiquetas diferentes misma iteracion |
+| B3 hypotheses | Bajo demanda | Critic detecta contradiccion |
+| C saturation | No aplica | Ya es iterativo |
+| 6a escritura | En divergencia | Transiciones forzadas |
+| 6c literatura | Nunca | Independiente por categoria |
+
+### 7.3 Registro
+
+Dos tools en ToolRegistry:
+1. `batch_process` — Map-Reduce normal
+2. `batch_process_react` — +ReAct para divergentes
+
+El orchestrator decide cual usar. El CWM sigue siendo algoritmico.
+
+### 7.4 Ver Referencias
+
+- Diseno completo: `7-GitLikeVersioning.md` (sistema de historial)
+- Checklist: `CHECKLIST_CGT_REFACTOR.md` E8

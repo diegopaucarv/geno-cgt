@@ -52,13 +52,27 @@ TERMINAL = {"listo", "sintetizado", "error"}
 
 PROJECT_STATES: dict[str, str] = {
     "collecting": "coding",
-    "coding": "finding_cc",
+    "coding": "checking_maturity",  # F3.3: maturity gate (kb.md 7.2)
+    "checking_maturity": "finding_cc",  # F3.3: after gate passes
     "finding_cc": "reducing",
     "reducing": "saturating",
     "saturating": "building_db",
     "building_db": "playground_ready",
     "playground_ready": "completed",
 }
+
+# ═══════════════════════════════════════════════════════
+# Gate Names — constantes canonicas (F1.1)
+# El concepto metodologico es "patron de interes",
+# pero los gate names en BD se mantienen por compatibilidad.
+# ═══════════════════════════════════════════════════════
+GATE_MAIN_CONCERN = "main_concern"
+GATE_CORE_EMERGENCE = "core_emergence"
+GATE_SELECTIVE_REDUCTION = "selective_reduction"
+GATE_CORE_SATURATION = "core_saturation"
+GATE_DATABASE_A = "database_a"
+GATE_DATABASE_B = "database_b"
+GATE_GLOBAL_SATURATION = "global_saturation"
 
 
 def transition(
@@ -313,6 +327,28 @@ def transition_project(
         )
         return False
     logger.info("Project %s: %s → %s", proyecto_id, from_state, to_state)
+
+    # F3.3.2: Notificar frontend via Redis pub/sub
+    try:
+        import json as _json
+
+        import redis as _redis
+
+        r = _redis.from_url(
+            _os.getenv("REDIS_URL", "redis://redis:6379"),
+            decode_responses=True,
+        )
+        payload = _json.dumps(
+            {
+                "type": "project_state_changed",
+                "from_state": from_state,
+                "to_state": to_state,
+            }
+        )
+        r.publish(f"project:{proyecto_id}:events", payload)
+    except Exception as _e:
+        logger.debug("Redis pub/sub failed (non-critical): %s", _e)
+
     return True
 
 
@@ -323,16 +359,24 @@ def hitl_gate(
     proposal: dict,
     critic_verdict: dict,
 ) -> str:
-    """Guarda una decisión HITL pendiente y notifica al frontend.
+    """Guarda una decision HITL pendiente y notifica al frontend.
 
-    REGLA 0.1 — Todo paso de decisión teórica requiere HITL.
-    El pipeline se PAUSA aquí. El coordinator espera a que el investigador
-    decida vía el endpoint POST /projects/{id}/hitl/{gate}/decide.
+    REGLA 0.1 — Todo paso de decision teorica requiere HITL.
+    El pipeline se PAUSA aqui. El coordinator espera a que el investigador
+    decida via el endpoint POST /projects/{id}/hitl/{gate}/decide.
+
+    Gates conocidos (ver constantes GATE_* arriba):
+      - GATE_MAIN_CONCERN ("main_concern") → Patron de Interes
+      - GATE_CORE_EMERGENCE → Core Category Emergence
+      - GATE_SELECTIVE_REDUCTION → Selective Reduction
+      - GATE_CORE_SATURATION → Core Saturation
+      - GATE_DATABASE_A / GATE_DATABASE_B → Database A/B
+      - GATE_GLOBAL_SATURATION → Global Saturation Check
 
     Returns:
-        'pending' — la decisión queda a la espera.
+        'pending' — la decision queda a la espera.
         El resultado real (accepted/modified/rejected) se obtiene
-        consultando hitl_decisions periódicamente.
+        consultando hitl_decisions periodicamente.
     """
     import json
 

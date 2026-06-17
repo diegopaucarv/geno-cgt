@@ -132,8 +132,8 @@ services:
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
       TEI_URL: http://tei:8080
       ENVIRONMENT: dev
-      JWT_SECRET_KEY: ${JWT_SECRET:-changeme}
-      CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      JWT_SECRET_KEY: ${JWT_SECRET:-dev-jwt-secret-gt-local}
+      CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       SEGMENTATION_MODE: ${SEGMENTATION_MODE:-spacy}
     depends_on:
       pgbouncer:
@@ -169,7 +169,7 @@ services:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379
       TEI_URL: http://tei:8080
-      CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
       MODEL_FLASH_REPETITION_PENALTY: ${MODEL_FLASH_REPETITION_PENALTY:-1.1}
@@ -211,7 +211,7 @@ services:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379/0
       TEI_URL: http://tei:8080
-      CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       UPLOAD_DIR: /app/uploads
       USE_GPU: ${USE_GPU:-false}
       SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
@@ -254,7 +254,7 @@ services:
           path: ./workers/heavy/Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
-      CELERY_HMAC_SECRET: ${HMAC_SECRET:-changeme}
+      CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}

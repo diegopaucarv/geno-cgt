@@ -1,0 +1,62 @@
+name: Deploy GT Pipeline
+
+# ═══════════════════════════════════════════════════════════════════════
+# Workflow de despliegue que INYECTA los 3 secretos reales desde GitHub.
+#
+# Solo estos 3 son secretos reales:
+#   • TOGETHER_API_KEY — facturación externa de Together.ai
+#   • JWT_SECRET       — firma de tokens de sesión
+#   • HMAC_SECRET      — firma de tareas Celery
+#
+# DB, MinIO, Redis y demás usan defaults hardcodeados.
+# Están protegidos por la capa de login + red Docker.
+#
+# Configurar en: Settings > Secrets and variables > Actions
+# ═══════════════════════════════════════════════════════════════════════
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  ENVIRONMENT: prod
+  SEGMENTATION_MODE: progressive
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build base image
+        run: docker build -f Dockerfile.base -t gt-base:latest .
+
+      - name: Deploy with Docker Compose
+        env:
+          # 🔒 Los 3 secretos reales — inyectados desde GitHub Secrets
+          TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
+          # 🏠 Estos no son secretos — defaults hardcodeados en docker-compose.yml
+          # DB_PASSWORD, MINIO_PASSWORD → usan defaults internos
+        run: |
+          docker compose up -d --build \
+            postgres pgbouncer redis minio tei \
+            fastapi worker-fast worker-nlp worker-heavy
+
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/v1/ping; then
+              echo "API ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to start" && exit 1

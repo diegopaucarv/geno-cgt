@@ -1,16 +1,11 @@
 # backend/app/models/domain/project.py
 import uuid
 
+from app.core.config import DEFAULT_POPULATION_ASSUMPTION
 from app.models.base import Base, TimestampMixin
 from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-DEFAULT_POPULATION_ASSUMPTION = (
-    "hábitos hipotéticos de comportamiento que procesan "
-    "preocupaciones similares o más amplias en la vida diaria "
-    "del entrevistado"
-)
 
 
 class Proyecto(Base, TimestampMixin):

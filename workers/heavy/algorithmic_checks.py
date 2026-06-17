@@ -139,22 +139,13 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def preclassify_glaser(segments_text: str) -> dict:
-    """
-    Pre-clasifica el tipo de dato Glaser basándose en señales textuales
-    objetivas. El LLM recibe esta pre-clasificación como contexto y puede
-    confirmarla o corregirla.
-
-    Señales:
-    - properline: hedging ("yo creo que", "supongo"), lenguaje de deseabilidad
-    - interpreted: preguntas del entrevistador visibles, respuestas forzadas
-    - vague: respuestas muy cortas, cambios de tema, "no sé"
-    - baseline: ninguno de los anteriores, narrativa fluida
+def _algorithmic_glaser_classify(segment_text: str) -> dict:
+    """Layer 1: Fast, free algorithmic classification based on textual signals.
 
     Returns:
-        dict con {suggested_type, signals_found, confidence}
+        dict with {glaser_data_type, suggested_type, signals_found, confidence, rationale}
     """
-    text_lower = segments_text.lower()
+    text_lower = segment_text.lower()
 
     properline_signals = [
         "la verdad que",
@@ -194,7 +185,7 @@ def preclassify_glaser(segments_text: str) -> dict:
     vague_count = sum(1 for s in vague_signals if s in text_lower)
 
     # Contar respuestas cortas como señal de vague
-    lines = [l.strip() for l in segments_text.split("\n") if l.strip()]
+    lines = [l.strip() for l in segment_text.split("\n") if l.strip()]
     short_lines = sum(1 for l in lines if len(l) < 60)
 
     total_lines = len(lines) or 1
@@ -212,9 +203,11 @@ def preclassify_glaser(segments_text: str) -> dict:
 
     if not signals:
         return {
+            "glaser_data_type": "baseline_data",
             "suggested_type": "baseline",
             "signals_found": "Sin marcadores claros de properline, interpreted o vague. El texto parece narrativa fluida y honesta.",
             "confidence": 0.6,
+            "rationale": "Sin marcadores de hedging, evasión o forzamiento. Texto parece narrativa fluida.",
         }
 
     # El tipo con más señales gana
@@ -226,9 +219,109 @@ def preclassify_glaser(segments_text: str) -> dict:
     suggested = max(counts, key=counts.get)  # type: ignore[arg-type]
 
     return {
+        "glaser_data_type": f"{suggested}_data",
         "suggested_type": suggested,
         "signals_found": "; ".join(signals),
         "confidence": min(0.9, counts[suggested] / 5),
+        "rationale": f"Detectados {counts[suggested]} marcadores de tipo '{suggested}'.",
+    }
+
+
+def preclassify_glaser(
+    segment_text: str,
+    interview_type: str = "",
+    use_llm_fallback: bool = False,
+    llm_client=None,
+) -> dict:
+    """Two-layer Glaser data classifier.
+
+    Layer 1 (algorithmic): Fast signal-based classification for ALL segments.
+    Runs in-process with zero cost. If confidence >= 0.7, returns immediately.
+
+    Layer 2 (FLASH fallback): Only invoked when use_llm_fallback=True AND
+    algorithmic confidence < 0.7. Dispatches a FLASH LLM call using the
+    deepseek_flash/glaser_data_classifier.md prompt.
+
+    Args:
+        segment_text: The segment text to classify (single segment).
+        interview_type: Type of interview for context (passed to LLM prompt).
+        use_llm_fallback: If True, dispatch FLASH LLM when algo confidence < 0.7.
+        llm_client: LLMClient instance (required if use_llm_fallback=True).
+
+    Returns:
+        dict with:
+            glaser_data_type: str  — "baseline_data" | "properline_data" |
+                                     "interpreted_data" | "vague_data"
+            suggested_type: str    — same without "_data" suffix (backward compat)
+            signals_found: str     — algorithmic signals detected
+            confidence: float      — 0.0–1.0
+            method: str            — "algorithmic" or "llm_fallback"
+            rationale: str         — explanation of the classification
+    """
+    # ── Layer 1: Algorithmic classification (always runs) ──
+    algo_result = _algorithmic_glaser_classify(segment_text)
+    algo_result["method"] = "algorithmic"
+
+    # If confidence is high enough, or fallback not requested, return
+    if algo_result["confidence"] >= 0.7 or not use_llm_fallback:
+        return algo_result
+
+    # ── Layer 2: FLASH LLM fallback ──
+    if llm_client is None:
+        logger.warning(
+            "LLM fallback requested but no llm_client provided. "
+            "Falling back to algorithmic result (conf=%.2f).",
+            algo_result["confidence"],
+        )
+        algo_result["method"] = "algorithmic (fallback not available)"
+        return algo_result
+
+    # Build variables for the FLASH prompt
+    llm_vars: dict[str, str] = {
+        "segment_text": segment_text[:2000],
+    }
+    if interview_type:
+        llm_vars["interview_type"] = interview_type
+
+    try:
+        llm_response = llm_client.run_agent(
+            agent_id="glaser_data_classifier",
+            variables=llm_vars,
+            temperature=0.1,
+        )
+    except Exception as e:
+        logger.warning(
+            "FLASH LLM fallback failed: %s. Using algorithmic result (conf=%.2f).",
+            e,
+            algo_result["confidence"],
+        )
+        algo_result["method"] = "algorithmic (llm error)"
+        return algo_result
+
+    # If LLM returned mock or error, keep algorithmic result
+    if llm_response.get("mock_note") or llm_response.get("error"):
+        logger.info("FLASH LLM fallback returned mock/error. Using algorithmic result.")
+        algo_result["method"] = "algorithmic (llm unavailable)"
+        return algo_result
+
+    # ── Merge LLM response ──
+    llm_type = llm_response.get("glaser_data_type", algo_result["glaser_data_type"])
+    llm_confidence_str = llm_response.get("confidence", "MEDIUM")
+    confidence_map: dict[str, float] = {"HIGH": 0.9, "MEDIUM": 0.65, "LOW": 0.4}
+    llm_confidence = confidence_map.get(llm_confidence_str, 0.5)
+
+    # Strip _data suffix for suggested_type (backward compat)
+    suggested_type = (
+        llm_type.replace("_data", "") if llm_type.endswith("_data") else llm_type
+    )
+
+    return {
+        "glaser_data_type": llm_type,
+        "suggested_type": suggested_type,
+        "signals_found": algo_result["signals_found"],
+        "confidence": max(algo_result["confidence"], llm_confidence),
+        "method": "llm_fallback",
+        "rationale": llm_response.get("rationale", ""),
     }
 
 
@@ -410,6 +503,7 @@ def deduplicate_hypotheses(
 # A5: Triada ENRICH / SUBDIVIDE / DIVIDE (Recategorizacion.json)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def triadic_recategorization_decision(
     incident_group_a: list[dict],
     incident_group_b: list[dict],
@@ -449,6 +543,7 @@ def triadic_recategorization_decision(
 # ═══════════════════════════════════════════════════════════════════════
 # A11: Hypothesis Evidence Counter (category saturator.json, Code1)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class HypothesisEvidenceCounter:
     """
@@ -539,8 +634,7 @@ class HypothesisEvidenceCounter:
             "positive_count": len(positive),
             "contrast_count": len(contrast),
             "no_evidence_count": len(no_evidence),
-            "confirmation_ratio": (len(positive) + len(contrast))
-            / max(total, 1),
+            "confirmation_ratio": (len(positive) + len(contrast)) / max(total, 1),
             "is_saturated": len(positive) >= 5,
             "positive_doc_ids": positive,
             "contrast_doc_ids": contrast,

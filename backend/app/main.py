@@ -8,6 +8,7 @@ from app.api.v1 import (
     analysis,
     auth,
     coding,
+    config_info,
     documents,
     elaboration,
     events,
@@ -85,6 +86,7 @@ app.include_router(projects.router)
 app.include_router(rag.router)
 app.include_router(events.router)
 app.include_router(analysis.router)
+app.include_router(config_info.router)
 app.include_router(theoretical_codes.router)
 app.include_router(elaboration.router)
 app.include_router(hitl.router)

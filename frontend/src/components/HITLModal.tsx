@@ -10,7 +10,7 @@ interface HITLModalProps {
 }
 
 const GATE_LABELS: Record<string, string> = {
-  main_concern: "Main Concern Detection",
+  main_concern: "🎯 Patrón de Interés",
   core_emergence: "Core Category Emergence",
   selective_reduction: "Selective Reduction",
   core_saturation: "Core Saturation",
@@ -45,18 +45,18 @@ function renderProposal(gate: string, p: Record<string, unknown>) {
     return (
       <div style={s}>
         <div>
-          <span style={labelStyle}>Main Concern: </span>
+          <span style={labelStyle}>Patron de Interes: </span>
           <span style={{ ...valStyle, fontSize: 14, fontWeight: 600 }}>
             {(p.main_concern as string) || "?"}
           </span>
         </div>
         <div style={{ marginTop: 4 }}>
-          <span style={labelStyle}>Confidence: </span>
+          <span style={labelStyle}>Confianza: </span>
           <span style={valStyle}>{p.confidence as string}</span>
         </div>
         {(p.recurring_problems as string[])?.length > 0 && (
           <div style={{ marginTop: 4 }}>
-            <span style={labelStyle}>Recurring Problems:</span>
+            <span style={labelStyle}>Problemas recurrentes:</span>
             <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
               {(p.recurring_problems as string[]).map((rp, i) => (
                 <li key={i} style={{ color: "#C9D1D9" }}>

@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
 .pytest_cache/
 .venv/
 *.log
@@ -9,3 +11,12 @@ data/
 cache/
 frontend/node_modules/
 frontend/package-lock.json
+
+# ── Secrets & credentials ──
+*.pem
+*.key
+*.crt
+credentials.json
+service-account.json
+secrets.yaml
+secrets.yml
