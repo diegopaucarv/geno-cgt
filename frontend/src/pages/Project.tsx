@@ -25,6 +25,7 @@ import {
   HitlPendingItem,
 } from "../api/client";
 import { MemoHistory, type MemoEntry } from "../components/MemoHistory";
+import { Toast } from "../components/Toast";
 import HITLModal from "../components/HITLModal";
 
 // ── Styles ────────────────────────────────────────────────────────
@@ -100,6 +101,8 @@ export default function ProjectDetail() {
   const [agentMemos, setAgentMemos] = useState<any[]>([]);
   const [agentFamilies, setAgentFamilies] = useState<any[]>([]);
   const [showIntermediates, setShowIntermediates] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
   const [pipelineLiveLogs, setPipelineLiveLogs] = useState<
     Array<{ ts: number; msg: string }>
   >([]);
@@ -138,6 +141,44 @@ export default function ProjectDetail() {
       .catch((e) => console.error("agent-memos failed:", e));
   }, [id]);
 
+  // ── Derive stage statuses from pipeline log on load ──
+  useEffect(() => {
+    if (!pipelineLog || pipelineRunning) return;
+    const s = pipelineLog.summary;
+    if (s.total === 0) return;
+
+    setStageStatuses((prev) => {
+      const next = { ...prev };
+
+      // Segment done if no docs need segmentation
+      if (s.need_segment === 0) next.segment = "done";
+
+      // Agents done only if BOTH segment and agents are complete
+      if (s.need_agents === 0 && s.need_segment === 0) {
+        next.agents = "done";
+      }
+
+      // Synthesis and downstream stages done if playground_ready
+      if (s.playground_ready) {
+        next.synthesis = "done";
+        next.find_cc = "done";
+        next.reduce = "done";
+        next.saturate = "done";
+        next.build_db = "done";
+        next.playground = "done";
+      }
+
+      // All done: every doc fully processed
+      if (s.done === s.total && s.total > 0) {
+        PIPELINE_STAGES.forEach((stage) => {
+          next[stage.key] = "done";
+        });
+      }
+
+      return next;
+    });
+  }, [pipelineLog, pipelineRunning]);
+
   // Debug: force fetch on every render if empty
   useEffect(() => {
     if (id && agentMemos.length === 0 && agentFamilies.length === 0) {
@@ -165,6 +206,74 @@ export default function ProjectDetail() {
     hitlPollRef.current = poll;
     return () => clearInterval(poll);
   }, [id]);
+
+  // ── Compute stageStatuses from pipelineLog ──
+  useEffect(() => {
+    if (!pipelineLog) return;
+    const s: Record<string, StageStatus> = {};
+    const { summary } = pipelineLog;
+
+    s.segment =
+      summary.need_segment === 0 && summary.total > 0 ? "done" : "pending";
+    s.agents =
+      summary.need_agents === 0 && summary.total > 0 ? "done" : "pending";
+    s.synthesis =
+      summary.sintetizados > 0 && summary.need_synthesis === 0
+        ? "done"
+        : "pending";
+
+    const ps = summary.project_state || "collecting";
+    s.find_cc = [
+      "finding_cc",
+      "reducing",
+      "saturating",
+      "building_db",
+      "playground_ready",
+      "completed",
+    ].includes(ps)
+      ? "done"
+      : "pending";
+    s.reduce = [
+      "reducing",
+      "saturating",
+      "building_db",
+      "playground_ready",
+      "completed",
+    ].includes(ps)
+      ? "done"
+      : "pending";
+    s.saturate = [
+      "saturating",
+      "building_db",
+      "playground_ready",
+      "completed",
+    ].includes(ps)
+      ? "done"
+      : "pending";
+    s.build_db = ["building_db", "playground_ready", "completed"].includes(ps)
+      ? "done"
+      : "pending";
+    s.playground = ["playground_ready", "completed"].includes(ps)
+      ? "done"
+      : "pending";
+
+    // Mark running if HITL pending for a gate
+    if (hitlPending.length > 0) {
+      const gate = hitlPending[0].gate_name;
+      if (gate === "main_concern" || gate === "core_emergence")
+        s.find_cc = "running";
+      if (gate === "selective_reduction") s.reduce = "running";
+      if (gate === "core_saturation") s.saturate = "running";
+      if (
+        gate === "database_a" ||
+        gate === "database_b" ||
+        gate === "global_saturation"
+      )
+        s.build_db = "running";
+    }
+
+    setStageStatuses(s);
+  }, [pipelineLog, hitlPending]);
 
   function refreshDocs() {
     if (!id) return;
@@ -263,9 +372,13 @@ export default function ProjectDetail() {
 
   function findLastCompletedIdx(): number {
     let last = -1;
-    PIPELINE_STAGES.forEach((s, i) => {
-      if ((stageStatuses[s.key] || "pending") === "done") last = i;
-    });
+    for (let i = 0; i < PIPELINE_STAGES.length; i++) {
+      if ((stageStatuses[PIPELINE_STAGES[i].key] || "pending") === "done") {
+        last = i;
+      } else {
+        break; // stop at first non-done — stages are sequential
+      }
+    }
     return last;
   }
 
@@ -280,6 +393,110 @@ export default function ProjectDetail() {
     // Run pipeline
     setPipelineRunning(true);
     runPipeline(false);
+  }
+
+  // ── Memo mutations ────────────────────────────
+
+  /** Deep-set a value in an object using dot/bracket path notation.
+   *  e.g. deepSet(obj, "items[0].name", "new") → cloned obj with nested update. */
+  function deepSet(
+    obj: Record<string, unknown>,
+    path: string,
+    value: unknown,
+  ): Record<string, unknown> {
+    const clone = JSON.parse(JSON.stringify(obj));
+    // Parse path: "sampling_dimensions[0].name" → ["sampling_dimensions", "[0]", "name"]
+    const parts: string[] = [];
+    let cur = "";
+    for (const ch of path) {
+      if (ch === ".") {
+        if (cur) {
+          parts.push(cur);
+          cur = "";
+        }
+      } else if (ch === "[") {
+        if (cur) {
+          parts.push(cur);
+          cur = "";
+        }
+        cur = "[";
+      } else if (ch === "]") {
+        parts.push(cur + "]");
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur) parts.push(cur);
+
+    // Navigate to the target and set value
+    let target: any = clone;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      target = p.startsWith("[") ? target[parseInt(p.slice(1, -1))] : target[p];
+      if (target === undefined || target === null) return clone; // bail on bad path
+    }
+    const last = parts[parts.length - 1];
+    if (last.startsWith("[")) {
+      target[parseInt(last.slice(1, -1))] = value;
+    } else {
+      target[last] = value;
+    }
+    return clone;
+  }
+
+  async function handleDeleteMemo(memoId: string) {
+    const token = localStorage.getItem("access_token");
+    await fetch(`/api/v1/agent-outputs/${memoId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setAgentMemos((prev) => prev.filter((m) => m.id !== memoId));
+    showToast("Eliminado permanentemente.");
+  }
+
+  async function handleUpdateMemo(
+    memoId: string,
+    field: string,
+    value: string,
+  ) {
+    const token = localStorage.getItem("access_token");
+    // Apply deep update on current memo data
+    setAgentMemos((prev) => {
+      const memo = prev.find((m) => m.id === memoId);
+      if (!memo) return prev;
+      const newData = deepSet(memo.data, field, value);
+      // Send full data to server (backed by JSONB column)
+      fetch(`/api/v1/agent-outputs/${memoId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ data: newData }),
+      }).catch(() => {});
+      return prev.map((m) => (m.id === memoId ? { ...m, data: newData } : m));
+    });
+    showToast("Los cambios realizados son permanentes.");
+  }
+
+  function showToast(msg: string) {
+    setToastMsg(msg);
+    setToastVisible(true);
+  }
+
+  // ── Modification callback ───────────────────
+
+  function handleMemoModified() {
+    if (id) {
+      getAgentMemos(id)
+        .then((r) => {
+          setAgentMemos(r.memos || []);
+          setAgentFamilies(r.families || []);
+        })
+        .catch(() => {});
+    }
+    showToast("Modificación aplicada. Memos actualizados.");
   }
 
   // ── Pipeline IA ──────────────────────────────────
@@ -698,6 +915,94 @@ export default function ProjectDetail() {
             </button>
           </div>
         </div>
+
+        {/* ── HITL Decision Banner ── */}
+        {hitlPending.length > 0 && (
+          <div
+            style={{
+              padding: "10px 16px",
+              marginBottom: 12,
+              borderRadius: 8,
+              background: "#D2992218",
+              border: "1px solid #D2992244",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#D29922" }}>
+              🛑 Decisión requerida:{" "}
+              <strong>
+                {hitlPending[0].gate_name === "main_concern"
+                  ? "Main Concern"
+                  : hitlPending[0].gate_name === "core_emergence"
+                    ? "Core Category"
+                    : hitlPending[0].gate_name === "selective_reduction"
+                      ? "Selective Reduction"
+                      : hitlPending[0].gate_name === "core_saturation"
+                        ? "Core Saturation"
+                        : hitlPending[0].gate_name === "database_a"
+                          ? "Database A — Nodes"
+                          : hitlPending[0].gate_name === "database_b"
+                            ? "Database B — Edges"
+                            : hitlPending[0].gate_name}
+              </strong>
+            </span>
+            <button
+              onClick={() => setShowHITLModal(true)}
+              style={{
+                padding: "6px 16px",
+                borderRadius: 6,
+                border: "none",
+                background: "#D29922",
+                color: "#0D1117",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Resolver
+            </button>
+          </div>
+        )}
+
+        {/* ── Playground Ready Banner ── */}
+        {pipelineLog?.summary?.project_state === "playground_ready" &&
+          hitlPending.length === 0 && (
+            <div
+              style={{
+                padding: "10px 16px",
+                marginBottom: 12,
+                borderRadius: 8,
+                background: "#2EA04318",
+                border: "1px solid #2EA04344",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span style={{ fontSize: 13, color: "#2EA043" }}>
+                🎨 Theoretical Playground listo — el modelo teórico está
+                completo
+              </span>
+              <Link
+                to={`/projects/${id}/theory`}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#2EA043",
+                  color: "#0D1117",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textDecoration: "none",
+                }}
+              >
+                Entrar
+              </Link>
+            </div>
+          )}
 
         {/* ── UNIFIED HEADER ── */}
         <div
@@ -1311,6 +1616,7 @@ export default function ProjectDetail() {
                 memos · {agentFamilies.length} familias
               </span>
             </div>
+
             <MemoHistory
               memos={agentMemos}
               families={agentFamilies}
@@ -1318,6 +1624,11 @@ export default function ProjectDetail() {
               showIntermediates={showIntermediates}
               onFilterChange={setMemoFilter}
               onToggleIntermediates={setShowIntermediates}
+              onDeleteMemo={handleDeleteMemo}
+              onUpdateMemo={handleUpdateMemo}
+              projectId={id!}
+              originalPrompt={project.ruta_de_codificacion || ""}
+              onMemoModified={handleMemoModified}
             />
           </div>
         </div>
@@ -1478,18 +1789,27 @@ export default function ProjectDetail() {
               {PIPELINE_STAGES.map((stage, idx) => {
                 const status = stageStatuses[stage.key] || "pending";
                 const isLast = idx === PIPELINE_STAGES.length - 1;
+                const lastDone = findLastCompletedIdx();
+                const isNextPending =
+                  status === "pending" && idx === lastDone + 1;
                 const isClickable =
-                  (status === "done" || status === "error") && !pipelineRunning;
+                  !pipelineRunning &&
+                  (status === "done" || status === "error" || isNextPending);
                 return (
                   <div key={stage.key}>
                     <div
                       onClick={() => {
                         if (!isClickable) return;
-                        const lastDone = findLastCompletedIdx();
                         if (status === "error") {
                           restartFromStage(stage.key);
                           return;
                         }
+                        if (isNextPending) {
+                          // Next pending after last done → start from here
+                          restartFromStage(stage.key);
+                          return;
+                        }
+                        // status === "done"
                         if (idx === lastDone) {
                           // Clicking last completed: restart from here
                           restartFromStage(stage.key);
@@ -1511,7 +1831,11 @@ export default function ProjectDetail() {
                         padding: "8px 0",
                         cursor: isClickable ? "pointer" : "default",
                         opacity:
-                          status === "pending" && !pipelineRunning ? 0.5 : 1,
+                          status === "pending" &&
+                          !isNextPending &&
+                          !pipelineRunning
+                            ? 0.5
+                            : 1,
                       }}
                     >
                       <div
@@ -1531,7 +1855,9 @@ export default function ProjectDetail() {
                                 ? "#A371F722"
                                 : status === "error"
                                   ? "#F8514922"
-                                  : "#21262D",
+                                  : isNextPending
+                                    ? "#A371F711"
+                                    : "#21262D",
                           border:
                             status === "running"
                               ? "2px solid #A371F7"
@@ -1539,7 +1865,9 @@ export default function ProjectDetail() {
                                 ? "2px solid #3FB950"
                                 : status === "error"
                                   ? "2px solid #F85149"
-                                  : "2px solid #30363D",
+                                  : isNextPending
+                                    ? "2px dashed #A371F755"
+                                    : "2px solid #30363D",
                           animation:
                             status === "running"
                               ? "pulse 1.5s ease-in-out infinite"
@@ -1560,6 +1888,10 @@ export default function ProjectDetail() {
                               background: "#A371F7",
                             }}
                           />
+                        ) : isNextPending ? (
+                          <span style={{ color: "#A371F7", fontSize: 10 }}>
+                            ▶
+                          </span>
                         ) : (
                           <span style={{ color: "#8B949E", fontSize: 11 }}>
                             {stage.icon}
@@ -1578,7 +1910,9 @@ export default function ProjectDetail() {
                                   ? "#E6EDF3"
                                   : status === "error"
                                     ? "#F85149"
-                                    : "#8B949E",
+                                    : isNextPending
+                                      ? "#A371F7"
+                                      : "#8B949E",
                           }}
                         >
                           {stage.label}
@@ -1594,7 +1928,9 @@ export default function ProjectDetail() {
                                 ? "#A371F7"
                                 : status === "error"
                                   ? "#F85149"
-                                  : "#484F58",
+                                  : isNextPending
+                                    ? "#A371F7"
+                                    : "#484F58",
                         }}
                       >
                         {status === "done"
@@ -1603,7 +1939,9 @@ export default function ProjectDetail() {
                             ? "…"
                             : status === "error"
                               ? "✕"
-                              : "○"}
+                              : isNextPending
+                                ? "▶"
+                                : "○"}
                       </span>
                     </div>
                     {!isLast && (
@@ -1626,6 +1964,11 @@ export default function ProjectDetail() {
           )}
         </div>
       </div>
+      <Toast
+        message={toastMsg}
+        visible={toastVisible}
+        onDone={() => setToastVisible(false)}
+      />
     </div>
   );
 }

@@ -173,6 +173,94 @@ def _b2b_generate_codes(
     )
 
 
+def _enrich_codes_with_evidence(codes: list[dict], proyecto_id: str) -> list[dict]:
+    """Post-B2b enrichment: busca evidencia documental para cada código vía RAG.
+
+    Para cada código generado por B2b:
+      1. Usa nombre + definición como query
+      2. search_segments(query, proyecto_id, top_k=8) → RRF (semántico + léxico)
+      3. Filtra segmentos con score >= 0.5
+      4. Agrupa por documento_id único
+      5. puntaje_relevancia = COUNT(DISTINCT documentos con evidencia)
+      6. Adjunta evidence: [{documento, documento_id, segmentos}]
+
+    Args:
+        codes: Lista de códigos crudos del LLM (con code_name, definition).
+        proyecto_id: UUID del proyecto.
+
+    Returns:
+        Lista de códigos enriquecidos con puntaje_relevancia y evidence.
+    """
+    import sys as _sys
+
+    _sys.path.insert(0, "/app")
+    from app.agents.tools.search_tools import search_segments
+
+    MIN_SCORE = 0.5
+
+    enriched: list[dict] = []
+    for code in codes:
+        name = (code.get("code_name") or "").strip()
+        definition = (code.get("definition") or "").strip()
+        if not name or not definition:
+            code["puntaje_relevancia"] = 0
+            code["evidence"] = []
+            enriched.append(code)
+            continue
+
+        # 1. Query rica: nombre + definición
+        query = f"{name}: {definition}"
+
+        # 2. Buscar segmentos vía RRF
+        try:
+            results = search_segments(query, proyecto_id, top_k=8)
+        except Exception as e:
+            logger.warning("Evidence enrichment failed for code '%s': %s", name, e)
+            code["puntaje_relevancia"] = 0
+            code["evidence"] = []
+            enriched.append(code)
+            continue
+
+        if not results or (len(results) == 1 and "error" in results[0]):
+            code["puntaje_relevancia"] = 0
+            code["evidence"] = []
+            enriched.append(code)
+            continue
+
+        # 3. Agrupar por documento_id único (score >= MIN_SCORE)
+        doc_groups: dict[str, dict] = {}
+        for r in results:
+            score = r.get("score", 0)
+            if score < MIN_SCORE:
+                continue
+
+            doc_id = r.get("documento_id", "unknown")
+            doc_name = r.get("documento_nombre", "desconocido")
+
+            if doc_id not in doc_groups:
+                doc_groups[doc_id] = {
+                    "documento": doc_name,
+                    "documento_id": doc_id,
+                    "segmentos": [],
+                }
+
+            doc_groups[doc_id]["segmentos"].append(
+                {
+                    "id": r.get("segmento_id", ""),
+                    "texto": (r.get("texto") or "")[:300],
+                    "score": round(score, 4),
+                }
+            )
+
+        # 4. puntaje_relevancia = COUNT DISTINCT docs con evidencia
+        code["puntaje_relevancia"] = len(doc_groups)
+        code["evidence"] = list(doc_groups.values())
+
+        enriched.append(code)
+
+    return enriched
+
+
 def b2_open_code(proyecto_id: str) -> dict:
     """
     Pipeline B2 completo:
@@ -281,23 +369,46 @@ def b2_open_code(proyecto_id: str) -> dict:
                 indicators_text=indicators_text,
             )
 
+        # ── Step 4: Enrich codes with documentary evidence (RAG search) ──
+        raw_codes = b2b_response.get("codes", [])
+        if raw_codes:
+            enriched_codes = _enrich_codes_with_evidence(raw_codes, proyecto_id)
+            avg_relevance = sum(
+                c.get("puntaje_relevancia", 0) for c in enriched_codes
+            ) / max(len(enriched_codes), 1)
+            logger.info(
+                "Evidence enrichment: %d codes, avg relevance=%.1f docs",
+                len(enriched_codes),
+                avg_relevance,
+            )
+        else:
+            enriched_codes = []
+
         created = 0
-        for code in b2b_response.get("codes", []):
+        for code in enriched_codes:
             name = code.get("code_name", "").strip()
-            if not name:
+            definition = (code.get("definition") or "").strip()
+            if not name or not definition:
                 continue
+            relevance = code.get("puntaje_relevancia", 0)
             session.execute(
                 text(
-                    "INSERT INTO categorias (id, proyecto_id, nombre, definicion, version, estado_saturacion, puntaje_relevancia, es_central) VALUES (gen_random_uuid(), :pid, :name, :def, 1, 'ABIERTO', 0, false)"
+                    "INSERT INTO categorias (id, proyecto_id, nombre, definicion, version, estado_saturacion, puntaje_relevancia, es_central) "
+                    "VALUES (gen_random_uuid(), :pid, :name, :def, 1, 'ABIERTO', :relevance, false)"
                 ),
-                {"pid": proyecto_id, "name": name, "def": code.get("definition", "")},
+                {
+                    "pid": proyecto_id,
+                    "name": name,
+                    "def": definition,
+                    "relevance": relevance,
+                },
             )
             created += 1
         session.commit()
 
         return {
             "codes_created": created,
-            "codes": b2b_response.get("codes", []),
+            "codes": enriched_codes,
             "auto_assigned": auto_assigned,
             "b2a_indicators": len(indicators_list),
         }
@@ -428,6 +539,22 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
             codes_processed,
             total_assigned,
         )
+
+        # Actualizar puntaje_relevancia = COUNT(DISTINCT documentos)
+        session.execute(
+            text("""
+                UPDATE categorias c SET puntaje_relevancia = (
+                    SELECT COUNT(DISTINCT s.documento_id)
+                    FROM codigos_segmento cs
+                    JOIN segmentos s ON cs.segmento_id = s.id
+                    WHERE cs.categoria_id = c.id
+                )
+                WHERE c.proyecto_id = :pid
+            """),
+            {"pid": proyecto_id},
+        )
+        session.commit()
+        logger.info("Relevance scores updated for project %s", proyecto_id[:8])
 
         return {
             "codes_processed": codes_processed,

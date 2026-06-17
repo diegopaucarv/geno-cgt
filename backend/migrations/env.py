@@ -37,9 +37,15 @@ from app.models.domain.canvas import (
     NodoDeLienzo,
 )
 from app.models.domain.category import Categoria, CodigoSegmento, DocCode
+from app.models.domain.database import DatabaseEdge, DatabaseNode
 from app.models.domain.document import Documento
 from app.models.domain.document_process import DocumentProcess
 from app.models.domain.hitl_decision import HitlDecision
+from app.models.domain.incident import (
+    ExtractedIncident,
+    IncidentComparison,
+    IncidentGroup,
+)
 from app.models.domain.memo import Memo
 from app.models.domain.pipeline_run import (
     PipelineRun,
@@ -49,6 +55,10 @@ from app.models.domain.pipeline_run import (
 from app.models.domain.population_context import PopulationContext
 from app.models.domain.project import Proyecto
 from app.models.domain.segment import Segmento
+from app.models.domain.sorting import (
+    MemoSortingAttempt,
+    MemoSortingGroup,
+)
 from app.models.domain.synthesis import (
     CodeDocumentSummary,
     CodeGlobalSummary,

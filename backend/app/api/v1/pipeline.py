@@ -85,8 +85,9 @@ async def run_pipeline_stage(
         result["status"] = "dispatched"
 
     elif stage_name == "main_concern":
+        # Redirigido al selective_coding_coordinator (Fase A)
         task = celery_app.send_task(
-            "a14_find_main_concern",
+            "selective_coding_coordinator",
             args=[str(project_id)],
             queue="heavy",
         )
@@ -94,8 +95,9 @@ async def run_pipeline_stage(
         result["status"] = "dispatched"
 
     elif stage_name == "selective":
+        # Redirigido al selective_coding_coordinator (pipeline completo)
         task = celery_app.send_task(
-            "trigger_selective_elaboration",
+            "selective_coding_coordinator",
             args=[str(project_id)],
             queue="heavy",
         )
@@ -242,7 +244,8 @@ async def get_pipeline_log(
             ),
             "segmented": n_segs > 0,
             "coded": n_codes > 0,
-            "agents_done": doc.estado == "listo" and n_codes > 0,
+            "agents_done": doc.estado in ("listo", "sintetizado") and n_codes > 0,
+            "synthesis_done": doc.estado == "sintetizado",
         }
 
         # Determinar qué falta
@@ -255,6 +258,8 @@ async def get_pipeline_log(
         elif not n_codes:
             next_action = "run_agents"
         elif doc.estado == "listo":
+            next_action = "run_synthesis"
+        elif doc.estado == "sintetizado":
             next_action = "done"
         else:
             next_action = "run_agents"
@@ -271,10 +276,14 @@ async def get_pipeline_log(
             }
         )
 
-    # Resumen
+    # Resumen con nuevos estados
     docs_need_segment = sum(1 for d in doc_logs if d["next_action"] == "segment")
     docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
+    docs_need_synthesis = sum(
+        1 for d in doc_logs if d["next_action"] == "run_synthesis"
+    )
     docs_done = sum(1 for d in doc_logs if d["next_action"] == "done")
+    docs_sintetizados = sum(1 for d in docs if d.estado == "sintetizado")
     docs_failed = sum(1 for d in doc_logs if d["next_action"] == "error")
     error_list = [
         {
@@ -310,13 +319,80 @@ async def get_pipeline_log(
             "total": len(docs),
             "need_segment": docs_need_segment,
             "need_agents": docs_need_agents,
+            "need_synthesis": docs_need_synthesis,
+            "sintetizados": docs_sintetizados,
             "done": docs_done,
             "failed": docs_failed,
             "failed_tasks": failed_tasks,
             "errors": error_list,
             "categories": cat_count,
-            "playground_ready": cat_count > 0,
+            "project_state": await _get_project_state(db, project_id),
+            "playground_ready": docs_sintetizados == len(docs) and cat_count > 0,
         },
+    }
+
+
+@router.get("/projects/{project_id}/pipeline/decisions")
+async def get_pipeline_decisions(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Devuelve todas las decisiones HITL aceptadas con sus propuestas completas.
+    Consumido por el PlaygroundDataPanel para mostrar el contexto del pipeline.
+    """
+    from sqlalchemy import text
+
+    rows = await db.execute(
+        text(
+            "SELECT gate_name, proposal, critic_verdict, status, "
+            "researcher_decision, researcher_note, decidido_en "
+            "FROM hitl_decisions "
+            "WHERE project_id = :pid AND status = 'accepted' "
+            "ORDER BY creado_en ASC"
+        ),
+        {"pid": project_id},
+    )
+
+    decisions = []
+    for row in rows:
+        decisions.append(
+            {
+                "gate": row[0],
+                "proposal": row[1] if isinstance(row[1], dict) else {},
+                "critic_verdict": row[2] if isinstance(row[2], dict) else {},
+                "status": row[3],
+                "decision": row[4],
+                "note": row[5],
+                "decided_at": str(row[6]) if row[6] else None,
+            }
+        )
+
+    # También devolver conteo de saturación
+    sat_rows = await db.execute(
+        text(
+            "SELECT c.nombre, "
+            "COUNT(ps.id) FILTER (WHERE ps.did_state_expand = false) AS no_expand "
+            "FROM categorias c "
+            "LEFT JOIN paradigm_states ps ON c.id = ps.code_id "
+            "WHERE c.proyecto_id = :pid AND COALESCE(c.puntaje_relevancia, 0) >= 4 "
+            "GROUP BY c.id, c.nombre"
+        ),
+        {"pid": project_id},
+    )
+
+    saturation = {}
+    for row in sat_rows:
+        saturation[row[0]] = {
+            "no_expansion_count": row[1] or 0,
+            "saturated": (row[1] or 0) >= 3,
+        }
+
+    return {
+        "project_id": str(project_id),
+        "decisions": decisions,
+        "saturation": saturation,
     }
 
 
@@ -590,8 +666,8 @@ async def get_agent_memos(
     # ── A2: Document Processes (descriptive_data, PRO) ──
     dp_rows = await db.execute(
         text(
-            "SELECT dp.id, dp.process_description, dp.is_first_document, "
-            "dp.has_comparison, dp.prime_mover, dp.prime_mover_confidence, "
+            "SELECT dp.id, dp.process_description, dp.similarity_to_previous, "
+            "dp.difference_from_previous, dp.prime_mover, dp.prime_mover_confidence, "
             "dp.creado_en, d.original_filename "
             "FROM document_processes dp "
             "JOIN documentos d ON dp.documento_id = d.id "
@@ -603,8 +679,8 @@ async def get_agent_memos(
     for row in dp_rows:
         data = {
             "process_description": row[1] or "",
-            "is_first_document": row[2] or False,
-            "has_comparison": row[3] or False,
+            "similarity_to_previous": row[2] or "",
+            "difference_from_previous": row[3] or "",
         }
         if row[4]:
             data["prime_mover"] = row[4]
@@ -648,3 +724,113 @@ async def get_agent_memos(
         )
 
     return {"memos": memos, "total": len(memos), "families": families}
+
+
+# ── Mutation endpoints for memo editing ──
+
+TABLE_MAP = {
+    "pc": (
+        "population_contexts",
+        ["surprising_details", "language_patterns", "data_production_context"],
+    ),
+    "dp": (
+        "document_processes",
+        [
+            "process_description",
+            "similarity_to_previous",
+            "difference_from_previous",
+            "prime_mover",
+        ],
+    ),
+    "cat": ("categorias", ["nombre", "definicion"]),
+}
+
+
+@router.delete("/agent-outputs/{memo_id}")
+async def delete_agent_output(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Delete an agent output. memo_id format: {prefix}-{uuid} (e.g. pc-xxx, dp-xxx, cat-xxx)"""
+    from sqlalchemy import text
+
+    parts = memo_id.split("-", 1)
+    if len(parts) != 2 or parts[0] not in TABLE_MAP:
+        raise HTTPException(400, f"Invalid memo_id format: {memo_id}")
+    prefix, row_id = parts
+    table, _ = TABLE_MAP[prefix]
+    await db.execute(text(f"DELETE FROM {table} WHERE id = :id"), {"id": row_id})
+    await db.commit()
+    return {"status": "deleted", "id": memo_id}
+
+
+@router.patch("/agent-outputs/{memo_id}")
+async def patch_agent_output(
+    memo_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Update fields on an agent output. body: {field: value, ...}"""
+    from sqlalchemy import text
+
+    parts = memo_id.split("-", 1)
+    if len(parts) != 2 or parts[0] not in TABLE_MAP:
+        raise HTTPException(400, f"Invalid memo_id format: {memo_id}")
+    prefix, row_id = parts
+    table, allowed = TABLE_MAP[prefix]
+
+    sets = []
+    params = {"id": row_id}
+    for key, value in body.items():
+        if key in allowed:
+            sets.append(f"{key} = :{key}")
+            params[key] = value
+    if not sets:
+        raise HTTPException(400, "No valid fields to update")
+
+    await db.execute(
+        text(f"UPDATE {table} SET {', '.join(sets)} WHERE id = :id"), params
+    )
+    await db.commit()
+    return {"status": "updated", "id": memo_id}
+
+
+@router.patch("/documents/{document_id}/text")
+async def patch_document_text(
+    document_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Update document text fields (texto_extraido, original_filename)."""
+    from sqlalchemy import text
+
+    allowed = ["texto_extraido", "original_filename"]
+    sets = []
+    params = {"id": str(document_id)}
+    for key, value in body.items():
+        if key in allowed:
+            sets.append(f"{key} = :{key}")
+            params[key] = value
+    if not sets:
+        raise HTTPException(400, "No valid fields")
+
+    await db.execute(
+        text(f"UPDATE documentos SET {', '.join(sets)} WHERE id = :id"), params
+    )
+    await db.commit()
+    return {"status": "updated", "id": str(document_id)}
+
+
+async def _get_project_state(db: AsyncSession, project_id: UUID) -> str:
+    """Obtiene el estado actual del proyecto desde la DB."""
+    from sqlalchemy import text
+
+    row = await db.execute(
+        text("SELECT estado FROM proyectos WHERE id = :pid"),
+        {"pid": project_id},
+    )
+    result = row.fetchone()
+    return result[0] if result else "collecting"

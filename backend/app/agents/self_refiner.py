@@ -62,10 +62,39 @@ class SelfRefinementLoop(BaseAgent):
 
         had_reasoning = bool(gen_response.get("_reasoning_content"))
 
-        # ── 2. CRITIC (FLASH — más barato, no razona) ────────────
+        # ── 2. ALGORITHMIC CHECK (O6: regex + heuristics, no LLM) ──
+        codes = gen_response.get("codes", [])
+        coding_style = kwargs.get("coding_style", "gerundio")
+
+        from app.agents.quality.scorer import (
+            compare_codes_for_redundancy,
+            evaluate_codes_algorithmic,
+        )
+
+        algo_eval = evaluate_codes_algorithmic(codes, coding_style)
+        redundancy_issues = compare_codes_for_redundancy(codes)
+        algo_eval["issues"].extend(redundancy_issues)
+        if redundancy_issues:
+            algo_eval["all_valid"] = False
+
+        # If algorithmic check passes, skip LLM critic entirely
+        if algo_eval["all_valid"]:
+            return {
+                "type": "refinement_step",
+                "iteration": iteration,
+                "output": gen_response,
+                "critic": algo_eval,
+                "is_valid": True,
+                "issues": [],
+                "had_reasoning": had_reasoning,
+                "critic_source": "algorithmic",
+            }
+
+        # ── 3. LLM CRITIC (FLASH) — only for qualitative issues ────
         critic_vars = {
             **kwargs.get("critic_vars", {}),
             "output_to_evaluate": gen_text,
+            "algorithmic_issues": json.dumps(algo_eval["issues"], ensure_ascii=False),
         }
         critic_response = self.llm.run_agent(
             self.critic_prompt_id,

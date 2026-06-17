@@ -71,6 +71,7 @@ def search_segments(query: str, proyecto_id: str, top_k: int = 5) -> list:
                     "segmento_id": str(r.segmento_id),
                     "texto": r.texto[:300],
                     "documento_id": str(r.documento_id),
+                    "documento_nombre": r.documento_nombre,
                     "score": r.score,
                 }
                 for r in results

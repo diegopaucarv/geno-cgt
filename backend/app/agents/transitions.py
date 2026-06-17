@@ -120,9 +120,14 @@ def transition(
             next_state or from_state,
         )
 
-    # ── 3. Si llegó a listo, verificar Phase B ──
+    # ── 3. Si llegó a listo, verificar Phase B + Iteration ──
     if next_state == "listo":
-        return _maybe_trigger_phase_b(session, proyecto_id)
+        # Phase B: >=3 docs listos → synthesis
+        result = _maybe_trigger_phase_b(session, proyecto_id)
+        if result:
+            return result
+        # Iteration: nuevo doc en proyecto avanzado → re-ejecutar pipeline
+        return _maybe_trigger_iteration(session, proyecto_id)
 
     return None
 
@@ -432,3 +437,107 @@ def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
         task.id,
     )
     return {"next_task": "selective_coding_coordinator", "task_id": task.id}
+
+
+def _maybe_trigger_iteration(session, proyecto_id: str) -> dict | None:
+    """
+    Detecta nuevos documentos en un proyecto que ya avanzó más allá de open coding.
+
+    Si el proyecto está en playground_ready o completed y hay docs en estado 'listo'
+    (nuevos, sin sintetizar), baja el proyecto a 'coding' y dispara el pipeline
+    de síntesis para incorporar los nuevos datos sin perder las decisiones HITL previas.
+    """
+    import os as _os
+
+    from celery import Celery
+
+    # Solo aplica si el proyecto ya pasó open coding
+    estado = session.execute(
+        text("SELECT estado FROM proyectos WHERE id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()
+    if not estado:
+        return None
+
+    project_state = estado[0]
+    if project_state not in ("playground_ready", "completed"):
+        return None
+
+    # Detectar docs nuevos (listo pero no sintetizado)
+    new_docs = session.execute(
+        text(
+            "SELECT COUNT(*) FROM documentos "
+            "WHERE proyecto_id = :pid AND estado = 'listo'"
+        ),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    if new_docs == 0:
+        return None
+
+    # Deducplicación
+    step = f"iteration_dc_{new_docs}"
+    already = session.execute(
+        text(
+            "SELECT step FROM processing_states "
+            "WHERE entity_type = 'project' AND entity_id = :pid AND step = :step"
+        ),
+        {"pid": proyecto_id, "step": step},
+    ).fetchone()
+    if already:
+        return None
+
+    # Marcar y bajar el proyecto a coding
+    session.execute(
+        text(
+            "INSERT INTO processing_states (entity_type, entity_id, step) "
+            "VALUES ('project', :pid, :step) ON CONFLICT DO NOTHING"
+        ),
+        {"pid": proyecto_id, "step": step},
+    )
+    session.commit()
+
+    # Bajar estado del proyecto para re-ejecutar síntesis
+    session.execute(
+        text(
+            "UPDATE proyectos SET estado = 'coding' "
+            "WHERE id = :pid AND estado = :current"
+        ),
+        {"pid": proyecto_id, "current": project_state},
+    )
+    session.commit()
+
+    logger.info(
+        "Iteration triggered: project=%s (%d new docs in 'listo', was %s → coding)",
+        proyecto_id,
+        new_docs,
+        project_state,
+    )
+
+    # Disparar síntesis B para incorporar los nuevos datos
+    app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+    task = app.send_task(
+        "process_synthesis_agents_b",
+        args=[proyecto_id],
+        queue="heavy",
+    )
+
+    # Tracking: tarea a nivel proyecto (document_id=NULL)
+    run_id = _get_active_run(session, proyecto_id)
+    if run_id:
+        session.execute(
+            text(
+                "INSERT INTO pipeline_tasks "
+                "(id, run_id, document_id, celery_task_id, task_name, queue, status, doc_estado_before) "
+                "VALUES (gen_random_uuid(), :rid, NULL, :tid, :tn, :q, 'queued', NULL)"
+            ),
+            {
+                "rid": run_id,
+                "tid": task.id,
+                "tn": "process_synthesis_agents_b",
+                "q": "heavy",
+            },
+        )
+        session.commit()
+
+    return {"next_task": "process_synthesis_agents_b", "task_id": task.id}

@@ -35,9 +35,9 @@ class RAGResult:
     segmento_id: UUID
     texto: str
     documento_id: UUID
-    score: float
+    documento_nombre: str = ""
+    score: float = 0.0
     mmr_score: float | None = None
-    # Embedding del segmento. Uso interno para MMR. No se expone en la API.
     _embedding: List[float] | None = field(default=None, repr=False)
 
 
@@ -219,8 +219,12 @@ class RAGService:
                     FROM semantic_rank sr
                     LEFT JOIN lexical_rank lr ON sr.id = lr.id
                 )
-                SELECT id, texto, documento_id, embedding, score
-                FROM rrf ORDER BY score DESC LIMIT :top_k
+                SELECT rrf.id, rrf.texto, rrf.documento_id,
+                       d.original_filename AS documento_nombre,
+                       rrf.embedding, rrf.score
+                FROM rrf
+                JOIN documentos d ON rrf.documento_id = d.id
+                ORDER BY rrf.score DESC LIMIT :top_k
             """)
             params = {
                 "query_vec": query_vec,
@@ -255,8 +259,12 @@ class RAGService:
                     FROM semantic_rank sr
                     LEFT JOIN lexical_rank lr ON sr.id = lr.id
                 )
-                SELECT id, texto, documento_id, embedding, score
-                FROM rrf ORDER BY score DESC LIMIT :top_k
+                SELECT rrf.id, rrf.texto, rrf.documento_id,
+                       d.original_filename AS documento_nombre,
+                       rrf.embedding, rrf.score
+                FROM rrf
+                JOIN documentos d ON rrf.documento_id = d.id
+                ORDER BY rrf.score DESC LIMIT :top_k
             """)
             params = {
                 "query_vec": query_vec,
@@ -272,8 +280,9 @@ class RAGService:
                 segmento_id=r[0],
                 texto=r[1],
                 documento_id=r[2],
-                score=round(float(r[4]), 4),
-                _embedding=r[3],
+                documento_nombre=r[3],
+                score=round(float(r[5]), 4),
+                _embedding=r[4],
             )
             for r in result.fetchall()
         ]
@@ -287,16 +296,19 @@ class RAGService:
     ) -> List[RAGResult]:
         if documento_id is not None:
             sql = text("""
-                SELECT id, texto, documento_id, embedding,
-                       1.0 - (embedding <=> :query_vec) AS score
-                FROM segmentos
-                WHERE documento_id = :doc_id AND embedding IS NOT NULL
+                SELECT s.id, s.texto, s.documento_id, d.original_filename AS documento_nombre,
+                       s.embedding,
+                       1.0 - (s.embedding <=> :query_vec) AS score
+                FROM segmentos s
+                JOIN documentos d ON s.documento_id = d.id
+                WHERE s.documento_id = :doc_id AND s.embedding IS NOT NULL
                 ORDER BY score DESC LIMIT :top_k
             """)
             params = {"query_vec": query_vec, "doc_id": documento_id, "top_k": top_k}
         else:
             sql = text("""
-                SELECT s.id, s.texto, s.documento_id, s.embedding,
+                SELECT s.id, s.texto, s.documento_id, d.original_filename AS documento_nombre,
+                       s.embedding,
                        1.0 - (s.embedding <=> :query_vec) AS score
                 FROM segmentos s
                 JOIN documentos d ON s.documento_id = d.id
@@ -315,8 +327,9 @@ class RAGService:
                 segmento_id=r[0],
                 texto=r[1],
                 documento_id=r[2],
-                score=round(float(r[4]), 4),
-                _embedding=r[3],
+                documento_nombre=r[3],
+                score=round(float(r[5]), 4),
+                _embedding=r[4],
             )
             for r in result.fetchall()
         ]
@@ -332,16 +345,17 @@ class RAGService:
         # cuando el usuario pide búsqueda puramente léxica, sin diversify).
         if documento_id is not None:
             sql = text("""
-                SELECT id, texto, documento_id,
-                       ts_rank(texto_tsv, plainto_tsquery('spanish', :query_text)) AS score
-                FROM segmentos
-                WHERE documento_id = :doc_id
+                SELECT s.id, s.texto, s.documento_id, d.original_filename AS documento_nombre,
+                       ts_rank(s.texto_tsv, plainto_tsquery('spanish', :query_text)) AS score
+                FROM segmentos s
+                JOIN documentos d ON s.documento_id = d.id
+                WHERE s.documento_id = :doc_id
                 ORDER BY score DESC LIMIT :top_k
             """)
             params = {"query_text": query_text, "doc_id": documento_id, "top_k": top_k}
         else:
             sql = text("""
-                SELECT s.id, s.texto, s.documento_id,
+                SELECT s.id, s.texto, s.documento_id, d.original_filename AS documento_nombre,
                        ts_rank(s.texto_tsv, plainto_tsquery('spanish', :query_text)) AS score
                 FROM segmentos s
                 JOIN documentos d ON s.documento_id = d.id
@@ -360,7 +374,8 @@ class RAGService:
                 segmento_id=r[0],
                 texto=r[1],
                 documento_id=r[2],
-                score=round(float(r[3]), 4),
+                documento_nombre=r[3],
+                score=round(float(r[4]), 4),
             )
             for r in result.fetchall()
         ]

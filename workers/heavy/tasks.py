@@ -160,6 +160,18 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
         if response.get("mock_note"):
             return {"error": "mock fallback", "note": response["mock_note"]}
 
+        # Validate: don't save empty outputs
+        sd = (response.get("surprising_details") or "").strip()
+        lp = (response.get("language_patterns") or "").strip()
+        dpc = (response.get("data_production_context") or "").strip()
+        all_empty = not sd and not lp and not dpc
+        all_no_evidence = all("Sin evidencia" in v for v in [sd, lp, dpc] if v)
+        if all_empty or all_no_evidence:
+            logger.warning(
+                "A1: empty/invalid response for doc=%s — marking as error", documento_id
+            )
+            return {"error": "empty_llm_response", "documento_id": documento_id}
+
         new_version = (existing[4] + 1) if existing else 1
         new_source_ids = list(existing[3]) if existing else []
         if documento_id not in new_source_ids:
@@ -171,9 +183,9 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
             ),
             {
                 "pid": proyecto_id,
-                "sd": response.get("surprising_details", ""),
-                "lp": response.get("language_patterns", ""),
-                "dpc": response.get("data_production_context", ""),
+                "sd": sd,
+                "lp": lp,
+                "dpc": dpc,
                 "sids": json.dumps(new_source_ids),
                 "ver": new_version,
             },
@@ -271,6 +283,14 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
         if response.get("mock_note"):
             return {"error": "mock fallback"}
 
+        # Validate: don't save empty outputs
+        pd = (response.get("process_description") or "").strip()
+        stp = (response.get("similarity_to_previous") or "").strip()
+        dfp = (response.get("difference_from_previous") or "").strip()
+        if not pd:
+            logger.warning("A2: empty process_description for doc=%s", documento_id)
+            return {"error": "empty_llm_response", "documento_id": documento_id}
+
         result = session.execute(
             text(
                 "INSERT INTO document_processes (id, documento_id, proyecto_id, process_description, similarity_to_previous, difference_from_previous, previous_document_id) VALUES (gen_random_uuid(), :did, :pid, :pd, :stp, :dfp, :prevd) RETURNING id"
@@ -278,9 +298,9 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
             {
                 "did": documento_id,
                 "pid": proyecto_id,
-                "pd": response.get("process_description", ""),
-                "stp": response.get("similarity_to_previous"),
-                "dfp": response.get("difference_from_previous"),
+                "pd": pd,
+                "stp": stp or None,
+                "dfp": dfp or None,
                 "prevd": str(previous[1]) if previous else None,
             },
         )
@@ -289,7 +309,7 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
 
         return {
             "document_process_id": new_id,
-            "process_description": response.get("process_description", ""),
+            "process_description": pd,
             "is_first_document": is_first,
             "has_comparison": not is_first,
         }
@@ -964,9 +984,62 @@ def _transition_docs_to_sintetizado(session, proyecto_id: str) -> int:
         logger.info(
             "Transitioned %d docs to 'sintetizado' for project %s", count, proyecto_id
         )
-        # Si todos los docs ya están sintetizados, disparar selective coding
         _maybe_trigger_selective_coding(session, proyecto_id)
     return count
+
+
+def _prepare_playground_for_project(proyecto_id: str) -> None:
+    """
+    Prepara el ecosistema del Theoretical Playground cuando el proyecto
+    llega a playground_ready: seed de códigos teóricos, layout inicial,
+    ghost blobs desde memos huérfanos.
+    """
+    try:
+        import sys as _s
+
+        _s.path.insert(0, "/app")
+        from app.services.ghost_connector import GhostConnector
+        from app.services.theory_seeder import seed_theoretical_codes
+        from database import SessionLocal as _SessionLocal
+
+        s2 = _SessionLocal()
+        try:
+            # 1. Seed theoretical codes
+            inserted = seed_theoretical_codes(s2)
+            logger.info("Playground prep: seeded %d theoretical codes", inserted)
+
+            # 2. Crear ecosystem layout inicial
+            existing = s2.execute(
+                text("SELECT id FROM ecosystem_layouts WHERE project_id = :pid"),
+                {"pid": proyecto_id},
+            ).fetchone()
+            if not existing:
+                s2.execute(
+                    text(
+                        "INSERT INTO ecosystem_layouts "
+                        "(id, project_id, version, blob_positions, ghost_positions, "
+                        "fog_zones, physics_params) "
+                        "VALUES (gen_random_uuid(), :pid, 1, '{}', '{}', '{}', "
+                        "CAST(:phys AS jsonb))"
+                    ),
+                    {
+                        "pid": proyecto_id,
+                        "phys": '{"attraction_strength":0.01,"repulsion":0.05,'
+                        '"damping":0.95,"core_gravity":0.005,'
+                        '"min_distance":80,"max_velocity":3.0}',
+                    },
+                )
+                s2.commit()
+                logger.info("Playground prep: created ecosystem layout")
+
+            # 3. Generar ghost blobs desde memos huérfanos
+            connector = GhostConnector(s2, llm)
+            ghosts = connector.generate_ghost_blobs(proyecto_id)
+            logger.info("Playground prep: generated %d ghost blobs", len(ghosts))
+        finally:
+            s2.close()
+    except Exception as e:
+        logger.warning("Playground prep failed (non-blocking): %s", e)
 
 
 def __rebuild_cache(proyecto_id: str) -> int:
@@ -1503,9 +1576,20 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
 @app.task(name="trigger_selective_elaboration")
 def trigger_selective_elaboration(proyecto_id: str) -> dict:
     """
-    Dispara elaboracion selectiva para todas las categorias del proyecto.
-    Itera sobre cada categoria y ejecuta incident_elaborator.
+    ⚠️ DEPRECATED — Usar selective_coding_coordinator en su lugar.
+
+    Esta función viola R0.1 (sin HITL), R0.2 (ejecución paralela),
+    y R0.3 (mezcla open/selective coding). Se mantiene por
+    compatibilidad pero no debe usarse en nuevos flujos.
     """
+    import warnings
+
+    warnings.warn(
+        "trigger_selective_elaboration is deprecated. "
+        "Use selective_coding_coordinator instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     s = SessionLocal()
     try:
         # Obtener todas las categorias del proyecto
@@ -1568,14 +1652,14 @@ def invoke_graph(self, proyecto_id: str, documento_id: str = None) -> dict:
     try:
         import os as _os
 
-        from app.core.workflow import AnalysisState, build_glaser_graph
+        from app.core.workflow import AnalysisState, build_glaser_graph_reduced
         from config import DATABASE_URL as db_url
         from langgraph.checkpoint.postgres import PostgresSaver
 
         saver = PostgresSaver.from_conn_string(db_url)
         saver.setup()
 
-        graph = build_glaser_graph()
+        graph = build_glaser_graph_reduced()
         graph = graph.with_config(checkpointer=saver)
 
         config = {"configurable": {"thread_id": proyecto_id}}
@@ -1731,6 +1815,9 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
                 return {"status": "paused", "phase": "E", "gate": "global_saturation"}
 
             transition_project(s, proyecto_id, "building_db", "playground_ready")
+
+            # ── Auto-trigger: preparar el Playground ──
+            _prepare_playground_for_project(proyecto_id)
 
         return {
             "status": "completed",
@@ -2343,6 +2430,31 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
 
         hitl_gate(s, proyecto_id, "database_a", proposal, critic)
 
+        # ── Si el critic dio SAT, persistir nodos inmediatamente ──
+        if critic.get("verdict") == "SAT":
+            nodes = proposal.get("nodes", [])
+            for node in nodes:
+                s.execute(
+                    text(
+                        "INSERT INTO database_nodes "
+                        "(id, project_id, category_id, label, entity_type, definition, is_core) "
+                        "VALUES (gen_random_uuid(), :pid, :cid, :label, :etype, :def, :core) "
+                        "ON CONFLICT DO NOTHING"
+                    ),
+                    {
+                        "pid": proyecto_id,
+                        "cid": node.get("category_id"),
+                        "label": node.get("label", ""),
+                        "etype": node.get("entity_type", "PROCESS"),
+                        "def": node.get("definition", ""),
+                        "core": node.get("is_core", False),
+                    },
+                )
+            s.commit()
+            logger.info(
+                "Persisted %d database nodes for project %s", len(nodes), proyecto_id
+            )
+
         return {"status": "paused", "gate": "database_a", "awaiting": "researcher"}
 
     except Exception:
@@ -2437,6 +2549,45 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
         from agents.transitions import hitl_gate
 
         hitl_gate(s, proyecto_id, "database_b", proposal, critic)
+
+        # ── Si el critic dio SAT, persistir edges ──
+        if critic.get("verdict") == "SAT":
+            edges = proposal.get("edges", [])
+            # Mapa label→id para resolver source/target
+            node_map = {}
+            node_rows = s.execute(
+                text("SELECT id, label FROM database_nodes WHERE project_id = :pid"),
+                {"pid": proyecto_id},
+            ).fetchall()
+            for nr in node_rows:
+                node_map[str(nr[1])] = str(nr[0])
+
+            for edge in edges:
+                src_id = node_map.get(edge.get("source_node_label", ""))
+                tgt_id = node_map.get(edge.get("target_node_label", ""))
+                if src_id and tgt_id:
+                    s.execute(
+                        text(
+                            "INSERT INTO database_edges "
+                            "(id, project_id, source_node_id, target_node_id, "
+                            "relationship_type, evidence, direction, strength) "
+                            "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :ev, :dir, :str) "
+                            "ON CONFLICT DO NOTHING"
+                        ),
+                        {
+                            "pid": proyecto_id,
+                            "src": src_id,
+                            "tgt": tgt_id,
+                            "rtype": edge.get("relationship_type", "CO_OCCURS_WITH"),
+                            "ev": edge.get("evidence", ""),
+                            "dir": edge.get("direction", "unidirectional"),
+                            "str": edge.get("strength", "moderate"),
+                        },
+                    )
+            s.commit()
+            logger.info(
+                "Persisted %d database edges for project %s", len(edges), proyecto_id
+            )
 
         return {"status": "paused", "gate": "database_b", "awaiting": "researcher"}
 

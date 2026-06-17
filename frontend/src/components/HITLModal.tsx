@@ -27,6 +27,150 @@ const VERDICT_COLORS: Record<string, string> = {
   DISAGREE: "#F85149",
 };
 
+function renderProposal(gate: string, p: Record<string, unknown>) {
+  const s: React.CSSProperties = {
+    margin: "8px 0 0 0",
+    fontSize: 12,
+    color: "#C9D1D9",
+    lineHeight: 1.6,
+  };
+  const labelStyle: React.CSSProperties = {
+    color: "#8B949E",
+    fontSize: 11,
+    fontWeight: 600,
+  };
+  const valStyle: React.CSSProperties = { color: "#E6EDF3" };
+
+  if (gate === "main_concern") {
+    return (
+      <div style={s}>
+        <div>
+          <span style={labelStyle}>Main Concern: </span>
+          <span style={{ ...valStyle, fontSize: 14, fontWeight: 600 }}>
+            {(p.main_concern as string) || "?"}
+          </span>
+        </div>
+        <div style={{ marginTop: 4 }}>
+          <span style={labelStyle}>Confidence: </span>
+          <span style={valStyle}>{p.confidence as string}</span>
+        </div>
+        {(p.recurring_problems as string[])?.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            <span style={labelStyle}>Recurring Problems:</span>
+            <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
+              {(p.recurring_problems as string[]).map((rp, i) => (
+                <li key={i} style={{ color: "#C9D1D9" }}>
+                  {rp}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div
+          style={{
+            marginTop: 6,
+            padding: "6px 8px",
+            background: "#1C2333",
+            borderRadius: 4,
+            fontSize: 11,
+            color: "#8B949E",
+            fontStyle: "italic",
+          }}
+        >
+          {(p.rationale as string) || ""}
+        </div>
+      </div>
+    );
+  }
+
+  if (gate === "core_emergence") {
+    const candidates =
+      (p.core_category_candidates as Array<Record<string, unknown>>) || [];
+    return (
+      <div style={s}>
+        {candidates.map((c, i) => (
+          <div
+            key={i}
+            style={{
+              marginBottom: 6,
+              padding: "6px 8px",
+              background: "#1C2333",
+              borderRadius: 4,
+            }}
+          >
+            <div>
+              <span style={labelStyle}>Candidate {i + 1}: </span>
+              <span style={{ ...valStyle, fontWeight: 600 }}>
+                {c.code_name as string}
+              </span>
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11 }}>
+              <span style={{ color: "#8B949E" }}>
+                Centrality: {((c.centrality_score as number) || 0).toFixed(1)} ·
+                Explanatory: {((c.explanatory_power as number) || 0).toFixed(1)}
+              </span>
+            </div>
+            <div style={{ marginTop: 2, color: "#8B949E", fontSize: 11 }}>
+              {c.theoretical_grab as string}
+            </div>
+          </div>
+        ))}
+        {p.no_core_detected && (
+          <div style={{ color: "#F85149" }}>⚠️ No core category detected</div>
+        )}
+      </div>
+    );
+  }
+
+  if (gate === "selective_reduction") {
+    const kept = (p.kept_codes as string[]) || [];
+    const merged = (p.merged_codes as Array<Record<string, unknown>>) || [];
+    const discarded =
+      (p.discarded_codes as Array<Record<string, unknown>>) || [];
+    return (
+      <div style={s}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <span style={{ color: "#2EA043" }}>✓ {kept.length} kept</span>
+          <span style={{ color: "#D29922" }}>↔ {merged.length} merged</span>
+          <span style={{ color: "#F85149" }}>
+            ✗ {discarded.length} discarded
+          </span>
+        </div>
+        {discarded.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {discarded.slice(0, 5).map((d, i) => (
+              <div
+                key={i}
+                style={{ fontSize: 11, color: "#F85149", padding: "2px 0" }}
+              >
+                ✗ {d.code_name as string}:{" "}
+                {(d.discard_rationale as string)?.slice(0, 80)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Default: compact JSON for other gates
+  return (
+    <pre
+      style={{
+        margin: "8px 0 0 0",
+        fontSize: 11,
+        color: "#C9D1D9",
+        whiteSpace: "pre-wrap",
+        fontFamily: "monospace",
+        maxHeight: 120,
+        overflow: "auto",
+      }}
+    >
+      {JSON.stringify(p, null, 2)}
+    </pre>
+  );
+}
+
 export default function HITLModal({
   open,
   projectId,
@@ -220,24 +364,14 @@ export default function HITLModal({
                 marginBottom: 16,
                 background: "#0D1117",
                 border: "1px solid #21262D",
-                maxHeight: 200,
+                maxHeight: 220,
                 overflow: "auto",
               }}
             >
               <strong style={{ fontSize: 12, color: "#58A6FF" }}>
                 Proposer Output:
               </strong>
-              <pre
-                style={{
-                  margin: "8px 0 0 0",
-                  fontSize: 12,
-                  color: "#C9D1D9",
-                  whiteSpace: "pre-wrap",
-                  fontFamily: "monospace",
-                }}
-              >
-                {JSON.stringify(proposal, null, 2)}
-              </pre>
+              {renderProposal(gateName, proposal)}
             </div>
 
             {/* Decision buttons */}

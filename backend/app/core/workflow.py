@@ -26,6 +26,15 @@ from app.core.llm_config import PROMPT_TIER_MAP, get_model_for_prompt
 
 logger = logging.getLogger(__name__)
 
+# Orchestrator integration (Fase 3)
+try:
+    from app.agents.orchestrator import OrchestratorRuleEngine
+    _orchestrator = OrchestratorRuleEngine()
+    ORCHESTRATOR_AVAILABLE = True
+except ImportError:
+    _orchestrator = None
+    ORCHESTRATOR_AVAILABLE = False
+
 # ── State definition ───────────────────────────────────────────────────────
 # This TypedDict defines every field the StateGraph reads/writes.
 # It mirrors the input_state / output_state metadata in each prompt .md file.
@@ -350,6 +359,39 @@ def after_hitl(state: AnalysisState) -> Literal["segment_and_index", "final_repo
     if state.get("study_status") == "closed":
         return "final_report"
     return "segment_and_index"
+
+
+# ── Orchestrator routing ──────────────────────────────────────────────────
+
+
+def route_via_orchestrator(state: AnalysisState) -> str:
+    """Route via OrchestratorRuleEngine if available, else deterministic fallback."""
+    current = state.get("current_step", "")
+    
+    if ORCHESTRATOR_AVAILABLE and _orchestrator is not None:
+        import os as _os
+        if _os.getenv("AGENTIC_ORCHESTRATOR", "false").lower() in ("1", "true", "yes"):
+            try:
+                decision = _orchestrator.decide(current, dict(state))
+                logger.info("Orchestrator: %s -> %s", current, decision)
+                return decision
+            except Exception as e:
+                logger.warning("Orchestrator failed: %s. Using fallback.", e)
+    
+    # Deterministic fallback (same as RULES in orchestrator.py)
+    fallback = {
+        "segment_and_index": "extract_entities",
+        "extract_entities": "batch_code",
+        "batch_code": "map_synthesize",
+        "map_synthesize": "reduce_synthesize",
+        "find_core_concern": "generate_hypotheses",
+        "generate_hypotheses": "calculate_saturation",
+        "calculate_saturation": "theosampler_evaluate",
+        "process_new_data": "theosampler_evaluate",
+        "prepare_playground": "hitl_review",
+        "hitl_review": "final_report",
+    }.get(current, "final_report")
+    return fallback
 
 
 # ── Build the StateGraph ────────────────────────────────────────────────────

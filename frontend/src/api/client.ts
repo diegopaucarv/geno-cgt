@@ -129,10 +129,17 @@ export interface DocPipelineLog {
     segmented: boolean;
     coded: boolean;
     agents_done: boolean;
+    synthesis_done: boolean;
   };
   segments_count: number;
   codes_count: number;
-  next_action: "extract_text" | "segment" | "run_agents" | "done" | "error";
+  next_action:
+    | "extract_text"
+    | "segment"
+    | "run_agents"
+    | "run_synthesis"
+    | "done"
+    | "error";
 }
 
 export interface PipelineLogError {
@@ -148,11 +155,14 @@ export interface PipelineLog {
     total: number;
     need_segment: number;
     need_agents: number;
+    need_synthesis: number;
+    sintetizados: number;
     done: number;
     failed: number;
     failed_tasks: number;
     errors: PipelineLogError[];
     categories: number;
+    project_state: string;
     playground_ready: boolean;
   };
 }
@@ -739,4 +749,23 @@ export async function getHitlDetail(
   created_at: string;
 }> {
   return request(`/projects/${projectId}/hitl/${gateName}/detail`);
+}
+
+export async function getPipelineDecisions(projectId: string): Promise<{
+  project_id: string;
+  decisions: Array<{
+    gate: string;
+    proposal: Record<string, unknown>;
+    critic_verdict: Record<string, unknown>;
+    status: string;
+    decision: string;
+    note: string;
+    decided_at: string | null;
+  }>;
+  saturation: Record<
+    string,
+    { no_expansion_count: number; saturated: boolean }
+  >;
+}> {
+  return request(`/projects/${projectId}/pipeline/decisions`);
 }

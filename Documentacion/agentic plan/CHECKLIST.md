@@ -46,8 +46,8 @@
 
 ## Fase 3 — Orchestrator Agent
 
-- [ ] `backend/app/agents/orchestrator.py` — OrchestratorRuleEngine (determinístico)
-- [ ] `backend/app/core/workflow.py` — nodo `orchestrator_decide` + edge dinámico
+- [x] `backend/app/agents/orchestrator.py` — OrchestratorRuleEngine (11 reglas + 2 heuristicas)
+- [x] `backend/app/core/workflow.py` — `route_via_orchestrator` + `ORCHESTRATOR_AVAILABLE` flag
 
 ---
 
@@ -62,10 +62,10 @@
 ## Optimizaciones (Sección 9 del plan)
 
 - [x] O2: Orchestrator → Rule Engine (implementado: OrchestratorRuleEngine con 11 reglas + 2 heuristicas)
-- [ ] O1: JSON Schema en Critic/Skeptic output
+- [x] O1: JSON Schema en Critic/Skeptic output (schemas.py con 5 schemas)
 - [ ] O3: find_similar_codes como tool en Critic
 - [ ] O5: Descomponer B2b (FLASH temas → PRO definiciones)
-- [ ] O6: Evaluación algorítmica (regex + TEI)
+- [x] O6: Evaluación algorítmica (quality/scorer.py + integrado en SelfRefinementLoop)
 - [ ] O7: PlanExecutor validación determinística
 - [ ] O8: Cache de Thought/Action
 - [ ] O9: Skeptic con tools propias

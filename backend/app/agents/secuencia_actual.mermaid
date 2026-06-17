@@ -1,0 +1,216 @@
+sequenceDiagram
+    actor U as 👤 Usuario
+    participant FE as 🖥️ Frontend (Project.tsx)
+    participant API as 🔌 API (/pipeline/run)
+    participant ORC as 🎯 Orchestrator
+    participant CEL as 📨 Celery (Redis)
+    participant NLP as ⚡ NLP Worker
+    participant HVY as 🧠 Heavy Worker
+    participant LLM as 🤖 Together.ai
+    participant DB as 🗄️ PostgreSQL
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 0: Segmentación<br/>══════════════════════════════════
+
+    U->>FE: Click ▶ Ejecutar Pipeline
+    FE->>API: POST /pipeline/run {force:false}
+    API->>ORC: PipelineOrchestrator.start_pipeline()
+
+    loop Por cada documento en estado "crudo"
+        ORC->>DB: UPDATE documentos SET estado='segmentando'
+        ORC->>CEL: dispatch("segmentar_documento", queue="nlp")
+        CEL->>NLP: 📄 segmentar_documento(texto, doc_id)
+        NLP->>DB: INSERT INTO segmentos
+        NLP->>DB: UPDATE documentos SET estado='segmentado'
+        NLP->>ORC: transition("segmentado", success=true)
+    end
+
+    ORC->>ORC: dispatch("segmentado") → "process_document_agents_a"
+
+    Note over U,DB: ══════════════════════════════════<br/>FASE A: Open Coding (por documento)<br/>══════════════════════════════════
+
+    loop Por cada documento en estado "segmentado"
+        ORC->>CEL: dispatch("process_document_agents_a", queue="heavy")
+        CEL->>HVY: process_document_agents_a(doc_id, project_id)
+
+        rect rgb(88, 166, 255, 0.1)
+            Note over HVY,LLM: ── A1: Population Context Builder ──
+            HVY->>LLM: 🟣 PRO · a1_population_context.md<br/>family: descriptive_data
+            LLM-->>HVY: surprising_details, language_patterns, data_production_context
+            HVY->>DB: INSERT INTO population_contexts (version N+1)
+        end
+
+        rect rgb(88, 166, 255, 0.1)
+            Note over HVY,LLM: ── A2: Process Identifier ──
+            HVY->>LLM: 🟣 PRO · a2_process_identifier.md<br/>family: descriptive_data
+            LLM-->>HVY: process_description, similarity/difference_to_previous
+            HVY->>DB: INSERT INTO document_processes
+        end
+
+        rect rgb(163, 113, 247, 0.1)
+            Note over HVY,LLM: ── B2a: Indicator Extractor ──
+            HVY->>LLM: 🟡 FLASH · b2a_extract_indicators.md<br/>family: inductive_data
+            LLM-->>HVY: indicators [ {key_phrases, suggested_pattern} ]
+        end
+
+        rect rgb(163, 113, 247, 0.1)
+            Note over HVY,LLM: ── B2b: Code Generator (SelfRefinement) ──
+            HVY->>LLM: 🟣 PRO · b2b_generate_codes.md<br/>family: inductive_data<br/>loop: Generate→AlgorithmicCheck→Critic
+            LLM-->>HVY: codes [ {code_name, definition, ...} ]
+            HVY->>DB: INSERT INTO categorias + codigos_segmento
+            HVY->>DB: RAG enrichment (search_segments top_k=8)
+        end
+
+        rect rgb(248, 81, 73, 0.1)
+            Note over HVY,LLM: ── B2.5: Code Critic ──
+            HVY->>LLM: 🟣 PRO · code_critic.md<br/>family: evaluative<br/>veredict: SAT/MOD/FORCED
+            LLM-->>HVY: grounding_score, veredict
+            HVY->>DB: UPDATE categorias SET puntaje_relevancia
+        end
+
+        rect rgb(248, 81, 73, 0.1)
+            Note over HVY,LLM: ── Prime Mover Extractor ──
+            HVY->>LLM: 🟣 PRO · prime_mover_extractor.md<br/>family: inductive_data
+            LLM-->>HVY: prime_mover, confidence
+            HVY->>DB: UPDATE document_processes SET prime_mover
+        end
+
+        alt doc_count ≥ 3
+            rect rgb(210, 153, 34, 0.1)
+                Note over HVY,LLM: ── A3: Sense Maker ──
+                HVY->>LLM: 🟣 PRO · a3_sense_maker.md<br/>family: inductive_concepts
+                LLM-->>HVY: sense_status, hypotheses [ {text, level, evidence} ]
+                HVY->>DB: INSERT INTO hypotheses
+            end
+        end
+
+        HVY->>DB: UPDATE documentos SET estado='listo'
+    end
+
+    alt docs_done ≥ 3
+        ORC->>ORC: _maybe_trigger_phase_b()
+    end
+
+    Note over U,DB: ══════════════════════════════════<br/>FASE B: Síntesis Cross-Documento<br/>══════════════════════════════════
+
+    rect rgb(88, 166, 255, 0.1)
+        Note over ORC,LLM: ── B1: Sampling Distiller ──
+        ORC->>LLM: 🟣 PRO · b1_sampling_distiller.md<br/>family: descriptive_data
+        LLM-->>ORC: sampling_dimensions [ {name, description, contrast_criteria, ...} ]
+        ORC->>DB: INSERT INTO memos (tipo='MUESTREO')
+    end
+
+    rect rgb(88, 166, 255, 0.1)
+        Note over ORC,LLM: ── Map Synthesis ──
+        ORC->>LLM: 🟣 PRO · map_synthesis.md<br/>family: descriptive_data · SelfRefinement
+        LLM-->>ORC: code_document_summaries
+        ORC->>DB: INSERT INTO code_document_summaries
+    end
+
+    rect rgb(88, 166, 255, 0.1)
+        Note over ORC,LLM: ── Reduce Synthesis ──
+        ORC->>LLM: 🟣 PRO · reduce_synthesis.md<br/>family: descriptive_data · SelfRefinement
+        LLM-->>ORC: code_global_summaries
+        ORC->>DB: INSERT INTO code_global_summaries
+    end
+
+    rect rgb(63, 185, 80, 0.1)
+        Note over ORC,LLM: ── Core Concern Finder ──
+        ORC->>LLM: 🟣 PRO · core_concern_finder.md<br/>family: inductive_concepts
+        LLM-->>ORC: main_concern
+    end
+
+    rect rgb(210, 153, 34, 0.1)
+        Note over ORC,LLM: ── Hypothesis Generation ──
+        ORC->>LLM: 🟣 PRO · b3_hypothesis_generator.md<br/>family: inductive_concepts
+        LLM-->>ORC: hypotheses [ {text, level, evidence, confidence} ]
+        ORC->>DB: INSERT INTO hypotheses (consolidadas)
+    end
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 3: Find Core Category<br/>══════════════════════════════════
+
+    rect rgb(210, 153, 34, 0.1)
+        Note over ORC,LLM: ── Paradigm Integrator ──
+        ORC->>LLM: 🟣 PRO · paradigm_integrator.md<br/>family: inductive_concepts
+        LLM-->>ORC: integrated_paradigm
+    end
+
+    rect rgb(163, 113, 247, 0.1)
+        Note over ORC,LLM: ── Main Concern Proposer + Critic ──
+        ORC->>LLM: 🟣 PRO · main_concern_proposer.md<br/>family: inductive_concepts
+        LLM-->>ORC: proposed_concern
+        ORC->>LLM: 🟣 PRO · main_concern_critic.md<br/>family: evaluative
+        LLM-->>ORC: veredict (SAT/MOD/FORCED)
+    end
+
+    rect rgb(210, 153, 34, 0.1)
+        Note over ORC,LLM: ── Core Emergence Proposer + Critic ──
+        ORC->>LLM: 🟣 PRO · core_emergence_proposer.md<br/>family: inductive_concepts
+        LLM-->>ORC: core_category proposal
+        ORC->>LLM: 🟣 PRO · core_emergence_critic.md<br/>family: evaluative
+        LLM-->>ORC: veredict
+    end
+
+    rect rgb(63, 185, 80, 0.1)
+        Note over ORC,LLM: ── Interchangeability Tester ──
+        ORC->>LLM: 🟣 PRO · a16_interchangeability_tester.md<br/>family: elaborative
+        LLM-->>ORC: interchangeability_results
+    end
+
+    rect rgb(210, 153, 34, 0.1)
+        Note over ORC,LLM: ── Group Constructs ──
+        ORC->>LLM: 🟣 PRO · agrupador.md<br/>family: inductive_concepts
+        LLM-->>ORC: grouped_constructs
+    end
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 4: Selective Reduction<br/>══════════════════════════════════
+
+    rect rgb(163, 113, 247, 0.1)
+        Note over ORC,LLM: ── Selective Reduction Proposer + Critic ──
+        ORC->>LLM: 🟣 PRO · selective_reduction_proposer.md<br/>family: inductive_data
+        LLM-->>ORC: reduction_plan
+        ORC->>LLM: 🟣 PRO · selective_reduction_critic.md<br/>family: evaluative
+        LLM-->>ORC: veredict
+    end
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 5: Core Saturation<br/>══════════════════════════════════
+
+    loop 4 fuentes de saturación
+        rect rgb(210, 153, 34, 0.1)
+            Note over ORC,LLM: ── Core Saturation Proposer ──
+            ORC->>LLM: 🟣 PRO · core_saturation_proposer.md<br/>family: inductive_concepts
+            LLM-->>ORC: saturation_analysis
+        end
+        rect rgb(248, 81, 73, 0.1)
+            Note over ORC,LLM: ── Core Saturation Critic ──
+            ORC->>LLM: 🟡 FLASH · core_saturation_critic.md<br/>family: evaluative
+            LLM-->>ORC: veredict
+        end
+    end
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 6: Database A/B<br/>══════════════════════════════════
+
+    rect rgb(121, 192, 255, 0.1)
+        Note over ORC,LLM: ── Database A Proposer + Critic ──
+        ORC->>LLM: 🟣 PRO · database_a_proposer.md<br/>family: structural
+        LLM-->>ORC: conceptual_relationships (nodos + edges)
+        ORC->>LLM: 🟣 PRO · database_a_critic.md<br/>family: structural
+        LLM-->>ORC: veredict
+    end
+
+    rect rgb(121, 192, 255, 0.1)
+        Note over ORC,LLM: ── Database B Proposer + Critic ──
+        ORC->>LLM: 🟣 PRO · database_b_proposer.md<br/>family: structural
+        LLM-->>ORC: property_space (dimensiones + rangos)
+        ORC->>LLM: 🟣 PRO · database_b_critic.md<br/>family: structural
+        LLM-->>ORC: veredict
+    end
+
+    ORC->>DB: UPDATE proyectos SET estado='playground_ready'
+
+    Note over U,DB: ══════════════════════════════════<br/>ETAPA 7: Playground<br/>══════════════════════════════════
+
+    U->>FE: 🎨 Navega al Playground
+    FE->>API: GET /projects/{id}/theory
+    API->>DB: SELECT categorias, canvas, hypotheses, relationships
+    API-->>FE: modelo teórico completo
+    FE-->>U: 🧪 Vista interactiva del modelo CGT

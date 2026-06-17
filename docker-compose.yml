@@ -259,6 +259,7 @@ services:
       MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
       PYTHONPATH: /app/backend:/app/backend/app
+      AGENTIC_MODE: "true"
     depends_on:
       - pgbouncer
     volumes:

@@ -55,6 +55,18 @@ class Proyecto(Base, TimestampMixin):
     - coding_styles: list[str] (default ["gerundio", "in_vivo"]) — estilo de codificación (Saldaña)
     """
 
+    # ── F0.3.4: Instrucción de estilo de codificación ──
+    coding_style_instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Instrucción compilada de coding_styles inyectada en prompts de agentes.
+    Derivada de population_assumption.coding_styles y compilada por
+    coding_styles.py al guardar la configuración del proyecto."""
+
+    # ── F0.3.5: Objeto de estudio como columna dedicada ──
+    object_of_study: Mapped[str] = mapped_column(String(50), default="concern")
+    """Tipo de patrón humano que se busca. Extraído de population_assumption
+    a columna dedicada para acceso rápido en agentes.
+    concern | emotion | behavior | discourse | identity | custom"""
+
     creador_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"))
 
     # Relaciones

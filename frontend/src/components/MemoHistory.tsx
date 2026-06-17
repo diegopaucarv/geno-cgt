@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import ModificationPanel from "./theory/ModificationPanel";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -54,7 +55,17 @@ function getFamilyColor(family: string) {
 
 // ── JsonViewer ──────────────────────────────────────────────────────
 
-function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
+function JsonViewer({
+  data,
+  depth = 0,
+  onEdit,
+  fieldPath = "",
+}: {
+  data: unknown;
+  depth?: number;
+  onEdit?: (field: string, value: string) => void;
+  fieldPath?: string;
+}) {
   if (data === null || data === undefined) {
     return <span style={{ color: "#484F58" }}>—</span>;
   }
@@ -83,6 +94,48 @@ function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
   }
 
   if (typeof data === "string") {
+    if (data.length > 120 && onEdit) {
+      return (
+        <div style={{ position: "relative" }}>
+          <div
+            onDoubleClick={() => onEdit(fieldPath, data)}
+            title="Doble click para editar"
+            style={{
+              background: "#0D1117",
+              border: "1px solid #21262D",
+              borderRadius: 6,
+              padding: "8px 10px",
+              fontFamily: "monospace",
+              fontSize: 11,
+              color: "#E6EDF3",
+              lineHeight: 1.5,
+              whiteSpace: "pre-wrap",
+              cursor: "text",
+            }}
+          >
+            {data}
+          </div>
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(fieldPath, data);
+            }}
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 6,
+              fontSize: 10,
+              color: "#58A6FF",
+              cursor: "pointer",
+              opacity: 0.6,
+            }}
+            title="Editar"
+          >
+            ✎
+          </span>
+        </div>
+      );
+    }
     if (data.length > 120) {
       return (
         <div
@@ -100,6 +153,22 @@ function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
         >
           {data}
         </div>
+      );
+    }
+    if (data.length <= 120 && onEdit) {
+      return (
+        <span
+          onDoubleClick={() => onEdit(fieldPath, data)}
+          title="Doble click para editar"
+          style={{
+            color: "#A5D6FF",
+            fontFamily: "monospace",
+            cursor: "text",
+            borderBottom: "1px dashed #30363D",
+          }}
+        >
+          "{data}"
+        </span>
       );
     }
     return (
@@ -129,7 +198,12 @@ function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
             <span style={{ color: "#484F58", fontSize: 10, minWidth: 16 }}>
               {i}
             </span>
-            <JsonViewer data={item} depth={depth + 1} />
+            <JsonViewer
+              data={item}
+              depth={depth + 1}
+              onEdit={onEdit}
+              fieldPath={fieldPath ? `${fieldPath}[${i}]` : `[${i}]`}
+            />
           </div>
         ))}
       </div>
@@ -174,7 +248,12 @@ function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
               {key}:
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <JsonViewer data={value} depth={depth + 1} />
+              <JsonViewer
+                data={value}
+                depth={depth + 1}
+                onEdit={onEdit}
+                fieldPath={fieldPath ? `${fieldPath}.${key}` : key}
+              />
             </div>
           </div>
         ))}
@@ -187,10 +266,39 @@ function JsonViewer({ data, depth = 0 }: { data: unknown; depth?: number }) {
 
 // ── MemoCard ────────────────────────────────────────────────────────
 
-export function MemoCard({ memo }: { memo: MemoEntry }) {
+export function MemoCard({
+  memo,
+  onDelete,
+  onUpdate,
+  projectId,
+  originalPrompt,
+  onMemoModified,
+}: {
+  memo: MemoEntry;
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, field: string, value: string) => void;
+  projectId: string;
+  originalPrompt?: string;
+  onMemoModified?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const colors = getFamilyColor(memo.family);
   const familyLabel = FAMILY_LABELS[memo.family] || memo.family;
+
+  function handleDblClick(field: string, currentValue: unknown) {
+    setEditingField(field);
+    setEditValue(typeof currentValue === "string" ? currentValue : "");
+  }
+
+  function handleSave(field: string) {
+    if (editValue.trim()) {
+      onUpdate(memo.id, field, editValue.trim());
+    }
+    setEditingField(null);
+  }
 
   return (
     <div
@@ -202,7 +310,36 @@ export function MemoCard({ memo }: { memo: MemoEntry }) {
         overflow: "hidden",
         cursor: "pointer",
       }}
-      onClick={() => setExpanded(!expanded)}
+      onClick={(e) => {
+        // No expandir/colapsar si el click viene de un elemento interactivo
+        const target = e.target as HTMLElement;
+        if (
+          target.closest(
+            "button, textarea, input, select, a, [contenteditable='true'], [role='button']",
+          )
+        )
+          return;
+
+        // Si ya hay un timer pendiente (posible doble-click), cancelar toggle
+        if (clickTimerRef.current) {
+          clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+          return;
+        }
+
+        // Esperar 250ms antes de toggle — si llega un 2º click (dblclick) se cancela
+        clickTimerRef.current = setTimeout(() => {
+          setExpanded(!expanded);
+          clickTimerRef.current = null;
+        }, 250);
+      }}
+      onDoubleClick={() => {
+        // Cancelar cualquier toggle pendiente al hacer doble-click
+        if (clickTimerRef.current) {
+          clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+        }
+      }}
     >
       {/* Header */}
       <div
@@ -240,6 +377,27 @@ export function MemoCard({ memo }: { memo: MemoEntry }) {
         >
           {memo.isFinal ? "final" : "intermedio"}
         </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm("¿Eliminar este output? Es permanente.")) {
+              onDelete(memo.id);
+            }
+          }}
+          style={{
+            background: "transparent",
+            border: "1px solid #F8514944",
+            borderRadius: 4,
+            color: "#F85149",
+            fontSize: 10,
+            padding: "2px 6px",
+            cursor: "pointer",
+            opacity: 0.7,
+          }}
+          title="Eliminar permanentemente"
+        >
+          ✕
+        </button>
         <span
           style={{
             fontSize: 10,
@@ -320,7 +478,163 @@ export function MemoCard({ memo }: { memo: MemoEntry }) {
       {/* Expanded full content */}
       {expanded && (
         <div style={{ padding: "10px 12px 14px" }}>
-          <JsonViewer data={memo.data} />
+          {editingField ? (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#0D1117",
+                border: "1px solid #58A6FF",
+                borderRadius: 6,
+                padding: 8,
+              }}
+            >
+              {/* ── Field label ── */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 6,
+                }}
+              >
+                <span
+                  style={{
+                    color: "#A371F7",
+                    fontSize: 10,
+                    fontFamily: "monospace",
+                    fontWeight: 600,
+                  }}
+                >
+                  {editingField}
+                </span>
+              </div>
+
+              {/* ── Input: single-line para strings cortos, textarea para largos ── */}
+              {editValue.length <= 120 ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditingField(null);
+                    if (e.key === "Enter") handleSave(editingField);
+                  }}
+                  style={{
+                    width: "100%",
+                    background: "#161B22",
+                    color: "#E6EDF3",
+                    border: "1px solid #30363D",
+                    borderRadius: 4,
+                    padding: "6px 8px",
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              ) : (
+                <textarea
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditingField(null);
+                    if (e.key === "Enter" && e.ctrlKey)
+                      handleSave(editingField);
+                  }}
+                  rows={Math.min(
+                    Math.max(Math.ceil(editValue.length / 55), 3),
+                    10,
+                  )}
+                  style={{
+                    width: "100%",
+                    minHeight: 48,
+                    background: "#161B22",
+                    color: "#E6EDF3",
+                    border: "1px solid #30363D",
+                    borderRadius: 4,
+                    padding: "6px 8px",
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                    resize: "vertical",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              )}
+
+              {/* ── Actions ── */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  marginTop: 6,
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  onClick={() => handleSave(editingField)}
+                  style={{
+                    padding: "3px 10px",
+                    borderRadius: 4,
+                    border: "none",
+                    background: "#3FB950",
+                    color: "#FFF",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  Guardar
+                  {editValue.length <= 120 ? " (Enter)" : " (Ctrl+Enter)"}
+                </button>
+                <button
+                  onClick={() => setEditingField(null)}
+                  style={{
+                    padding: "3px 10px",
+                    borderRadius: 4,
+                    border: "1px solid #30363D",
+                    background: "#1C2333",
+                    color: "#8B949E",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar (Esc)
+                </button>
+              </div>
+            </div>
+          ) : (
+            <JsonViewer
+              data={memo.data}
+              onEdit={(field, value) => {
+                setEditingField(field);
+                setEditValue(value);
+              }}
+            />
+          )}
+
+          {/* ── Modification Panel ───────────────────── */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: "1px solid #21262D",
+            }}
+          >
+            <ModificationPanel
+              projectId={projectId}
+              agentId={memo.agentId}
+              currentMemo={memo.data}
+              memoId={memo.id}
+              originalPrompt={originalPrompt || ""}
+              agentFamily={memo.family}
+              onApplied={onMemoModified}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -336,6 +650,11 @@ interface MemoHistoryProps {
   showIntermediates: boolean;
   onFilterChange: (family: string) => void;
   onToggleIntermediates: (show: boolean) => void;
+  onDeleteMemo: (id: string) => void;
+  onUpdateMemo: (id: string, field: string, value: string) => void;
+  projectId: string;
+  originalPrompt?: string;
+  onMemoModified?: () => void;
 }
 
 export function MemoHistory({
@@ -345,6 +664,11 @@ export function MemoHistory({
   showIntermediates,
   onFilterChange,
   onToggleIntermediates,
+  onDeleteMemo,
+  onUpdateMemo,
+  projectId,
+  originalPrompt,
+  onMemoModified,
 }: MemoHistoryProps) {
   const filtered = memos.filter((m) => {
     if (activeFilter !== "all" && m.family !== activeFilter) return false;
@@ -458,7 +782,17 @@ export function MemoHistory({
           Sin memos aún. Ejecutá el pipeline para ver resultados.
         </div>
       ) : (
-        filtered.map((memo) => <MemoCard key={memo.id} memo={memo} />)
+        filtered.map((memo) => (
+          <MemoCard
+            key={memo.id}
+            memo={memo}
+            onDelete={onDeleteMemo}
+            onUpdate={onUpdateMemo}
+            projectId={projectId}
+            originalPrompt={originalPrompt}
+            onMemoModified={onMemoModified}
+          />
+        ))
       )}
     </div>
   );

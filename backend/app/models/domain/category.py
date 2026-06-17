@@ -38,6 +38,21 @@ class Categoria(Base, TimestampMixin):
     )
     """Categoría padre. NULL = categoría raíz."""
 
+    # ── F0.3.2: Panel de 4 señales de saturación ────
+    saturation_panel_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    """Cache pre-calculada de las 4 señales de saturación:
+    {matematica: {rolling_std, status},
+     cualitativa: {paradigm_window, did_expand_last_5},
+     cobertura: {propiedades_cubiertas, total_propiedades},
+     integracion: {relaciones_documentadas, categorias_vinculadas}}.
+    Actualizado por task_core_saturation_loop (F4.2)."""
+
+    # ── F0.3.3: Etiqueta en gerundio ────────────────
+    gerundio_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    """Etiqueta en gerundio propuesta por el pattern_labeler (B2).
+    Ej: 'Negociando permanencia', 'Escaneando amenazas'.
+    NULL hasta que el labeler procesa el grupo de incidentes."""
+
     # Relaciones
     doc_codes = relationship(
         "DocCode", back_populates="categoria", cascade="all, delete-orphan"
