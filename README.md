@@ -23,34 +23,34 @@ El sistema se organiza en fases secuenciales que reflejan el proceso glaseriano:
 8. **Diálogo con la literatura** – Comparación con fuentes externas.
 9. **Aplicabilidad** – Generación de directrices de intervención.
 
-> El ritmo que atraviesa todo el proceso es: **PROPONER → CRITICAR → SINTETIZAR → VOLVER A CRITICAR → VOS DECIDÍS (HITL)**. Ese es el latido del sistema.[reference:0]
+> El ritmo que atraviesa todo el proceso es: **PROPONER → CRITICAR → SINTETIZAR → VOLVER A CRITICAR → VOS DECIDÍS (HITL)**. Ese es el latido del sistema.
 
 ---
 
 ## 🧠 Lo que hace Geno (y por qué)
 
-Geno no es un análisis temático ni una verificación de hipótesis. Es un sistema que **descubre** lo que no sabés que está ahí.[reference:1]
+Geno no es un análisis temático ni una verificación de hipótesis. Es un sistema que **descubre** lo que no sabés que está ahí.
 
-- **Comparación constante**: cada incidente se compara con cada otro incidente, una y otra vez, hasta que los patrones se revelan solos.[reference:2]
-- **Emergencia**: las categorías, propiedades y relaciones surgen de los datos, no de tu cabeza.[reference:3]
-- **Abstracción creciente**: empezás con incidentes concretos y terminás con conceptos abstractos.[reference:4]
-- **Guiado por vos**: el sistema propone, critica, muestra evidencia — pero la decisión final siempre es tuya.[reference:5]
+- **Comparación constante**: cada incidente se compara con cada otro incidente, una y otra vez, hasta que los patrones se revelan solos.
+- **Emergencia**: las categorías, propiedades y relaciones surgen de los datos, no de tu cabeza.
+- **Abstracción creciente**: empezás con incidentes concretos y terminás con conceptos abstractos.
+- **Guiado por vos**: el sistema propone, critica, muestra evidencia — pero la decisión final siempre es tuya.
 
 ### Tipos de datos que maneja
 
 Siguiendo a Glaser, Geno clasifica cada segmento antes de codificarlo:
 
-- **Oro (baseline_data)**: experiencia real, espontánea. Solo esto avanza a codificación.[reference:6]
-- **Plata (properline_data)**: lo que el participante cree que debe decir.[reference:7]
-- **Bronce (interpreted_data)**: opinión forzada por la pregunta del entrevistador.[reference:8]
-- **Anomalía (vague_data)**: evasión.[reference:9]
+- **Oro (baseline_data)**: experiencia real, espontánea. Solo esto avanza a codificación.
+- **Plata (properline_data)**: lo que el participante cree que debe decir.
+- **Bronce (interpreted_data)**: opinión forzada por la pregunta del entrevistador.
+- **Anomalía (vague_data)**: evasión.
 
-> Si codificás properline data creyendo que es experiencia real, tu teoría va a describir normas sociales, no comportamiento real.[reference:10]
+> Si codificás properline data creyendo que es experiencia real, tu teoría va a describir normas sociales, no comportamiento real.
 
 ### El patrón de interés
 
-No es lo que los participantes dicen que les preocupa — es lo que **hacen**, lo que **sienten**, cómo **actúan** cuando no están performando.[reference:11]  
-Ejemplo: "La inteligencia artificial en el periodismo" es un tema. "Manteniendo relevancia profesional ante la amenaza de obsolescencia" es un patrón de interés.[reference:12]
+No es lo que los participantes dicen que les preocupa — es lo que **hacen**, lo que **sienten**, cómo **actúan** cuando no están performando.  
+Ejemplo: "La inteligencia artificial en el periodismo" es un tema. "Manteniendo relevancia profesional ante la amenaza de obsolescencia" es un patrón de interés.
 
 ---
 
@@ -193,34 +193,34 @@ The system is organized into sequential phases that reflect the Glaserian proces
 8. **Dialogue with the literature** – Comparison with external sources.
 9. **Applicability** – Generation of intervention guidelines.
 
-> The rhythm that runs through the entire process is: **PROPOSE → CRITIQUE → SYNTHESIZE → CRITIQUE AGAIN → YOU DECIDE (HITL)**. That is the system's heartbeat.[reference:13]
+> The rhythm that runs through the entire process is: **PROPOSE → CRITIQUE → SYNTHESIZE → CRITIQUE AGAIN → YOU DECIDE (HITL)**. That is the system's heartbeat.
 
 ---
 
 ## 🧠 What Geno does (and why)
 
-Geno is not a thematic analysis or a hypothesis test. It is a system that **discovers** what you don't know is there.[reference:14]
+Geno is not a thematic analysis or a hypothesis test. It is a system that **discovers** what you don't know is there.
 
-- **Constant comparison**: each incident is compared with every other incident, again and again, until patterns reveal themselves.[reference:15]
-- **Emergence**: categories, properties, and relationships arise from the data, not from your head.[reference:16]
-- **Increasing abstraction**: you start with concrete incidents and end with abstract concepts.[reference:17]
-- **Guided by you**: the system proposes, critiques, shows evidence — but the final decision is always yours.[reference:18]
+- **Constant comparison**: each incident is compared with every other incident, again and again, until patterns reveal themselves.
+- **Emergence**: categories, properties, and relationships arise from the data, not from your head.
+- **Increasing abstraction**: you start with concrete incidents and end with abstract concepts.
+- **Guided by you**: the system proposes, critiques, shows evidence — but the final decision is always yours.
 
 ### Data types it handles
 
 Following Glaser, Geno classifies each segment before coding it:
 
-- **Gold (baseline_data)**: real, spontaneous experience. Only this moves forward to coding.[reference:19]
-- **Silver (properline_data)**: what the participant believes they should say.[reference:20]
-- **Bronze (interpreted_data)**: opinion forced by the interviewer's question.[reference:21]
-- **Anomaly (vague_data)**: evasion.[reference:22]
+- **Gold (baseline_data)**: real, spontaneous experience. Only this moves forward to coding.
+- **Silver (properline_data)**: what the participant believes they should say.
+- **Bronze (interpreted_data)**: opinion forced by the interviewer's question.
+- **Anomaly (vague_data)**: evasion.
 
-> If you code properline data thinking it's real experience, your theory will describe social norms, not actual behavior.[reference:23]
+> If you code properline data thinking it's real experience, your theory will describe social norms, not actual behavior.
 
 ### The pattern of interest
 
-It's not what participants say concerns them — it's what they **do**, what they **feel**, how they **act** when they're not performing.[reference:24]  
-Example: "Artificial intelligence in journalism" is a topic. "Maintaining professional relevance in the face of obsolescence threat" is a pattern of interest.[reference:25]
+It's not what participants say concerns them — it's what they **do**, what they **feel**, how they **act** when they're not performing.  
+Example: "Artificial intelligence in journalism" is a topic. "Maintaining professional relevance in the face of obsolescence threat" is a pattern of interest.
 
 ---
 
@@ -363,34 +363,34 @@ O sistema é organizado em fases sequenciais que refletem o processo glaseriano:
 8. **Diálogo com a literatura** – Comparação com fontes externas.
 9. **Aplicabilidade** – Geração de diretrizes de intervenção.
 
-> O ritmo que atravessa todo o processo é: **PROPOR → CRITICAR → SINTETIZAR → CRITICAR NOVAMENTE → VOCÊ DECIDE (HITL)**. Esse é o batimento do sistema.[reference:26]
+> O ritmo que atravessa todo o processo é: **PROPOR → CRITICAR → SINTETIZAR → CRITICAR NOVAMENTE → VOCÊ DECIDE (HITL)**. Esse é o batimento do sistema.
 
 ---
 
 ## 🧠 O que Geno faz (e por quê)
 
-Geno não é uma análise temática nem uma verificação de hipóteses. É um sistema que **descobre** o que você não sabe que está lá.[reference:27]
+Geno não é uma análise temática nem uma verificação de hipóteses. É um sistema que **descobre** o que você não sabe que está lá.
 
-- **Comparação constante**: cada incidente é comparado com cada outro incidente, repetidamente, até que os padrões se revelem.[reference:28]
-- **Emergência**: as categorias, propriedades e relações surgem dos dados, não da sua cabeça.[reference:29]
-- **Abstração crescente**: você começa com incidentes concretos e termina com conceitos abstratos.[reference:30]
-- **Guiado por você**: o sistema propõe, critica, mostra evidência — mas a decisão final é sempre sua.[reference:31]
+- **Comparação constante**: cada incidente é comparado com cada outro incidente, repetidamente, até que os padrões se revelem.
+- **Emergência**: as categorias, propriedades e relações surgem dos dados, não da sua cabeça.
+- **Abstração crescente**: você começa com incidentes concretos e termina com conceitos abstratos.
+- **Guiado por você**: o sistema propõe, critica, mostra evidência — mas a decisão final é sempre sua.
 
 ### Tipos de dados que ele manuseia
 
 Seguindo Glaser, Geno classifica cada segmento antes de codificá-lo:
 
-- **Ouro (baseline_data)**: experiência real, espontânea. Só isso avança para a codificação.[reference:32]
-- **Prata (properline_data)**: o que o participante acredita que deve dizer.[reference:33]
-- **Bronze (interpreted_data)**: opinião forçada pela pergunta do entrevistador.[reference:34]
-- **Anomalia (vague_data)**: evasão.[reference:35]
+- **Ouro (baseline_data)**: experiência real, espontânea. Só isso avança para a codificação.
+- **Prata (properline_data)**: o que o participante acredita que deve dizer.
+- **Bronze (interpreted_data)**: opinião forçada pela pergunta do entrevistador.
+- **Anomalia (vague_data)**: evasão.
 
-> Se você codificar properline_data achando que é experiência real, sua teoria vai descrever normas sociais, não comportamento real.[reference:36]
+> Se você codificar properline_data achando que é experiência real, sua teoria vai descrever normas sociais, não comportamento real.
 
 ### O padrão de interesse
 
-Não é o que os participantes dizem que os preocupa — é o que eles **fazem**, o que **sentem**, como **agem** quando não estão performando.[reference:37]  
-Exemplo: "A inteligência artificial no jornalismo" é um tópico. "Mantendo relevância profissional diante da ameaça de obsolescência" é um padrão de interesse.[reference:38]
+Não é o que os participantes dizem que os preocupa — é o que eles **fazem**, o que **sentem**, como **agem** quando não estão performando.  
+Exemplo: "A inteligência artificial no jornalismo" é um tópico. "Mantendo relevância profissional diante da ameaça de obsolescência" é um padrão de interesse.
 
 ---
 
