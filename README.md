@@ -1,11 +1,8 @@
 # Geno: an automated CGT System
+*Presented at ALAS 2026*
 
 *Añadir comparación coprocesual con métodos cualitativos tradicionales*.
 
-# GT — Grounded Theory Pipeline
-
-**Automated qualitative analysis system based on Grounded Theory (CGT)**  
-*Presented at ALAS 2026*
 
 This pipeline orchestrates LLM agents (via Together.ai) and specialized workers to process documents, extract incidents, synthesize patterns, and generate theory from qualitative data, following the Grounded Theory method.
 
