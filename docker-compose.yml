@@ -120,6 +120,12 @@ services:
         - action: sync
           path: ./backend/app
           target: /app/app
+          ignore:
+            - "**/__pycache__/"
+            - "**/*.pyc"
+            - "**/.venv/"
+            - "**/uploads/"
+            - "**/*.log"
         - action: rebuild
           path: ./backend/requirements.txt
         - action: rebuild
