@@ -2878,30 +2878,32 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
 
         hitl_gate(s, proyecto_id, "database_a", proposal, critic)
 
-        # ── Si el critic dio SAT, persistir nodos inmediatamente ──
-        if critic.get("verdict") == "SAT":
-            nodes = proposal.get("nodes", [])
-            for node in nodes:
-                s.execute(
-                    text(
-                        "INSERT INTO database_nodes "
-                        "(id, project_id, category_id, label, entity_type, definition, is_core) "
-                        "VALUES (gen_random_uuid(), :pid, :cid, :label, :etype, :def, :core) "
-                        "ON CONFLICT DO NOTHING"
-                    ),
-                    {
-                        "pid": proyecto_id,
-                        "cid": node.get("category_id"),
-                        "label": node.get("label", ""),
-                        "etype": node.get("entity_type", "PROCESS"),
-                        "def": node.get("definition", ""),
-                        "core": node.get("is_core", False),
-                    },
-                )
-            s.commit()
-            logger.info(
-                "Persisted %d database nodes for project %s", len(nodes), proyecto_id
+        # ── F5.1: Siempre persistir (HITL decide), no solo si SAT ──
+        nodes = proposal.get("nodes", [])
+        for node in nodes:
+            s.execute(
+                text(
+                    "INSERT INTO database_nodes "
+                    "(id, project_id, category_id, label, entity_type, definition, is_core) "
+                    "VALUES (gen_random_uuid(), :pid, :cid, :label, :etype, :def, :core) "
+                    "ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "pid": proyecto_id,
+                    "cid": node.get("category_id"),
+                    "label": node.get("label", ""),
+                    "etype": node.get("entity_type", "PROCESS"),
+                    "def": node.get("definition", ""),
+                    "core": node.get("is_core", False),
+                },
             )
+        s.commit()
+        logger.info(
+            "Persisted %d database nodes for project %s (critic: %s)",
+            len(nodes),
+            proyecto_id,
+            critic.get("verdict", "?"),
+        )
 
         return {"status": "paused", "gate": "database_a", "awaiting": "researcher"}
 
@@ -2998,44 +3000,49 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
 
         hitl_gate(s, proyecto_id, "database_b", proposal, critic)
 
-        # ── Si el critic dio SAT, persistir edges ──
-        if critic.get("verdict") == "SAT":
-            edges = proposal.get("edges", [])
-            # Mapa label→id para resolver source/target
-            node_map = {}
-            node_rows = s.execute(
-                text("SELECT id, label FROM database_nodes WHERE project_id = :pid"),
-                {"pid": proyecto_id},
-            ).fetchall()
-            for nr in node_rows:
-                node_map[str(nr[1])] = str(nr[0])
+        # ── F5.1: Siempre persistir (HITL decide), no solo si SAT ──
+        edges = proposal.get("edges", [])
+        # Mapa label→id para resolver source/target
+        node_map = {}
+        node_rows = s.execute(
+            text("SELECT id, label FROM database_nodes WHERE project_id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchall()
+        for nr in node_rows:
+            node_map[str(nr[1])] = str(nr[0])
 
-            for edge in edges:
-                src_id = node_map.get(edge.get("source_node_label", ""))
-                tgt_id = node_map.get(edge.get("target_node_label", ""))
-                if src_id and tgt_id:
-                    s.execute(
-                        text(
-                            "INSERT INTO database_edges "
-                            "(id, project_id, source_node_id, target_node_id, "
-                            "relationship_type, evidence, direction, strength) "
-                            "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :ev, :dir, :str) "
-                            "ON CONFLICT DO NOTHING"
-                        ),
-                        {
-                            "pid": proyecto_id,
-                            "src": src_id,
-                            "tgt": tgt_id,
-                            "rtype": edge.get("relationship_type", "CO_OCCURS_WITH"),
-                            "ev": edge.get("evidence", ""),
-                            "dir": edge.get("direction", "unidirectional"),
-                            "str": edge.get("strength", "moderate"),
-                        },
-                    )
-            s.commit()
-            logger.info(
-                "Persisted %d database edges for project %s", len(edges), proyecto_id
-            )
+        persisted = 0
+        for edge in edges:
+            src_id = node_map.get(edge.get("source_node_label", ""))
+            tgt_id = node_map.get(edge.get("target_node_label", ""))
+            if src_id and tgt_id:
+                s.execute(
+                    text(
+                        "INSERT INTO database_edges "
+                        "(id, project_id, source_node_id, target_node_id, "
+                        "relationship_type, evidence, direction, strength) "
+                        "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :ev, :dir, :str) "
+                        "ON CONFLICT DO NOTHING"
+                    ),
+                    {
+                        "pid": proyecto_id,
+                        "src": src_id,
+                        "tgt": tgt_id,
+                        "rtype": edge.get("relationship_type", "CO_OCCURS_WITH"),
+                        "ev": edge.get("evidence", ""),
+                        "dir": edge.get("direction", "unidirectional"),
+                        "str": edge.get("strength", "moderate"),
+                    },
+                )
+                persisted += 1
+        s.commit()
+        logger.info(
+            "Persisted %d/%d database edges for project %s (critic: %s)",
+            persisted,
+            len(edges),
+            proyecto_id,
+            critic.get("verdict", "?"),
+        )
 
         return {"status": "paused", "gate": "database_b", "awaiting": "researcher"}
 

@@ -118,10 +118,12 @@ async def get_population_context_versions(
 
 # ── Coding Styles (Saldaña library) ──────────────────────────────────
 
+
 @router.get("/coding-styles")
 async def list_coding_styles():
     """Lista de estilos de codificación disponibles (Saldaña-inspired)."""
     from app.core.coding_styles import get_all_styles, get_default_style
+
     return {
         "styles": get_all_styles(),
         "default": get_default_style(),
@@ -131,13 +133,15 @@ async def list_coding_styles():
 @router.put("/projects/{project_id}/config/coding-styles")
 async def set_coding_styles(
     project_id: UUID,
-    styles: str = Query("gerundio,in_vivo", description="Keys separadas por coma (gerundio,nominalizacion,parafrasis,tema_subtema,causal,in_vivo)"),
+    styles: str = Query(
+        "gerundio,in_vivo",
+        description="Keys separadas por coma (gerundio,nominalizacion,parafrasis,tema_subtema,causal,in_vivo)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     """Configura los estilos de codificación (múltiples) para un proyecto."""
-    from app.core.coding_styles import get_all_styles
-    from app.core.coding_styles import get_combined_instruction
+    from app.core.coding_styles import get_all_styles, get_combined_instruction
 
     keys = [s.strip() for s in styles.split(",") if s.strip()]
     valid_keys = [s for s in keys if s in CODING_STYLES]
@@ -160,4 +164,64 @@ async def set_coding_styles(
         "coding_styles": valid_keys,
         "names": [all_styles.get(k, k) for k in valid_keys],
         "combined_instruction": get_combined_instruction(valid_keys),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F5.2: Panel de 4 Señales de Saturación
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/projects/{project_id}/saturation-panel")
+async def get_saturation_panel(
+    project_id: UUID,
+    refresh: bool = Query(False, description="Recalcular panel (costoso)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """F5.2: Panel de 4 senales de saturacion por categoria.
+
+    Lee de categorias.saturation_panel_json (cache F4.2).
+    Si refresh=true, recalcula via SaturationGapAnalyzer.
+    """
+    if refresh:
+        analyzer = SaturationGapAnalyzer(db)
+        await analyzer.full_analysis(project_id)
+
+    rows = await db.execute(
+        text(
+            "SELECT id, nombre, gerundio_label, estado_saturacion, "
+            "saturation_panel_json, puntaje_relevancia "
+            "FROM categorias WHERE proyecto_id = :pid "
+            "ORDER BY COALESCE(puntaje_relevancia, 0) DESC"
+        ),
+        {"pid": project_id},
+    )
+    result = []
+    for r in rows.fetchall():
+        panel = r[4] if isinstance(r[4], dict) else {}
+        result.append(
+            {
+                "category_id": str(r[0]),
+                "nombre": r[1],
+                "gerundio_label": r[2],
+                "estado_saturacion": r[3],
+                "puntaje_relevancia": r[5],
+                "panel": {
+                    "matematica": panel.get("matematica", {}),
+                    "cualitativa": panel.get("cualitativa", {}),
+                    "cobertura": panel.get("cobertura", {}),
+                    "integracion": panel.get("integracion", {}),
+                    "updated_at": panel.get("updated_at"),
+                },
+            }
+        )
+
+    return {
+        "project_id": str(project_id),
+        "categories": result,
+        "total": len(result),
+        "saturated": sum(
+            1 for r in result if r["estado_saturacion"] in ("SATURADO", "ESTABLE")
+        ),
     }
