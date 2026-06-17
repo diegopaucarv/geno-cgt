@@ -1,6 +1,7 @@
 # Geno: an automated CGT System
 
 *Añadir comparación coprocesual con métodos cualitativos tradicionales*.
+<img width="3366" height="8191" alt="Untitled diagram-2026-06-17-043730" src="https://github.com/user-attachments/assets/f4a6d038-5c74-4323-9803-b216df413541" />
 
 ```mermaid
 sequenceDiagram
