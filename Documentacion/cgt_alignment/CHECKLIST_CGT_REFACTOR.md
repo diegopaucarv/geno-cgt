@@ -413,9 +413,12 @@ F0.1-F0.3 (tablas y columnas nuevas), F0.5 (migración), F0.7 (TECH_DEBT.md), F1
 ### 🟢 Futuro (nice to have) — 15 ítems
 F0.4 (carpetas), F4.3 (MemoMaker), F5.2-F5.6 (endpoints dedicados, redacción, literatura, aplicabilidad, re-especificación), F6.1-F6.4, F6.6 (auditoría FK, trazabilidad, consistencia estados, imports, schemas)
 
+### 🆕 Add Memo System — 9 ítems (diseño: `7-AddMemo_System.md`)
+A1 (columnas user_created/stage_at_creation), A2 (memo_types.py), A3-A4 (endpoints GET/POST memos), A5 (detección en coordinator), A6-A9 (frontend: modal, botón, historial, client.ts)
+
 ---
 
-> **Total de ítems verificables:** 65 (63 originales + 2 nuevos: F0.6, F0.7)
+> **Total de ítems verificables:** 74 (63 originales + 2 documentos F0.6/F0.7 + 9 Add Memo System)
 >
 > **Archivos a crear:** ~27 (entre modelos, workers, prompts, componentes frontend, + AGENTES.md, TECH_DEBT.md, 6-ContextWindowManager.md)
 >

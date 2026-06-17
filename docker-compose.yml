@@ -126,6 +126,12 @@ services:
             - "**/.venv/"
             - "**/uploads/"
             - "**/*.log"
+        - action: sync
+          path: ./backend/migrations
+          target: /app/migrations
+          ignore:
+            - "**/__pycache__/"
+            - "**/*.pyc"
         - action: rebuild
           path: ./backend/requirements.txt
         - action: rebuild
@@ -140,6 +146,7 @@ services:
       ENVIRONMENT: dev
       JWT_SECRET_KEY: ${JWT_SECRET:-dev-jwt-secret-gt-local}
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       SEGMENTATION_MODE: ${SEGMENTATION_MODE:-spacy}
     depends_on:
       pgbouncer:
@@ -154,6 +161,7 @@ services:
       - "8000:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - runtime_config:/app/config
     networks:
       - gt_network
 
@@ -184,6 +192,7 @@ services:
       MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
     volumes:
       - ./backend/app/prompts:/app/prompts:ro
+      - runtime_config:/app/config:ro
     depends_on:
       - pgbouncer
       - redis
@@ -212,6 +221,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./backend:/app/backend:ro
+      - runtime_config:/app/config:ro
     command: celery -A tasks worker --queues=nlp --concurrency=${NLP_CONCURRENCY:-1} --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
@@ -271,6 +281,7 @@ services:
     volumes:
       - ./backend:/app/backend:ro
       - ./backend/app/prompts:/app/prompts:ro
+      - runtime_config:/app/config:ro
     # No hard mem_limit — API-bound, negligible memory
 
   frontend:
@@ -291,6 +302,7 @@ volumes:
   redisdata:
   miniodata:
   frontend_modules:
+  runtime_config:
   tei_cache:
     driver: local
     driver_opts:

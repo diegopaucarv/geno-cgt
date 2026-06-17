@@ -34,3 +34,6 @@ class Memo(Base, TimestampMixin):
     structured_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     """Campos estructurados generados por MemoMaker:
     {sorting_family, cross_references, tables, correlations, tipologias}."""
+
+    user_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    stage_at_creation: Mapped[str | None] = mapped_column(String(50), nullable=True)

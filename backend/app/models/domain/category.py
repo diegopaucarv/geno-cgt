@@ -38,6 +38,11 @@ class Categoria(Base, TimestampMixin):
     )
     """Categoría padre. NULL = categoría raíz."""
 
+    source_memo_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("memos.id"), nullable=True
+    )
+    """Memo de origen. NOT NULL = creada manualmente. NULL = generada por agente."""
+
     # ── F0.3.2: Panel de 4 señales de saturación ────
     saturation_panel_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     """Cache pre-calculada de las 4 señales de saturación:

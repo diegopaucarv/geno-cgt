@@ -95,6 +95,59 @@ export interface Project {
   creado_en: string;
   num_documentos?: number;
   num_categorias?: number;
+  // ── Config fields (from GET /projects/{id}/config) ──
+  supuesto_poblacional?: string | null;
+  object_of_study?: string;
+  population_assumption?: Record<string, any> | null;
+  config_segmentacion?: Record<string, any> | null;
+  coding_style_instruction?: string | null;
+  config_mutation_policy?: Record<string, string> | null;
+}
+
+export interface ProjectConfig {
+  project_id: string;
+  nombre: string;
+  estado: string;
+  ruta_de_codificacion: string;
+  supuesto_poblacional: string | null;
+  object_of_study: string;
+  population_assumption: Record<string, any>;
+  coding_style_instruction: string | null;
+  config_segmentacion: Record<string, any>;
+  mutation_policy: Record<string, string>;
+  pending_suggestions: ConfigSuggestion[];
+}
+
+export interface ConfigHistoryEntry {
+  id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string;
+  triggered_by: string;
+  agent_run_id: string | null;
+  mutation_level: string | null;
+  rationale: string | null;
+  confidence: number | null;
+  context: Record<string, any> | null;
+  timestamp: string | null;
+}
+
+export interface ConfigHistory {
+  project_id: string;
+  total: number;
+  entries: ConfigHistoryEntry[];
+}
+
+export interface ConfigSuggestion {
+  id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string;
+  triggered_by: string;
+  rationale: string | null;
+  confidence: number | null;
+  context: Record<string, any> | null;
+  timestamp: string | null;
 }
 
 export interface Document {
@@ -222,6 +275,80 @@ export async function createProject(body: {
 
 export async function getProject(id: string) {
   return request<Project>(`/projects/${id}`);
+}
+
+export async function updateProject(
+  id: string,
+  body: {
+    nombre?: string;
+    supuesto_poblacional?: string;
+    object_of_study?: string;
+  },
+) {
+  return request<Project>(`/projects/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteProject(id: string) {
+  return request<{ status: string; nombre: string; id: string }>(
+    `/projects/${id}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function deleteAllDocuments(projectId: string) {
+  return request<{ status: string; count: number; project_id: string }>(
+    `/projects/${projectId}/documents`,
+    { method: "DELETE" },
+  );
+}
+
+export async function getProjectConfig(projectId: string) {
+  return request<ProjectConfig>(`/projects/${projectId}/config`);
+}
+
+export async function getProjectConfigHistory(
+  projectId: string,
+  field?: string,
+  limit?: number,
+) {
+  const params = new URLSearchParams();
+  if (field) params.set("field", field);
+  if (limit) params.set("limit", String(limit));
+  const qs = params.toString();
+  return request<ConfigHistory>(
+    `/projects/${projectId}/config/history${qs ? "?" + qs : ""}`,
+  );
+}
+
+export async function updateMutationPolicy(
+  projectId: string,
+  policy: Record<string, string>,
+) {
+  return request<{
+    status: string;
+    message: string;
+    mutation_policy: Record<string, string>;
+  }>(`/projects/${projectId}/config/mutation-policy`, {
+    method: "PUT",
+    body: JSON.stringify(policy),
+  });
+}
+
+export async function updatePopulationAssumption(
+  projectId: string,
+  body: Record<string, any>,
+) {
+  return request<{
+    status: string;
+    population_assumption: Record<string, any>;
+    supuesto_poblacional: string | null;
+  }>(`/projects/${projectId}/config/population-assumption`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 }
 
 // ── Documents ───────────────────────────────────────────────────────
@@ -749,6 +876,74 @@ export async function getHitlDetail(
   created_at: string;
 }> {
   return request(`/projects/${projectId}/hitl/${gateName}/detail`);
+}
+
+// ── User Memos ────────────────────────────────────────────────────────
+
+export interface MemoTypeItem {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+export interface AvailableMemoTypes {
+  stage: string;
+  pipeline_running: boolean;
+  can_add_memo: boolean;
+  available_types: MemoTypeItem[];
+  all_types: MemoTypeItem[];
+}
+
+export async function getAvailableMemoTypes(
+  projectId: string,
+): Promise<AvailableMemoTypes> {
+  return request(`/projects/${projectId}/available-memo-types`);
+}
+
+export async function getEntityTypeColors(): Promise<{
+  types: Array<{
+    key: string;
+    label: string;
+    icon: string;
+    color: string;
+    description: string;
+  }>;
+}> {
+  return request("/entity-type-colors");
+}
+
+export async function createMemo(
+  projectId: string,
+  body: { tipo: string; contenido: string; es_confidencial: boolean },
+): Promise<{ id: string; tipo: string; stage: string; user_created: boolean }> {
+  return request(`/projects/${projectId}/memos`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getStaleUserEntities(
+  projectId: string,
+  currentStage: string,
+): Promise<{
+  count: number;
+  affected_stages: string[];
+  earliest_stage: string | null;
+}> {
+  return request(
+    `/projects/${projectId}/stale-user-entities?current_stage=${currentStage}`,
+  );
+}
+
+export async function deleteMemosByType(
+  projectId: string,
+  tipo: string,
+): Promise<{ deleted: number; tipo: string }> {
+  return request(`/projects/${projectId}/memos?tipo=${tipo}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getPipelineDecisions(projectId: string): Promise<{

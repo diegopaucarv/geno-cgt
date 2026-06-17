@@ -1,24 +1,27 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ModificationPanel from "./theory/ModificationPanel";
+import {
+  deleteMemosByType,
+  getEntityTypeColors,
+  type MemoTypeItem,
+} from "../api/client";
 
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface MemoEntry {
   id: string;
-  family: string; // agent_families.family key
+  family: string; // agent_families.family key (system memos) or entity_type (user memos)
   agentId: string;
   isFinal: boolean;
   documentName: string;
   timestamp: string;
   data: Record<string, unknown>;
+  user_created?: boolean;
+  entity_type?: string;
 }
 
-export interface AgentFamily {
-  key: string;
-  label: string;
-  icon: string;
-  description: string;
-}
+// Re-export MemoTypeItem as EntityTypeInfo for convenience
+export type EntityTypeInfo = MemoTypeItem;
 
 // ── Family colors ────────────────────────────────────────────────────
 
@@ -51,6 +54,44 @@ function getFamilyColor(family: string) {
       text: "#8B949E",
     }
   );
+}
+
+// ── Family → Entity Type mapping (frontend mirror of memo_types.py) ─
+
+const FAMILY_TO_ENTITY_TYPE: Record<string, string> = {
+  inductive_data: "CATEGORIA",
+  inductive_concepts: "HIPOTESIS",
+  descriptive_data: "METODOLOGICO",
+  evaluative: "CATEGORIA",
+  structural: "DATABASE_NODE",
+  elaborative: "RELACION",
+};
+
+function getMemoEntityType(memo: MemoEntry): string {
+  if (memo.user_created && memo.entity_type) return memo.entity_type;
+  return FAMILY_TO_ENTITY_TYPE[memo.family] || "GENERAL";
+}
+
+function getUserMemoFamily(memo: MemoEntry): string {
+  if (!memo.user_created) return memo.family;
+  const map: Record<string, string> = {
+    CATEGORIA: "inductive_data",
+    HIPOTESIS: "inductive_concepts",
+    PROPIEDAD: "inductive_data",
+    RELACION: "elaborative",
+    METODOLOGICO: "descriptive_data",
+    MUESTREO: "descriptive_data",
+    TEORICO: "structural",
+    DATABASE_NODE: "structural",
+    DATABASE_EDGE: "structural",
+    GENERAL: "descriptive_data",
+  };
+  return map[memo.entity_type || ""] || "descriptive_data";
+}
+
+function getFamilyLabel(memo: MemoEntry): string {
+  const family = getUserMemoFamily(memo);
+  return FAMILY_LABELS[family] || family;
 }
 
 // ── JsonViewer ──────────────────────────────────────────────────────
@@ -273,6 +314,7 @@ export function MemoCard({
   projectId,
   originalPrompt,
   onMemoModified,
+  entityTypes,
 }: {
   memo: MemoEntry;
   onDelete: (id: string) => void;
@@ -280,13 +322,18 @@ export function MemoCard({
   projectId: string;
   originalPrompt?: string;
   onMemoModified?: () => void;
+  entityTypes: EntityTypeInfo[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const colors = getFamilyColor(memo.family);
-  const familyLabel = FAMILY_LABELS[memo.family] || memo.family;
+  const entityTypeKey = getMemoEntityType(memo);
+  const entityTypeInfo = entityTypes.find((t) => t.key === entityTypeKey);
+  const typeColor = entityTypeInfo?.color || "#8B949E";
+  const typeLabel = entityTypeInfo
+    ? `${entityTypeInfo.icon} ${entityTypeInfo.label}`
+    : entityTypeKey;
 
   function handleDblClick(field: string, currentValue: unknown) {
     setEditingField(field);
@@ -304,7 +351,7 @@ export function MemoCard({
     <div
       style={{
         background: "#161B22",
-        border: `1px solid ${colors.border}`,
+        border: `1px solid ${typeColor}33`,
         borderRadius: 8,
         marginBottom: 8,
         overflow: "hidden",
@@ -356,27 +403,56 @@ export function MemoCard({
             fontSize: 10,
             padding: "2px 6px",
             borderRadius: 4,
-            background: colors.bg,
-            color: colors.text,
-            border: `1px solid ${colors.border}`,
+            background: typeColor + "18",
+            color: typeColor,
+            border: `1px solid ${typeColor}44`,
             fontWeight: 600,
           }}
         >
-          {familyLabel}
+          {typeLabel}
         </span>
         <span
           style={{
             fontSize: 10,
             padding: "2px 6px",
             borderRadius: 4,
-            background: memo.isFinal ? "#3FB95022" : "#D2992222",
-            color: memo.isFinal ? "#3FB950" : "#D29922",
-            border: `1px solid ${memo.isFinal ? "#3FB95044" : "#D2992244"}`,
-            fontFamily: "monospace",
+            background: "#8B949E18",
+            color: "#8B949E",
+            border: "1px solid #8B949E33",
+            fontWeight: 500,
           }}
         >
-          {memo.isFinal ? "final" : "intermedio"}
+          {getFamilyLabel(memo)}
         </span>
+        <span
+          style={{
+            fontSize: 10,
+            padding: "2px 6px",
+            borderRadius: 4,
+            background: memo.user_created ? "#3FB95018" : "#A371F718",
+            color: memo.user_created ? "#3FB950" : "#A371F7",
+            border: memo.user_created
+              ? "1px solid #3FB95033"
+              : "1px solid #A371F744",
+            fontWeight: 500,
+          }}
+        >
+          {memo.user_created ? "👤 Manual" : "🤖 IA"}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: "#E6EDF3",
+            fontWeight: 500,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+        >
+          {memo.documentName}
+        </span>
+        <span style={{ fontSize: 9, color: "#484F58" }}>{memo.timestamp}</span>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -398,32 +474,6 @@ export function MemoCard({
         >
           ✕
         </button>
-        <span
-          style={{
-            fontSize: 10,
-            padding: "2px 6px",
-            borderRadius: 4,
-            background: "#21262D",
-            color: "#8B949E",
-            fontFamily: "monospace",
-          }}
-        >
-          {memo.agentId}
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            color: "#E6EDF3",
-            fontWeight: 500,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            flex: 1,
-          }}
-        >
-          {memo.documentName}
-        </span>
-        <span style={{ fontSize: 9, color: "#484F58" }}>{memo.timestamp}</span>
         <span style={{ fontSize: 11, color: "#484F58" }}>
           {expanded ? "▲" : "▼"}
         </span>
@@ -641,15 +691,124 @@ export function MemoCard({
   );
 }
 
+// ── DeleteByTypeButton ─────────────────────────────────────────────────
+
+export function DeleteByTypeButton({
+  projectId,
+  tipo,
+  label,
+  onDeleted,
+}: {
+  projectId: string;
+  tipo: string;
+  label?: string;
+  onDeleted: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteMemosByType(projectId, tipo);
+      onDeleted();
+    } catch (e: any) {
+      alert(e.message || "Error al eliminar");
+    } finally {
+      setDeleting(false);
+      setConfirming(false);
+    }
+  };
+
+  const btnLabel = label || `Eliminar memos "${tipo}"`;
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirming(true);
+        }}
+        title={`Eliminar todos los memos de tipo "${tipo}"`}
+        style={{
+          padding: "3px 8px",
+          borderRadius: 999,
+          border: "1px solid #F8514933",
+          background: "#F8514918",
+          color: "#F85149",
+          fontSize: 10,
+          cursor: "pointer",
+          marginLeft: 4,
+        }}
+      >
+        🗑 {btnLabel}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        marginLeft: 4,
+        padding: "3px 8px",
+        borderRadius: 999,
+        border: "1px solid #F8514944",
+        background: "#F8514922",
+        fontSize: 10,
+        color: "#F85149",
+      }}
+    >
+      <span>Eliminar todos de "{tipo}"?</span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDelete();
+        }}
+        disabled={deleting}
+        style={{
+          padding: "1px 5px",
+          borderRadius: 4,
+          border: "none",
+          background: "#F85149",
+          color: "#fff",
+          fontSize: 9,
+          fontWeight: 600,
+          cursor: deleting ? "not-allowed" : "pointer",
+          opacity: deleting ? 0.6 : 1,
+        }}
+      >
+        {deleting ? "..." : "Si"}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirming(false);
+        }}
+        style={{
+          padding: "1px 5px",
+          borderRadius: 4,
+          border: "none",
+          background: "#21262D",
+          color: "#8B949E",
+          fontSize: 9,
+          cursor: "pointer",
+        }}
+      >
+        No
+      </button>
+    </span>
+  );
+}
+
 // ── MemoHistory ─────────────────────────────────────────────────────
 
 interface MemoHistoryProps {
   memos: MemoEntry[];
-  families: AgentFamily[];
   activeFilter: string;
-  showIntermediates: boolean;
-  onFilterChange: (family: string) => void;
-  onToggleIntermediates: (show: boolean) => void;
+  onFilterChange: (typeKey: string) => void;
   onDeleteMemo: (id: string) => void;
   onUpdateMemo: (id: string, field: string, value: string) => void;
   projectId: string;
@@ -659,42 +818,31 @@ interface MemoHistoryProps {
 
 export function MemoHistory({
   memos,
-  families,
   activeFilter,
-  showIntermediates,
   onFilterChange,
-  onToggleIntermediates,
   onDeleteMemo,
   onUpdateMemo,
   projectId,
   originalPrompt,
   onMemoModified,
 }: MemoHistoryProps) {
+  const [entityTypes, setEntityTypes] = useState<EntityTypeInfo[]>([]);
+
+  useEffect(() => {
+    getEntityTypeColors()
+      .then((r) => setEntityTypes(r.types))
+      .catch(() => {});
+  }, []);
+
   const filtered = memos.filter((m) => {
-    if (activeFilter !== "all" && m.family !== activeFilter) return false;
-    if (!showIntermediates && !m.isFinal) return false;
+    if (activeFilter !== "all" && getMemoEntityType(m) !== activeFilter)
+      return false;
     return true;
   });
 
-  const getFamilyColor = (family: string) => {
-    const colors: Record<string, string> = {
-      descriptive_data: "#58A6FF",
-      inductive_data: "#A371F7",
-      inductive_concepts: "#D29922",
-      elaborative: "#3FB950",
-      evaluative: "#F85149",
-      structural: "#79C0FF",
-    };
-    const c = colors[family] || "#8B949E";
-    return {
-      bg: activeFilter === family ? c + "22" : "#21262D",
-      text: c,
-    };
-  };
-
   return (
     <div>
-      {/* Filter bar — agent families */}
+      {/* Filter bar — entity types */}
       <div
         style={{
           display: "flex",
@@ -722,51 +870,32 @@ export function MemoHistory({
         >
           Todos
         </button>
-        {families.map((fam) => {
-          const fc = getFamilyColor(fam.key);
+        {entityTypes.map((t) => {
+          const isActive = activeFilter === t.key;
           return (
             <button
-              key={fam.key}
+              key={t.key}
               onClick={(e) => {
                 e.stopPropagation();
-                onFilterChange(fam.key);
+                onFilterChange(t.key);
               }}
-              title={fam.description}
+              title={t.description}
               style={{
                 padding: "3px 8px",
                 borderRadius: 999,
-                border: `1px solid ${activeFilter === fam.key ? fc.text + "44" : "#21262D"}`,
-                background: fc.bg,
-                color: fc.text,
+                border: `1px solid ${isActive ? t.color + "44" : "#21262D"}`,
+                background: isActive ? t.color + "22" : "#21262D",
+                color: t.color,
                 fontSize: 10,
                 cursor: "pointer",
-                fontWeight: activeFilter === fam.key ? 600 : 400,
+                fontWeight: isActive ? 600 : 400,
               }}
             >
-              {fam.icon} {fam.label}
+              {t.icon} {t.label}
             </button>
           );
         })}
-        {/* Intermediate toggle */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleIntermediates(!showIntermediates);
-          }}
-          title="Mostrar outputs intermedios (no finales)"
-          style={{
-            padding: "3px 6px",
-            borderRadius: 999,
-            border: `1px solid ${showIntermediates ? "#D2992244" : "#21262D"}`,
-            background: showIntermediates ? "#D2992222" : "#21262D",
-            color: showIntermediates ? "#D29922" : "#484F58",
-            fontSize: 10,
-            cursor: "pointer",
-            marginLeft: 8,
-          }}
-        >
-          {showIntermediates ? "🔽 Intermedios" : "📎 Solo finales"}
-        </button>
+        {/* DeleteByTypeButton removed — now in Project.tsx header */}
       </div>
 
       {/* Memo list */}
@@ -791,6 +920,7 @@ export function MemoHistory({
             projectId={projectId}
             originalPrompt={originalPrompt}
             onMemoModified={onMemoModified}
+            entityTypes={entityTypes}
           />
         ))
       )}

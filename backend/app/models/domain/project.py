@@ -62,6 +62,34 @@ class Proyecto(Base, TimestampMixin):
     a columna dedicada para acceso rápido en agentes.
     concern | emotion | behavior | discourse | identity | custom"""
 
+    # ── Política de mutaciones automáticas ──
+    config_mutation_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    """Controla qué campos de configuración puede modificar el sistema
+    automáticamente y cuáles requieren aprobación del investigador.
+
+    Claves posibles y sus niveles:
+    - population_description: "auto" | "suggest" | "require_approval" | "locked"
+    - temporal_frame: "auto" | "suggest" | "require_approval" | "locked"
+    - spatial_frame: "auto" | "suggest" | "require_approval" | "locked"
+    - object_of_study: "auto" | "suggest" | "require_approval" | "locked"
+    - pattern_of_interest: "auto" | "suggest" | "require_approval" | "locked"
+    - coding_styles: "auto" | "suggest" | "require_approval" | "locked"
+    - gerundio_esperado: "auto" | "suggest" | "require_approval" | "locked"
+    - segmentation_config: "auto" | "suggest" | "require_approval" | "locked"
+
+    Valores por defecto para proyecto nuevo:
+    {
+        "population_description": "suggest",
+        "temporal_frame": "suggest",
+        "spatial_frame": "suggest",
+        "object_of_study": "require_approval",
+        "pattern_of_interest": "require_approval",
+        "coding_styles": "suggest",
+        "gerundio_esperado": "suggest",
+        "segmentation_config": "auto"
+    }
+    """
+
     creador_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"))
 
     # Relaciones
@@ -83,7 +111,16 @@ class Proyecto(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+    config_history = relationship(
+        "ProjectConfigHistory",
+        back_populates="proyecto",
+        cascade="all, delete-orphan",
+    )
+
 
 # Importar aquí para que SQLAlchemy registre la clase antes de resolver relaciones
 from app.models.domain.canvas import LienzoDelPlanDeAnalisis  # noqa: E402,F401
+from app.models.domain.project_config_history import (
+    ProjectConfigHistory,  # noqa: E402,F401
+)
 from app.models.domain.theory import EcosystemLayout  # noqa: E402,F401

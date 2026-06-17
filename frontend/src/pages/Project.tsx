@@ -8,6 +8,7 @@ import {
   uploadDocument,
   punctuateDocument,
   deleteDocument,
+  deleteAllDocuments,
   getPipelineLog,
   getAgentMemos,
   getPendingHitl,
@@ -24,9 +25,15 @@ import {
   DocPipelineLog,
   HitlPendingItem,
 } from "../api/client";
-import { MemoHistory, type MemoEntry } from "../components/MemoHistory";
+import {
+  MemoHistory,
+  type MemoEntry,
+  DeleteByTypeButton,
+} from "../components/MemoHistory";
 import { Toast } from "../components/Toast";
 import HITLModal from "../components/HITLModal";
+import AddMemoModal from "../components/AddMemoModal";
+import ProjectConfigPanel from "../components/ProjectConfigPanel";
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -100,8 +107,6 @@ export default function ProjectDetail() {
   const [pipelineFailed, setPipelineFailed] = useState(false);
   const [memoFilter, setMemoFilter] = useState("all");
   const [agentMemos, setAgentMemos] = useState<any[]>([]);
-  const [agentFamilies, setAgentFamilies] = useState<any[]>([]);
-  const [showIntermediates, setShowIntermediates] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const [pipelineLiveLogs, setPipelineLiveLogs] = useState<
@@ -120,6 +125,8 @@ export default function ProjectDetail() {
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
   const [showHITLModal, setShowHITLModal] = useState(false);
+  const [showAddMemo, setShowAddMemo] = useState(false);
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -137,7 +144,6 @@ export default function ProjectDetail() {
       .then((r) => {
         console.log("MEMOS LOADED:", r.total, "families:", r.families?.length);
         setAgentMemos(r.memos || []);
-        setAgentFamilies(r.families || []);
       })
       .catch((e) => console.error("agent-memos failed:", e));
   }, [id]);
@@ -182,12 +188,11 @@ export default function ProjectDetail() {
 
   // Debug: force fetch on every render if empty
   useEffect(() => {
-    if (id && agentMemos.length === 0 && agentFamilies.length === 0) {
+    if (id && agentMemos.length === 0) {
       getAgentMemos(id)
         .then((r) => {
           console.log("MEMOS RETRY:", r.total);
           setAgentMemos(r.memos || []);
-          setAgentFamilies(r.families || []);
         })
         .catch((e) => console.error("retry failed:", e));
     }
@@ -493,7 +498,6 @@ export default function ProjectDetail() {
       getAgentMemos(id)
         .then((r) => {
           setAgentMemos(r.memos || []);
-          setAgentFamilies(r.families || []);
         })
         .catch(() => {});
     }
@@ -730,7 +734,6 @@ export default function ProjectDetail() {
     getAgentMemos(id!)
       .then((r) => {
         setAgentMemos(r.memos || []);
-        setAgentFamilies(r.families || []);
       })
       .catch(() => {});
     setPipelineRunning(false);
@@ -748,6 +751,24 @@ export default function ProjectDetail() {
       alert(err.message);
     }
     e.target.value = "";
+  }
+
+  async function handleDeleteAllDocs() {
+    if (!id) return;
+    if (
+      !confirm(
+        "¿Eliminar TODOS los documentos del proyecto? Esto borra segmentos y códigos asociados.",
+      )
+    )
+      return;
+    try {
+      const result = await deleteAllDocuments(id);
+      showToast(`✅ ${result.count} documentos eliminados`);
+      refreshDocs();
+      resetStages();
+    } catch (err: any) {
+      alert(err.message);
+    }
   }
 
   function handleLogout() {
@@ -1226,6 +1247,24 @@ export default function ProjectDetail() {
                 {playgroundReady ? "🧪 Playground →" : "🔒 Playground"}
               </Link>
 
+              {/* Project Config button */}
+              <button
+                onClick={() => setShowConfigPanel(true)}
+                title="Ver y editar configuración del proyecto"
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #A371F744",
+                  background: "#A371F718",
+                  color: "#A371F7",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ⚙️ Config
+              </button>
+
               {/* Status pills inline */}
               {/* Log toggle */}
             </div>
@@ -1256,7 +1295,34 @@ export default function ProjectDetail() {
           </div>
 
           {/* ── Documents ──────────────────────────────── */}
-          <h3 style={{ marginBottom: 12 }}>Documentos ({docs.length})</h3>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>Documentos ({docs.length})</h3>
+            {docs.length > 0 && (
+              <button
+                onClick={handleDeleteAllDocs}
+                style={{
+                  background: "#F8514918",
+                  border: "1px solid #F8514933",
+                  borderRadius: 6,
+                  color: "#F85149",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                }}
+                title="Eliminar todos los documentos y resetear el pipeline"
+              >
+                🗑 Eliminar todos
+              </button>
+            )}
+          </div>
           {docs.length === 0 && (
             <p style={{ color: "#8B949E", fontSize: 13 }}>
               Sin documentos. Subí un archivo para empezar.
@@ -1593,6 +1659,27 @@ export default function ProjectDetail() {
             />
           )}
 
+          {/* ── Add Memo Modal ── */}
+          {showAddMemo && id && (
+            <AddMemoModal
+              projectId={id}
+              onClose={() => setShowAddMemo(false)}
+              onCreated={() => {
+                setShowAddMemo(false);
+                refreshDocs();
+              }}
+            />
+          )}
+
+          {/* ── Project Config Panel ── */}
+          {id && (
+            <ProjectConfigPanel
+              open={showConfigPanel}
+              projectId={id}
+              onClose={() => setShowConfigPanel(false)}
+            />
+          )}
+
           {/* ── Memo History ── */}
           <div
             style={{
@@ -1612,19 +1699,51 @@ export default function ProjectDetail() {
               <span style={{ fontSize: 14, fontWeight: 600, color: "#E6EDF3" }}>
                 📝 Historial de Memos
               </span>
-              <span style={{ fontSize: 11, color: "#484F58" }}>
-                {pipelineLog?.documents?.length || 0} docs · {agentMemos.length}{" "}
-                memos · {agentFamilies.length} familias
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "#484F58" }}>
+                  {pipelineLog?.documents?.length || 0} docs ·{" "}
+                  {agentMemos.length} memos
+                </span>
+                {!pipelineRunning && (
+                  <button
+                    onClick={() => setShowAddMemo(true)}
+                    style={{
+                      background: "#3FB95018",
+                      border: "1px solid #3FB95044",
+                      borderRadius: 6,
+                      color: "#3FB950",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: "3px 10px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ➕ Add Memo
+                  </button>
+                )}
+                {/* Delete buttons */}
+                {memoFilter !== "all" && (
+                  <DeleteByTypeButton
+                    projectId={id!}
+                    tipo={memoFilter}
+                    onDeleted={() => setMemoFilter("all")}
+                  />
+                )}
+                {memoFilter === "all" && agentMemos.length > 0 && (
+                  <DeleteByTypeButton
+                    projectId={id!}
+                    tipo="all"
+                    label="Eliminar todos los memos"
+                    onDeleted={() => {}}
+                  />
+                )}
+              </div>
             </div>
 
             <MemoHistory
               memos={agentMemos}
-              families={agentFamilies}
               activeFilter={memoFilter}
-              showIntermediates={showIntermediates}
               onFilterChange={setMemoFilter}
-              onToggleIntermediates={setShowIntermediates}
               onDeleteMemo={handleDeleteMemo}
               onUpdateMemo={handleUpdateMemo}
               projectId={id!}
@@ -1643,16 +1762,26 @@ export default function ProjectDetail() {
           width: 340,
           flexShrink: 0,
           borderRight: "1px solid #21262D",
-          background: "#161B22",
+          background: "#0D1117",
           padding: "16px 14px",
           overflowY: "auto",
           maxHeight: "100vh",
           position: "sticky",
           top: 0,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Pipeline Flow — inline */}
-        <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            marginBottom: 16,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -1679,23 +1808,25 @@ export default function ProjectDetail() {
               {showLog ? "📊 Diagrama" : "📋 Logs"}
             </button>
             {!pipelineRunning && (
-              <button
-                onClick={() => runPipeline(false)}
-                disabled={docs.length === 0}
-                style={{
-                  background: "linear-gradient(135deg, #A371F7, #3FB950)",
-                  border: "none",
-                  borderRadius: 6,
-                  color: "#FFF",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "4px 12px",
-                  cursor: docs.length === 0 ? "not-allowed" : "pointer",
-                  opacity: docs.length === 0 ? 0.5 : 1,
-                }}
-              >
-                ▶
-              </button>
+              <>
+                <button
+                  onClick={() => runPipeline(false)}
+                  disabled={docs.length === 0}
+                  style={{
+                    background: "linear-gradient(135deg, #A371F7, #3FB950)",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "#FFF",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "4px 12px",
+                    cursor: docs.length === 0 ? "not-allowed" : "pointer",
+                    opacity: docs.length === 0 ? 0.5 : 1,
+                  }}
+                >
+                  ▶ Ejecutar Pipeline
+                </button>
+              </>
             )}
             {pipelineRunning && (
               <button
@@ -1796,6 +1927,38 @@ export default function ProjectDetail() {
                 const isClickable =
                   !pipelineRunning &&
                   (status === "done" || status === "error" || isNextPending);
+
+                const circleBg =
+                  status === "done"
+                    ? "#3FB95022"
+                    : status === "running"
+                      ? "#A371F722"
+                      : status === "error"
+                        ? "#F8514922"
+                        : isNextPending
+                          ? "#A371F711"
+                          : "#161B22";
+                const circleBorder =
+                  status === "running"
+                    ? "2px solid #A371F7"
+                    : status === "done"
+                      ? "2px solid #3FB950"
+                      : status === "error"
+                        ? "2px solid #F85149"
+                        : isNextPending
+                          ? "2px dashed #A371F755"
+                          : "2px solid #21262D";
+                const labelColor =
+                  status === "done"
+                    ? "#3FB950"
+                    : status === "running"
+                      ? "#E6EDF3"
+                      : status === "error"
+                        ? "#F85149"
+                        : isNextPending
+                          ? "#A371F7"
+                          : "#8B949E";
+
                 return (
                   <div key={stage.key}>
                     <div
@@ -1806,16 +1969,12 @@ export default function ProjectDetail() {
                           return;
                         }
                         if (isNextPending) {
-                          // Next pending after last done → start from here
                           restartFromStage(stage.key);
                           return;
                         }
-                        // status === "done"
                         if (idx === lastDone) {
-                          // Clicking last completed: restart from here
                           restartFromStage(stage.key);
                         } else if (idx < lastDone) {
-                          // Clicking earlier completed: warn
                           if (
                             !confirm(
                               `¿Reiniciar desde "${stage.label}"? Se eliminarán datos de etapas posteriores.`,
@@ -1828,47 +1987,34 @@ export default function ProjectDetail() {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 10,
-                        padding: "8px 0",
+                        gap: 12,
+                        padding: "10px 12px",
+                        margin: "2px 0",
+                        borderRadius: 8,
                         cursor: isClickable ? "pointer" : "default",
                         opacity:
                           status === "pending" &&
                           !isNextPending &&
                           !pipelineRunning
-                            ? 0.5
+                            ? 0.4
                             : 1,
+                        background:
+                          status === "running" ? "#A371F708" : "transparent",
+                        transition: "all 0.2s ease",
                       }}
                     >
                       <div
                         style={{
-                          width: 24,
-                          height: 24,
+                          width: 32,
+                          height: 32,
+                          minWidth: 32,
                           borderRadius: "50%",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: 12,
-                          flexShrink: 0,
-                          background:
-                            status === "done"
-                              ? "#3FB95022"
-                              : status === "running"
-                                ? "#A371F722"
-                                : status === "error"
-                                  ? "#F8514922"
-                                  : isNextPending
-                                    ? "#A371F711"
-                                    : "#21262D",
-                          border:
-                            status === "running"
-                              ? "2px solid #A371F7"
-                              : status === "done"
-                                ? "2px solid #3FB950"
-                                : status === "error"
-                                  ? "2px solid #F85149"
-                                  : isNextPending
-                                    ? "2px dashed #A371F755"
-                                    : "2px solid #30363D",
+                          fontSize: 14,
+                          background: circleBg,
+                          border: circleBorder,
                           animation:
                             status === "running"
                               ? "pulse 1.5s ease-in-out infinite"
@@ -1883,76 +2029,41 @@ export default function ProjectDetail() {
                           <span
                             style={{
                               display: "inline-block",
-                              width: 8,
-                              height: 8,
+                              width: 10,
+                              height: 10,
                               borderRadius: "50%",
                               background: "#A371F7",
                             }}
                           />
                         ) : isNextPending ? (
-                          <span style={{ color: "#A371F7", fontSize: 10 }}>
+                          <span style={{ color: "#A371F7", fontSize: 12 }}>
                             ▶
                           </span>
                         ) : (
-                          <span style={{ color: "#8B949E", fontSize: 11 }}>
-                            {stage.icon}
-                          </span>
+                          <span style={{ fontSize: 14 }}>{stage.icon}</span>
                         )}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
-                            fontSize: 12,
-                            fontWeight: status === "running" ? 600 : 400,
-                            color:
-                              status === "done"
-                                ? "#3FB950"
-                                : status === "running"
-                                  ? "#E6EDF3"
-                                  : status === "error"
-                                    ? "#F85149"
-                                    : isNextPending
-                                      ? "#A371F7"
-                                      : "#8B949E",
+                            fontSize: 13,
+                            fontWeight: status === "running" ? 600 : 500,
+                            color: labelColor,
+                            lineHeight: 1.3,
                           }}
                         >
                           {stage.label}
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color:
-                            status === "done"
-                              ? "#3FB950"
-                              : status === "running"
-                                ? "#A371F7"
-                                : status === "error"
-                                  ? "#F85149"
-                                  : isNextPending
-                                    ? "#A371F7"
-                                    : "#484F58",
-                        }}
-                      >
-                        {status === "done"
-                          ? "✓"
-                          : status === "running"
-                            ? "…"
-                            : status === "error"
-                              ? "✕"
-                              : isNextPending
-                                ? "▶"
-                                : "○"}
-                      </span>
                     </div>
                     {!isLast && (
-                      <div style={{ display: "flex", paddingLeft: 11 }}>
+                      <div style={{ display: "flex", paddingLeft: 27 }}>
                         <div
                           style={{
-                            width: 1,
-                            height: 10,
+                            width: 2,
+                            height: 14,
                             background:
-                              status === "done" ? "#3FB950" : "#21262D",
+                              status === "done" ? "#3FB95044" : "#21262D",
                             borderRadius: 1,
                           }}
                         />
