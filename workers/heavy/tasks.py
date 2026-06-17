@@ -1035,6 +1035,28 @@ def task_gap_feeler(draft: str, project_id: str) -> list[dict]:
     return _feel_gaps_impl(draft, project_id)
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# F5.6: ReSpecAgent — Re-especificacion jerarquica
+# ═══════════════════════════════════════════════════════════════════════
+
+from respect_agent import evaluate_respec_signals as _evaluate_respec_signals
+from respect_agent import query_lower_level as _query_lower_level
+
+
+@app.task(name="evaluate_respec_signals")
+def task_evaluate_respec_signals(proyecto_id: str) -> dict:
+    """F5.6: Evalua senales de re-especificacion (ambiguos, rechazados, divergentes, huerfanos)."""
+    return _evaluate_respec_signals(proyecto_id)
+
+
+@app.task(name="query_lower_level")
+def task_query_lower_level(
+    entity_type: str, entity_id: str, direction: str = "down"
+) -> dict:
+    """F5.6: Baja un nivel de abstraccion para re-examinar una entidad."""
+    return _query_lower_level(entity_type, entity_id, direction)
+
+
 @app.task(
     name="process_synthesis_agents_b",
     base=AbortableTask,
