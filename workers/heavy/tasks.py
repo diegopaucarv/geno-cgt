@@ -2118,7 +2118,7 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
         )
 
         response = llm.run_agent(
-            "fc_core_emergence_proposer",
+            "fc_core_category_proposer",
             variables={
                 "core_concern": "(see task_a14 for confirmed core concern)",
                 "object_of_study": "concern",
@@ -2974,7 +2974,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
         core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
 
         proposal = llm.run_agent(
-            "fc_core_emergence_proposer",
+            "fc_core_category_proposer",
             variables={
                 "core_concern": core_concern,
                 "object_of_study": object_of_study,

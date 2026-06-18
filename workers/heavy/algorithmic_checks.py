@@ -228,9 +228,15 @@ def classify_segments_batch(
     # Build a lookup from seg index to result
     ai_by_seg = {}
     for c in classifications:
-        seg_num = c.get("seg")
-        if seg_num is not None:
-            ai_by_seg[seg_num] = c
+        seg_id = c.get("segment_id")
+        if seg_id is not None:
+            # Normalize: convert string "1" to int 1
+            try:
+                seg_num = int(seg_id) if isinstance(seg_id, str) else seg_id
+            except (ValueError, TypeError):
+                seg_num = None
+            if seg_num is not None:
+                ai_by_seg[seg_num] = c
 
     for i, s in enumerate(segments):
         seg_num = i + 1
@@ -540,7 +546,7 @@ class HypothesisEvidenceCounter:
             segments_text = "\n---\n".join(r[0][:300] for r in similar)
             if llm_client:
                 verdict = llm_client.run_agent(
-                    "evidence_classifier",
+                    "fb_evidence_classifier",
                     variables={
                         "hypothesis": hyp[0],
                         "segments": segments_text,

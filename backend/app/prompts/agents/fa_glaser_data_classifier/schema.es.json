@@ -1,33 +1,45 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "glaser_data_type",
-    "rationale"
-  ],
+  "required": ["classifications"],
   "properties": {
-    "glaser_data_type": {
-      "type": "string",
-      "enum": [
-        "baseline_data",
-        "properline_data",
-        "interpreted_data",
-        "vague_data"
-      ],
-      "description": "baseline_data: experiencia real espontánea. properline_data: discurso normativo. interpreted_data: respuesta forzada. vague_data: evasivo."
-    },
-    "rationale": {
-      "type": "string",
-      "description": "Una oración justificando la clasificación con evidencia textual."
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Nivel de confianza en la clasificación."
+    "classifications": {
+      "type": "array",
+      "description": "Array de clasificaciones por segmento. Debe contener una entrada por cada segmento en el lote de entrada.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "glaser_data_type"],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "description": "El índice 'seg' de la entrada, como string (ej. '1', '2')."
+          },
+          "glaser_data_type": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data"
+            ],
+            "description": "Tipo de dato Glaser para este segmento."
+          },
+          "is_interviewer": {
+            "type": "boolean",
+            "description": "true si este segmento es habla del entrevistador (pregunta, instrucción, metadata)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Nivel de confianza en la clasificación."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Una oración justificando la clasificación con evidencia textual."
+          }
+        }
+      }
     }
   }
 }

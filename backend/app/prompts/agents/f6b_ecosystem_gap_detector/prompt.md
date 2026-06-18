@@ -1,5 +1,5 @@
 ---
-agent: ecosystem_gap_detector
+agent: f6b_ecosystem_gap_detector
 tier: PRO
 description: Analiza el ecosistema completo del Theoretical Playground y detecta gaps: categorías huérfanas, capas teóricas no cubiertas, zonas de baja densidad conceptual. Sugiere muestreo teórico dirigido. T10 del plan.
 notes:

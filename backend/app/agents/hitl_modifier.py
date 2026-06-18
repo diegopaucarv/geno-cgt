@@ -43,8 +43,8 @@ CHANGE_IMPACT_MAP: dict[str, dict[str, Any]] = {
         "invalidates": [
             "B2.5 grounding",
             "B3 hypotheses",
-            "map_synthesis",
-            "reduce_synthesis",
+            "util_map_synthesis",
+            "util_reduce_synthesis",
         ],
         "restart_from": "batch_code",
     },
@@ -56,7 +56,7 @@ CHANGE_IMPACT_MAP: dict[str, dict[str, Any]] = {
             "code_document_summaries",
             "code_global_summaries",
         ],
-        "invalidates": ["B2.5 grounding", "B3 hypotheses", "map_synthesis"],
+        "invalidates": ["B2.5 grounding", "B3 hypotheses", "util_map_synthesis"],
         "restart_from": "batch_code",
     },
     "incident_extractor": {
@@ -110,14 +110,14 @@ CHANGE_IMPACT_MAP: dict[str, dict[str, Any]] = {
         "invalidates": ["criterios de muestreo teorico derivados"],
         "restart_from": "batch_code",
     },
-    "map_synthesis": {
+    "util_map_synthesis": {
         "output_table": "code_document_summaries",
         "output_field": "summary",
         "dependent_tables": ["code_global_summaries"],
-        "invalidates": ["reduce_synthesis"],
+        "invalidates": ["util_reduce_synthesis"],
         "restart_from": "map_synthesize",
     },
-    "reduce_synthesis": {
+    "util_reduce_synthesis": {
         "output_table": "code_global_summaries",
         "output_field": "summary",
         "dependent_tables": [],
@@ -566,11 +566,11 @@ class HITLModificationAgent:
                     "  SELECT CASE "
                     "    WHEN :aid IN ('b2b_generate_codes','batch_coder_producer','incident_extractor','prime_mover_extractor','definition_writer') "
                     "      THEN 'inductive_data'"
-                    "    WHEN :aid2 IN ('main_concern_proposer','b3_hypothesis_generator','react_hypothesis','core_emergence_proposer','selective_reduction_proposer','agrupador','a3_sense_maker') "
+                    "    WHEN :aid2 IN ('main_concern_proposer','b3_hypothesis_generator','react_hypothesis','fc_core_category_proposer','selective_reduction_proposer','agrupador','a3_sense_maker') "
                     "      THEN 'inductive_concepts'"
-                    "    WHEN :aid3 IN ('a1_population_context','a2_process_identifier','b1_sampling_distiller','map_synthesis','reduce_synthesis','final_report') "
+                    "    WHEN :aid3 IN ('a1_population_context','a2_process_identifier','b1_sampling_distiller','util_map_synthesis','util_reduce_synthesis','f6a_final_report') "
                     "      THEN 'descriptive_data'"
-                    "    WHEN :aid4 IN ('batch_coder_critic','main_concern_critic','core_emergence_critic','selective_reduction_critic','b2_critic','recategorization_decider') "
+                    "    WHEN :aid4 IN ('batch_coder_critic','main_concern_critic','core_emergence_critic','selective_reduction_critic','b2_critic','util_recategorization_decider') "
                     "      THEN 'evaluative'"
                     "    WHEN :aid5 IN ('database_a_proposer','database_b_proposer','database_a_critic','database_b_critic') "
                     "      THEN 'structural'"

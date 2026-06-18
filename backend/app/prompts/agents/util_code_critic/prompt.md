@@ -1,5 +1,5 @@
 ---
-agent: code_critic
+agent: util_code_critic
 tier: FLASH
 description: Evalúa calidad de códigos generados. FLASH — tarea de verificación de checklist, no creativa.
 notes:

@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["core_category_candidates", "recommendation"],
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "description": "Categorías evaluadas como potenciales categorías centrales, ordenadas por idoneidad decreciente. Todas deben EXISTIR en categories_summary.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category_label",
+          "is_central",
+          "has_explanatory_power",
+          "has_theoretical_grab",
+          "centrality_rationale",
+          "connected_categories",
+          "key_hypothesis_refs"
+        ],
+        "properties": {
+          "category_label": {
+            "type": "string",
+            "description": "Nombre EXACTO de la categoría tal como aparece en categories_summary."
+          },
+          "is_central": {
+            "type": "boolean",
+            "description": "true si esta categoría actúa como hub: múltiples otras categorías se conectan a ella mediante hipótesis documentadas."
+          },
+          "has_explanatory_power": {
+            "type": "boolean",
+            "description": "true si esta categoría explica POR QUÉ los participantes se comportan como lo hacen, no solo QUÉ hacen."
+          },
+          "has_theoretical_grab": {
+            "type": "boolean",
+            "description": "true si conectar esta categoría con otras produce insight emergente o 'momentos aha'."
+          },
+          "centrality_rationale": {
+            "type": "string",
+            "description": "Razonamiento cualitativo cubriendo: centralidad (¿hub de relaciones?), poder explicativo (¿explica POR QUÉ?), frecuencia con variación (¿aparece en múltiples docs con matices?), y grab teórico. Cita IDs de hipótesis [H1], [H2], etc."
+          },
+          "connected_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Etiquetas de categorías que esta candidata conecta mediante hipótesis (de categories_summary)."
+          },
+          "key_hypothesis_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Referencias a hipótesis que respaldan esta candidata. Usar formato [H1], [H2], etc."
+          }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "Qué categoría recomendás como central y por qué. Si hay múltiples candidatas fuertes, explicar los trade-offs. El investigador (HITL) toma la decisión final."
+    },
+    "no_suitable_core": {
+      "type": "boolean",
+      "description": "true si ninguna categoría existente alcanza el nivel de categoría central."
+    },
+    "no_suitable_rationale": {
+      "type": "string",
+      "description": "Si no_suitable_core=true: qué falta (conexiones insuficientes, bajo poder explicativo, categorías demasiado descriptivas)."
+    }
+  }
+}

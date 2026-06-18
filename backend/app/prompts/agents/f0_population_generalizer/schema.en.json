@@ -1,49 +1,143 @@
 {
-  "type": "json_schema",
-  "json_schema": {
-    "name": "population_generalizer",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "generalized_population": {
-          "type": "string",
-          "description": "Generalized population with theoretical scope. 1-2 sentences."
-        },
-        "spatial_frame": {
-          "type": "string",
-          "enum": [
-            "cohabiting_group",
-            "sparse",
-            "high_diversity"
-          ]
-        },
-        "temporal_frame": {
-          "type": "string",
-          "enum": [
-            "present_continuous",
-            "retrospective",
-            "prospective",
-            "longitudinal"
-          ]
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Confidence in the generalization (0.0-1.0)"
-        },
-        "rationale": {
-          "type": "string",
-          "description": "Brief justification of the generalization (2-3 sentences)"
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "generalization_statements",
+    "boundary_conditions",
+    "transferability_assessment"
+  ],
+  "properties": {
+    "generalization_statements": {
+      "type": "array",
+      "description": "Generalization statements at three levels of ambition.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "level",
+          "statement",
+          "confidence",
+          "supporting_categories"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": ["conservative", "moderate", "ambitious"],
+            "description": "Level of generalization ambition."
+          },
+          "statement": {
+            "type": "string",
+            "description": "The generalization statement. What population/context does the theory (or part of it) apply to?"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "How confident is this generalization based on the data?"
+          },
+          "confidence_rationale": {
+            "type": "string",
+            "description": "Why this confidence level (e.g., 'documented across 7 of 9 cases with variation in context')."
+          },
+          "supporting_categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Categories that support this generalization."
+          },
+          "limitations": {
+            "type": "string",
+            "description": "What limits this generalization? What would need to be true for it to NOT hold?"
+          }
         }
-      },
+      }
+    },
+    "boundary_conditions": {
+      "type": "array",
+      "description": "Conditions that define where the theory applies and where it does not.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["condition", "condition_type", "effect_on_theory"],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "description": "The boundary condition. E.g., 'Participants must be mid-career professionals facing technological displacement.'"
+          },
+          "condition_type": {
+            "type": "string",
+            "enum": [
+              "structural",
+              "temporal",
+              "contextual",
+              "role_based",
+              "cultural"
+            ],
+            "description": "Type of boundary condition."
+          },
+          "effect_on_theory": {
+            "type": "string",
+            "description": "How the theory changes if this condition is not met. 'Theory does not apply', 'Core process changes from X to Y', 'Property Z loses relevance', etc."
+          },
+          "derived_from_category": {
+            "type": "string",
+            "description": "Which category or property reveals this boundary condition."
+          }
+        }
+      }
+    },
+    "transferability_assessment": {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
-        "generalized_population",
-        "spatial_frame",
-        "temporal_frame",
-        "confidence",
-        "rationale"
-      ]
+        "conceptual_transferability",
+        "populational_transferability",
+        "overall_assessment"
+      ],
+      "properties": {
+        "conceptual_transferability": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "How transferable are the CONCEPTS (categories, properties) to other populations? Independent of whether the full theory transfers."
+        },
+        "conceptual_transferability_rationale": {
+          "type": "string"
+        },
+        "populational_transferability": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "How transferable are the full FINDINGS to other populations?"
+        },
+        "populational_transferability_rationale": {
+          "type": "string"
+        },
+        "overall_assessment": {
+          "type": "string",
+          "description": "Narrative synthesis: to whom does this theory apply? What are the key boundaries? 3-5 sentences."
+        }
+      }
+    },
+    "context_bound_categories": {
+      "type": "array",
+      "description": "Categories that are too tied to the specific study context to generalize.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name"],
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "specificity_rationale": {
+            "type": "string",
+            "description": "Why this category does not generalize beyond the studied context."
+          }
+        }
+      }
+    },
+    "suggested_future_research": {
+      "type": "string",
+      "description": "Populations or contexts where the theory should be tested/elaborated next."
     }
   }
 }

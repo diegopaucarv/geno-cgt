@@ -529,8 +529,8 @@ PROMPT_NODE_MAP: dict[str, str] = {
     # Pro prompts
     "batch_coder_producer": "batch_code",  # Node 3.0
     "batch_coder_critic": "batch_code",  # Node 3.1
-    "map_synthesis": "map_synthesize",  # Node 4
-    "reduce_synthesis": "reduce_synthesize",  # Node 5
+    "util_map_synthesis": "map_synthesize",  # Node 4
+    "util_reduce_synthesis": "reduce_synthesize",  # Node 5
     "core_concern_finder": "find_core_concern",  # Node 5.5
     "hypothesis_generation": "generate_hypotheses",  # Node 6
     "clusterizador_informado": None,  # Manual fallback, not in main graph

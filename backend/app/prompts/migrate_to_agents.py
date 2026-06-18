@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """
-Phase 2 migration: Create agents/{agent_id}/ folder structure from
-deepseek_flash/ and deepseek_pro/ .md prompt files.
+Phase 2 migration: Create agents/{agent_id}/ folder structure.
 
-For each .md file:
-  1. Create folder agents/{agent_id}/
-  2. Extract YAML frontmatter + ## System + ## User → prompt.md (or .flash.md / .pro.md)
-  3. Extract ## Output Schema JSON → schema.en.json
+This script has been run. The deepseek_pro/ and deepseek_flash/
+directories have been deleted. All prompts now live in agents/{agent_id}/prompt.md.
 
-.txt legacy files are skipped.
+This file is kept for historical reference.
 """
 
 import json
@@ -99,88 +96,9 @@ def process_file(filepath: Path, output_dir: Path, suffix: str) -> dict | None:
 
 
 def main():
-    base = Path(__file__).resolve().parent
-    agents_dir = base / "agents"
-
-    # Collect all .md files from deepseek_flash/ and deepseek_pro/
-    flash_dir = base / "deepseek_flash"
-    pro_dir = base / "deepseek_pro"
-
-    flash_files: dict[str, Path] = {}
-    pro_files: dict[str, Path] = {}
-
-    for f in sorted(flash_dir.glob("*.md")):
-        agent_id = f.stem  # filename without extension
-        flash_files[agent_id] = f
-
-    for f in sorted(pro_dir.glob("*.md")):
-        agent_id = f.stem
-        pro_files[agent_id] = f
-
-    # All unique agent_ids
-    all_ids = sorted(set(flash_files.keys()) | set(pro_files.keys()))
-
-    print(f"Found {len(flash_files)} flash .md files, {len(pro_files)} pro .md files")
-    print(f"Unique agent IDs: {len(all_ids)}")
-    print()
-
-    stats = {"created": 0, "flash_only": 0, "pro_only": 0, "dual": 0, "errors": 0}
-
-    for agent_id in all_ids:
-        print(f"Agent: {agent_id}")
-        agent_folder = agents_dir / agent_id
-        agent_folder.mkdir(parents=True, exist_ok=True)
-
-        in_flash = agent_id in flash_files
-        in_pro = agent_id in pro_files
-
-        schema = None
-
-        if in_flash and in_pro:
-            # Dual: create both .flash.md and .pro.md
-            stats["dual"] += 1
-            print(f"  DUAL (flash + pro)")
-
-            # Process flash version
-            _ = process_file(flash_files[agent_id], agent_folder, suffix=".flash")
-
-            # Process pro version, use its schema
-            schema = process_file(pro_files[agent_id], agent_folder, suffix=".pro")
-
-        elif in_flash:
-            # Flash only
-            stats["flash_only"] += 1
-            print(f"  FLASH only")
-            schema = process_file(flash_files[agent_id], agent_folder, suffix="")
-
-        elif in_pro:
-            # Pro only
-            stats["pro_only"] += 1
-            print(f"  PRO only")
-            schema = process_file(pro_files[agent_id], agent_folder, suffix="")
-
-        # Write schema.en.json
-        if schema is not None:
-            schema_path = agent_folder / "schema.en.json"
-            schema_path.write_text(
-                json.dumps(schema, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-            print(f"    Wrote: {schema_path}")
-        else:
-            print(f"    WARNING: No schema extracted, skipping schema.en.json")
-            stats["errors"] += 1
-
-        stats["created"] += 1
-        print()
-
-    print("=" * 60)
-    print(f"Migration complete!")
-    print(f"  Total agents created: {stats['created']}")
-    print(f"  Flash only: {stats['flash_only']}")
-    print(f"  Pro only:   {stats['pro_only']}")
-    print(f"  Dual:       {stats['dual']}")
-    print(f"  Errors:     {stats['errors']}")
+    print("Migration already complete. All prompts live in agents/{agent_id}/prompt.md")
+    print("This script is kept for historical reference only.")
+    return
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 ---
-agent: recategorization_decider
+agent: util_recategorization_decider
 tier: PRO
 description: Decide between ENRICH, SUBDIVIDE, or DIVIDE for a category by comparing two groups of incidents. Triadic protocol from Recategorización.json.
 notes:

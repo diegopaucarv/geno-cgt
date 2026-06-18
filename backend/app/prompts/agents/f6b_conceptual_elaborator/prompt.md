@@ -1,5 +1,5 @@
 ---
-agent: conceptual_elaborator
+agent: f6b_conceptual_elaborator
 tier: PRO
 description: Evalúa la relación conceptual entre 2+ categorías usando un código teórico. Busca evidencia convergente (densifica) y divergente (expande). NO emite veredictos absolutos. T07 del plan Theoretical Playground.
 notes:

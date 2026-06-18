@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["patterns", "incidents", "document_signals"],
+  "properties": {
+    "patterns": {
+      "type": "array",
+      "description": "Códigos em gerúndio que nomeiam processos comportamentais recorrentes. Cada padrão é evidenciado por múltiplos segmentos.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "properties": {
+          "pattern_name": {
+            "type": "string",
+            "description": "Nome em gerúndio de 2-6 palavras. Captura o processo comportamental recorrente."
+          },
+          "definition": {
+            "type": "string",
+            "description": "2-3 frases definindo o que este padrão captura: qual comportamento se repete, sob quais condições, com qual variação."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "Índices base 1 dos segmentos que evidenciam este padrão."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Com que força os segmentos convergem neste padrão."
+          }
+        }
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "description": "Frases curtas de evidência. Coisas concretas que o participante fez, disse, sentiu ou vivenciou.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "segment_refs"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Frase curta descrevendo o que aconteceu. Linguagem simples, sem gerúndios."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "Índices base 1 dos segmentos de onde este incidente se origina."
+          },
+          "patterns": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "Índices base 0 dos padrões que este incidente apoia. Opcional."
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Citação literal do segmento que melhor captura este incidente. Opcional."
+          }
+        }
+      }
+    },
+    "document_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prime_mover", "tentative_concern"],
+      "properties": {
+        "prime_mover": {
+          "type": "string",
+          "description": "O que parece impulsionar o comportamento deste participante? 2-3 frases."
+        },
+        "prime_mover_confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Confiança na avaliação do motor principal."
+        },
+        "tentative_concern": {
+          "type": "string",
+          "description": "O que este participante está continuamente tentando resolver? Uma frase em gerúndio."
+        },
+        "anomalies": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Segmentos ou padrões que não se encaixam ou exigem verificação. Opcional."
+        },
+        "needs_verification": {
+          "type": "boolean",
+          "description": "true se este documento contém padrões que devem ser sinalizados para verificação."
+        }
+      }
+    }
+  }
+}

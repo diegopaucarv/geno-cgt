@@ -648,10 +648,10 @@ AGENT_SCHEMAS: dict[str, dict] = {
     # Phase 5b — Selective Coding (nuevos)
     "main_concern_proposer": S1_SCHEMA,
     "main_concern_critic": S2_SCHEMA,
-    "core_emergence_proposer": S3_SCHEMA,
+    "fc_core_category_proposer": S3_SCHEMA,
     "core_emergence_critic": S4_SCHEMA,
     "selective_reduction_proposer": S5_SCHEMA,
     "selective_reduction_critic": S6_SCHEMA,
     "core_saturation_proposer": S7_SCHEMA,
-    "core_saturation_critic": S8_SCHEMA,
+    "fe_core_saturation_critic": S8_SCHEMA,
 }

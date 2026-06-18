@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["core_category_candidates", "recommendation"],
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "description": "Categories evaluated as potential core categories, ordered by decreasing suitability (most central first). All candidates must EXIST in categories_summary.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category_label",
+          "is_central",
+          "has_explanatory_power",
+          "has_theoretical_grab",
+          "centrality_rationale",
+          "connected_categories",
+          "key_hypothesis_refs"
+        ],
+        "properties": {
+          "category_label": {
+            "type": "string",
+            "description": "EXACT category name as it appears in categories_summary."
+          },
+          "is_central": {
+            "type": "boolean",
+            "description": "true if this category acts as a hub: multiple other categories connect to it via documented hypotheses."
+          },
+          "has_explanatory_power": {
+            "type": "boolean",
+            "description": "true if this category explains WHY participants behave as they do, not just WHAT they do."
+          },
+          "has_theoretical_grab": {
+            "type": "boolean",
+            "description": "true if connecting this category to others produces emergent insight or 'aha moments'."
+          },
+          "centrality_rationale": {
+            "type": "string",
+            "description": "Qualitative reasoning covering: centrality (hub of relationships?), explanatory power (explains WHY?), frequency with variation (appears across docs with nuance?), and theoretical grab. Cite hypothesis IDs [H1], [H2], etc."
+          },
+          "connected_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Category labels this candidate connects to via hypotheses (from categories_summary)."
+          },
+          "key_hypothesis_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Hypothesis references supporting this candidate. Use [H1], [H2], etc. format."
+          }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "Which category you recommend as core and why. If multiple strong candidates, explain trade-offs. The researcher (HITL) makes the final choice."
+    },
+    "no_suitable_core": {
+      "type": "boolean",
+      "description": "true if no existing category reaches core category level."
+    },
+    "no_suitable_rationale": {
+      "type": "string",
+      "description": "If no_suitable_core=true: what is missing (insufficient connections, low explanatory power, categories too descriptive)."
+    }
+  }
+}

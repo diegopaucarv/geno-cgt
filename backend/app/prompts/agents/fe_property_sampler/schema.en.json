@@ -1,64 +1,111 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "found_incidents",
-    "gradient_expanded"
-  ],
+  "required": ["sampling_recommendations", "overall_saturation_assessment"],
   "properties": {
-    "found_incidents": {
+    "sampling_recommendations": {
       "type": "array",
+      "description": "Prioritized list of properties that need more evidence. Empty array if all properties are well-covered.",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
-          "segment_id",
-          "document_name",
-          "exact_quote"
+          "property_name",
+          "priority",
+          "missing_extreme",
+          "theoretical_importance"
         ],
         "properties": {
-          "segment_id": {
-            "type": "string"
-          },
-          "document_name": {
-            "type": "string"
-          },
-          "exact_quote": {
-            "type": "string"
-          },
-          "extreme_manifested": {
+          "property_name": {
             "type": "string",
-            "enum": [
-              "confirms_known_extreme",
-              "expands_extreme_further",
-              "reveals_new_extreme"
-            ],
-            "description": "Does this incident confirm the known extreme, push it further, or reveal a new extreme?"
+            "description": "Name of the property that needs sampling."
           },
-          "elaboration": {
-            "type": "string"
+          "current_gradient": {
+            "type": "string",
+            "description": "Documented gradient of this property."
+          },
+          "missing_extreme": {
+            "type": "string",
+            "description": "Which extreme of the gradient has insufficient evidence."
+          },
+          "current_evidence_count": {
+            "type": "integer",
+            "description": "Number of incidents currently at this extreme."
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Sampling priority. critical = 0 cases, high theoretical importance. low = may be marked as limitation."
+          },
+          "theoretical_importance": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "How important this property is to the emerging theory."
+          },
+          "importance_rationale": {
+            "type": "string",
+            "description": "Why this property has this importance level (cited in hypotheses, distinguishes types, peripheral, etc.)."
+          },
+          "what_to_look_for": {
+            "type": "string",
+            "description": "Concrete description of what behavioral manifestation to look for. What would the missing extreme look like in practice?"
+          },
+          "participant_profile": {
+            "type": "string",
+            "description": "Type of participant or context where this extreme would likely manifest."
+          },
+          "suggested_interview_question": {
+            "type": "string",
+            "description": "Concrete question or probe to elicit the missing extreme in new data collection."
+          },
+          "search_in_existing_corpus": {
+            "type": "boolean",
+            "description": "true if existing documents may already contain the missing extreme (suggest searching before collecting new data)."
+          },
+          "search_criteria": {
+            "type": "string",
+            "description": "If search_in_existing_corpus=true: keywords or concepts to search for in existing segments."
+          },
+          "mark_as_limitation": {
+            "type": "boolean",
+            "description": "true if this gap is likely irresolvable in the current population and should be documented as a study limitation."
+          },
+          "limitation_rationale": {
+            "type": "string",
+            "description": "If mark_as_limitation=true: why this gap cannot be resolved."
           }
         }
       }
     },
-    "gradient_expanded": {
-      "type": "boolean",
-      "description": "true if any incident expanded the gradient beyond what was known."
+    "saturated_properties": {
+      "type": "array",
+      "description": "Properties that are well-covered at both extremes. For reference only.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["property_name"],
+        "properties": {
+          "property_name": {
+            "type": "string"
+          },
+          "evidence_summary": {
+            "type": "string",
+            "description": "Brief summary of evidence at each extreme."
+          }
+        }
+      }
     },
-    "expanded_gradient_description": {
+    "overall_saturation_assessment": {
       "type": "string",
-      "description": "New gradient range if expanded."
+      "description": "Narrative assessment: is this category close to saturation? What's holding it back? 2-4 sentences."
     },
-    "corpus_gap": {
-      "type": "boolean",
-      "description": "true if the current corpus does NOT contain incidents at the sought extreme."
+    "estimated_iterations_to_saturation": {
+      "type": "integer",
+      "description": "Estimated number of additional document iterations needed. -1 if cannot estimate."
     },
-    "sampling_recommendation": {
+    "sampling_strategy_note": {
       "type": "string",
-      "description": "If corpus_gap=true: what type of case to look for."
-    },
-    "suggested_interview_question": {
-      "type": "string",
-      "description": "Concrete question for a theoretical sampling document."
+      "description": "Free note for the researcher: overarching strategy for completing saturation of this category."
     }
   }
 }

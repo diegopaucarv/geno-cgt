@@ -1,95 +1,84 @@
 {
-  "type": "json_schema",
-  "json_schema": {
-    "name": "memo_theoretical_tagger",
-    "schema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "family_affinities",
-        "primary_family"
-      ],
-      "properties": {
-        "family_affinities": {
-          "type": "array",
-          "description": "Families with score ≥ 0.3, ordered by score descending.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "family",
-              "score",
-              "rationale"
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["family_affinities", "primary_family"],
+  "properties": {
+    "family_affinities": {
+      "type": "array",
+      "description": "Theoretical code families that show affinity with this memo, ordered by strength of fit.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "has_affinity", "rationale"],
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "Causes",
+              "Consequences",
+              "Conditions",
+              "Process",
+              "Degree",
+              "Dimension",
+              "Type",
+              "Strategy",
+              "Structural",
+              "Functional",
+              "Interaction",
+              "Identity"
             ],
-            "properties": {
-              "family": {
-                "type": "string",
-                "enum": [
-                  "Causes",
-                  "Consequences",
-                  "Conditions",
-                  "Process",
-                  "Degree",
-                  "Dimension",
-                  "Type",
-                  "Strategy",
-                  "Structural",
-                  "Functional",
-                  "Interaction",
-                  "Identity"
-                ],
-                "description": "One of the 12 canonical theoretical code families."
-              },
-              "score": {
-                "type": "number",
-                "minimum": 0.3,
-                "maximum": 1.0,
-                "description": "Affinity score. Only families ≥ 0.3 are included."
-              },
-              "rationale": {
-                "type": "string",
-                "description": "One-sentence justification citing specific memo content that justifies this score."
-              }
-            }
+            "description": "One of the 12 canonical theoretical code families."
+          },
+          "has_affinity": {
+            "type": "boolean",
+            "description": "true if the memo content shows a meaningful fit with this theoretical family."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "One-sentence justification citing specific memo content."
           }
-        },
-        "primary_family": {
-          "type": "string",
-          "enum": [
-            "Causes",
-            "Consequences",
-            "Conditions",
-            "Process",
-            "Degree",
-            "Dimension",
-            "Type",
-            "Strategy",
-            "Structural",
-            "Functional",
-            "Interaction",
-            "Identity"
-          ],
-          "description": "Family with the highest affinity score."
-        },
-        "secondary_family": {
-          "type": "string",
-          "enum": [
-            "Causes",
-            "Consequences",
-            "Conditions",
-            "Process",
-            "Degree",
-            "Dimension",
-            "Type",
-            "Strategy",
-            "Structural",
-            "Functional",
-            "Interaction",
-            "Identity"
-          ],
-          "description": "Family with the second-highest affinity score. Only present if that score ≥ 0.3."
         }
       }
+    },
+    "primary_family": {
+      "type": "string",
+      "enum": [
+        "Causes",
+        "Consequences",
+        "Conditions",
+        "Process",
+        "Degree",
+        "Dimension",
+        "Type",
+        "Strategy",
+        "Structural",
+        "Functional",
+        "Interaction",
+        "Identity"
+      ],
+      "description": "Family with the strongest documented fit."
+    },
+    "secondary_family": {
+      "type": "string",
+      "enum": [
+        "Causes",
+        "Consequences",
+        "Conditions",
+        "Process",
+        "Degree",
+        "Dimension",
+        "Type",
+        "Strategy",
+        "Structural",
+        "Functional",
+        "Interaction",
+        "Identity"
+      ],
+      "description": "Family with the second-strongest fit. Only present if a second family has affinity."
+    },
+    "unmapped": {
+      "type": "boolean",
+      "description": "true if no family shows meaningful affinity with this memo."
     }
   }
 }

@@ -1,5 +1,5 @@
 ---
-agent: map_synthesis
+agent: util_map_synthesis
 tier: PRO
 description: Síntesis intra-documento por código. Resume cómo una categoría se manifiesta en un documento específico. Paso 1 de Map-Reduce.
 notes:

@@ -1,33 +1,45 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "glaser_data_type",
-    "rationale"
-  ],
+  "required": ["classifications"],
   "properties": {
-    "glaser_data_type": {
-      "type": "string",
-      "enum": [
-        "baseline_data",
-        "properline_data",
-        "interpreted_data",
-        "vague_data"
-      ],
-      "description": "baseline_data: experiência real espontânea. properline_data: discurso normativo. interpreted_data: resposta forçada. vague_data: evasivo."
-    },
-    "rationale": {
-      "type": "string",
-      "description": "Uma frase justificando a classificação com evidência textual."
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Nível de confiança na classificação."
+    "classifications": {
+      "type": "array",
+      "description": "Array de classificações por segmento. Deve conter uma entrada para cada segmento no lote de entrada.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "glaser_data_type"],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "description": "O índice 'seg' da entrada, como string (ex. '1', '2')."
+          },
+          "glaser_data_type": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data"
+            ],
+            "description": "Tipo de dado Glaser para este segmento."
+          },
+          "is_interviewer": {
+            "type": "boolean",
+            "description": "true se este segmento é fala do entrevistador (pergunta, instrução, metadata)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Nível de confiança na classificação."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Uma frase justificando a classificação com evidência textual."
+          }
+        }
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 ---
-agent: b3_react
+agent: util_react_hypothesis
 tier: PRO
 description: Genera hipotesis grounded a partir de codigos y evidencia. Modo ReAct: busca datos antes de hipotetizar. PRO.
 notes:

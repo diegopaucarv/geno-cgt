@@ -1,33 +1,45 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "glaser_data_type",
-    "rationale"
-  ],
+  "required": ["classifications"],
   "properties": {
-    "glaser_data_type": {
-      "type": "string",
-      "enum": [
-        "baseline_data",
-        "properline_data",
-        "interpreted_data",
-        "vague_data"
-      ],
-      "description": "baseline_data: spontane reale Erfahrung. properline_data: normativer Diskurs. interpreted_data: erzwungene Antwort. vague_data: ausweichend."
-    },
-    "rationale": {
-      "type": "string",
-      "description": "Ein Satz zur Rechtfertigung der Klassifikation mit textueller Evidenz."
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Konfidenzniveau der Klassifikation."
+    "classifications": {
+      "type": "array",
+      "description": "Array von Klassifizierungen pro Segment. Muss einen Eintrag für jedes Segment im Eingabe-Batch enthalten.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "glaser_data_type"],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "description": "Der 'seg'-Index aus der Eingabe, als String (z.B. '1', '2')."
+          },
+          "glaser_data_type": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data"
+            ],
+            "description": "Glaser-Datentyp für dieses Segment."
+          },
+          "is_interviewer": {
+            "type": "boolean",
+            "description": "true wenn dieses Segment Interviewer-Rede ist (Frage, Anweisung, Metadaten)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Konfidenzniveau der Klassifikation."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Ein Satz zur Rechtfertigung der Klassifikation mit textueller Evidenz."
+          }
+        }
+      }
     }
   }
 }

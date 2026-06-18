@@ -1,28 +1,106 @@
 {
   "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "document_type", "main_topics", "richness"],
   "properties": {
     "summary": {
       "type": "string",
-      "description": "Executive summary of 3-5 sentences"
+      "description": "Executive summary of the document content. 3-5 sentences. Descriptive, not theoretical. Max ~300 words."
     },
-    "topic_labels": {
+    "document_type": {
+      "type": "string",
+      "description": "Type of document: interview, focus_group, field_note, written_document, transcript, other."
+    },
+    "main_topics": {
       "type": "array",
+      "description": "Main topics discussed, ordered by prominence. 3-6 descriptive labels.",
       "items": {
-        "type": "string"
-      },
-      "description": "3-6 topic labels"
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic"],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Descriptive topic label (e.g., 'experiences with AI tools at work'). NOT a CGT code."
+          },
+          "coverage": {
+            "type": "string",
+            "enum": ["extensive", "moderate", "brief"],
+            "description": "How much of the document discusses this topic."
+          }
+        }
+      }
     },
-    "inferred_document_type": {
-      "type": "string",
-      "description": "Inferred document type"
+    "participants": {
+      "type": "array",
+      "description": "Key participants identified in the document.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identifier"],
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Participant identifier or pseudonym."
+          },
+          "role": {
+            "type": "string",
+            "description": "Role or position relative to the population."
+          },
+          "profile_notes": {
+            "type": "string",
+            "description": "Relevant demographic or contextual details mentioned."
+          },
+          "is_primary_speaker": {
+            "type": "boolean",
+            "description": "true if this is the main participant."
+          }
+        }
+      }
     },
-    "language": {
+    "notable_features": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "emotional_tone": {
+          "type": "string",
+          "description": "Dominant emotional tone of the document."
+        },
+        "contradictions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Contradictions or ambivalence in the participant's account."
+        },
+        "rich_passages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Notably rich descriptions, vivid examples, stories, or metaphors. Potential in-vivo code sources."
+        },
+        "thin_areas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Topics barely touched or avoided."
+        },
+        "properline_indicators": {
+          "type": "string",
+          "description": "Moments where the participant seems to say what they should say rather than what they actually experience."
+        }
+      }
+    },
+    "richness": {
       "type": "string",
-      "description": "Primary language of the document"
+      "enum": ["rich", "moderate", "thin"],
+      "description": "Estimated richness for CGT analysis. rich = dense behavioral descriptions. moderate = useful but some thin sections. thin = brief, abstract, or mostly properline."
+    },
+    "richness_rationale": {
+      "type": "string",
+      "description": "Why this richness level was assigned."
     }
-  },
-  "required": [
-    "summary",
-    "topic_labels"
-  ]
+  }
 }

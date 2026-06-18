@@ -1,5 +1,5 @@
 ---
-agent: theme_grouper
+agent: util_theme_grouper
 tier: FLASH
 description: Agrupa indicadores de comportamiento en temas coherentes. FLASH — tarea de clasificación, no creativa.
 notes:

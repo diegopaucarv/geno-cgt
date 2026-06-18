@@ -5,7 +5,6 @@ import sys
 
 PROMPTS_DIR = "/mnt/hdd/Program Files/Docker/gt/backend/app/prompts"
 AGENTS_DIR = os.path.join(PROMPTS_DIR, "agents")
-TIERS = ["deepseek_pro", "deepseek_flash"]
 
 os.makedirs(AGENTS_DIR, exist_ok=True)
 
@@ -104,26 +103,21 @@ for agent_id, schema in {**agent_schema_map, **agents_py_schemas}.items():
     agent_id_clean = agent_id.replace("_SCHEMA", "").lower()
     all_schemas[agent_id_clean] = schema
 
-# Then scan prompt files for agents not already covered
-for tier in TIERS:
-    tier_dir = os.path.join(PROMPTS_DIR, tier)
-    if not os.path.isdir(tier_dir):
-        continue
-    for fname in sorted(os.listdir(tier_dir)):
-        fpath = os.path.join(tier_dir, fname)
-        agent_id = fname.rsplit(".", 1)[0]
-
+# Then scan agents/ prompt.md files for schemas not already covered
+agents_dir = os.path.join(PROMPTS_DIR, "agents")
+if os.path.isdir(agents_dir):
+    for agent_id in sorted(os.listdir(agents_dir)):
+        agent_dir = os.path.join(agents_dir, agent_id)
+        if not os.path.isdir(agent_dir):
+            continue
         if agent_id in all_schemas:
             continue
 
-        schema = None
-        if fname.endswith(".md"):
-            schema = extract_from_md(fpath)
-        elif fname.endswith(".txt"):
-            schema = extract_from_txt(fpath)
-
-        if schema:
-            all_schemas[agent_id] = schema
+        prompt_path = os.path.join(agent_dir, "prompt.md")
+        if os.path.isfile(prompt_path):
+            schema = extract_from_md(prompt_path)
+            if schema:
+                all_schemas[agent_id] = schema
 
 # Write schemas
 print(f"Total unique agents with schemas: {len(all_schemas)}")

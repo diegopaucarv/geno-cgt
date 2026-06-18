@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["core_category_candidates", "recommendation"],
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "description": "Als potenzielle Kernkategorien bewertete Kategorien, geordnet nach abnehmender Eignung. Alle müssen in categories_summary EXISTIEREN.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category_label",
+          "is_central",
+          "has_explanatory_power",
+          "has_theoretical_grab",
+          "centrality_rationale",
+          "connected_categories",
+          "key_hypothesis_refs"
+        ],
+        "properties": {
+          "category_label": {
+            "type": "string",
+            "description": "EXAKTER Kategoriename wie in categories_summary."
+          },
+          "is_central": {
+            "type": "boolean",
+            "description": "true wenn diese Kategorie als Hub fungiert: mehrere andere Kategorien verbinden sich über dokumentierte Hypothesen mit ihr."
+          },
+          "has_explanatory_power": {
+            "type": "boolean",
+            "description": "true wenn diese Kategorie erklärt, WARUM die Teilnehmer sich so verhalten, nicht nur WAS sie tun."
+          },
+          "has_theoretical_grab": {
+            "type": "boolean",
+            "description": "true wenn die Verbindung dieser Kategorie mit anderen emergente Einsichten oder 'Aha-Momente' erzeugt."
+          },
+          "centrality_rationale": {
+            "type": "string",
+            "description": "Qualitative Begründung zu: Zentralität (Hub von Beziehungen?), Erklärungskraft (erklärt WARUM?), Häufigkeit mit Variation (erscheint in mehreren Dokumenten mit Nuancen?), theoretischer Grab. Zitieren Sie Hypothesen-IDs [H1], [H2] etc."
+          },
+          "connected_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Kategoriebezeichnungen, die dieser Kandidat über Hypothesen verbindet (aus categories_summary)."
+          },
+          "key_hypothesis_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Hypothesen-Referenzen, die diesen Kandidaten stützen. Format [H1], [H2] etc."
+          }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "Welche Kategorie Sie als Kernkategorie empfehlen und warum. Bei mehreren starken Kandidaten: Trade-offs erklären. Der Forscher (HITL) trifft die endgültige Entscheidung."
+    },
+    "no_suitable_core": {
+      "type": "boolean",
+      "description": "true wenn keine existierende Kategorie das Niveau einer Kernkategorie erreicht."
+    },
+    "no_suitable_rationale": {
+      "type": "string",
+      "description": "Wenn no_suitable_core=true: was fehlt (unzureichende Verbindungen, geringe Erklärungskraft, zu deskriptive Kategorien)."
+    }
+  }
+}

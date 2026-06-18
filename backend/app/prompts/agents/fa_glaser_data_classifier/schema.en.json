@@ -1,33 +1,45 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "glaser_data_type",
-    "rationale"
-  ],
+  "required": ["classifications"],
   "properties": {
-    "glaser_data_type": {
-      "type": "string",
-      "enum": [
-        "baseline_data",
-        "properline_data",
-        "interpreted_data",
-        "vague_data"
-      ],
-      "description": "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: forced response. vague_data: evasive."
-    },
-    "rationale": {
-      "type": "string",
-      "description": "One sentence justifying the classification with textual evidence."
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Confidence level in the classification."
+    "classifications": {
+      "type": "array",
+      "description": "Array of per-segment classifications. Must contain one entry for each segment in the input batch.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "glaser_data_type"],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "description": "The 'seg' index from the input, as a string (e.g. '1', '2')."
+          },
+          "glaser_data_type": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data"
+            ],
+            "description": "Glaser data type for this segment."
+          },
+          "is_interviewer": {
+            "type": "boolean",
+            "description": "true if this segment is interviewer speech (question, instruction, metadata)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Confidence level in the classification."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "One sentence justifying the classification with textual evidence."
+          }
+        }
+      }
     }
   }
 }

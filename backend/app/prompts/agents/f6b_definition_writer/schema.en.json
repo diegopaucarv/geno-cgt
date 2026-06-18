@@ -1,56 +1,141 @@
 {
   "type": "object",
+  "additionalProperties": false,
   "required": [
-    "codes"
+    "formal_definition",
+    "core_essence",
+    "properties_integrated",
+    "theoretical_positioning"
   ],
   "properties": {
-    "codes": {
+    "formal_definition": {
+      "type": "string",
+      "description": "The complete formal CGT definition. 4-8 sentences. Integrates: what the pattern is (gerund), what it processes/resolves, properties and dimensions, conditions, relationship to core, and conceptual boundaries. Present tense, theoretical language."
+    },
+    "core_essence": {
+      "type": "string",
+      "description": "One-sentence distillation of what this category IS at its most abstract. The irreducible core of the pattern."
+    },
+    "properties_integrated": {
       "type": "array",
+      "description": "All properties from the paradigm_state, integrated into the definition.",
       "items": {
         "type": "object",
-        "required": [
-          "code_name",
-          "definition",
-          "properties",
-          "dimensions",
-          "relationship_to_existing"
-        ],
+        "additionalProperties": false,
+        "required": ["property_name", "gradient", "integration_note"],
         "properties": {
-          "code_name": {
+          "property_name": {
+            "type": "string"
+          },
+          "gradient": {
             "type": "string",
-            "description": "Final name of the code."
+            "description": "The documented gradient of this property."
           },
-          "definition": {
+          "integration_note": {
             "type": "string",
-            "description": "Definition: what behavioral pattern it captures. 2-4 sentences."
+            "description": "How this property is reflected in the formal definition."
           },
-          "properties": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Properties of the phenomenon (observable attributes in the indicators)."
-          },
-          "dimensions": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Dimensions of variation (how the phenomenon changes according to context, intensity, etc.)."
-          },
-          "indicators": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Indicators supporting this code."
-          },
-          "relationship_to_existing": {
+          "evidence_strength": {
             "type": "string",
-            "description": "Relationship to existing codes: 'New', 'Subcode of X', 'Overlaps with Y'."
+            "enum": ["strong", "moderate", "thin"],
+            "description": "strong = both extremes well-documented. moderate = one extreme thin. thin = tentative."
           }
         }
       }
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "structural": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Stable contextual conditions that enable or constrain this pattern."
+        },
+        "contingent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Variable circumstances that change how this pattern manifests."
+        }
+      }
+    },
+    "theoretical_positioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relationship_to_core_category"],
+      "properties": {
+        "relationship_to_core_category": {
+          "type": "string",
+          "description": "How this category relates to the core category. E.g., 'is_a_strategy_for', 'is_a_condition_of', 'is_a_consequence_of', 'co-occurs_with', 'is_a_variant_of'."
+        },
+        "relationship_rationale": {
+          "type": "string",
+          "description": "Why this relationship type was assigned, citing evidence."
+        },
+        "connections_to_other_categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category_name", "relationship_type"],
+            "properties": {
+              "category_name": {
+                "type": "string"
+              },
+              "relationship_type": {
+                "type": "string"
+              },
+              "evidence_summary": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "conceptual_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "what_it_is_not": {
+          "type": "string",
+          "description": "What this category explicitly does NOT capture. Prevents miscoding."
+        },
+        "distinction_from": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category_name", "key_difference"],
+            "properties": {
+              "category_name": {
+                "type": "string",
+                "description": "A category this one could be confused with."
+              },
+              "key_difference": {
+                "type": "string",
+                "description": "What essentially distinguishes this category from that one."
+              }
+            }
+          }
+        }
+      }
+    },
+    "definition_confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "How confident is this definition? high = all properties well-documented, clear positioning. medium = some properties thin. low = category still evolving."
+    },
+    "pending_elaborations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What aspects of this category still need elaboration to strengthen the definition."
     }
   }
 }

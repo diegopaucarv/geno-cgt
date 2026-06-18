@@ -55,17 +55,17 @@
 
 | # | Test | Quién | Vel | Comando / Verificación | Estado |
 |---|------|-------|-----|----------------------|--------|
-| T0.1 | Todos los .py compilan (syntax check) | 🤖 | ⚡ | `find workers/ -name '*.py' ...` | ✅ 28/28 |
-| T0.2 | Modelos SQLAlchemy cargan sin errores | 🤖 | ⚡ | `Base.metadata.tables` | ✅ 41 tablas |
-| T0.3 | Migración Alembic está en head | 👤 | ⚡ | `cd backend && alembic current` | ✅ |
-| T0.10 | Prompts se cargan sin errores | 🤖 | ⚡ | `PROMPT_REGISTRY` → 70 | ✅ |
-| T0.11 | Schemas Pydantic para tablas nuevas | 🤖 | ⚡ | `response_schema()` para 5 modelos | ✅ |
-| T0.4 | Docker containers arrancan | 👤 | 🏃 | `docker compose up -d && docker compose ps` | ✅ |
-| T0.5 | PostgreSQL acepta conexiones | 👤 | 🏃 | `docker compose exec postgres pg_isready` | ✅ |
-| T0.6 | Redis responde | 👤 | 🏃 | `docker compose exec redis redis-cli ping` | ✅ |
-| T0.7 | TEI embedding server responde | 👤 | 🏃 | `curl http://localhost:8080/health` | ✅ |
-| T0.8 | MinIO accesible | 👤 | 🏃 | `curl http://localhost:9001` | ✅ |
-| T0.9 | Seed de códigos teóricos funciona | 👤 | 🏃 | `seed_theoretical_codes()` → 12 built-in | ✅ |
+| T0.1 | Todos los .py compilan (syntax check) | 🤖 | ⚡ | `find workers/ -name '*.py' ...` | ⬜ 28/28 |
+| T0.2 | Modelos SQLAlchemy cargan sin errores | 🤖 | ⚡ | `Base.metadata.tables` | ⬜ 41 tablas |
+| T0.3 | Migración Alembic está en head | 👤 | ⚡ | `cd backend && alembic current` | ⬜ |
+| T0.10 | Prompts se cargan sin errores | 🤖 | ⚡ | `PROMPT_REGISTRY` → 70 | ⬜ |
+| T0.11 | Schemas Pydantic para tablas nuevas | 🤖 | ⚡ | `response_schema()` para 5 modelos | ⬜ |
+| T0.4 | Docker containers arrancan | 👤 | 🏃 | `docker compose up -d && docker compose ps` | ⬜ |
+| T0.5 | PostgreSQL acepta conexiones | 👤 | 🏃 | `docker compose exec postgres pg_isready` | ⬜ |
+| T0.6 | Redis responde | 👤 | 🏃 | `docker compose exec redis redis-cli ping` | ⬜ |
+| T0.7 | TEI embedding server responde | 👤 | 🏃 | `curl http://localhost:8080/health` | ⬜ |
+| T0.8 | MinIO accesible | 👤 | 🏃 | `curl http://localhost:9001` | ⬜ |
+| T0.9 | Seed de códigos teóricos funciona | 👤 | 🏃 | `seed_theoretical_codes()` → 12 built-in | ⬜ |
 
 ---
 
@@ -79,13 +79,16 @@
 | T7.1.6 | `database_edges` table existe con FK a database_nodes | 🤖 | ⚡ | Migration aplicada, FK válidas | ⬜ |
 | T7.1.7 | `reporter.py` queries usan `database_nodes` | 🤖 | ⚡ | Nombres de tabla corregidos | ⬜ |
 | T7.1.8 | `reporter.py` edges query hace JOIN con nodes para labels | 🤖 | ⚡ | SQL con JOIN a database_nodes | ⬜ |
+| T0.12 | `concerns` table existe con columnas correctas | 🤖 | ⚡ | id, project_id, label, description, status, identified_at_batch | ⬜ |
+| T0.13 | `categorias` tiene `concern_label` y `population_label` | 🤖 | ⚡ | Ambas columnas presentes, nullable | ⬜ |
+| T0.14 | `hypotheses` tiene `concern_labels` (JSONB) y `batch_number` | 🤖 | ⚡ | Ambas columnas presentes | ⬜ |
 
 ### 1. Fase 0: Config — Schema Checks (sin API)
 
 | # | Test | Quién | Vel | Qué verificar | Estado |
 |---|------|-------|-----|--------------|--------|
-| T1.4 | `object_of_study` default es "concern" | 🤖 | ⚡ | Columna `proyectos.object_of_study` | ✅ |
-| T1.5 | `coding_style_instruction` es nullable | 🤖 | ⚡ | Columna existe, nullable=True | ✅ |
+| T1.4 | `object_of_study` default es "concern" | 🤖 | ⚡ | Columna `proyectos.object_of_study` | ⬜ |
+| T1.5 | `coding_style_instruction` es nullable | 🤖 | ⚡ | Columna existe, nullable=True | ⬜ |
 
 ### 4. Core Category — Static Checks
 
@@ -100,7 +103,7 @@
 
 | # | Test | Quién | Vel | Qué verificar | Estado |
 |---|------|-------|-----|--------------|--------|
-| T2.10 | `process_document_agents_a` usa AbortableTask | 🤖 | ⚡ | Decorador `base=AbortableTask` presente | ✅ |
+| T2.10 | `process_document_agents_a` usa AbortableTask | 🤖 | ⚡ | Decorador `base=AbortableTask` presente | ⬜ |
 
 ### 3. Fase B — Static Checks
 
@@ -138,10 +141,10 @@
 
 | # | Test | Quién | Vel | API | Qué verificar | Estado |
 |---|------|-------|-----|-----|--------------|--------|
-| T1.1 | `POST /projects` crea proyecto con `supuesto_poblacional` | 👤 | 🏃 | ⬜ | `population_assumption` JSONB se llena | ✅ |
-| T1.6 | `GET /projects/{id}` incluye `object_of_study` | 👤 | 🏃 | ⬜ | Response JSON incluye el campo | ✅ |
-| T1.3 | `population_generalizer` falla gracefully sin API key | 👤 | 🏃 | ⬜ | Proyecto se crea igual | ✅ |
-| T1.2 | `population_generalizer` se ejecuta (FLASH) | 👤 | 🏃 | 🔵×1 | Logs: "population_generalizer: project=X spatial=Y temporal=Z" | ✅ |
+| T1.1 | `POST /projects` crea proyecto con `supuesto_poblacional` | 👤 | 🏃 | ⬜ | `population_assumption` JSONB se llena | ⬜ |
+| T1.6 | `GET /projects/{id}` incluye `object_of_study` | 👤 | 🏃 | ⬜ | Response JSON incluye el campo | ⬜ |
+| T1.3 | `population_generalizer` falla gracefully sin API key | 👤 | 🏃 | ⬜ | Proyecto se crea igual | ⬜ |
+| T1.2 | `population_generalizer` se ejecuta (FLASH) | 👤 | 🏃 | 🔵×1 | Logs: "population_generalizer: project=X spatial=Y temporal=Z" | ⬜ |
 
 ### 1.1 Processing Verb System — Endpoints (1-2 FLASH calls cada uno)
 
@@ -171,15 +174,15 @@
 
 | # | Test | Quién | Vel | API est. | Qué verificar | Estado |
 |---|------|-------|-----|----------|--------------|--------|
-| T2.1 | Upload de documento (PDF/TXT) funciona | 👤 | 🏃 | ⬜ | `POST /projects/{id}/documents` → 201 | ✅ |
-| T2.2 | `segmentar_documento` (NLP worker) segmenta y persiste | 👤 | 🚶 | ⬜ | Segmentos con embeddings | ✅ 18 segmentos |
-| T2.3 | `glaser_data_classifier` clasifica segmentos | 👤 | 🚶 | 🔵×18/doc ⛔ | `segmentos.tipo_dato_glaser` poblado | ✅ 18/18 |
-| T2.4 | `glaser_data_classifier` fallback FLASH para borderline | 👤 | 🚶 | 🔵 extra | Logs: "tier=FLASH" para confidence < 0.7 | ✅ |
-| T2.5 | `extract_incident` (FLASH) extrae jots | 👤 | 🚶 | 🔵×~15/doc ⛔ | `extracted_incidents` con jot_text en gerundio | ✅ 63 incidentes |
-| T2.6 | `extract_incident` aplica 4 preguntas de Glaser | 👤 | 🚶 | 🔵×~15/doc | `preguntas_glaser_json` tiene 4 keys | ✅ |
-| T2.7 | `extract_core_pattern` (PRO) sintetiza patrón | 👤 | 🚶 | 🔴×1/doc | `document_processes` actualizado | ✅ |
-| T2.8 | `a1_build_population_context` actualiza cada 3 docs | 👤 | 🚶 | 🔵×1/doc | `population_contexts.version` incrementado | ✅ v1 creado |
-| T2.9 | `a2_identify_process` identifica proceso | 👤 | 🚶 | 🔵×1/doc | `document_processes.process_description` | ✅ + prime_mover HIGH |
+| T2.1 | Upload de documento (PDF/TXT) funciona | 👤 | 🏃 | ⬜ | `POST /projects/{id}/documents` → 201 | ⬜ |
+| T2.2 | `segmentar_documento` (NLP worker) segmenta y persiste | 👤 | 🚶 | ⬜ | Segmentos con embeddings | ⬜ 18 segmentos |
+| T2.3 | `glaser_data_classifier` clasifica segmentos | 👤 | 🚶 | 🔵×18/doc ⛔ | `segmentos.tipo_dato_glaser` poblado | ⬜ 18/18 |
+| T2.4 | `glaser_data_classifier` fallback FLASH para borderline | 👤 | 🚶 | 🔵 extra | Logs: "tier=FLASH" para confidence < 0.7 | ⬜ |
+| T2.5 | `extract_incident` (FLASH) extrae jots | 👤 | 🚶 | 🔵×~15/doc ⛔ | `extracted_incidents` con jot_text en gerundio | ⬜ 63 incidentes |
+| T2.6 | `extract_incident` aplica 4 preguntas de Glaser | 👤 | 🚶 | 🔵×~15/doc | `preguntas_glaser_json` tiene 4 keys | ⬜ |
+| T2.7 | `extract_core_pattern` (PRO) sintetiza patrón | 👤 | 🚶 | 🔴×1/doc | `document_processes` actualizado | ⬜ |
+| T2.8 | `a1_build_population_context` actualiza cada 3 docs | 👤 | 🚶 | 🔵×1/doc | `population_contexts.version` incrementado | ⬜ v1 creado |
+| T2.9 | `a2_identify_process` identifica proceso | 👤 | 🚶 | 🔵×1/doc | `document_processes.process_description` | ⬜ + prime_mover HIGH |
 
 ---
 
@@ -280,7 +283,7 @@
 
 | # | Test | Quién | Vel | API est. | Qué verificar | Estado |
 |---|------|-------|-----|----------|--------------|--------|
-| T2.11 | `process_document_agents_a` ejecuta A1→A2→A3 completo | 👤 | 🐢 | 🔵~157 + 🔴~12 ⛔ | 1 doc → A1+A2. 3+ docs → A1+A2+A3 | ✅ |
+| T2.11 | `process_document_agents_a` ejecuta A1→A2→A3 completo | 👤 | 🐢 | 🔵~157 + 🔴~12 ⛔ | 1 doc → A1+A2. 3+ docs → A1+A2+A3 | ⬜ |
 
 ---
 
@@ -298,6 +301,20 @@
 | T3.6 | `process_synthesis_agents_b` ejecuta B1→B2→B2.5→B3 | 👤 | 🐢 | 🔴×~6 + 🔵×1 | Pipeline log muestra orden correcto | ⬜ |
 | T3.8 | Legacy `b1_distill_sampling` emite DeprecationWarning | 👤 | 🏃 | ⬜ | Redirect a b1_compare_incidents | ⬜ |
 | T3.9 | Legacy `b2_open_code` emite DeprecationWarning | 👤 | 🏃 | ⬜ | Redirect a b2_label_groups | ⬜ |
+
+### Fase A/B — Every-3-Doc Pause
+
+| # | Test | Quién | Vel | Qué verificar |
+|---|------|-------|-----|--------------|
+| T3.10 | Phase B triggers automatically when 3 docs reach 'listo' | 👤 | 🐢 | `process_synthesis_agents_b` dispatched |
+| T3.11 | Phase B triggers for last incomplete batch (1-2 docs) | 👤 | 🐢 | Guardrail allows <3 docs when all are listo |
+| T3.12 | Synthesizer 1 merges categories after batch | 👤 | 🐢 | Previous + new categories unified |
+| T3.13 | Synthesizer 2 updates hypotheses after synthesizer 1 | 👤 | 🐢 | Growing hypothesis note with references |
+| T3.14 | Configuration Critic reviews concerns, population, coding style | 👤 | 🐢 | concerns[], population_variants[], coding_style_rec returned |
+| T3.15 | HITL overlay shows unified category set + hypotheses + concerns + population + coding style | 👤 | 🐢 | All options visible in modal |
+| T3.16 | User can select multiple concerns during early batches | 👤 | 🐢 | Multi-select works |
+| T3.17 | User can keep current population/concern/style selection | 👤 | 🐢 | "Mantener selección actual" option works |
+| T3.18 | After selecting "no volver a preguntar", config locks for remaining batches | 👤 | 🐢 | Config frozen, no more HITL for config |
 
 ### 15.4 Pre-filtro B1 + Batching
 
@@ -337,6 +354,15 @@
 | T7.1.2 | `ff_database_a_critic` evalúa nodos | 👤 | 🐢 | 🔴×1 | Verdict SAT\|MOD\|FORCED | ⬜ |
 | T7.1.3 | `ff_database_b_proposer` genera PROCESSES edge | 👤 | 🐢 | 🔴×1 | Al menos un edge PROCESSES | ⬜ |
 | T7.1.4 | `ff_database_b_critic` detecta contradicciones | 👤 | 🐢 | 🔴×1 | Issues[] con contradictions + missing_edges | ⬜ |
+
+### 7.2 Core Category Selection (Guardrails + HITL)
+
+| # | Test | Quién | Vel | Qué verificar |
+|---|------|-------|-----|--------------|
+| T7.3 | Guardrail 1: blocks if ≠1 confirmed concern | 👤 | 🐢 | Error message shown |
+| T7.4 | Guardrail 2: blocks if categories lack concern_label | 👤 | 🐢 | Unlinked categories listed |
+| T7.5 | Core Category Proposer ranks candidates by hypothesis connections | 👤 | 🐢 | Candidates with centrality scores |
+| T7.6 | User selects ONE core category → unlocks selective coding | 👤 | 🐢 | HITL gate resolved, pipeline advances |
 
 ### 8. Theoretical Playground (requiere fases previas)
 
@@ -474,16 +500,16 @@
 |------|-----------|-------|-----------|-----------|--------|
 | ⚡ Rápida 1 | 15, 12.1 | 21 | < 30s | 0 | ✅ Ninguno |
 | ⚡ Rápida 2 | 0 | 11 | < 60s | 0 | ✅ Ninguno |
-| 🏃 Rápida 3 | 7.1, 1(schema), 4(static), 2(static), 3(static), 5(static) | 16 | < 60s | 0 | ✅ Ninguno |
+| 🏃 Rápida 3 | 7.1, 0(new schema), 1(schema), 4(static), 2(static), 3(static), 5(static) | 19 | < 60s | 0 | ✅ Ninguno |
 | 🏃 Rápida 4 | 12(labels), 13(auth), 1(endpoints), 1.1(verbs) | 30 | < 2min | ~10 FLASH | ✅ Bajo |
 | 🚶 Moderada 1 | 2(Phase A individual) | 9 | 2-10min | ~100 FLASH + ~8 PRO | ⛔ ALTO |
 | 🚶 Moderada 2 | 13(regr), 4(core), 5(red), 9-11b(writing), 15.3(llm) | 37 | 3-15min | ~30 PRO + ~10 FLASH | ⚠️ Medio |
 | 🐢 Lenta 1 | 2.11 (Phase A full) | 1 | 10-30min | ~169-187 total | ⛔ CRÍTICO |
-| 🐢 Lenta 2 | 3 (Phase B), 15.4 (pre-filtro) | 13 | 5-20min | ~10-15 PRO | ⚠️ Medio |
-| 🐢 Lenta 3 | 6 (sat), 7 (DB), 8 (playground) | 23 | 10-40min | ~15-50 variable | ⚠️ Variable |
+| 🐢 Lenta 2 | 3 (Phase B), 3(AB pause), 15.4 (pre-filtro) | 22 | 5-20min | ~10-15 PRO | ⚠️ Medio |
+| 🐢 Lenta 3 | 6 (sat), 7 (DB), 7.2(core sel), 8 (playground) | 27 | 10-40min | ~15-50 variable | ⚠️ Variable |
 | 🐢 Lenta 4 | 12 (HITL API), 13 (regr pipeline) | 10 | 5-20min | ~5-10 mixto | ✅ Bajo |
 | 💤 Muy Lenta | 14 (frontend UX) | 46 | Manual | 0 (frontend) | ✅ Ninguno |
-| **TOTAL** | | **217** | | | |
+| **TOTAL** | | **233** | | | |
 
 ### 🚨 TESTS QUE REQUIEREN INTERVENCIÓN HUMANA ANTES DE CORRER
 

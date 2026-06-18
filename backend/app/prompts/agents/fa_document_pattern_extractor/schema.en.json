@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["patterns", "incidents", "document_signals"],
+  "properties": {
+    "patterns": {
+      "type": "array",
+      "description": "Gerund codes naming recurring behavioral processes. Each pattern is evidenced by multiple segments.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "properties": {
+          "pattern_name": {
+            "type": "string",
+            "description": "Gerund name of 2-6 words. Captures the recurring behavioral process."
+          },
+          "definition": {
+            "type": "string",
+            "description": "2-3 sentences defining what this pattern captures: what behavior recurs, under what conditions, with what variation."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "1-based indices of segments that evidence this pattern."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "How strongly the segments converge on this pattern."
+          }
+        }
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "description": "Evidence one-liners. Concrete things the participant did, said, felt, or experienced.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "segment_refs"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "One-liner describing what happened. Plain language, no gerunds."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "1-based indices of segments this incident comes from."
+          },
+          "patterns": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "0-based indices of patterns that this incident supports. Optional."
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Verbatim quote from the segment that best captures this incident. Optional."
+          }
+        }
+      }
+    },
+    "document_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prime_mover", "tentative_concern"],
+      "properties": {
+        "prime_mover": {
+          "type": "string",
+          "description": "What seems to drive this participant's behavior? 2-3 sentences."
+        },
+        "prime_mover_confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Confidence in the prime mover assessment."
+        },
+        "tentative_concern": {
+          "type": "string",
+          "description": "What is this participant continuously trying to resolve? A gerund phrase."
+        },
+        "anomalies": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Segments or patterns that don't fit or require verification. Optional."
+        },
+        "needs_verification": {
+          "type": "boolean",
+          "description": "true if this document contains patterns that should be flagged for verification."
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 ---
-agent: reduce_synthesis
+agent: util_reduce_synthesis
 tier: PRO
 description: Inter-document consolidation by code. Step 2 of Map-Reduce. Produces global definition, properties, internal types, conditions, and suggested action.
 notes:

@@ -1,9 +1,6 @@
 {
   "type": "object",
-  "required": [
-    "evaluations",
-    "ranked_recommendation"
-  ],
+  "required": ["evaluations", "ranked_recommendation"],
   "properties": {
     "evaluations": {
       "type": "array",
@@ -16,49 +13,26 @@
           "grounding_assessment"
         ],
         "properties": {
-          "candidate_statement": {
-            "type": "string"
+          "candidate_statement": { "type": "string" },
+          "verdict": { "type": "string", "enum": ["SAT", "MOD", "FORCED"] },
+          "rationale": { "type": "string" },
+          "grounding_assessment": { "type": "string" },
+          "has_acceptable_coverage": {
+            "type": "boolean",
+            "description": "true if candidate explains acceptable proportion of system categories."
           },
-          "verdict": {
-            "type": "string",
-            "enum": [
-              "SAT",
-              "MOD",
-              "FORCED"
-            ]
-          },
-          "rationale": {
-            "type": "string"
-          },
-          "grounding_assessment": {
-            "type": "string"
-          },
-          "coverage_ratio": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1
+          "is_confident": {
+            "type": "boolean",
+            "description": "true if critic is confident in this verdict."
           },
           "abstraction_assessment": {
             "type": "string",
-            "enum": [
-              "adequate",
-              "too_concrete",
-              "too_abstract"
-            ]
+            "enum": ["adequate", "too_concrete", "too_abstract"]
           },
-          "suggestion": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1
-          }
+          "suggestion": { "type": "string" }
         }
       }
     },
-    "ranked_recommendation": {
-      "type": "string"
-    }
+    "ranked_recommendation": { "type": "string" }
   }
 }

@@ -1,5 +1,5 @@
 ---
-agent: code_namer
+agent: util_code_namer
 tier: FLASH
 description: Sugiere nombre en gerundio (o in-vivo) para un tema de indicadores. FLASH — tarea simple de naming.
 notes:

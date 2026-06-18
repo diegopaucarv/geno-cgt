@@ -3,13 +3,11 @@ Cliente LLM síncrono para workers Celery. Usa Together.ai como proveedor.
 
 Plan §2.1: Patrón Factory. Plan §2.8: Prompt Engineering Skill.
 
-Soporta dos formatos de prompt:
-  1. YAML (.md):  ---\nkey: value\n---\n## System\n...\n## Output Schema\n```json...```
-  2. Legacy (.txt): -- agent: a1\n[ROL]...\n---\nSCHEMA\n{{...}}
+Soporta el formato de prompt:
+  YAML (.md):  ---\nkey: value\n---\n## System\n...\n## Output Schema\n```json...```
 
-El parser detecta el formato automáticamente.
 Las variables {nombre} se reemplazan con Python .format().
-El schema se extrae del bloque Output Schema (md) o SCHEMA (txt).
+El schema se extrae del bloque Output Schema (md) o del archivo schema.en.json.
 """
 
 from __future__ import annotations
@@ -231,42 +229,26 @@ def _parse_legacy_format(raw: str) -> dict[str, Any]:
 
 
 def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
-    """Busca el prompt en deepseek_pro/ o deepseek_flash/. Prueba .md y .txt."""
-    tier_dir = {
-        "PRO": "deepseek_pro",
-        "FLASH": "deepseek_flash",
-    }
-    agent_files = {
-        "a1": "a1_population_context",
-        "a2": "a2_process_identifier",
-        "a3": "a3_sense_maker",
-        "b1": "b1_sampling_distiller",
-        "b2a": "b2a_extract_indicators",
-        "b2b": "b2b_generate_codes",
-        "b3": "b3_hypothesis_generator",
-        "util_graph_entity_extractor": "entity_extraction",
-    }
-    base_name = agent_files.get(agent_id, agent_id)
-    extensions = [".md", ".txt"]
+    """Load prompt from agents/{agent_id}/prompt.md and schema from schema.en.json."""
+    agent_dir = Path(PROMPTS_DIR) / "agents" / agent_id
+    prompt_path = agent_dir / "prompt.md"
 
-    for ext in extensions:
-        filename = base_name + ext
-        # Primero en raíz, luego en subdirectorio de tier
-        for candidate_dir in ("", tier_dir[tier]):
-            dir_path = (
-                Path(PROMPTS_DIR) / candidate_dir
-                if candidate_dir
-                else Path(PROMPTS_DIR)
-            )
-            filepath = dir_path / filename
-            if filepath.exists():
-                raw = filepath.read_text(encoding="utf-8")
-                return _parse_prompt_file(raw)
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt no encontrado para {agent_id}: {prompt_path}")
 
-    raise FileNotFoundError(
-        f"Prompt no encontrado para {agent_id} (tier={tier}): "
-        f"buscado como {base_name}.md y {base_name}.txt"
-    )
+    raw = prompt_path.read_text(encoding="utf-8")
+    result = _parse_prompt_file(raw)
+
+    # Load schema from schema.en.json if available and not already in prompt
+    if result.get("schema") is None:
+        schema_path = agent_dir / "schema.en.json"
+        if schema_path.exists():
+            try:
+                result["schema"] = json.loads(schema_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, IOError):
+                logger.warning("Failed to load schema from %s", schema_path)
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -319,6 +301,20 @@ MOCK_RESPONSES: dict[str, dict] = {
             },
         ]
     },
+    "fb_indicators_extractor": {
+        "indicators": [
+            {
+                "segment_index": 0,
+                "key_phrases": ["cambio de zona"],
+                "suggested_pattern": "Evita zonas sin pedidos",
+            },
+            {
+                "segment_index": 1,
+                "key_phrases": ["acepto las que valen"],
+                "suggested_pattern": "Rechazo selectivo por rentabilidad",
+            },
+        ]
+    },
     "b2b": {
         "codes": [
             {
@@ -330,7 +326,29 @@ MOCK_RESPONSES: dict[str, dict] = {
             }
         ]
     },
+    "fb_code_generator": {
+        "codes": [
+            {
+                "code_name": "Evadiendo control algorítmico",
+                "definition": "Patrón de comportamiento donde...",
+                "indicators": ["cambio de zona"],
+                "variations": "Varía según hora del día",
+                "relationship_to_existing": "Nuevo.",
+            }
+        ]
+    },
     "b3": {
+        "hypotheses": [
+            {
+                "text": "[MOCK] Experiencia → sofisticación de estrategias.",
+                "level": "general",
+                "evidence": "Doc1 y Doc2 muestran progresión.",
+                "type": "relational",
+                "related_codes": [],
+            }
+        ]
+    },
+    "fb_hypothesis_generator": {
         "hypotheses": [
             {
                 "text": "[MOCK] Experiencia → sofisticación de estrategias.",

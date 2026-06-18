@@ -1,41 +1,124 @@
 {
   "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "context_narrative",
+    "consolidated_patterns",
+    "active_categories_summary",
+    "knowledge_gaps",
+    "attentional_directive"
+  ],
   "properties": {
-    "synthesis": {
+    "context_narrative": {
       "type": "string",
-      "description": "Summary of maximum 500 words"
+      "description": "Synthesized narrative context for the next single-document agent. Max ~800 words. Structure: (1) what we know — salient patterns, (2) what we're exploring — active questions, (3) what to look for — attentional directive."
     },
-    "key_codes": {
+    "consolidated_patterns": {
       "type": "array",
+      "description": "Behavioral patterns observed across multiple documents. Only include patterns seen in ≥2 documents.",
       "items": {
         "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "documents_count"],
         "properties": {
-          "label": {
-            "type": "string"
+          "pattern": {
+            "type": "string",
+            "description": "Description of the recurring behavioral pattern."
           },
-          "definition": {
-            "type": "string"
+          "documents_count": {
+            "type": "integer",
+            "description": "Number of documents where this pattern has been observed."
           },
-          "frequency": {
-            "type": "integer"
+          "associated_category": {
+            "type": "string",
+            "description": "Category that captures this pattern, if any."
+          },
+          "variation_notes": {
+            "type": "string",
+            "description": "How this pattern varies across documents."
           }
         }
       }
     },
-    "emerging_relationships": {
+    "active_categories_summary": {
       "type": "array",
+      "description": "Summary of categories currently active (being densified).",
       "items": {
-        "type": "string"
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name", "status"],
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["growing", "stable", "new"],
+            "description": "growing = new properties being added. stable = no recent changes. new = emerged in last batch."
+          },
+          "properties_count": {
+            "type": "integer"
+          },
+          "concern_label": {
+            "type": "string",
+            "description": "Which concern this category is linked to."
+          }
+        }
       }
     },
     "knowledge_gaps": {
       "type": "array",
+      "description": "Theoretical questions or behavioral areas not yet covered. What do we NOT know?",
       "items": {
-        "type": "string"
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap_description", "priority"],
+        "properties": {
+          "gap_description": {
+            "type": "string",
+            "description": "What question remains unanswered or what behavior hasn't been observed."
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "How important is it to fill this gap?"
+          },
+          "could_next_document_address": {
+            "type": "boolean",
+            "description": "true if the next document might reasonably address this gap."
+          },
+          "what_to_look_for": {
+            "type": "string",
+            "description": "Concrete description of what would fill this gap."
+          }
+        }
+      }
+    },
+    "attentional_directive": {
+      "type": "string",
+      "description": "Specific instructions for A1/A2/A3 agents analyzing the next document. What should they prioritize? What patterns should they compare against? What gaps should they try to fill? 2-4 sentences."
+    },
+    "concern_convergence": {
+      "type": "object",
+      "description": "Assessment of whether concerns are converging.",
+      "additionalProperties": false,
+      "properties": {
+        "is_converging": {
+          "type": "boolean",
+          "description": "true if evidence is converging toward a specific concern."
+        },
+        "leading_concern": {
+          "type": "string",
+          "description": "The concern with the most supporting evidence."
+        },
+        "competing_concerns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Other concerns still in contention."
+        }
       }
     }
-  },
-  "required": [
-    "synthesis"
-  ]
+  }
 }

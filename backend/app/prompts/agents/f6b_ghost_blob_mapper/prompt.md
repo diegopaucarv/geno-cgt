@@ -1,5 +1,5 @@
 ---
-agent: ghost_blob_mapper
+agent: f6b_ghost_blob_mapper
 tier: PRO
 description: Mapea hipótesis de memos no conectadas a categorías existentes que podrían densificar. Evalúa qué propiedad, dimensión o variante añadiría el memo. T09 del plan Theoretical Playground.
 notes:

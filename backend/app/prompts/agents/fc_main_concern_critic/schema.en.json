@@ -1,8 +1,39 @@
 {
   "type": "object",
+  "required": ["verdict", "issues", "evaluations", "ranked_recommendation"],
   "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["SAT", "MOD", "FORCED"],
+      "description": "Global methodological verdict across all candidates."
+    },
+    "issues": {
+      "type": "array",
+      "description": "Top-level issues that apply across candidates. Empty if verdict is SAT.",
+      "items": {
+        "type": "object",
+        "required": ["type", "detail", "suggestion"],
+        "properties": {
+          "type": { "type": "string", "description": "Issue category." },
+          "detail": {
+            "type": "string",
+            "description": "Specific description."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Concrete, actionable suggestion."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor"],
+            "description": "Severity."
+          }
+        }
+      }
+    },
     "evaluations": {
       "type": "array",
+      "description": "Per-candidate evaluations.",
       "items": {
         "type": "object",
         "required": [
@@ -12,62 +43,39 @@
           "grounding_assessment"
         ],
         "properties": {
-          "candidate_statement": {
-            "type": "string",
-            "description": "The evaluated candidate's statement (exact text)."
-          },
-          "verdict": {
-            "type": "string",
-            "enum": [
-              "SAT",
-              "MOD",
-              "FORCED"
-            ],
-            "description": "Methodological verdict."
-          },
+          "candidate_statement": { "type": "string" },
+          "verdict": { "type": "string", "enum": ["SAT", "MOD", "FORCED"] },
           "rationale": {
             "type": "string",
-            "description": "Detailed justification of the verdict, citing specific codes and memos."
+            "description": "Detailed justification citing specific codes and memos."
           },
           "grounding_assessment": {
             "type": "string",
-            "description": "Do the supporting_codes actually support this candidate? Evaluate each cited code."
+            "description": "Do the supporting_codes actually support this candidate?"
           },
-          "coverage_ratio": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "Proportion of total codes that this candidate explains (1 - orphan_count/total_codes)."
+          "has_acceptable_coverage": {
+            "type": "boolean",
+            "description": "true if this candidate explains an acceptable proportion of the system's categories (not leaving too many orphans)."
+          },
+          "is_confident": {
+            "type": "boolean",
+            "description": "true if the critic is confident in this verdict based on available evidence."
           },
           "abstraction_assessment": {
             "type": "string",
-            "enum": [
-              "adequate",
-              "too_concrete",
-              "too_abstract"
-            ],
-            "description": "Evaluation of the abstraction level."
+            "enum": ["adequate", "too_concrete", "too_abstract"],
+            "description": "Abstraction level evaluation."
           },
           "suggestion": {
             "type": "string",
-            "description": "Suggested concrete action. Only if MOD. E.g.: 'Reformulate label to X', 'Reduce abstraction by anchoring in code Y', 'Review whether code Z actually supports'."
-          },
-          "confidence": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "Critic's confidence in this verdict (0.0–1.0)."
+            "description": "Suggested action if MOD. Concrete and actionable."
           }
         }
       }
     },
     "ranked_recommendation": {
       "type": "string",
-      "description": "Final recommendation: which {object_of_study} candidate do you recommend to the researcher and why? If none is SAT, explain what is missing."
+      "description": "Final recommendation: which candidate do you recommend and why? If none is SAT, explain what is missing."
     }
-  },
-  "required": [
-    "evaluations",
-    "ranked_recommendation"
-  ]
+  }
 }

@@ -1,105 +1,125 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "new_categories"
-  ],
+  "required": ["clusters", "unclustered_categories", "bridging_categories"],
   "properties": {
-    "new_categories": {
+    "clusters": {
       "type": "array",
-      "description": "Consolidated categories after clustering. Empty array if no changes are required.",
+      "description": "Clusters of related categories organized around the core category.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "category",
-          "human_purpose",
-          "definition"
+          "cluster_label",
+          "theoretical_family",
+          "member_categories",
+          "is_cohesive"
         ],
         "properties": {
-          "category": {
+          "cluster_label": {
             "type": "string",
-            "description": "Label of the consolidated group."
+            "description": "Theoretical label for the cluster. Expresses the cluster's role relative to the core category."
           },
-          "human_purpose": {
+          "theoretical_family": {
             "type": "string",
-            "description": "Underlying behavioral intent shared by the grouped codes (Step 1)."
+            "description": "The theoretical code family that best describes this cluster's organizing logic (e.g., Strategy, Causal, Process, Condition)."
           },
-          "definition": {
+          "description": {
             "type": "string",
-            "description": "Consolidated definition of the category (Step 3)."
+            "description": "Narrative description of what unifies these categories theoretically. 2-4 sentences."
           },
-          "source_codes": {
+          "member_categories": {
             "type": "array",
-            "description": "Names of the original codes merged into this category.",
-            "items": {
-              "type": "string"
-            }
-          },
-          "variations": {
-            "type": "array",
-            "description": "Documented internal variations. Empty array if the category is uniform.",
+            "description": "Categories belonging to this cluster.",
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "description"
+                "category_name",
+                "is_core_member",
+                "relationship_to_core"
               ],
               "properties": {
-                "description": {
-                  "type": "string",
-                  "description": "Description of the variation."
+                "category_name": { "type": "string" },
+                "is_core_member": {
+                  "type": "boolean",
+                  "description": "true if this category is a core member of the cluster (strong hypothesis connections)."
                 },
-                "documents": {
+                "relationship_to_core": {
+                  "type": "string",
+                  "description": "How this category relates to the core category per documented hypotheses: is_a_strategy_for, is_a_condition_of, co-occurs_with."
+                },
+                "supporting_hypothesis_ids": {
                   "type": "array",
-                  "description": "Names of documents where this variation is observed.",
-                  "items": {
-                    "type": "string"
-                  }
+                  "items": { "type": "string" },
+                  "description": "IDs of hypotheses supporting membership."
                 }
               }
             }
           },
-          "theoretical_hypotheses": {
-            "type": "array",
-            "description": "Hypotheses that emerge from this group (Step 4). Empty array if no clear hypotheses emerge.",
-            "items": {
-              "type": "string"
-            }
+          "is_cohesive": {
+            "type": "boolean",
+            "description": "true if the categories in this cluster are tightly connected via documented hypotheses."
           },
-          "sampling_criteria": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "inclusion",
-              "exclusion"
-            ],
-            "properties": {
-              "inclusion": {
-                "type": "array",
-                "description": "Inclusion criteria for future sampling.",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "exclusion": {
-                "type": "array",
-                "description": "Exclusion criteria.",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
+          "cohesion_rationale": {
+            "type": "string",
+            "description": "Why this cluster is or is not cohesive. Reference specific hypothesis connections."
           },
-          "orphan_segments": {
-            "type": "array",
-            "description": "Segments left without a code after consolidation (Step 6). Empty array if all are assigned.",
-            "items": {
-              "type": "string"
-            }
+          "is_priority": {
+            "type": "boolean",
+            "description": "true if this cluster should be prioritized in the saturation loop (directly relates to core concern)."
+          },
+          "priority_rationale": {
+            "type": "string",
+            "description": "Why this cluster was assigned this priority."
           }
         }
       }
+    },
+    "unclustered_categories": {
+      "type": "array",
+      "description": "Categories with no documented hypothesis relationship to any other category.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name"],
+        "properties": {
+          "category_name": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "description": "Why unclustered (no hypotheses, insufficient evidence)."
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Recommendation: search for relationships, mark as secondary, or discard."
+          }
+        }
+      }
+    },
+    "bridging_categories": {
+      "type": "array",
+      "description": "Categories that connect two or more clusters.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name", "connects_clusters"],
+        "properties": {
+          "category_name": { "type": "string" },
+          "connects_clusters": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Cluster labels this category connects."
+          },
+          "bridging_rationale": {
+            "type": "string",
+            "description": "How this category bridges the clusters."
+          }
+        }
+      }
+    },
+    "sorting_recommendation": {
+      "type": "string",
+      "description": "Overall recommendation: which clusters to elaborate first, which gaps to address, whether the hypothesis graph is mature enough for theoretical coding."
     }
   }
 }

@@ -1,18 +1,12 @@
 """
-Cargador de prompts desde archivos .txt versionados.
+Cargador de prompts desde la estructura agents/{agent_id}/.
 
 Estructura:
     prompts/
-    ├── deepseek_pro/        ← CoT, razonamiento paso a paso
-    │   ├── a1_population_context.txt
-    │   ├── a2_process_identifier.txt
-    │   ├── a3_sense_maker.txt
-    │   ├── b1_sampling_distiller.txt
-    │   ├── b2_open_coder.txt
-    │   └── b3_hypothesis_generator.txt
-    ├── deepseek_flash/      ← Directo, instrucciones cortas
-    │   └── (mismos archivos)
-    └── schemas.py            ← JSON schemas para structured output
+    └── agents/
+        └── {agent_id}/
+            ├── prompt.md       ← YAML frontmatter + ## System / ## User
+            └── schema.en.json  ← JSON Schema para structured output
 
 Uso:
     loader = PromptLoader("/app/prompts")
@@ -23,45 +17,29 @@ Uso:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Literal
 
 TierName = Literal["POWERFUL", "BALANCED", "FAST"]
 
-# Mapeo tier → carpeta de prompts
-TIER_DIR: dict[TierName, str] = {
-    "POWERFUL": "deepseek_pro",
-    "BALANCED": "deepseek_pro",  # Gemma usa mismo formato que Pro
-    "FAST": "deepseek_flash",
-}
-
-# Mapeo agent_id → nombre de archivo
-AGENT_FILES: dict[str, str] = {
-    "a1": "a1_population_context.txt",
-    "a2": "a2_process_identifier.txt",
-    "a3": "a3_sense_maker.txt",
-    "b1": "b1_sampling_distiller.txt",
-    "b2": "b2_open_coder.txt",
-    "b3": "b3_hypothesis_generator.txt",
-}
-
 
 class PromptLoader:
-    """Carga prompts desde archivos y los combina con JSON schemas."""
+    """Carga prompts desde agents/{agent_id}/ y los combina con JSON schemas."""
 
     def __init__(self, prompts_dir: str | None = None):
         self.base = Path(prompts_dir or os.path.join(os.path.dirname(__file__)))
         self._cache: dict[tuple[str, str], str] = {}
 
-        # Import schemas (lazy)
+        # Import schemas (lazy) — used as fallback if no schema file
         from app.prompts.schemas import AGENT_SCHEMAS
 
         self._schemas = AGENT_SCHEMAS
 
     def load(self, agent_id: str, tier: TierName) -> tuple[str, dict | None]:
         """
-        Carga el prompt para un agente y tier.
+        Carga el prompt para un agente.
 
         Returns:
             (system_prompt_template, json_schema_or_none)
@@ -69,21 +47,23 @@ class PromptLoader:
         El system_prompt_template contiene {variables} que deben ser
         reemplazadas con .format() antes de enviar al LLM.
         """
-        tier_dir = TIER_DIR.get(tier, "deepseek_pro")
-        filename = AGENT_FILES.get(agent_id)
-        if not filename:
-            raise ValueError(f"Agente desconocido: {agent_id}")
-
-        filepath = self.base / tier_dir / filename
+        prompt_path = self.base / "agents" / agent_id / "prompt.md"
 
         cache_key = (agent_id, tier)
         if cache_key not in self._cache:
-            if not filepath.exists():
-                raise FileNotFoundError(f"Prompt no encontrado: {filepath}")
-            self._cache[cache_key] = filepath.read_text(encoding="utf-8")
+            if not prompt_path.exists():
+                raise FileNotFoundError(f"Prompt no encontrado: {prompt_path}")
+            self._cache[cache_key] = prompt_path.read_text(encoding="utf-8")
 
         template = self._cache[cache_key]
-        schema = self._schemas.get(agent_id)
+
+        # Load schema from schema.en.json if available; fall back to AGENT_SCHEMAS
+        schema = None
+        schema_path = self.base / "agents" / agent_id / "schema.en.json"
+        if schema_path.exists():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        if schema is None:
+            schema = self._schemas.get(agent_id)
 
         return template, schema
 

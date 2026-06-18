@@ -8,15 +8,15 @@
   "properties": {
     "surprising_details": {
       "type": "string",
-      "description": "Was dieser Teilnehmer über diese Population offenbart, das Sie nicht wussten. Was Ihren bisherigen Annahmen widerspricht, sie nuanciert oder erweitert. Muss die neue Erkenntnis mit dem angesammelten Kontext integrieren. Wenn es keine echte Neuheit gibt, antworten Sie genau: 'Keine Änderungen zur vorherigen Version.' Wenn die Segmente nicht genügend Informationen enthalten, um diese Dimension zu bewerten, antworten Sie: 'Ungenügende Evidenz in diesem Dokument.'"
+      "description": "Was dieser Teilnehmer über diese Population offenbart, das Sie nicht wussten. Was dem widerspricht, nuanciert oder erweitert, was Sie glaubten. Muss die neue Erkenntnis mit dem gesammelten Kontext integrieren. Wenn es keine echte Neuheit gibt, antworten Sie genau: 'Keine Änderungen zur vorherigen Version.' Wenn die Segmente nicht genügend Informationen enthalten, um diese Dimension zu bewerten, antworten Sie: 'Unzureichende Evidenz in diesem Dokument.'"
     },
     "language_patterns": {
       "type": "string",
-      "description": "Wie dieser Teilnehmer spricht: verwendete Metaphern, Euphemismen, Füllwörter, wiederholte Wörter, erfundene Begriffe. Mit dem dokumentierten allgemeinen Muster vergleichen. Wenn kein Unterschied: 'Keine Änderungen zur vorherigen Version.' Wenn Text für Bewertung unzureichend: 'Ungenügende Evidenz in diesem Dokument.'"
+      "description": "Wie dieser Teilnehmer spricht: verwendete Metaphern, Euphemismen, Füllwörter, wiederholte Wörter, erfundene Begriffe. Vergleichen Sie mit dem dokumentierten allgemeinen Muster. Wenn kein Unterschied: 'Keine Änderungen zur vorherigen Version.' Wenn der Text zur Bewertung unzureichend ist: 'Unzureichende Evidenz in diesem Dokument.'"
     },
     "data_production_context": {
       "type": "string",
-      "description": "Was Sie zur Entstehung dieses Dokuments beobachten: physische Umgebung, Haltung des Teilnehmenden, Machtdynamiken, vermiedene Themen. Wenn keine neuen Beobachtungen: 'Keine Änderungen zur vorherigen Version.' Wenn der Text keine Hinweise zum Produktionskontext enthält: 'Ungenügende Evidenz in diesem Dokument.'"
+      "description": "Was Sie darüber beobachten, wie dieses Dokument produziert wurde: physische Umgebung, Teilnehmerhaltung, Machtdynamiken, vermiedene Themen. Wenn keine neuen Beobachtungen: 'Keine Änderungen zur vorherigen Version.' Wenn der Text keine Hinweise auf den Produktionskontext enthält: 'Unzureichende Evidenz in diesem Dokument.'"
     }
   }
 }

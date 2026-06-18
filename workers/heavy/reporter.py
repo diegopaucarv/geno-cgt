@@ -119,7 +119,7 @@ def generate_final_report(proyecto_id: str) -> dict:
 
         # Call PRO agent
         result = llm.run_agent(
-            "final_report",
+            "f6a_final_report",
             variables={
                 "object_of_study": object_of_study,
                 "research_question": research_question,

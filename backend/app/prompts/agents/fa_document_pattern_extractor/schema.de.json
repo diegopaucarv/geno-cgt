@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["patterns", "incidents", "document_signals"],
+  "properties": {
+    "patterns": {
+      "type": "array",
+      "description": "Gerundium-Codes, die wiederkehrende Verhaltensprozesse benennen. Jedes Muster wird durch mehrere Segmente belegt.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "properties": {
+          "pattern_name": {
+            "type": "string",
+            "description": "Gerundium-Name mit 2-6 Wörtern. Erfasst den wiederkehrenden Verhaltensprozess."
+          },
+          "definition": {
+            "type": "string",
+            "description": "2-3 Sätze, die definieren, was dieses Muster erfasst: welches Verhalten wiederkehrt, unter welchen Bedingungen, mit welcher Variation."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "1-basierte Indizes der Segmente, die dieses Muster belegen."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Wie stark die Segmente auf dieses Muster konvergieren."
+          }
+        }
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "description": "Evidenz-Einzeiler. Konkrete Dinge, die der Teilnehmer tat, sagte, fühlte oder erlebte.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "segment_refs"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Einzeiler, der beschreibt, was geschah. Einfache Sprache, keine Gerundien."
+          },
+          "segment_refs": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "1-basierte Indizes der Segmente, aus denen dieser Vorfall stammt."
+          },
+          "patterns": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "0-basierte Indizes der Muster, die dieser Vorfall unterstützt. Optional."
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Wörtliches Zitat aus dem Segment, das diesen Vorfall am besten erfasst. Optional."
+          }
+        }
+      }
+    },
+    "document_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prime_mover", "tentative_concern"],
+      "properties": {
+        "prime_mover": {
+          "type": "string",
+          "description": "Was scheint das Verhalten dieses Teilnehmers anzutreiben? 2-3 Sätze."
+        },
+        "prime_mover_confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Konfidenz in der Prime-Mover-Bewertung."
+        },
+        "tentative_concern": {
+          "type": "string",
+          "description": "Was versucht dieser Teilnehmer kontinuierlich zu lösen? Eine Gerundium-Phrase."
+        },
+        "anomalies": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Segmente oder Muster, die nicht passen oder überprüft werden müssen. Optional."
+        },
+        "needs_verification": {
+          "type": "boolean",
+          "description": "true, wenn dieses Dokument Muster enthält, die zur Überprüfung markiert werden sollten."
+        }
+      }
+    }
+  }
+}

@@ -1,37 +1,104 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "matches"
-  ],
+  "required": ["search_summary", "relevant_segments"],
   "properties": {
-    "matches": {
+    "search_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_answered", "answer_summary"],
+      "properties": {
+        "question_answered": {
+          "type": "boolean",
+          "description": "true if the corpus contains sufficient evidence to answer the theoretical question."
+        },
+        "answer_summary": {
+          "type": "string",
+          "description": "Narrative summary of findings. What did the scan reveal? 2-4 sentences."
+        }
+      }
+    },
+    "relevant_segments": {
       "type": "array",
-      "description": "Segments that manifest the property at the sought extreme. Empty if none.",
+      "description": "Segments relevant to the theoretical question. Empty if none found.",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "segment_id",
+          "document_name",
           "exact_quote",
-          "relevance"
+          "is_relevant",
+          "theoretical_contribution"
         ],
         "properties": {
           "segment_id": {
             "type": "string",
             "description": "UUID of the segment."
           },
+          "document_name": {
+            "type": "string",
+            "description": "Name of the document."
+          },
           "exact_quote": {
             "type": "string",
-            "description": "First 200 words of the segment, verbatim."
+            "description": "Exact verbatim quote. Truncate to ~300 words max."
           },
-          "relevance": {
-            "type": "number",
-            "minimum": 0.0,
-            "maximum": 1.0,
-            "description": "How clearly it manifests the property at the sought extreme. 0=none, 1=unequivocally."
+          "is_relevant": {
+            "type": "boolean",
+            "description": "true if this segment provides meaningful evidence for the theoretical question."
+          },
+          "theoretical_contribution": {
+            "type": "string",
+            "description": "What this segment contributes: confirms, expands gradient, reveals new property/condition, or contradicts assumption."
+          },
+          "contribution_type": {
+            "type": "string",
+            "enum": [
+              "confirms_existing",
+              "expands_gradient",
+              "reveals_new_property",
+              "reveals_new_condition",
+              "contradicts_assumption",
+              "shows_co_occurrence",
+              "ambiguous"
+            ],
+            "description": "Type of theoretical contribution."
+          },
+          "suggested_coding_action": {
+            "type": "string",
+            "description": "If this segment should be coded differently, what action to take."
           }
         }
       }
+    },
+    "no_evidence_gap": {
+      "type": "object",
+      "description": "Present only if no relevant segments were found.",
+      "additionalProperties": false,
+      "properties": {
+        "is_gap": {
+          "type": "boolean",
+          "description": "true if corpus lacks evidence."
+        },
+        "gap_description": {
+          "type": "string",
+          "description": "What kind of evidence is missing."
+        },
+        "recommended_data_collection": {
+          "type": "string",
+          "description": "What type of data to collect."
+        },
+        "alternative_search_suggestion": {
+          "type": "string",
+          "description": "Alternative search angle."
+        }
+      }
+    },
+    "emergent_insights": {
+      "type": "array",
+      "description": "Unexpected patterns or connections observed during the scan.",
+      "items": { "type": "string" }
     }
   }
 }

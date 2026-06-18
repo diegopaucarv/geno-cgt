@@ -1,22 +1,27 @@
 {
   "type": "object",
+  "required": [
+    "category_id",
+    "document_id",
+    "proposed_expansions",
+    "did_state_expand",
+    "elaboration_type"
+  ],
   "properties": {
     "category_id": {
-      "type": "string"
+      "type": "string",
+      "description": "UUID of the category being evaluated."
     },
     "document_id": {
-      "type": "string"
+      "type": "string",
+      "description": "UUID of the source document."
     },
     "proposed_expansions": {
       "type": "array",
       "description": "Proposed expansions. Empty if no novelty.",
       "items": {
         "type": "object",
-        "required": [
-          "expansion_type",
-          "description",
-          "evidence_quote"
-        ],
+        "required": ["expansion_type", "description", "evidence_quote"],
         "properties": {
           "expansion_type": {
             "type": "string",
@@ -51,10 +56,7 @@
           },
           "expansion_nature": {
             "type": "string",
-            "enum": [
-              "dimensional",
-              "essential"
-            ],
+            "enum": ["dimensional", "essential"],
             "description": "dimensional=more of the same in new degree. essential=qualitatively new aspect."
           },
           "relation_to_core": {
@@ -64,6 +66,23 @@
         }
       }
     },
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "TRUE if at least one new incident expands the paradigm. FALSE if all map to existing items. Used by saturation loop to track expansion streaks."
+    },
+    "elaboration_type": {
+      "type": "string",
+      "enum": ["expanded", "converges", "NONE"],
+      "description": "Type of elaboration: 'expanded' if did_state_expand=true, 'converges' if did_state_expand=false (confirming saturation), or 'NONE'."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Methodological note explaining what was expanded and why, or why nothing was expanded."
+    },
+    "expanded_definition": {
+      "type": "string",
+      "description": "Updated category definition incorporating the new expansions. Only present when did_state_expand=true. If empty, definition unchanged."
+    },
     "confirmed_only": {
       "type": "boolean",
       "description": "true if ALL incidents only confirm existing properties (no expansions)"
@@ -72,10 +91,5 @@
       "type": "string",
       "description": "Synthesis note: is the category stabilizing or still revealing variation?"
     }
-  },
-  "required": [
-    "category_id",
-    "document_id",
-    "proposed_expansions"
-  ]
+  }
 }
