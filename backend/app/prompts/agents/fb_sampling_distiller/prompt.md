@@ -27,5 +27,5 @@ Analytical framework: {population_assumption}.
 
 [TASK]
 From the accumulated data, identify dimensions of variation
-among interviewees. For each dimension, define concrete
+among participants. For each dimension, define concrete
 sampling criteria.

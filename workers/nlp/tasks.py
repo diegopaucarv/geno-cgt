@@ -89,7 +89,16 @@ app = Celery(
 )
 app.conf.update(
     task_queues=(Queue("nlp", Exchange("nlp", type="direct"), routing_key="nlp"),),
+    task_reject_on_worker_lost=True,
 )
+
+
+@app.task(name="update_saturation")
+def update_saturation_stub(proyecto_id: str):
+    """Stub: saturation update is handled by the heavy worker.
+    This task arrives on the NLP queue but should be ignored here."""
+    logger.debug("update_saturation stub called for %s — ignoring", proyecto_id)
+    return {"status": "ignored", "note": "handled by worker-heavy"}
 
 
 @app.task(name="generar_embedding")

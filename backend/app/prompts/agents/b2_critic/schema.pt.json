@@ -41,7 +41,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Apenas se MOD. Ação concreta: novo gerúndio, definição ajustada ou divisão em subcódigos. Se não aplicável, deixar string vazia."
+            "description": "Apenas se MOD. Ação concreta: novo rótulo, definição ajustada ou divisão em subcódigos. Se não aplicável, deixar string vazia."
           },
           "overlap_with_existing": {
             "type": "array",

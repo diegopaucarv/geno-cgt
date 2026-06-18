@@ -1,14 +1,14 @@
 ---
 agent: punctuator
 tier: PRO
-description: Corrige puntuación, mayúsculas y caracteres de entrevistas transcritas. DeepSeek PRO.
+description: Corrige puntuación, mayúsculas y caracteres de documentos transcritos. DeepSeek PRO.
 notes:
   - DeepSeek PRO. Usa staged context: [Objetivo], [Contexto], [Restricciones] claramente separados.
   - NO uses 'think step by step'. DeepSeek tiene chain-of-thought nativo.
   - Ejemplos inline en una sola línea para no inducir halucinación.
 constraints:
   - Mantén el vocabulario y la longitud del texto original de forma idéntica.
-  - Respeta nombres propios, tecnicismos y jerga del entrevistado.
+  - Respeta nombres propios, tecnicismos y jerga del participante.
 ---
 
 ## System

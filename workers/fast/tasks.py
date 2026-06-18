@@ -39,7 +39,7 @@ ENTITY_EXTRACTION_PROMPT = """[ROL]
 Eres un extractor de entidades y relaciones para investigación cualitativa (Grounded Theory).
 
 [TAREA]
-Del siguiente segmento de entrevista, extrae:
+Del siguiente segmento del documento, extrae:
 1. ENTIDADES: personas, organizaciones, conceptos abstractos, eventos significativos.
    No extraigas entidades triviales (ej. "yo", "ellos" sin contexto).
 2. RELACIONES entre entidades, clasificadas como:
@@ -328,7 +328,7 @@ def graphrag_search_local(query: str, proyecto_id: str, top_k: int = 5) -> dict:
 @app.task(name="punctuate_text")
 def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") -> dict:
     """
-    Anade puntuacion a texto crudo de entrevistas.
+    Anade puntuacion a texto crudo de documentos.
     Si el texto excede max_chars, lo divide en bloques y procesa iterativamente.
     Si se proporciona documento_id, actualiza el texto en la DB tras la puntuacion.
     """

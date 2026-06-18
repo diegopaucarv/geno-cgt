@@ -58,7 +58,7 @@
     },
     "suggested_interview_question": {
       "type": "string",
-      "description": "Concrete question for a theoretical sampling interview."
+      "description": "Concrete question for a theoretical sampling document."
     }
   }
 }

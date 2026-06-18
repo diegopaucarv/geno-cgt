@@ -89,7 +89,7 @@ DEFAULT_POPULATION_ASSUMPTION = get_config_value(
     default=(
         "hábitos hipotéticos de comportamiento que procesan "
         "preocupaciones similares o más amplias en la vida diaria "
-        "del entrevistado"
+        "del participante"
     ),
 )
 DEFAULT_OBJECT_OF_STUDY = get_config_value("DEFAULT_OBJECT_OF_STUDY", default="concern")

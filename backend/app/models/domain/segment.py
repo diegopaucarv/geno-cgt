@@ -23,9 +23,9 @@ class Segmento(Base):
     # ── Clasificación Glaser ────────────────────────
     tipo_dato_glaser: Mapped[str | None] = mapped_column(String(50), nullable=True)
     """
-    baseline | properline | interpreted | vague.
-    Pre-clasificado por señales textuales (algorithmic_checks.preclassify_glaser).
-    El LLM puede confirmar o corregir durante codificación.
+    baseline_data | properline_data | interpreted_data | vague_data | interviewer_context.
+    Clasificado por IA en batch (classify_segments_batch).
+    interviewer_context = pregunta del autor, título, o metadata.
     """
 
     # ── Reconstrucción determinista (A2 — Hacedor de texto) ──

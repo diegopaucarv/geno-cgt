@@ -6,14 +6,14 @@ notes:
   - Runs once or on-demand (executeOnce: true). Not automatic.
   - Generates both RESEARCH QUESTION (investigator-facing) and OPERATIONAL QUESTION (agent-facing).
   - Parametrized by {object_of_study} (concern|emotion|behavior|discourse|identity|custom).
-  - The operational question is SINGULAR and process-oriented. It answers the process half of the RQ directly.
+  - The operational question uses PLURAL pattern nouns during the DISCOVERY phase because the specific pattern hasn't been identified yet. It answers the process half of the RQ directly.
   - The population must be PLURAL actors. Units of analysis are not valid populations.
 constraints:
   - NO inventar poblaciones o contextos no presentes en los datos proporcionados.
   - Usar la population_description EXACTAMENTE como se provee. No reescribir.
   - Seguir estrictamente las convenciones CGT (Classic Grounded Theory).
   - La pregunta operacional debe guiar a los agentes a OBSERVAR, no a confirmar hipótesis.
-  - La pregunta operacional es SINGULAR (e.g., "their concern", nunca "concerns" o "their concerns").
+  - La pregunta operacional usa SUSTANTIVOS EN PLURAL durante la fase de descubrimiento porque el patrón específico aún no se ha identificado (e.g., "sus preocupaciones", nunca "su preocupación").
   - La población SIEMPRE debe ser actores en plural. Si el usuario nombra una unidad (e.g., "un aula"), identifica los actores humanos dentro de ella.
 input_state: object_of_study, population_description, processing_verb, processing_gerund, processing_verb_conjugated, spatial_frame, temporal_frame, coding_styles
 executeOnce: true
@@ -38,16 +38,20 @@ Generate TWO questions:
    ```
 
 2. **OPERATIONAL QUESTION** — for LLM agents during the open discovery phase.
-   This question MUST be SINGULAR, process-oriented, and answer the process half of the RQ directly.
+   This question MUST use PLURAL pattern nouns because during discovery, the specific pattern
+   hasn't been identified yet — we are looking for patterns, not confirming a single one.
+   The operational question is process-oriented and answers the process half of the RQ directly.
    Format:
 
    ```
-   "How do [population] [processing_verb] their [pattern]?"
+   "How do [population] [processing_verb] their [pattern_plural]?"
    ```
 
    The operational question uses the CONJUGATED form ({processing_verb_conjugated}) when the
-   instructions are in Spanish or another inflected language. The pattern noun is ALWAYS singular
-   ("their concern", "their emotional dynamic", "their strategy" — never plural).
+   instructions are in Spanish or another inflected language. The pattern noun is ALWAYS plural
+   during the discovery phase ("their concerns", "their emotional dynamics", "their strategies" —
+   never singular). The singular form is reserved for selective coding once the core category
+   has been identified.
 
 [PATTERN TYPE GUIDANCE]
 The object_of_study type determines how the pattern is named and framed. Use {processing_verb}
@@ -56,37 +60,37 @@ and {processing_gerund} consistently across all types:
 - **concern**: The population faces a recurrent problem they must continuously address.
   - Pattern noun in RQ: "concern"
   - Process half: "...how do they continuously {processing_verb} it?"
-  - OQ: "How do [population] {processing_verb} their concern?"
+  - OQ: "How do [population] {processing_verb} their concerns?"
   - Frame check: "What problem are they continuously trying to {processing_verb}?"
 
 - **emotion**: The population experiences a pervasive emotional dynamic they must process.
   - Pattern noun in RQ: "emotional dynamic"
   - Process half: "...how do they continuously {processing_gerund} it?"
-  - OQ: "How do [population] {processing_gerund} their emotional dynamic?"
+  - OQ: "How do [population] {processing_gerund} their emotional dynamics?"
   - Frame check: "What emotional dynamic are they continuously {processing_gerund}?"
 
 - **behavior**: The population deploys a recurring behavioral strategy to handle their situation.
   - Pattern noun in RQ: "behavioral strategy"
   - Process half: "...how do they continuously {processing_verb} it?"
-  - OQ: "How do [population] {processing_verb} their behavioral strategy?"
+  - OQ: "How do [population] {processing_verb} their behavioral strategies?"
   - Frame check: "What behavioral strategy characterizes how they {processing_verb} their situation?"
 
 - **discourse**: The population shares a narrative that organizes how they make sense of their world.
   - Pattern noun in RQ: "shared narrative"
   - Process half: "...how do they continuously {processing_verb} it?"
-  - OQ: "How do [population] {processing_verb} their shared narrative?"
+  - OQ: "How do [population] {processing_verb} their shared narratives?"
   - Frame check: "What shared narrative shapes how they {processing_verb} their world?"
 
 - **identity**: The population negotiates who they are through an ongoing construction process.
   - Pattern noun in RQ: "identity negotiation"
   - Process half: "...how do they continuously {processing_verb} it?"
-  - OQ: "How do [population] {processing_verb} their identity negotiation?"
+  - OQ: "How do [population] {processing_verb} their identity negotiations?"
   - Frame check: "What identity negotiation drives how they {processing_verb} who they are?"
 
 - **custom**: The population manifests a recurring pattern specific to their context.
   - Pattern noun in RQ: "custom pattern" (or the custom_label from coding_styles if provided)
   - Process half: "...how do they continuously {processing_verb} it?"
-  - OQ: "How do [population] {processing_verb} their custom pattern?"
+  - OQ: "How do [population] {processing_verb} their custom patterns?"
   - Frame check: "What custom pattern defines how they {processing_verb} their experience?"
 
 [POPULATION RULE]
@@ -106,8 +110,10 @@ studies people and their behaviors, not abstract containers.
   as the pattern noun.
 - The operational question must be concise (one sentence), directive, and optimized for LLM agents
   that will scan segmented text looking for behavioral patterns.
-- THE OPERATIONAL QUESTION IS ALWAYS SINGULAR. Never use plural nouns for the pattern
-  (e.g., never "their concerns", "their strategies", "their narratives").
+- THE OPERATIONAL QUESTION USES PLURAL PATTERN NOUNS during the DISCOVERY phase.
+  The specific pattern hasn't been identified yet — we are scanning for patterns.
+  Use plural nouns (e.g., "their concerns", "their strategies", "their narratives").
+  The singular form is only used in selective coding once the core category is identified.
 
 ## User
 
@@ -133,14 +139,17 @@ Based on the data above, generate:
    "What is the [pattern] of [population] and how do they continuously [processing_verb] it?"
 
 2. An OPERATIONAL QUESTION to guide LLM agents during the open discovery phase.
-   This question MUST be SINGULAR, process-oriented, and directly operationalize the RQ.
+   This question MUST use PLURAL pattern nouns because the specific pattern hasn't been
+   identified yet — we are in the discovery phase looking for patterns.
    It must follow the structure:
-   "How do [population] [processing_verb] their [pattern]?"
+   "How do [population] [processing_verb] their [pattern_plural]?"
 
    When coding_styles specifies a language other than English (e.g., Spanish),
    conjugate the verb appropriately using {processing_verb_conjugated}.
+   Example: "¿Cómo los docentes de secundaria en Minnesota resuelven sus preocupaciones?"
 
 The two questions serve different purposes:
 - The RESEARCH QUESTION frames the entire study for the investigator.
 - The OPERATIONAL QUESTION tells agents what to look for in the raw data.
   It is the process half of the RQ, formulated as a directive question.
+  Uses PLURAL pattern nouns because the specific pattern hasn't been identified yet.

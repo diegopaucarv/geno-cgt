@@ -20,7 +20,7 @@ interface PipelineDecisions {
 }
 
 const GATE_ICONS: Record<string, string> = {
-  main_concern: "🎯",
+  pattern_of_interest: "🎯",
   core_emergence: "⭐",
   selective_reduction: "✂️",
   core_saturation: "🔄",
@@ -30,7 +30,7 @@ const GATE_ICONS: Record<string, string> = {
 };
 
 const GATE_LABELS: Record<string, string> = {
-  main_concern: "theory.gateMainConcern",
+  pattern_of_interest: "theory.gateMainConcern",
   core_emergence: "theory.gateCoreCategory",
   selective_reduction: "theory.gateSelectiveReduction",
   core_saturation: "theory.gateSaturation",
@@ -56,7 +56,7 @@ export default function PlaygroundDataPanel({
   }, [projectId]);
 
   function formatProposal(gate: string, p: Record<string, unknown>): string {
-    if (gate === "main_concern") {
+    if (gate === "pattern_of_interest") {
       return `"${(p.core_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
     }
     if (gate === "core_emergence") {

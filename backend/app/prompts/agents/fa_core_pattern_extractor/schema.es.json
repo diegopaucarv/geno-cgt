@@ -12,7 +12,7 @@
     "properties": {
       "core_pattern": {
         "type": "string",
-        "description": "Gerundio (frase verbal de 2-6 palabras) que nombra el patrón central único que sintetiza todos los incidentes en este documento. Debe capturar la esencia de lo que el participante está repetidamente {processing_gerund}. Ejemplos: 'Negociando permanencia en la plataforma', 'Equilibrando riesgo y visibilidad', 'Defendiendo estatus profesional'."
+        "description": "Etiqueta según estilo de codificación (frase de 2-6 palabras) que nombra el patrón central único que sintetiza todos los incidentes en este documento. Debe capturar la esencia de lo que el participante está repetidamente {processing_gerund}. Ejemplos: 'Negociando permanencia en la plataforma', 'Equilibrando riesgo y visibilidad', 'Defendiendo estatus profesional'."
       },
       "description": {
         "type": "string",
@@ -53,7 +53,7 @@
       },
       "alternative_patterns": {
         "type": "array",
-        "description": "Interpretaciones alternativas plausibles del patrón si la confianza es MEDIUM o LOW. Cada alternativa nombra un gerundio diferente que podría explicar plausiblemente los datos.",
+        "description": "Interpretaciones alternativas plausibles del patrón si la confianza es MEDIUM o LOW. Cada alternativa nombra una etiqueta diferente que podría explicar plausiblemente los datos.",
         "items": {
           "type": "object",
           "additionalProperties": false,
@@ -64,7 +64,7 @@
           "properties": {
             "pattern": {
               "type": "string",
-              "description": "Nombre alternativo del patrón en gerundio."
+              "description": "Nombre alternativo del patrón según estilo de codificación."
             },
             "why_different": {
               "type": "string",

@@ -1,54 +1,27 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "all_valid",
-    "issues"
-  ],
+  "required": ["issues"],
   "properties": {
-    "all_valid": {
-      "type": "boolean",
-      "description": "true wenn ALLE Labels die Prüfung bestehen (alle SAT)"
-    },
     "issues": {
       "type": "array",
-      "description": "Gefundene Probleme. Leeres Array wenn all_valid true ist.",
+      "description": "Gefundene Probleme mit dem Label. Leeres Array wenn das Label gut ist.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "label",
-          "verdict",
-          "description"
-        ],
+        "required": ["label", "description", "suggestion"],
         "properties": {
           "label": {
             "type": "string",
             "description": "Name des bewerteten Labels"
           },
-          "verdict": {
-            "type": "string",
-            "enum": [
-              "SAT",
-              "MOD",
-              "FORCED"
-            ],
-            "description": "Urteil für dieses Label"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "not_grounded",
-              "wrong_gerund",
-              "scope_issue",
-              "overlap",
-              "forced_pattern"
-            ],
-            "description": "Art des Problems (weglassen wenn SAT)"
-          },
           "description": {
             "type": "string",
-            "description": "Beschreibung des Problems. Wenn MOD, einen konkreten Vorschlag einfügen."
+            "description": "Was ist falsch mit dem Label"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Wie das Problem behoben werden kann"
           }
         }
       }

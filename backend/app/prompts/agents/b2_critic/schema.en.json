@@ -20,7 +20,7 @@
         "properties": {
           "code_label": {
             "type": "string",
-            "description": "Name of the evaluated code (exact gerund)"
+            "description": "Name of the evaluated code (exact label)"
           },
           "verdict": {
             "type": "string",
@@ -41,7 +41,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Only if MOD. Concrete action: new gerund, adjusted definition, or split into subcodes. If not applicable, leave empty string."
+            "description": "Only if MOD. Concrete action: new label, adjusted definition, or split into subcodes. If not applicable, leave empty string."
           },
           "overlap_with_existing": {
             "type": "array",

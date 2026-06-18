@@ -7,7 +7,7 @@
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "O processo central que este entrevistado tenta continuamente {processing_verb}, expresso como gerúndio. Explique em 2-3 frases quais ações concretas revelam este processo. Se os segmentos não permitirem identificar um processo claro: 'Evidência insuficiente.'"
+      "description": "O processo central que este participante tenta continuamente {processing_verb}, expresso conforme estilo de codificação. Explique em 2-3 frases quais ações concretas revelam este processo. Se os segmentos não permitirem identificar um processo claro: 'Evidência insuficiente.'"
     },
     "data_classification": {
       "type": "string",
@@ -22,11 +22,11 @@
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "Como é SEMELHANTE ao anterior. Se for o primeiro entrevistado: 'N/A — primeiro entrevistado'."
+      "description": "Como é SEMELHANTE ao anterior. Se for o primeiro participante: 'N/A — primeiro participante'."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "Como DIFERE do anterior. Se for o primeiro entrevistado: 'N/A — primeiro entrevistado'."
+      "description": "Como DIFERE do anterior. Se for o primeiro participante: 'N/A — primeiro participante'."
     }
   }
 }

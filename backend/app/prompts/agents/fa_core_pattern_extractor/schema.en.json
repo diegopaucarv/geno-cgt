@@ -12,7 +12,7 @@
     "properties": {
       "core_pattern": {
         "type": "string",
-        "description": "Gerund (verb phrase ending in -ing, 2-6 words) that names the single core pattern synthesizing all incidents in this document. Must capture the essence of what the participant is repeatedly {processing_gerund}. Examples: 'Negotiating permanence on the platform', 'Balancing risk and visibility', 'Defending professional status'."
+        "description": "Per-coding-style label (verb phrase, 2-6 words) that names the single core pattern synthesizing all incidents in this document. Must capture the essence of what the participant is repeatedly {processing_gerund}. Examples: 'Negotiating permanence on the platform', 'Balancing risk and visibility', 'Defending professional status'."
       },
       "description": {
         "type": "string",
@@ -53,7 +53,7 @@
       },
       "alternative_patterns": {
         "type": "array",
-        "description": "Plausible alternative pattern interpretations if confidence is MEDIUM or LOW. Each alternative names a different gerund that could plausibly explain the data.",
+        "description": "Plausible alternative pattern interpretations if confidence is MEDIUM or LOW. Each alternative names a different label that could plausibly explain the data.",
         "items": {
           "type": "object",
           "additionalProperties": false,
@@ -64,7 +64,7 @@
           "properties": {
             "pattern": {
               "type": "string",
-              "description": "Alternative gerund pattern name."
+              "description": "Alternative label pattern name."
             },
             "why_different": {
               "type": "string",

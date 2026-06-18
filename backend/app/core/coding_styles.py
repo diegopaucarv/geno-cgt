@@ -144,13 +144,13 @@ CODING_STYLES: dict[str, CodingStyle] = {
         key="in_vivo",
         name="In Vivo (citas literales)",
         instruction=(
-            "Nombra cada código usando una CITA TEXTUAL CORTA del entrevistado "
+            "Nombra cada código usando una CITA TEXTUAL CORTA del participante "
             "(entre comillas). La cita debe capturar una expresión llamativa, "
-            "una metáfora nativa, o un término que el entrevistado usa repetidamente. "
+            "una metáfora nativa, o un término que el participante usa repetidamente. "
             "Ejemplos: '\"la aplicación no te dice nada\"', '\"cada uno tiene su maña\"', '\"acepto las que valen\"'."
         ),
         rename_instruction=(
-            "Sugiere renombres como CITAS TEXTUALES del entrevistado. "
+            "Sugiere renombres como CITAS TEXTUALES del participante. "
             "Solo sugiere renombre si encontrás una cita MÁS PRECISA que la actual."
         ),
         examples=[
@@ -206,9 +206,15 @@ def get_default_style() -> str:
     return "gerundio"
 
 
+def get_default_style_instruction() -> str:
+    """Instrucción default para prompts: gerundio."""
+    return get_code_instruction(get_default_style())
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Soporte multi-estilo
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def get_combined_instruction(keys: list[str]) -> str:
     """

@@ -13,6 +13,7 @@ Pattern 5: Verificación post-hoc de alucinaciones (todos)
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import List, Optional
@@ -32,10 +33,10 @@ def check_output_references(
     proyecto_id: str,
 ) -> dict:
     """
-    Verifica que las referencias a entrevistados y segmentos en el output
+    Verifica que las referencias a participantes y segmentos en el output
     del LLM correspondan a datos reales en la base de datos.
 
-    Busca patrones como "Entrevistado 3", "el entrevistado 1", "Doc 2"
+    Busca patrones como "Participante 3", "el participante 1", "Doc 2"
     y verifica que existan document_processes con esos índices.
 
     Returns:
@@ -44,9 +45,9 @@ def check_output_references(
     issues: list[str] = []
     all_text = str(output)
 
-    # Buscar referencias a entrevistados por índice
+    # Buscar referencias a participantes por índice
     refs = re.findall(
-        r"(?:entrevistado|doc(?:umento)?|participante)\s*#?\s*(\d+)",
+        r"(?:doc(?:umento)?|participante)\s*#?\s*(\d+)",
         all_text,
         re.IGNORECASE,
     )
@@ -61,7 +62,7 @@ def check_output_references(
             idx = int(ref)
             if idx > max_doc_count:
                 issues.append(
-                    f"Referencia a entrevistado {idx} pero solo hay "
+                    f"Referencia a participante {idx} pero solo hay "
                     f"{max_doc_count} procesados"
                 )
 
@@ -93,7 +94,7 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
     o que solo mencionan variables demográficas sin citar datos.
 
     Una dimensión es válida si:
-    - evidence_of_variation cita al menos un entrevistado o proceso específico
+    - evidence_of_variation cita al menos un participante o proceso específico
     - NO es puramente demográfica sin respaldo en los datos
 
     Returns:
@@ -118,7 +119,7 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
         # ¿Tiene evidencia cualitativa?
         has_evidence = len(evidence) > 30 and any(
             kw in evidence.lower()
-            for kw in ["entrevistado", "doc", "participante", "describe", "menciona"]
+            for kw in ["doc", "participante", "describe", "menciona"]
         )
 
         if is_demographic_only and not has_evidence:
@@ -139,190 +140,120 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _algorithmic_glaser_classify(segment_text: str) -> dict:
-    """Layer 1: Fast, free algorithmic classification based on textual signals.
+def classify_segments_batch(
+    segments: list[dict],
+    llm_client,
+    allow_interviewer_as_baseline: bool = False,
+) -> list[dict]:
+    """AI-only Glaser data classifier for a batch of segments.
 
-    Returns:
-        dict with {glaser_data_type, suggested_type, signals_found, confidence, rationale}
-    """
-    text_lower = segment_text.lower()
+    Sends ALL segments in ONE PRO call. No algorithmic pre-filter.
+    The AI does explication de texte and classifies each segment.
 
-    properline_signals = [
-        "la verdad que",
-        "no sé si está bien decir",
-        "yo creo que",
-        "supongo",
-        "dicen que",
-        "se supone que",
-        "debería",
-        "tendría que",
-        "lo correcto es",
-        "lo que pasa es que",
-        "obviamente",
-    ]
-    interpreted_signals = [
-        "como te dije",
-        "como te comenté",
-        "me preguntas",
-        "si me preguntás",
-        "no sé qué decirte",
-        "es difícil responder",
-    ]
-    vague_signals = [
-        "no sé",
-        "no me acuerdo",
-        "no sabría decirte",
-        "mmm",
-        "ehh",
-        "y bueno",
-        "y nada",
-        "cosas así",
-        "ese tipo de cosas",
-    ]
-
-    properline_count = sum(1 for s in properline_signals if s in text_lower)
-    interpreted_count = sum(1 for s in interpreted_signals if s in text_lower)
-    vague_count = sum(1 for s in vague_signals if s in text_lower)
-
-    # Contar respuestas cortas como señal de vague
-    lines = [l.strip() for l in segment_text.split("\n") if l.strip()]
-    short_lines = sum(1 for l in lines if len(l) < 60)
-
-    total_lines = len(lines) or 1
-    short_ratio = short_lines / total_lines
-
-    signals = []
-    if properline_count >= 3:
-        signals.append(f"properline ({properline_count} marcadores)")
-    if interpreted_count >= 3:
-        signals.append(f"interpreted ({interpreted_count} marcadores)")
-    if vague_count >= 3 or short_ratio > 0.5:
-        signals.append(
-            f"vague ({vague_count} marcadores, {short_ratio:.0%} líneas cortas)"
-        )
-
-    if not signals:
-        return {
-            "glaser_data_type": "baseline_data",
-            "suggested_type": "baseline",
-            "signals_found": "Sin marcadores claros de properline, interpreted o vague. El texto parece narrativa fluida y honesta.",
-            "confidence": 0.6,
-            "rationale": "Sin marcadores de hedging, evasión o forzamiento. Texto parece narrativa fluida.",
-        }
-
-    # El tipo con más señales gana
-    counts = {
-        "properline": properline_count,
-        "interpreted": interpreted_count,
-        "vague": vague_count,
-    }
-    suggested = max(counts, key=counts.get)  # type: ignore[arg-type]
-
-    return {
-        "glaser_data_type": f"{suggested}_data",
-        "suggested_type": suggested,
-        "signals_found": "; ".join(signals),
-        "confidence": min(0.9, counts[suggested] / 5),
-        "rationale": f"Detectados {counts[suggested]} marcadores de tipo '{suggested}'.",
-    }
-
-
-def preclassify_glaser(
-    segment_text: str,
-    interview_type: str = "",
-    use_llm_fallback: bool = False,
-    llm_client=None,
-) -> dict:
-    """Two-layer Glaser data classifier.
-
-    Layer 1 (algorithmic): Fast signal-based classification for ALL segments.
-    Runs in-process with zero cost. If confidence >= 0.7, returns immediately.
-
-    Layer 2 (FLASH fallback): Only invoked when use_llm_fallback=True AND
-    algorithmic confidence < 0.7. Dispatches a FLASH LLM call using the
-    deepseek_flash/glaser_data_classifier.md prompt.
+    Interviewer questions, titles, subtitles, and metadata are classified
+    as "interviewer_context" — NOT baseline/properline/interpreted/vague —
+    unless allow_interviewer_as_baseline=True.
 
     Args:
-        segment_text: The segment text to classify (single segment).
-        interview_type: Type of interview for context (passed to LLM prompt).
-        use_llm_fallback: If True, dispatch FLASH LLM when algo confidence < 0.7.
-        llm_client: LLMClient instance (required if use_llm_fallback=True).
+        segments: List of {id, text} dicts.
+        llm_client: LLMClient instance.
+        allow_interviewer_as_baseline: If True, interviewer speech MAY be
+            classified as baseline_data. Default False.
 
     Returns:
-        dict with:
-            glaser_data_type: str  — "baseline_data" | "properline_data" |
-                                     "interpreted_data" | "vague_data"
-            suggested_type: str    — same without "_data" suffix (backward compat)
-            signals_found: str     — algorithmic signals detected
-            confidence: float      — 0.0–1.0
-            method: str            — "algorithmic" or "llm_fallback"
-            rationale: str         — explanation of the classification
+        List of {segment_id, glaser_data_type, confidence, rationale, is_interviewer}
     """
-    # ── Layer 1: Algorithmic classification (always runs) ──
-    algo_result = _algorithmic_glaser_classify(segment_text)
-    algo_result["method"] = "algorithmic"
+    if not segments:
+        return []
 
-    # If confidence is high enough, or fallback not requested, return
-    if algo_result["confidence"] >= 0.7 or not use_llm_fallback:
-        return algo_result
-
-    # ── Layer 2: FLASH LLM fallback ──
-    if llm_client is None:
-        logger.warning(
-            "LLM fallback requested but no llm_client provided. "
-            "Falling back to algorithmic result (conf=%.2f).",
-            algo_result["confidence"],
-        )
-        algo_result["method"] = "algorithmic (fallback not available)"
-        return algo_result
-
-    # Build variables for the FLASH prompt
-    llm_vars: dict[str, str] = {
-        "segment_text": segment_text[:2000],
-    }
-    if interview_type:
-        llm_vars["interview_type"] = interview_type
-
-    try:
-        llm_response = llm_client.run_agent(
-            agent_id="fa_glaser_data_classifier",
-            variables=llm_vars,
-            temperature=0.1,
-        )
-    except Exception as e:
-        logger.warning(
-            "FLASH LLM fallback failed: %s. Using algorithmic result (conf=%.2f).",
-            e,
-            algo_result["confidence"],
-        )
-        algo_result["method"] = "algorithmic (llm error)"
-        return algo_result
-
-    # If LLM returned mock or error, keep algorithmic result
-    if llm_response.get("mock_note") or llm_response.get("error"):
-        logger.info("FLASH LLM fallback returned mock/error. Using algorithmic result.")
-        algo_result["method"] = "algorithmic (llm unavailable)"
-        return algo_result
-
-    # ── Merge LLM response ──
-    llm_type = llm_response.get("glaser_data_type", algo_result["glaser_data_type"])
-    llm_confidence_str = llm_response.get("confidence", "MEDIUM")
-    confidence_map: dict[str, float] = {"HIGH": 0.9, "MEDIUM": 0.65, "LOW": 0.4}
-    llm_confidence = confidence_map.get(llm_confidence_str, 0.5)
-
-    # Strip _data suffix for suggested_type (backward compat)
-    suggested_type = (
-        llm_type.replace("_data", "") if llm_type.endswith("_data") else llm_type
+    # Build a compact JSON with all segments
+    segments_json = json.dumps(
+        [
+            {
+                "seg": i + 1,
+                "id": s["id"],
+                "text": s["text"][:1500],
+            }
+            for i, s in enumerate(segments)
+        ],
+        ensure_ascii=False,
     )
 
-    return {
-        "glaser_data_type": llm_type,
-        "suggested_type": suggested_type,
-        "signals_found": algo_result["signals_found"],
-        "confidence": max(algo_result["confidence"], llm_confidence),
-        "method": "llm_fallback",
-        "rationale": llm_response.get("rationale", ""),
-    }
+    interviewer_rule = (
+        "Interviewer questions and speech CAN be classified as baseline_data or properline_data if they reveal the interviewer's own behavioral patterns."
+        if allow_interviewer_as_baseline
+        else "Interviewer questions, titles, subtitles, and metadata are NEVER participant data. Classify them as 'interviewer_context' ONLY."
+    )
+
+    try:
+        response = llm_client.run_agent(
+            agent_id="fa_glaser_data_classifier",
+            variables={
+                "segments_json": segments_json,
+                "interviewer_rule": interviewer_rule,
+            },
+        )
+    except Exception as e:
+        logger.warning("Batch classification failed: %s. Falling back to defaults.", e)
+        return [
+            {
+                "segment_id": s["id"],
+                "glaser_data_type": "baseline_data",
+                "confidence": 0.3,
+                "rationale": f"Batch LLM error: {e}",
+                "is_interviewer": False,
+                "method": "batch_fallback",
+            }
+            for s in segments
+        ]
+
+    if response.get("mock_note") or response.get("error"):
+        logger.info("Batch classification: mock/error. Using conservative defaults.")
+        return [
+            {
+                "segment_id": s["id"],
+                "glaser_data_type": "baseline_data",
+                "confidence": 0.3,
+                "rationale": response.get("mock_note", response.get("error", "mock")),
+                "is_interviewer": False,
+                "method": "batch_mock",
+            }
+            for s in segments
+        ]
+
+    # Parse AI response: expect {"classifications": [{seg, glaser_data_type, ...}, ...]}
+    classifications = response.get("classifications", [])
+    results = []
+
+    # Build a lookup from seg index to result
+    ai_by_seg = {}
+    for c in classifications:
+        seg_num = c.get("seg")
+        if seg_num is not None:
+            ai_by_seg[seg_num] = c
+
+    for i, s in enumerate(segments):
+        seg_num = i + 1
+        ai = ai_by_seg.get(seg_num, {})
+        glaser_type = ai.get("glaser_data_type", "baseline_data")
+        is_interviewer = ai.get("is_interviewer", False)
+
+        # Enforce interviewer rule: if flagged as interviewer, force type
+        if is_interviewer and not allow_interviewer_as_baseline:
+            glaser_type = "interviewer_context"
+
+        results.append(
+            {
+                "segment_id": s["id"],
+                "glaser_data_type": glaser_type,
+                "confidence": ai.get("confidence", 0.5),
+                "rationale": ai.get("rationale", ""),
+                "is_interviewer": is_interviewer,
+                "method": "ai_batch",
+            }
+        )
+
+    return results
 
 
 # ═══════════════════════════════════════════════════════════════════════

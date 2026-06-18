@@ -33,9 +33,9 @@ class PopulationContext(Base, TimestampMixin):
     estructuras discursivas, términos nativos, jerga del grupo."""
 
     data_production_context: Mapped[str] = mapped_column(Text, default="")
-    """Contexto de producción de los datos: condiciones de las entrevistas,
+    """Contexto de producción de los datos: condiciones de los documentos,
     señales de deseabilidad social, fatiga, evasión, apertura,
-    dinámicas de poder entrevistador-entrevistado."""
+    dinámicas de poder autor-participante."""
 
     # ── Trazabilidad ──────────────────────────────────
     source_document_ids: Mapped[list] = mapped_column(JSONB, default=list)

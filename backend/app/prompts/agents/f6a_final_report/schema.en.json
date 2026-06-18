@@ -45,7 +45,7 @@
                 },
                 "pattern_identification": {
                   "type": "string",
-                  "description": "The gerund that names the core pattern. Explanation of what the pattern IS and why this gerund captures it."
+                  "description": "The label that names the core pattern. Explanation of what the pattern IS and why this label captures it."
                 },
                 "emergence_narrative": {
                   "type": "string",

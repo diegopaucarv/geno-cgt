@@ -83,7 +83,7 @@ def write_section(sorting_group_id: str, proyecto_id: str) -> dict:
         cc = session.execute(
             text(
                 "SELECT proposal->>'core_concern' FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
                 "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
@@ -161,6 +161,30 @@ def critique_section(draft: str, memo_ids: list[str], proyecto_id: str) -> dict:
         # ── Load source memos for fidelity verification ──
         source_memos = _load_memos_for_writing(session, memo_ids)
 
+        # ── Load study context for the critic (G27-G29) ──
+        ctx = session.execute(
+            text(
+                "SELECT object_of_study, population_assumption "
+                "FROM proyectos WHERE id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = ctx[0] if ctx and ctx[0] else "concern"
+        pa = ctx[1] if ctx and ctx[1] else {}
+        rq_data = pa.get("research_question", {}) if isinstance(pa, dict) else {}
+        research_question = rq_data.get("research_question", "(not generated)")
+
+        # ── Fetch core_concern from HITL ──
+        cc = session.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = cc[0] if cc and cc[0] else "(not yet identified)"
+
         # ── Call writing_critic (PRO) ──
         logger.info(
             "Critic: evaluating draft (%d chars) against %d source memos",
@@ -171,6 +195,9 @@ def critique_section(draft: str, memo_ids: list[str], proyecto_id: str) -> dict:
         variables = {
             "draft": draft,
             "source_memos": source_memos,
+            "object_of_study": object_of_study,
+            "core_concern": core_concern,
+            "research_question": research_question,
         }
 
         response = llm.run_agent(
@@ -229,12 +256,23 @@ def feel_gaps(draft: str, project_id: str) -> list[dict]:
         cc = session.execute(
             text(
                 "SELECT proposal->>'core_concern' FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
                 "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": project_id},
         ).fetchone()
         core_concern = cc[0] if cc and cc[0] else "(not yet identified)"
+
+        # ── Fetch research_question for gap context (G30) ──
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": project_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        research_question = rq_data.get("research_question", "(not generated)")
 
         # ── Call gap_feeler agent (FLASH) ──
         result = llm.run_agent(
@@ -244,6 +282,7 @@ def feel_gaps(draft: str, project_id: str) -> list[dict]:
                 "project_id": project_id,
                 "object_of_study": object_of_study,
                 "core_concern": core_concern,
+                "research_question": research_question,
             },
         )
 

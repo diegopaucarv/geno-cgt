@@ -219,7 +219,7 @@ services:
         - action: rebuild
           path: ./workers/nlp/Dockerfile
     volumes:
-      - ./uploads:/app/uploads
+      - uploads_data:/app/uploads
       - ./backend:/app/backend:ro
       - runtime_config:/app/config:ro
     command: celery -A tasks worker --queues=nlp --concurrency=${NLP_CONCURRENCY:-1} --loglevel=info
@@ -304,6 +304,7 @@ volumes:
   miniodata:
   frontend_modules:
   runtime_config:
+  uploads_data:
   tei_cache:
     driver: local
     driver_opts:

@@ -9,7 +9,7 @@
   "properties": {
     "main_concern": {
       "type": "string",
-      "description": "Core {object_of_study} expressed as a gerund or verb phrase."
+      "description": "Core {object_of_study} expressed per coding style or verb phrase."
     },
     "rationale": {
       "type": "string",
@@ -24,7 +24,7 @@
     },
     "resolving_mechanisms": {
       "type": "array",
-      "description": "Codes or mechanisms that resolve the problems (Question 2). Empty array if none identified.",
+      "description": "Codes or mechanisms that {processing_verb} the pattern (Question 2). Empty array if none identified.",
       "items": {
         "type": "string"
       }
@@ -47,7 +47,7 @@
     },
     "alternative_concerns": {
       "type": "array",
-      "description": "Plausible alternative concerns if confidence is not HIGH.",
+      "description": "Plausible alternative patterns if confidence is not HIGH.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -58,7 +58,7 @@
         "properties": {
           "concern": {
             "type": "string",
-            "description": "Alternative concern."
+            "description": "Alternative pattern."
           },
           "why_less_likely": {
             "type": "string",

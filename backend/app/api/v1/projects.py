@@ -230,6 +230,10 @@ async def create_project(
     current_user: Usuario = Depends(get_current_user),
 ):
     data = body.model_dump()
+    # Remove fields that are NOT Proyecto columns (stored in JSONB later)
+    custom_label = data.pop("custom_label", None)
+    processing_verb = data.pop("processing_verb", "").strip() or "resolve"
+    processing_gerund = data.pop("processing_gerund", "").strip() or "resolving"
     oos = data.get("object_of_study", "concern")
     if oos and oos not in VALID_OBJECTS_OF_STUDY:
         raise HTTPException(
@@ -240,7 +244,6 @@ async def create_project(
     data["object_of_study"] = oos or "concern"
 
     # ── spaCy validation for custom object_of_study ──
-    custom_label = body.custom_label
     spacy_result: dict | None = None
     if oos == "custom" and custom_label and custom_label.strip():
         try:
@@ -276,11 +279,9 @@ async def create_project(
         await db.refresh(proyecto)
 
     # ── Store processing_verb in population_assumption ──
-    pv = data.get("processing_verb", "").strip() or "resolve"
-    pg = data.get("processing_gerund", "").strip() or "resolving"
     pop = proyecto.population_assumption or {}
-    pop["processing_verb"] = pv
-    pop["processing_gerund"] = pg
+    pop["processing_verb"] = processing_verb
+    pop["processing_gerund"] = processing_gerund
     # Default methodological framework
     pop.setdefault("methodological_framework", "classic_gt")
     proyecto.population_assumption = pop

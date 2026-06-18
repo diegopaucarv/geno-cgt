@@ -27,7 +27,7 @@
           },
           "suggested_gerundio": {
             "type": "string",
-            "description": "Möglicher Codename in Gerundium (-ing Form)."
+            "description": "Möglicher Codename je nach Codierungsstil (-ing Form)."
           }
         }
       }

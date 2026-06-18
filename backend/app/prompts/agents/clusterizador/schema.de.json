@@ -19,7 +19,7 @@
         "properties": {
           "category": {
             "type": "string",
-            "description": "Gerundium der konsolidierten Gruppe."
+            "description": "Label der konsolidierten Gruppe."
           },
           "human_purpose": {
             "type": "string",

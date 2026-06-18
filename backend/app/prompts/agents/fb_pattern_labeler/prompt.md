@@ -55,3 +55,17 @@ Use only the provided incidents. Do not use external knowledge or prior categori
 
 [EXISTING CODES — for duplicate avoidance only]
 {existing_labels}
+
+[PREVIOUS ITERATION LABELS — your own last output]
+{previous_labels}
+
+[ACCUMULATED CRITIC FEEDBACK — all issues across iterations]
+{accumulated_feedback}
+
+[REFINEMENT INSTRUCTIONS — when previous_labels and accumulated_feedback are present]
+When both `{previous_labels}` and `{accumulated_feedback}` are provided, you are in a REFINEMENT iteration. Do NOT regenerate from scratch. Instead:
+1. Start from your PREVIOUS labels (your own last output).
+2. For each label flagged by the critic, apply the suggested fix.
+3. Only modify labels that received MOD or FORCED verdicts — leave SAT labels unchanged.
+4. If accumulated_feedback shows the same issue was flagged in multiple iterations, that issue requires deeper rethinking, not just surface adjustment.
+5. If previous_labels is empty, this is the first iteration — generate from scratch.

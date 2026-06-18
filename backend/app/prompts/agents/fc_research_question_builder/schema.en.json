@@ -14,7 +14,7 @@
     },
     "operational_question": {
       "type": "string",
-      "description": "Operational question for LLM agents during discovery. Follows the structure: 'How do [population] [processing_verb] their [pattern]?' SINGULAR (pattern noun is always singular), process-oriented, concise, guides observation of patterns. Use conjugated verb form when instructions are in an inflected language."
+      "description": "Operational question for LLM agents during DISCOVERY. Uses PLURAL pattern nouns because the specific pattern hasn't been identified yet. Format: 'How do [population] [processing_verb] their [pattern_plural]?' Process-oriented, concise, guides observation of patterns. Use conjugated verb form when instructions are in an inflected language."
     },
     "rationale": {
       "type": "string",
@@ -26,10 +26,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "dimension",
-          "rationale"
-        ],
+        "required": ["dimension", "rationale"],
         "properties": {
           "dimension": {
             "type": "string",

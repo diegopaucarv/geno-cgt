@@ -12,7 +12,7 @@
     "properties": {
       "core_pattern": {
         "type": "string",
-        "description": "Gerúndio (frase verbal de 2-6 palavras) que nomeia o padrão central único sintetizando todos os incidentes neste documento. Deve capturar a essência do que o participante está repetidamente {processing_gerund}. Exemplos: 'Negociando permanência na plataforma', 'Equilibrando risco e visibilidade', 'Defendendo status profissional'."
+        "description": "Rótulo conforme estilo de codificação (frase de 2-6 palavras) que nomeia o padrão central único sintetizando todos os incidentes neste documento. Deve capturar a essência do que o participante está repetidamente {processing_gerund}. Exemplos: 'Negociando permanência na plataforma', 'Equilibrando risco e visibilidade', 'Defendendo status profissional'."
       },
       "description": {
         "type": "string",
@@ -64,7 +64,7 @@
           "properties": {
             "pattern": {
               "type": "string",
-              "description": "Nome alternativo do padrão em gerúndio."
+              "description": "Nome alternativo do padrão conforme estilo de codificação."
             },
             "why_different": {
               "type": "string",

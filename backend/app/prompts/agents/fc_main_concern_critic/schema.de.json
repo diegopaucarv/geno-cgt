@@ -50,7 +50,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Vorgeschlagene konkrete Maßnahme. Nur wenn MOD. Z.B.: 'Gerundium zu X umformulieren', 'Abstraktion durch Verankerung in Code Y reduzieren', 'Prüfen, ob Code Z tatsächlich stützt'."
+            "description": "Vorgeschlagene konkrete Maßnahme. Nur wenn MOD. Z.B.: 'Label zu X umformulieren', 'Abstraktion durch Verankerung in Code Y reduzieren', 'Prüfen, ob Code Z tatsächlich stützt'."
           },
           "confidence": {
             "type": "number",

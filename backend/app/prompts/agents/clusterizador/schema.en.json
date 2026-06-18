@@ -19,7 +19,7 @@
         "properties": {
           "category": {
             "type": "string",
-            "description": "Gerund of the consolidated group."
+            "description": "Label of the consolidated group."
           },
           "human_purpose": {
             "type": "string",

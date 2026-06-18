@@ -24,7 +24,7 @@ A self-contained summary of the entire study: the core pattern, the core categor
 the population, the theoretical contribution, and key implications. No citations.
 Standalone — a reader must understand the essence of the theory from this alone.
 
-SECTION 2 — CORE {PATTERN}
+SECTION 2 — CORE {Pattern}
 The core pattern of interest that participants are continuously {processing_gerund}.
 Adapt the heading: if the object_of_study is "concern" → use "Core Concern";
 if "emotion" → "Core Emotion"; if "behavior" → "Core Behavior";

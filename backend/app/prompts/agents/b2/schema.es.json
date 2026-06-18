@@ -18,7 +18,7 @@
         "properties": {
           "code_name": {
             "type": "string",
-            "description": "Nombre en gerundio."
+            "description": "Nombre según estilo de codificación."
           },
           "definition": {
             "type": "string"

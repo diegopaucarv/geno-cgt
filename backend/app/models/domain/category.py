@@ -58,6 +58,15 @@ class Categoria(Base, TimestampMixin):
     Ej: 'Negociando permanencia', 'Escaneando amenazas'.
     NULL hasta que el labeler procesa el grupo de incidentes."""
 
+    # ── CGT concern/population labels ───────────────
+    concern_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    """Concern label linking this category to a gerund concern.
+    Matches Concern.label. Populated by the concern labeler (A14)."""
+
+    population_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    """Population-level label for this category.
+    Broader than individual concerns; may span multiple concerns."""
+
     # Relaciones
     doc_codes = relationship(
         "DocCode", back_populates="categoria", cascade="all, delete-orphan"

@@ -37,6 +37,7 @@ from app.models.domain.canvas import (
     NodoDeLienzo,
 )
 from app.models.domain.category import Categoria, CodigoSegmento, DocCode
+from app.models.domain.concern import Concern
 from app.models.domain.database import DatabaseEdge, DatabaseNode
 from app.models.domain.document import Documento
 from app.models.domain.document_process import DocumentProcess

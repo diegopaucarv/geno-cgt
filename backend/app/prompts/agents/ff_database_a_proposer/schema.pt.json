@@ -23,7 +23,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerúndio ou substantivo conceitual. O nome formal deste nó teórico."
+            "description": "Rótulo ou substantivo conceitual. O nome formal deste nó teórico."
           },
           "entity_type": {
             "type": "string",

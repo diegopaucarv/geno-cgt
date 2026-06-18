@@ -49,34 +49,22 @@ def _get_population_assumption(session, proyecto_id: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _get_coding_style_instruction(session, proyecto_id: str) -> str:
-    """Lee los coding_styles del proyecto y devuelve instruccion combinada."""
-    config = session.execute(
-        text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
-        {"pid": proyecto_id},
-    ).fetchone()
-    style_keys = ["gerundio", "in_vivo"]  # default
-    if config and config[0] and isinstance(config[0], dict):
-        style_keys = config[0].get("coding_styles", style_keys)
-        if isinstance(style_keys, str):
-            style_keys = [style_keys]
+def _get_coding_style_instruction(proyecto_id: str, session=None) -> str:
+    """Read coding_style_instruction from project config, with fallback."""
+    try:
+        from app.core.coding_styles import get_default_style_instruction
 
-    # Embedded instructions (avoid import dependency in worker)
-    instructions = {
-        "gerundio": "Nombra cada código con un GERUNDIO (-ando/-iendo). Ej: 'Negociando límites'.",
-        "nominalizacion": "Nombra cada código con un SUSTANTIVO derivado de verbo (-ción, -miento). Ej: 'Negociación de límites'.",
-        "parafrasis": "Nombra cada código con una FRASE CORTA descriptiva (3-8 palabras). Ej: 'El algoritmo decide sin consultar'.",
-        "tema_subtema": "Nombra cada código como TEMA → subtema. Ej: 'Control algorítmico → Resistencia'.",
-        "causal": "Nombra cada código como CADENA CAUSAL (A → B). Ej: 'Falta de transparencia → Desconfianza'.",
-        "in_vivo": "Nombra cada código con una CITA TEXTUAL del entrevistado (entre comillas). Ej: '\"cada uno tiene su maña\"'.",
-    }
-    if len(style_keys) == 1:
-        return instructions.get(style_keys[0], instructions["gerundio"])
-    return (
-        "Puedes usar CUALQUIERA de estos estilos:\n"
-        + "\n".join(f"  • {instructions[k]}" for k in style_keys if k in instructions)
-        + "\n\nElige el más adecuado para cada código según el contenido."
-    )
+        # Try to read from DB if session available
+        if session and proyecto_id:
+            row = session.execute(
+                text("SELECT coding_style_instruction FROM proyectos WHERE id = :pid"),
+                {"pid": proyecto_id},
+            ).fetchone()
+            if row and row[0]:
+                return row[0]
+        return get_default_style_instruction()
+    except Exception:
+        return "Nombra cada código con un GERUNDIO (-ando/-iendo)."
 
 
 def b1_distill_sampling(proyecto_id: str) -> dict:
@@ -337,140 +325,163 @@ def b2_open_code(proyecto_id: str) -> dict:
 
 def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
     """
-    Post-B2 grounding: asigna códigos (nuevos y existentes) a segmentos
-    usando similitud de embeddings (pgvector cosine distance).
+    Post-B2 grounding: anchors categories to segments via incident groups.
 
-    Para cada código sin segmentos asignados:
-      1. Genera embedding de su definición vía TEI
-      2. Busca los top-5 segmentos más similares en el proyecto
-      3. Inserta en codigos_segmento si similitud >= 0.60
+    For each category that has an incident group:
+      1. Find its incident group (matched by label name)
+      2. For each incident, read its segment_refs from preguntas_glaser_json
+      3. Insert codigos_segmento rows (confidence = 1.0)
 
-    Llamado tras B2 (open coding). Si el código ya tiene segmentos asignados,
-    no se re-asigna (respeta asignaciones existentes).
+    NO embeddings. NO similarity threshold. The link is deterministic:
+    if an incident is grouped under a category, its segments ARE evidence.
     """
     session = SessionLocal()
     try:
-        # 1. Obtener códigos que NO tienen segmentos asignados aún
-        codes = session.execute(
-            text("""
-                SELECT c.id, c.nombre, c.definicion
-                FROM categorias c
-                WHERE c.proyecto_id = :pid
-                  AND c.id NOT IN (
-                      SELECT DISTINCT categoria_id FROM codigos_segmento
-                  )
-                ORDER BY c.actualizado_en DESC
-                LIMIT 30
-            """),
+        # 1. Get all categories for this project
+        cats = session.execute(
+            text("SELECT id, nombre FROM categorias WHERE proyecto_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
 
-        if not codes:
-            return {
-                "codes_processed": 0,
-                "segments_assigned": 0,
-                "reason": "todos los códigos ya tienen segmentos",
-            }
+        if not cats:
+            return {"codes_processed": 0, "segments_assigned": 0}
 
-        # 2. Intentar embedder las definiciones vía TEI
-        try:
-            import requests
+        # 2. Get all incident groups for this project
+        groups = session.execute(
+            text(
+                "SELECT id, label, incident_ids_json "
+                "FROM incident_groups "
+                "WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
 
-            tei_url = os.getenv("TEI_URL", "http://tei:8080")
-            definitions = [f"{c[1]}: {c[2]}" for c in codes]
-            resp = requests.post(
-                f"{tei_url}/v1/embeddings",
-                json={"input": definitions, "model": "voyageai/voyage-4-nano"},
-                timeout=30.0,
-            )
-            resp.raise_for_status()
-            embeddings = [item["embedding"] for item in resp.json()["data"]]
-        except Exception as e:
-            logger.warning("TEI no disponible para grounding: %s. Fallback a skip.", e)
-            return {
-                "codes_processed": 0,
-                "segments_assigned": 0,
-                "reason": f"TEI no disponible: {e}",
-            }
+        # Build label → group map
+        group_by_label = {}
+        for g in groups:
+            label = (g[1] or "").strip()
+            if label:
+                group_by_label[label] = {
+                    "group_id": str(g[0]),
+                    "incident_ids": g[2] if isinstance(g[2], list) else [],
+                }
 
-        # 3. Para cada código, buscar segmentos similares y asignar
         total_assigned = 0
         codes_processed = 0
 
-        for (code_id, code_name, code_def), code_emb in zip(codes, embeddings):
-            _ensure_vector_adapter()  # register pgvector before first <=> query
-            # Buscar top-5 segmentos más similares (con embedding)
-            similar = session.execute(
-                text("""
-                    SELECT s.id, 1.0 - (s.embedding <=> :query_vec) AS score
-                    FROM segmentos s
-                    JOIN documentos d ON s.documento_id = d.id
-                    WHERE d.proyecto_id = :pid
-                      AND s.embedding IS NOT NULL
-                    ORDER BY score DESC
-                    LIMIT 5
-                """),
-                {"query_vec": code_emb, "pid": proyecto_id},
-            ).fetchall()
+        for cat_row in cats:
+            cat_id = str(cat_row[0])
+            cat_name = (cat_row[1] or "").strip()
 
-            if not similar:
+            # Find matching incident group by label
+            group = group_by_label.get(cat_name)
+            if not group:
                 continue
 
+            incident_ids = group["incident_ids"]
+            if not incident_ids:
+                continue
+
+            # Get segment_refs for all incidents in this group
+            seg_rows = session.execute(
+                text(
+                    "SELECT preguntas_glaser_json "
+                    "FROM extracted_incidents "
+                    "WHERE id::text = ANY(:iids) "
+                    "AND proyecto_id = :pid"
+                ),
+                {"iids": incident_ids, "pid": proyecto_id},
+            ).fetchall()
+
+            assigned_segs = set()
+            for sr in seg_rows:
+                meta = sr[0] if isinstance(sr[0], dict) else {}
+                seg_refs = meta.get("segment_refs", [])
+                for ref in seg_refs:
+                    if isinstance(ref, int):
+                        assigned_segs.add(ref)
+                    elif isinstance(ref, str) and ref.isdigit():
+                        assigned_segs.add(int(ref))
+
+            if not assigned_segs:
+                continue
+
+            # Resolve segment numbers to UUIDs
+            seg_map_rows = session.execute(
+                text(
+                    "SELECT s.id, s.posicion FROM segmentos s "
+                    "JOIN documentos d ON s.documento_id = d.id "
+                    "WHERE d.proyecto_id = :pid AND s.posicion = ANY(:positions)"
+                ),
+                {"pid": proyecto_id, "positions": list(assigned_segs)},
+            ).fetchall()
+
+            seg_map = {row[1]: str(row[0]) for row in seg_map_rows}
+
             assigned_for_code = 0
-            for seg_row in similar:
-                seg_id = str(seg_row[0])
-                score = float(seg_row[1])
-
-                if score < 0.60:
+            for pos in assigned_segs:
+                seg_uuid = seg_map.get(pos)
+                if not seg_uuid:
                     continue
-
-                session.execute(
-                    text(
-                        "INSERT INTO codigos_segmento (segmento_id, categoria_id, estado, confianza, origen) "
-                        "VALUES (:sid, :cid, 'asignado', :conf, 'ia') "
-                        "ON CONFLICT DO NOTHING"
-                    ),
-                    {
-                        "sid": seg_id,
-                        "cid": str(code_id),
-                        "conf": round(score, 3),
-                    },
-                )
-                assigned_for_code += 1
+                try:
+                    session.execute(
+                        text(
+                            "INSERT INTO codigos_segmento "
+                            "(segmento_id, categoria_id, estado, confianza, origen) "
+                            "VALUES (:sid, :cid, 'asignado', 1.0, 'ia') "
+                            "ON CONFLICT DO NOTHING"
+                        ),
+                        {"sid": seg_uuid, "cid": cat_id},
+                    )
+                    assigned_for_code += 1
+                except Exception as e:
+                    logger.warning(
+                        "Grounding insert failed for cat=%s seg=%s: %s",
+                        cat_name,
+                        pos,
+                        e,
+                    )
 
             if assigned_for_code > 0:
                 codes_processed += 1
                 total_assigned += assigned_for_code
+                logger.info(
+                    "Grounding: '%s' → %d segments",
+                    cat_name,
+                    assigned_for_code,
+                )
 
         session.commit()
+
+        # Update relevance scores
+        session.execute(
+            text(
+                "UPDATE categorias c SET puntaje_relevancia = ("
+                "SELECT COUNT(DISTINCT s.documento_id) "
+                "FROM codigos_segmento cs "
+                "JOIN segmentos s ON cs.segmento_id = s.id "
+                "WHERE cs.categoria_id = c.id"
+                ") WHERE c.proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        )
+        session.commit()
+
         logger.info(
-            "Grounding: %d códigos asignados a %d segmentos",
+            "Grounding complete: %d categories → %d segment assignments",
             codes_processed,
             total_assigned,
         )
 
-        # Actualizar puntaje_relevancia = COUNT(DISTINCT documentos)
-        session.execute(
-            text("""
-                UPDATE categorias c SET puntaje_relevancia = (
-                    SELECT COUNT(DISTINCT s.documento_id)
-                    FROM codigos_segmento cs
-                    JOIN segmentos s ON cs.segmento_id = s.id
-                    WHERE cs.categoria_id = c.id
-                )
-                WHERE c.proyecto_id = :pid
-            """),
-            {"pid": proyecto_id},
-        )
-        session.commit()
-        logger.info("Relevance scores updated for project %s", proyecto_id[:8])
-
         return {
             "codes_processed": codes_processed,
             "segments_assigned": total_assigned,
-            "total_codes_without_segments": len(codes),
         }
 
+    except Exception:
+        session.rollback()
+        logger.exception("Grounding failed for project %s", proyecto_id)
+        raise
     finally:
         session.close()
 
@@ -657,8 +668,191 @@ def b3_generate_hypotheses(
         return {
             "hypotheses_created": created,
             "hypotheses_reinforced": reinforced,
-            "hypotheses": response.get("hypotheses", []),
+            "hypotheses": raw_hypotheses,
         }
+    finally:
+        session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F4.2 — Recurring hypotheses: updates relationship notes after each synthesizer
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def update_hypotheses_incremental(proyecto_id: str) -> dict:
+    """Recurring hypotheses agent: runs after each synthesizer batch to update
+    relationship notes between ALL categories (old + new).
+
+    Reads:
+      - Previous hypotheses memo (memos table, tipo='HIPOTESIS_RELATIONSHIPS')
+      - All current categories with their indicators + which documents they appear in
+      - Process descriptions from all documents
+
+    Calls AI to evaluate cross-category relationships and updates the growing memo
+    with precise references (which documents, which categories).
+
+    The memo grows over time — each batch adds new relationship insights.
+    """
+    session = SessionLocal()
+    try:
+        pop_assumption = _get_population_assumption(session, proyecto_id)
+
+        # ── 1. Read existing relationships memo ──
+        existing_memo = session.execute(
+            text(
+                "SELECT id, contenido FROM memos "
+                "WHERE proyecto_id = :pid AND tipo = 'HIPOTESIS_RELATIONSHIPS' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        previous_note = existing_memo[1] if existing_memo else ""
+        memo_id = str(existing_memo[0]) if existing_memo else None
+
+        # ── 2. Read all categories with their indicators ──
+        categorias = session.execute(
+            text(
+                "SELECT id, nombre, definicion, gerundio_label "
+                "FROM categorias WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        if not categorias:
+            logger.info(
+                "update_hypotheses_incremental: no categories for project %s",
+                proyecto_id[:8],
+            )
+            return {"categories_count": 0, "status": "no_categories"}
+
+        # ── 3. Read which documents each category appears in ──
+        doc_links = session.execute(
+            text(
+                "SELECT dc.categoria_id, d.nombre_archivo, d.indice "
+                "FROM doc_codes dc "
+                "JOIN documentos d ON dc.documento_id = d.id "
+                "WHERE d.proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        # Build category → documents map
+        cat_docs: dict[str, list[str]] = {}
+        for dl in doc_links:
+            cid = str(dl[0])
+            doc_name = dl[1] or f"Doc {dl[2]}"
+            if cid not in cat_docs:
+                cat_docs[cid] = []
+            cat_docs[cid].append(doc_name)
+
+        # ── 4. Build categories text with precise references ──
+        categories_lines: list[str] = []
+        for cat in categorias:
+            cid = str(cat[0])
+            nombre = cat[1]
+            definicion = cat[2]
+            gerundio = cat[3] or ""
+            docs = cat_docs.get(cid, [])
+            indicator = (
+                gerundio if gerundio else (definicion[:120] if definicion else "")
+            )
+            docs_str = ", ".join(docs) if docs else "(sin documentos asociados)"
+            categories_lines.append(
+                f"- [{nombre}] {indicator} — aparece en: {docs_str}"
+            )
+        categories_text = "\n".join(categories_lines)
+
+        # ── 5. Read process descriptions ──
+        processes = session.execute(
+            text(
+                "SELECT process_description FROM document_processes "
+                "WHERE proyecto_id = :pid ORDER BY creado_en"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        processes_text = "\n".join(
+            f"Doc {i + 1}: {p[0]}" for i, p in enumerate(processes)
+        )
+
+        # ── 6. Call AI to update relationships ──
+        response = llm.run_agent(
+            agent_id="fb_hypothesis_generator",
+            variables={
+                "population_assumption": pop_assumption,
+                "population_context": "(incremental update — recurring hypotheses agent)",
+                "processes": processes_text,
+                "codes": categories_text,
+                "existing_hypotheses": previous_note
+                if previous_note
+                else "(primera iteración — no hay notas previas de relaciones)",
+                "object_of_study": "concern",
+                "operational_question": "(recurring relationship update — evaluar relaciones entre todas las categorías)",
+            },
+            temperature=0.4,
+        )
+
+        raw_hypotheses = response.get("hypotheses", [])
+
+        # ── 7. Build updated memo text ──
+        if isinstance(raw_hypotheses, list):
+            new_lines = []
+            for h in raw_hypotheses:
+                if isinstance(h, dict):
+                    text_val = h.get("text", "") or h.get("hypothesis", "") or str(h)
+                else:
+                    text_val = str(h)
+                if text_val.strip():
+                    new_lines.append(f"- {text_val.strip()}")
+            updated_text = "\n".join(new_lines) if new_lines else previous_note
+        else:
+            updated_text = str(raw_hypotheses) if raw_hypotheses else previous_note
+
+        # ── 8. Store/update memo ──
+        if memo_id:
+            session.execute(
+                text(
+                    "UPDATE memos SET contenido = :content, version = version + 1 "
+                    "WHERE id = :mid"
+                ),
+                {"content": updated_text, "mid": memo_id},
+            )
+            logger.info(
+                "update_hypotheses_incremental: updated memo %s for project %s",
+                memo_id[:8],
+                proyecto_id[:8],
+            )
+        else:
+            # Use project creator as auto-generated memo author
+            session.execute(
+                text(
+                    "INSERT INTO memos (id, proyecto_id, autor_id, tipo, estado, contenido) "
+                    "VALUES (gen_random_uuid(), :pid, "
+                    "(SELECT creador_id FROM proyectos WHERE id = :pid2 LIMIT 1), "
+                    "'HIPOTESIS_RELATIONSHIPS', 'ABIERTO', :content)"
+                ),
+                {"pid": proyecto_id, "pid2": proyecto_id, "content": updated_text},
+            )
+            logger.info(
+                "update_hypotheses_incremental: created new memo for project %s",
+                proyecto_id[:8],
+            )
+
+        session.commit()
+
+        return {
+            "memo_updated": bool(memo_id),
+            "categories_count": len(categorias),
+            "hypotheses_generated": len(raw_hypotheses),
+            "status": "ok",
+        }
+
+    except Exception:
+        session.rollback()
+        logger.exception(
+            "update_hypotheses_incremental failed for project %s", proyecto_id
+        )
+        return {"status": "error", "proyecto_id": proyecto_id}
     finally:
         session.close()
 

@@ -1,24 +1,25 @@
 ---
 agent: a2
 tier: PRO
-description: Identifica el proceso central que el entrevistado intenta resolver continuamente.
+description: Identifica el proceso central que el participante intenta resolver continuamente.
 notes:
   - Promovido de FLASH a PRO. Requiere razonamiento cualitativo para identificar procesos.
   - ⚠️ Input limitado a 8 segmentos para mantener contexto manejable.
 constraints:
-  - Usá solo los segmentos proporcionados. No inventes entrevistados ni datos.
+  - Usá solo los segmentos proporcionados. No inventes participantes ni datos.
+input_state: population_assumption, previous_process, object_of_study, operational_question, segments, task_section, coding_style_instruction
 ---
 
 ## System
 
-Eres un identificador de procesos. Extraés el patrón central de comportamiento que el entrevistado repite.
+Eres un identificador de procesos. Extraés el patrón central de comportamiento que el participante repite.
 
 ## Reglas
 
-1. PRODUCÍ un gerundio que capture el proceso central (ej: "Negociando permanencia").
+1. PRODUCÍ un código siguiendo esta instrucción: {coding_style_instruction}
 2. CLASIFICÁ el tipo de dato: baseline, properline, interpreted, vague o mixed.
-3. Si hay entrevistado anterior, INDICÁ en qué se parece y en qué se diferencia.
-4. Si es el primer entrevistado, usá "N/A".
+3. Si hay participante anterior, INDICÁ en qué se parece y en qué se diferencia.
+4. Si es el primer participante, usá "N/A".
 5. SI no hay proceso claro, respondé: "Sin evidencia suficiente."
 
 ## Ejemplo
@@ -57,7 +58,7 @@ El investigador investiga: {object_of_study}
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "Proceso en gerundio + 2-3 oraciones."
+      "description": "Proceso expresado según la instrucción de estilo + 2-3 oraciones."
     },
     "data_classification": {
       "type": "string",
@@ -65,11 +66,11 @@ El investigador investiga: {object_of_study}
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "En qué se parece al anterior. Primer entrevistado: N/A."
+      "description": "En qué se parece al anterior. Primer participante: N/A."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "En qué difiere del anterior. Primer entrevistado: N/A."
+      "description": "En qué difiere del anterior. Primer participante: N/A."
     }
   }
 }

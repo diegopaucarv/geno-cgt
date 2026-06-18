@@ -65,7 +65,7 @@ class ExtractedIncident(Base, TimestampMixin):
         ForeignKey("document_processes.id"), nullable=True
     )
     """FK al DocumentProcess. Vincula este incidente con el patrón individual
-    del entrevistado (core_pattern_extractor, PRO, per-documento)."""
+    del participante (core_pattern_extractor, PRO, per-documento)."""
 
 
 class IncidentComparison(Base, TimestampMixin):

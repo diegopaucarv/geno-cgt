@@ -32,7 +32,7 @@
             },
             "supporting_patterns": {
               "type": "array",
-              "description": "Cuáles de los 3 patrones (por sus nombres en gerundio o índices 1-3) respaldan este elemento convergente.",
+              "description": "Cuáles de los 3 patrones (por sus nombres según estilo de codificación o índices 1-3) respaldan este elemento convergente.",
               "items": {
                 "type": "string"
               }
@@ -96,7 +96,7 @@
       },
       "suggested_shared_pattern": {
         "type": "string",
-        "description": "Si existe convergencia: un nombre tentativo en GERUNDIO para el patrón compartido que unifica los 3 patrones individuales. Debe ser un gerundio (frase verbal). Si la divergencia es fundamental, dejar como cadena vacía."
+        "description": "Si existe convergencia: un nombre tentativo según estilo de codificación para el patrón compartido que unifica los 3 patrones individuales. Debe ser según estilo de codificación (frase verbal). Si la divergencia es fundamental, dejar como cadena vacía."
       },
       "suggested_shared_pattern_rationale": {
         "type": "string",

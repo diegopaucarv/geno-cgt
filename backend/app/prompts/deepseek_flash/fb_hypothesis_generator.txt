@@ -24,7 +24,7 @@ Hipótesis existentes: {existing_hypotheses}
 {{
   "hypotheses": [
     {{
-      "text": "Los entrevistados que dependen totalmente de la plataforma desarrollan estrategias de evasión más elaboradas.",
+      "text": "Los participantes que dependen totalmente de la plataforma desarrollan estrategias de evasión más elaboradas.",
       "level": "specific",
       "type": "relational",
       "evidence": "Entrevistado 1 (tiempo completo): 4 estrategias. Entrevistado 4 (complementario): 1 estrategia.",

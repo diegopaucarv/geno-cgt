@@ -42,7 +42,7 @@
           },
           "evidence": {
             "type": "string",
-            "description": "Evidência concreta citando entrevistados."
+            "description": "Evidência concreta citando participantes."
           },
           "related_codes": {
             "type": "array",

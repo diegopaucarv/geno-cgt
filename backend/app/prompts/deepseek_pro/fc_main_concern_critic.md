@@ -5,8 +5,8 @@ model_profile: pro
 description: Evalua los candidatos a patron de interes propuestos por el proposer. Verifica grounding empirico, cobertura de codigos, type match y riesgos de forzamiento. Parametrizado por {object_of_study}. Paso A2 de Codificacion Selectiva.
 langgraph_node: critique_main_concern
 execution_order: "5.2 (inmediatamente después de propose_main_concern)"
-input_state: main_concern_candidates, all_open_codes, all_memos, object_of_study
-output_state: main_concern_evaluations
+input_state: core_concern_candidates, all_open_codes, all_memos, object_of_study
+output_state: core_concern_evaluations
 depends_on: main_concern_proposer
 prerequisite_for: core_emergence_proposer
 agent_id: none

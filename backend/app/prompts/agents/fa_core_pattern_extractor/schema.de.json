@@ -12,7 +12,7 @@
     "properties": {
       "core_pattern": {
         "type": "string",
-        "description": "Gerundium (Verbalphrase mit -ing Endung, 2-6 Wörter), das das einzige Kernmuster benennt, das alle Incidente in diesem Dokument synthetisiert. Muss die Essenz dessen erfassen, was der Teilnehmer wiederholt {processing_gerund}. Beispiele: 'Verhandeln von Dauerhaftigkeit auf der Plattform', 'Abwägen von Risiko und Sichtbarkeit', 'Verteidigen des beruflichen Status'."
+        "description": "Label je nach Codierungsstil (Verbalphrase, 2-6 Wörter), das das einzige Kernmuster benennt, das alle Incidente in diesem Dokument synthetisiert. Muss die Essenz dessen erfassen, was der Teilnehmer wiederholt {processing_gerund}. Beispiele: 'Verhandeln von Dauerhaftigkeit auf der Plattform', 'Abwägen von Risiko und Sichtbarkeit', 'Verteidigen des beruflichen Status'."
       },
       "description": {
         "type": "string",
@@ -53,7 +53,7 @@
       },
       "alternative_patterns": {
         "type": "array",
-        "description": "Plausible alternative Musterinterpretationen, wenn Konfidenz MEDIUM oder LOW ist. Jede Alternative nennt ein anderes Gerundium, das die Daten plausibel erklären könnte.",
+        "description": "Plausible alternative Musterinterpretationen, wenn Konfidenz MEDIUM oder LOW ist. Jede Alternative nennt ein anderes Label, das die Daten plausibel erklären könnte.",
         "items": {
           "type": "object",
           "additionalProperties": false,
@@ -64,7 +64,7 @@
           "properties": {
             "pattern": {
               "type": "string",
-              "description": "Alternativer Gerundium-Mustername."
+              "description": "Alternativer Label-Mustername."
             },
             "why_different": {
               "type": "string",

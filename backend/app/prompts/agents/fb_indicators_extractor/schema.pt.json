@@ -27,7 +27,7 @@
           },
           "suggested_pattern": {
             "type": "string",
-            "description": "Descrição do padrão de ação observado. Sem gerúndio. Sem jargão teórico."
+            "description": "Descrição do padrão de ação observado. Sconforme estilo de codificação. Sem jargão teórico."
           }
         }
       }

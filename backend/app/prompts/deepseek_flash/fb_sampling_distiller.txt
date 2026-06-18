@@ -3,9 +3,9 @@
 -- description: Muestreo teórico — versión directa. El sistema filtra después.
 
 [INSTRUCCIÓN — lee esto primero]
-Identifica dimensiones de variación entre los entrevistados. Para cada una:
+Identifica dimensiones de variación entre los participantes. Para cada una:
 - Qué varía y por qué importa
-- Evidencia concreta citando entrevistados
+- Evidencia concreta citando participantes
 - Perfil para contrastar, extremo, y consistente
 Output: SOLO el JSON. NO inventes.
 

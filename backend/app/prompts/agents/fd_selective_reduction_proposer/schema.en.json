@@ -15,7 +15,7 @@
         "properties": {
           "new_label": {
             "type": "string",
-            "description": "Gerund of the higher-order concept (if merger) or original label (if kept alone)"
+            "description": "Label of the higher-order concept (if merger) or original label (if kept alone)"
           },
           "entity_type": {
             "type": "string",

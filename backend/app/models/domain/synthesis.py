@@ -85,6 +85,16 @@ class Hypothesis(Base):
         ForeignKey("hypotheses.id"), nullable=True
     )
 
+    # ── CGT concern labels ──────────────────────────
+    concern_labels: Mapped[list] = mapped_column(JSONB, default=list)
+    """List of concern labels this hypothesis relates to.
+    Example: ['Negotiating permanence', 'Scanning threats'].
+    Empty list means unlinked or not yet labeled."""
+
+    batch_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Which batch (1, 2, 3...) produced this hypothesis.
+    NULL until the concern labeler batch is assigned."""
+
 
 class ProcessingState(Base):
     """Rastreador de estado para el procesamiento por lotes e idempotencia."""

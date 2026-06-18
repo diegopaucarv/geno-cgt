@@ -363,6 +363,46 @@ MOCK_RESPONSES: dict[str, dict] = {
         "anomalies": [],
     },
     "fb_label_critic": {"all_valid": True, "issues": []},
+    "fa_document_pattern_extractor": {
+        "patterns": [
+            {
+                "id": "p1",
+                "label": "Negociando agencia creativa",
+                "definition": "[MOCK] El participante negocia continuamente su libertad creativa frente a presiones externas.",
+                "confidence": "MEDIUM",
+            },
+            {
+                "id": "p2",
+                "label": "Gestionando obsolescencia profesional",
+                "definition": "[MOCK] Estrategias para mantenerse relevante ante cambios tecnológicos.",
+                "confidence": "MEDIUM",
+            },
+        ],
+        "incidents": [
+            {
+                "description": "[MOCK] [document] describes rejecting commercial projects that contradict personal style",
+                "segment_refs": [1, 3],
+                "patterns": ["p1"],
+                "exact_quote": "No voy a hacer algo que no me representa solo porque pagan bien.",
+            },
+            {
+                "description": "[MOCK] [document] spends evenings learning new design tools to stay competitive",
+                "segment_refs": [5],
+                "patterns": ["p2"],
+            },
+            {
+                "description": "[MOCK] [document] mentions that younger colleagues get more opportunities",
+                "segment_refs": [7],
+                "patterns": ["p1", "p2"],
+            },
+        ],
+        "document_signals": {
+            "prime_mover": "Negociando identidad profesional en un mercado cambiante",
+            "main_concern_signal": "El participante teme quedar obsoleto pero se niega a traicionar sus principios creativos",
+            "surprising_detail": "A pesar de la presión económica, prioriza la autenticidad sobre la estabilidad",
+            "confidence": "MEDIUM",
+        },
+    },
 }
 
 
@@ -407,6 +447,56 @@ class LLMClient:
             except Exception as e:
                 logger.warning("Together.ai init failed: %s. MOCK mode.", e)
                 self.is_mock = True
+
+    def chat(
+        self,
+        messages: list[dict],
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Simple chat interface for agents (orchestrator, plan_executor, react).
+
+        Compatible with backend TogetherLLM.chat() interface.
+        """
+        if self.is_mock:
+            return {
+                "content": '{"next_step": "final_report"}',
+                "reasoning_content": "",
+                "usage": {"total_tokens": 0},
+            }
+
+        model = model or _MODEL_PRO
+        system_msg = ""
+        user_msg = ""
+        for m in messages:
+            if m.get("role") == "system":
+                system_msg = m.get("content", "")
+            elif m.get("role") == "user":
+                user_msg = m.get("content", "")
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            msg = response.choices[0].message
+            return {
+                "content": msg.content or "",
+                "reasoning_content": getattr(msg, "reasoning_content", ""),
+                "usage": {
+                    "total_tokens": response.usage.total_tokens if response.usage else 0
+                },
+            }
+        except Exception as e:
+            logger.warning("LLMClient.chat failed: %s", e)
+            return {
+                "content": "",
+                "reasoning_content": "",
+                "usage": {"total_tokens": 0},
+            }
 
     def run_agent(
         self,
@@ -507,7 +597,15 @@ class LLMClient:
         temperature: float,
         retry: bool = True,
     ) -> dict[str, Any]:
-        """Llama a Together.ai con response_format json_object. Retry 1 vez."""
+        """Llama a Together.ai con response_format json_object.
+
+        Retry strategy:
+        - 429 (rate limit): exponential backoff 2s, 4s, 8s, 16s, max 4 retries
+        - 5xx (server error): 1 retry after 2s
+        - JSON parse error: 1 retry with error hint
+        """
+        import time as _time
+
         if schema:
             system_prompt += (
                 "\n\n[OUTPUT FORMAT — responde EXCLUSIVAMENTE en JSON]\n"
@@ -526,58 +624,116 @@ class LLMClient:
             "LLM: tier=%s model=%s prompt_chars=%d", tier, model, len(system_prompt)
         )
 
-        try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-            message = response.choices[0].message
-            content = message.content or ""
-            reasoning = getattr(message, "reasoning_content", None)
-            content = content.strip()
-            # Strip markdown code fences if present
-            if content.startswith("```"):
-                lines = content.split("\n")
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                content = "\n".join(lines)
-            result = json.loads(content)
-            if reasoning:
-                result["_reasoning_content"] = reasoning
-            return result
+        last_error = None
+        rate_limit_retries = 0
+        max_rate_limit_retries = 4
 
-        except json.JSONDecodeError as e:
-            if retry:
-                logger.warning(
-                    "JSON parse failed for %s: %s. Retrying with error hint.",
-                    tier,
-                    str(e)[:100],
+        while True:
+            try:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=max_tokens,
+                    temperature=temperature,
                 )
-                hint = (
-                    f"\n\n[ERROR EN RESPUESTA ANTERIOR]\n"
-                    f"Tu respuesta no era JSON válido: {str(e)[:200]}\n"
-                    f"Corrige y responde SOLO el JSON."
-                )
-                return self._call_llm(
-                    tier,
-                    model,
-                    system_prompt + hint,
-                    schema,
-                    max_tokens + 512,
-                    temperature,
-                    retry=False,
-                )
-            logger.warning("JSON parse failed after retry. Mock fallback.")
-            return dict(MOCK_RESPONSES.get(tier, {"error": "JSON parse failed"}))
+                message = response.choices[0].message
+                content = message.content or ""
+                reasoning = getattr(message, "reasoning_content", None)
+                content = content.strip()
+                # Strip markdown code fences if present
+                if content.startswith("```"):
+                    lines = content.split("\n")
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    content = "\n".join(lines)
+                result = json.loads(content)
+                if reasoning:
+                    result["_reasoning_content"] = reasoning
+                return result
 
-        except Exception as e:
-            logger.error("LLM call failed: %s. Mock fallback.", e)
-            return dict(MOCK_RESPONSES.get(tier, {"error": str(e)}))
+            except json.JSONDecodeError as e:
+                last_error = e
+                if retry:
+                    logger.warning(
+                        "JSON parse failed for %s: %s. Retrying with error hint.",
+                        model,
+                        e,
+                    )
+                    retry = False
+                    system_prompt += (
+                        "\n\n[ERROR — Your previous response was not valid JSON. "
+                        "You MUST output ONLY valid JSON. No markdown, no preambles.]"
+                    )
+                    continue
+                break
+
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+
+                # Rate limit (429) — exponential backoff
+                if (
+                    "429" in error_str
+                    or "throttl" in error_str
+                    or "rate limit" in error_str
+                ):
+                    if rate_limit_retries < max_rate_limit_retries:
+                        wait = 2 ** (rate_limit_retries + 1)  # 2, 4, 8, 16 seconds
+                        rate_limit_retries += 1
+                        logger.warning(
+                            "Rate limited (429). Backing off %ds (attempt %d/%d)...",
+                            wait,
+                            rate_limit_retries,
+                            max_rate_limit_retries,
+                        )
+                        _time.sleep(wait)
+                        continue
+                    else:
+                        logger.error(
+                            "Rate limit retries exhausted after %d attempts.",
+                            max_rate_limit_retries,
+                        )
+                        break
+
+                # Server error (5xx) — 1 retry
+                if "500" in error_str or "502" in error_str or "503" in error_str:
+                    if retry:
+                        logger.warning(
+                            "Server error (%s). Retrying once after 2s...",
+                            error_str[:80],
+                        )
+                        retry = False
+                        _time.sleep(2)
+                        continue
+                    break
+
+                # Network/timeout — 1 retry
+                if "timeout" in error_str or "connection" in error_str:
+                    if retry:
+                        logger.warning(
+                            "Network error: %s. Retrying once after 3s...",
+                            error_str[:80],
+                        )
+                        retry = False
+                        _time.sleep(3)
+                        continue
+                    break
+
+                # Unknown error — don't retry
+                logger.error("LLM call failed: %s", e)
+                break
+
+        # All retries exhausted
+        return {
+            "error": str(last_error),
+            "mock_note": f"LLM failed after retries: {str(last_error)[:100]}",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════════

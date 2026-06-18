@@ -1,0 +1,11 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "synthesizer",
+    "schema": {
+      "type": "object",
+      "description": "Propuesta refinada que preserva la estructura original con las modificaciones solicitadas por el critic aplicadas",
+      "additionalProperties": true
+    }
+  }
+}

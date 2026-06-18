@@ -15,7 +15,7 @@
         "properties": {
           "new_label": {
             "type": "string",
-            "description": "Gerúndio do conceito de ordem superior (se fusão) ou rótulo original (se mantido sozinho)"
+            "description": "Rótulo do conceito de ordem superior (se fusão) ou rótulo original (se mantido sozinho)"
           },
           "entity_type": {
             "type": "string",

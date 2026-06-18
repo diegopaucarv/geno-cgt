@@ -1,11 +1,9 @@
 """
-B2 — Pattern Labeler (PRO + SelfRefinement loop).
+B2 — Pattern Labeler (PRO + SelfRefinement loop por concepto).
 
-Recibe grupos de incidentes intercambiables del comparator (B1).
-Propone etiquetas (gerundios) + definiciones para cada grupo.
-
-Usa un bucle de auto-refinamiento: generate → critic → refine.
-Máx 3 iteraciones. PRO para generar, FLASH para criticar.
+Itera CONCEPTO POR CONCEPTO: para cada grupo de incidentes,
+propone UNA etiqueta, la evalúa con el critic, y refina si es necesario.
+Máx 3 iteraciones por grupo. PRO para generar, FLASH para criticar.
 
 See AGENTES.md §pattern_labeler for I/O spec.
 """
@@ -33,12 +31,14 @@ def _build_assistant_message(content: str, response: dict) -> dict:
 
 
 def b2_label_groups(proyecto_id: str) -> dict:
-    """Propone etiquetas para grupos de incidentes usando SelfRefinement.
+    """Propone etiquetas para grupos de incidentes — iterando concepto por concepto.
 
-    1. Lee incident_groups con status='open' (sin etiqueta).
-    2. Bucle Generate (pattern_labeler, PRO) → Critic (label_critic, FLASH).
-    3. Máx 3 iteraciones. Converge cuando all_valid=True.
-    4. Persiste etiquetas aprobadas en incident_groups y categorias.
+    Para CADA grupo:
+    1. Propone UNA etiqueta con el pattern_labeler (PRO).
+    2. El label_critic (FLASH) evalúa ESA etiqueta contra los incidentes fuente.
+    3. Si el critic no encuentra issues → etiqueta aprobada, siguiente grupo.
+    4. Si encuentra issues → feedback al proposer, repetir (máx 3 iteraciones).
+    5. Si tras 3 iteraciones aún hay issues → conservar última versión.
 
     Args:
         proyecto_id: UUID del proyecto.
@@ -49,8 +49,8 @@ def b2_label_groups(proyecto_id: str) -> dict:
           - labels_created: int
           - labels_approved: int
           - labels_modified: int
-          - labels_forced: int
-          - iterations: int (total del bucle)
+          - labels_forced: int (siempre 0, sin veredictos)
+          - iterations: int (total de iteraciones entre todos los grupos)
     """
     session = SessionLocal()
     try:
@@ -142,195 +142,194 @@ def b2_label_groups(proyecto_id: str) -> dict:
         )
         operational_question = rq_data.get("operational_question", "")
 
-        # ── SelfRefinement Loop ────────────────────────────────────
-        groups_json = json.dumps(groups, indent=2, ensure_ascii=False)
-        history: list[dict] = []
+        # Read coding_style_instruction from project config
+        coding_style_instruction = (
+            pa_data.get("coding_style_instruction", "")
+            if isinstance(pa_data, dict)
+            else ""
+        )
+        if not coding_style_instruction:
+            from app.core.coding_styles import get_default_style_instruction
 
+            coding_style_instruction = get_default_style_instruction()
+
+        # ── Iterar CONCEPTO POR CONCEPTO ───────────────────────────
         max_iterations = 3
-        all_valid = False
-        final_labels: list[dict] = []
         total_iterations = 0
-
-        for iteration in range(1, max_iterations + 1):
-            total_iterations = iteration
-
-            # 1. GENERATE (PRO)
-            gen_vars = {
-                "groups_json": groups_json,
-                "object_of_study": object_of_study,
-                "existing_labels": existing_labels,
-                "operational_question": operational_question or "(not yet generated)",
-            }
-
-            # Si hay feedback de iteración anterior, añadirlo
-            if history:
-                feedback_msgs = [
-                    m["content"]
-                    for m in history
-                    if m.get("role") == "user" and "issues" in m.get("content", "")
-                ]
-                if feedback_msgs:
-                    gen_vars["groups_json"] = (
-                        groups_json
-                        + "\n\n[FEEDBACK DE ITERACIÓN ANTERIOR]\n"
-                        + feedback_msgs[-1]
-                    )
-
-            gen_response = llm.run_agent(
-                agent_id="fb_pattern_labeler",
-                variables=gen_vars,
-            )
-
-            gen_text = json.dumps(gen_response, ensure_ascii=False)
-            history.append(_build_assistant_message(gen_text, gen_response))
-
-            proposed_labels = gen_response.get("proposed_labels", [])
-            if not proposed_labels:
-                logger.warning("B2 iter %d: No labels proposed", iteration)
-                break
-
-            # 2. CRITIC (FLASH)
-            critic_response = llm.run_agent(
-                agent_id="fb_label_critic",
-                variables={
-                    "output_to_evaluate": gen_text,
-                    "source_incidents": groups_json,
-                },
-                temperature=0.1,
-            )
-
-            all_valid = critic_response.get("all_valid", False)
-            issues = critic_response.get("issues", [])
-
-            logger.info(
-                "B2 iter %d: %d labels, all_valid=%s, issues=%d",
-                iteration,
-                len(proposed_labels),
-                all_valid,
-                len(issues),
-            )
-
-            if all_valid:
-                final_labels = proposed_labels
-                break
-
-            # 3. FEEDBACK para siguiente iteración
-            if issues and iteration < max_iterations:
-                feedback = (
-                    f"Iteration {iteration} issues:\n"
-                    f"{json.dumps(issues, ensure_ascii=False)[:800]}\n"
-                    "Refiná las etiquetas con problemas."
-                )
-                history.append(
-                    {
-                        "role": "user",
-                        "content": feedback,
-                    }
-                )
-                final_labels = proposed_labels  # Guardar por si es la última
-            else:
-                final_labels = proposed_labels
-
-        # ── Si no convergió, usar últimos labels ───────────────────
-        if not all_valid and final_labels:
-            logger.info("B2: Using labels from final iteration (not fully converged)")
-
-        # ── Persistir etiquetas ────────────────────────────────────
         labels_created = 0
         labels_approved = 0
         labels_modified = 0
-        labels_forced = 0
 
-        # Clasificar por veredicto (del último critic si existe)
-        verdict_map: dict[str, str] = {}
-        if not all_valid:
-            # Último critic issues para clasificar
-            critic_check = llm.run_agent(
-                agent_id="fb_label_critic",
-                variables={
-                    "output_to_evaluate": json.dumps(
-                        {"proposed_labels": final_labels}, ensure_ascii=False
-                    ),
-                    "source_incidents": groups_json,
-                },
-                temperature=0.1,
-            )
-            for issue in critic_check.get("issues", []):
-                label_name = issue.get("label", "")
-                verdict = issue.get("verdict", "MOD")
-                if label_name:
-                    verdict_map[label_name] = verdict
+        for group in groups:
+            group_id = group["group_id"]
+            # Wrap single group as array — pattern_labeler expects array input
+            group_json = json.dumps([group], indent=2, ensure_ascii=False)
+            history: list[dict] = []
+            previous_labels_json: str = ""
+            accumulated_feedback: list[str] = []
+            final_label: dict = {}
+            label_converged = False
 
-        for label_info in final_labels:
-            label = label_info.get("label", "").strip()
-            definition = label_info.get("definition", "").strip()
-            group_index = label_info.get("group_index", -1)
+            for iteration in range(1, max_iterations + 1):
+                total_iterations += 1
 
-            if not label or not definition:
-                continue
+                # 1. PROPOSE (PRO) — ONE group → ONE label
+                gen_vars = {
+                    "groups_json": group_json,
+                    "object_of_study": object_of_study,
+                    "existing_labels": existing_labels,
+                    "operational_question": operational_question
+                    or "(not yet generated)",
+                    "coding_style_instruction": coding_style_instruction,
+                }
 
-            # Obtener el group_id correspondiente
-            group_id = None
-            if 0 <= group_index < len(groups):
-                group_id = groups[group_index]["group_id"]
+                # G15: Pass own previous output so labeler can do targeted refinement
+                if previous_labels_json:
+                    gen_vars["previous_labels"] = previous_labels_json
 
-            if not group_id:
-                continue
+                # G16: Accumulate ALL feedback across iterations, not just last
+                if accumulated_feedback:
+                    gen_vars["accumulated_feedback"] = "\n\n---\n".join(
+                        accumulated_feedback
+                    )
 
-            verdict = verdict_map.get(label, "SAT")
-
-            # Actualizar incident_group
-            session.execute(
-                text(
-                    "UPDATE incident_groups "
-                    "SET label = :label, definition = :definition, "
-                    "    status = CASE WHEN :status = 'SAT' THEN 'labeled' ELSE 'open' END, "
-                    "    labeled_by_agent = 'pattern_labeler', "
-                    "    critic_verdict = :verdict::jsonb "
-                    "WHERE id = :gid AND proyecto_id = :pid"
-                ),
-                {
-                    "label": label,
-                    "definition": definition,
-                    "status": "SAT" if verdict == "SAT" else "MOD",
-                    "verdict": json.dumps({"verdict": verdict}),
-                    "gid": group_id,
-                    "pid": proyecto_id,
-                },
-            )
-
-            # Si SAT, crear categoría
-            if verdict == "SAT":
-                session.execute(
-                    text(
-                        "INSERT INTO categorias "
-                        "(id, proyecto_id, nombre, definicion, version, "
-                        " estado_saturacion, puntaje_relevancia, es_central) "
-                        "VALUES (gen_random_uuid(), :pid, :name, :def, "
-                        " 1, 'ABIERTO', 1.0, false)"
-                    ),
-                    {
-                        "pid": proyecto_id,
-                        "name": label,
-                        "def": definition,
-                    },
+                gen_response = llm.run_agent(
+                    agent_id="fb_pattern_labeler",
+                    variables=gen_vars,
                 )
-                labels_approved += 1
-            elif verdict == "MOD":
-                labels_modified += 1
-            else:
-                labels_forced += 1
 
-            labels_created += 1
+                gen_text = json.dumps(gen_response, ensure_ascii=False)
+                history.append(_build_assistant_message(gen_text, gen_response))
 
-        session.commit()
+                proposed_labels = gen_response.get("proposed_labels", [])
+                if not proposed_labels:
+                    logger.warning(
+                        "B2 group %s iter %d: No labels proposed. Response keys: %s, raw (300 chars): %s",
+                        group_id[:8],
+                        iteration,
+                        list(gen_response.keys())
+                        if isinstance(gen_response, dict)
+                        else type(gen_response).__name__,
+                        str(gen_response)[:300],
+                    )
+                    break
+
+                # Take the label for THIS group (group_index 0 since single group)
+                label_info = proposed_labels[0] if proposed_labels else {}
+                final_label = label_info
+
+                # G15: Save own output for next iteration's targeted refinement
+                previous_labels_json = json.dumps(
+                    {"proposed_labels": [label_info]}, ensure_ascii=False
+                )[:4000]
+
+                # 2. CRITIC (FLASH) — ONE label against ONE group's incidents
+                label_json = json.dumps(label_info, ensure_ascii=False)
+                critic_response = llm.run_agent(
+                    agent_id="fb_label_critic",
+                    variables={
+                        "output_to_evaluate": label_json,
+                        "source_incidents": group_json,
+                    },
+                    temperature=0.1,
+                )
+
+                issues = critic_response.get("issues", [])
+
+                logger.info(
+                    "B2 group=%s iter=%d: label=%s, issues=%d",
+                    group_id[:8],
+                    iteration,
+                    label_info.get("label", "?"),
+                    len(issues),
+                )
+
+                if not issues:
+                    # Label is good — move to next group
+                    label_converged = True
+                    break
+
+                # Log first 3 issues to understand critic's concerns
+                for iss in issues[:3]:
+                    logger.info(
+                        "B2 critic issue: label=%s desc=%s",
+                        iss.get("label", "?"),
+                        str(iss.get("description", ""))[:120],
+                    )
+
+                # 3. FEEDBACK para siguiente iteración
+                if iteration < max_iterations:
+                    feedback_parts = [f"=== Iteration {iteration} Critic Review ==="]
+                    for issue in issues:
+                        label = issue.get("label", "(unnamed)")
+                        description = issue.get("description", "")
+                        suggestion = issue.get("suggestion", "")
+                        feedback_parts.append(f"Issue with '{label}': {description}")
+                        if suggestion:
+                            feedback_parts.append(f"  → Suggestion: {suggestion}")
+                    feedback = "\n".join(feedback_parts)
+
+                    history.append({"role": "user", "content": feedback})
+                    accumulated_feedback.append(feedback)  # G16: accumulate all
+                # If last iteration with issues, keep final_label as-is
+
+            # ── Persist label for this group ────────────────────────
+            if final_label:
+                label_name = final_label.get("label", "").strip()
+                definition = final_label.get("definition", "").strip()
+
+                if label_name and definition:
+                    status = "labeled" if label_converged else "open"
+
+                    # Update incident_group
+                    session.execute(
+                        text(
+                            "UPDATE incident_groups "
+                            "SET label = :label, definition = :definition, "
+                            "    status = :status, "
+                            "    labeled_by_agent = 'pattern_labeler' "
+                            "WHERE id = :gid AND proyecto_id = :pid"
+                        ),
+                        {
+                            "label": label_name,
+                            "definition": definition,
+                            "status": status,
+                            "gid": group_id,
+                            "pid": proyecto_id,
+                        },
+                    )
+
+                    if label_converged:
+                        # Create category for approved labels
+                        session.execute(
+                            text(
+                                "INSERT INTO categorias "
+                                "(id, proyecto_id, nombre, definicion, version, "
+                                " estado_saturacion, puntaje_relevancia, es_central) "
+                                "VALUES (gen_random_uuid(), :pid, :name, :def, "
+                                " 1, 'ABIERTO', 1.0, false)"
+                            ),
+                            {
+                                "pid": proyecto_id,
+                                "name": label_name,
+                                "def": definition,
+                            },
+                        )
+                        labels_approved += 1
+                    else:
+                        labels_modified += 1
+
+                    labels_created += 1
+
+            # Commit per group so partial progress is saved
+            session.commit()
 
         logger.info(
-            "B2 complete: %d labels (%d SAT, %d MOD, %d FORCED) in %d iterations",
+            "B2 complete: %d groups → %d labels (%d approved, %d modified) in %d total iterations",
+            len(rows),
             labels_created,
             labels_approved,
             labels_modified,
-            labels_forced,
             total_iterations,
         )
 
@@ -339,7 +338,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
             "labels_created": labels_created,
             "labels_approved": labels_approved,
             "labels_modified": labels_modified,
-            "labels_forced": labels_forced,
+            "labels_forced": 0,
             "iterations": total_iterations,
         }
 

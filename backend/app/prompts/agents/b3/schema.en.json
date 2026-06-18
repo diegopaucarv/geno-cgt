@@ -42,7 +42,7 @@
           },
           "evidence": {
             "type": "string",
-            "description": "Concrete evidence citing interviewees."
+            "description": "Concrete evidence citing participants."
           },
           "related_codes": {
             "type": "array",

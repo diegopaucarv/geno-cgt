@@ -27,7 +27,7 @@
           },
           "suggested_gerundio": {
             "type": "string",
-            "description": "Posible nombre de código en gerundio (forma -ing)."
+            "description": "Posible nombre de código según estilo de codificación (forma -ing)."
           }
         }
       }

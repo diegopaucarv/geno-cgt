@@ -54,7 +54,7 @@
               },
               "proximity_to_core": {
                 "type": "boolean",
-                "description": "true if the gap is in or near a paragraph referencing the core concern."
+                "description": "true if the gap is in or near a paragraph referencing the core pattern."
               }
             }
           }

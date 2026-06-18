@@ -24,7 +24,7 @@ async def run_pipeline_stage(
     """
     Dispara una etapa del pipeline y devuelve los task_ids para polling.
 
-    Stages: upload, precoding, open_coding, cross_doc, main_concern,
+    Stages: upload, precoding, open_coding, cross_doc, pattern_of_interest,
             selective, saturation
     """
     result = {"stage": stage_name, "project_id": str(project_id), "task_ids": []}
@@ -84,7 +84,7 @@ async def run_pipeline_stage(
         result["task_ids"].append(task.id)
         result["status"] = "dispatched"
 
-    elif stage_name == "main_concern":
+    elif stage_name == "pattern_of_interest":
         # Redirigido al selective_coding_coordinator (Fase A)
         task = celery_app.send_task(
             "selective_coding_coordinator",
@@ -449,7 +449,7 @@ async def get_pipeline_status(
         "cross_doc": "done"
         if hyp_count > 0
         else ("in_progress" if cat_count > 0 else "pending"),
-        "main_concern": "pending",
+        "pattern_of_interest": "pending",
         "selective": "pending",
         "saturation": "pending",
     }

@@ -64,7 +64,9 @@ class SelfRefinementLoop(BaseAgent):
 
         # ── 2. ALGORITHMIC CHECK (O6: regex + heuristics, no LLM) ──
         codes = gen_response.get("codes", [])
-        coding_style = kwargs.get("coding_style", "gerundio")
+        from app.core.coding_styles import get_default_style
+
+        coding_style = kwargs.get("coding_style", get_default_style())
 
         from app.agents.quality.scorer import (
             compare_codes_for_redundancy,

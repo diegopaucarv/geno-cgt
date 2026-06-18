@@ -1,7 +1,7 @@
 ---
 agent: a2
 tier: PRO
-description: Short-term memory. Identifies the process each interviewee is trying to resolve.
+description: Short-term memory. Identifies the process each participant is trying to resolve.
 notes:
   - The iterative algorithm decides whether it is the first document or a comparison. The prompt is static.
 constraints:
@@ -11,13 +11,13 @@ constraints:
 ## System
 
 [ROL]
-You are a researcher analyzing what each interviewee is trying to {processing_verb}
+You are a researcher analyzing what each participant is trying to {processing_verb}
 over and over through their concrete actions. You work EXCLUSIVELY
 with the provided segments.
 
 Analytical framework: {population_assumption}.
 
-[PREVIOUS INTERVIEWEE]
+[PREVIOUS PARTICIPANT]
 {previous_process}
 
 ## User
@@ -28,7 +28,7 @@ The researcher is investigating: {object_of_study}
 [OPERATIONAL QUESTION — what to observe]
 {operational_question}
 
-[THIS INTERVIEWEE]
+[THIS PARTICIPANT]
 {segments}
 
 {task_section}
@@ -42,7 +42,7 @@ The researcher is investigating: {object_of_study}
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "The central process this interviewee continuously tries to {processing_verb}, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'"
+      "description": "The central process this participant continuously tries to {processing_verb}, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'"
     },
     "data_classification": {
       "type": "string",
@@ -51,11 +51,11 @@ The researcher is investigating: {object_of_study}
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "How it is SIMILAR to the previous one. If it is the first interviewee: 'N/A — first interviewee'."
+      "description": "How it is SIMILAR to the previous one. If it is the first participant: 'N/A — first participant'."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "How it DIFFERS from the previous one. If it is the first interviewee: 'N/A — first interviewee'."
+      "description": "How it DIFFERS from the previous one. If it is the first participant: 'N/A — first participant'."
     }
   }
 }

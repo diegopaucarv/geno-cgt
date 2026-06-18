@@ -20,7 +20,7 @@
         "properties": {
           "code_label": {
             "type": "string",
-            "description": "Nombre del código evaluado (gerundio exacto)"
+            "description": "Nombre del código evaluado (etiqueta exacta)"
           },
           "verdict": {
             "type": "string",
@@ -41,7 +41,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Solo si MOD. Acción concreta: nuevo gerundio, definición ajustada o división en subcódigos. Si no aplica, dejar cadena vacía."
+            "description": "Solo si MOD. Acción concreta: nueva etiqueta, definición ajustada o división en subcódigos. Si no aplica, dejar cadena vacía."
           },
           "overlap_with_existing": {
             "type": "array",

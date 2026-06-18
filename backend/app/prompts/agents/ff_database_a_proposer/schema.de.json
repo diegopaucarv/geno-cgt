@@ -23,7 +23,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerundium oder konzeptuelles Substantiv. Der formale Name dieses theoretischen Knotens."
+            "description": "Label oder konzeptuelles Substantiv. Der formale Name dieses theoretischen Knotens."
           },
           "entity_type": {
             "type": "string",

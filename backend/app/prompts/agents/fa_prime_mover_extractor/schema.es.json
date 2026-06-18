@@ -8,7 +8,7 @@
   "properties": {
     "prime_mover": {
       "type": "string",
-      "description": "Patrón central expresado como gerundio."
+      "description": "Patrón central expresado según estilo de codificación."
     },
     "description": {
       "type": "string",

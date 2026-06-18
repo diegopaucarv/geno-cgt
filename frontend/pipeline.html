@@ -584,12 +584,11 @@
                     config: [],
                 },
                 {
-                    id: "main_concern",
+                    id: "pattern_of_interest",
                     icon: "🎯",
-                    title: "Main Concern (A14)",
-                    subtitle:
-                        "3 preguntas operacionales → preocupación central",
-                    agents: "A14 main_concern_proposer (PRO)",
+                    title: "Pattern of Interest (A14)",
+                    subtitle: "3 preguntas operacionales → patrón de interés",
+                    agents: "A14 pattern_of_interest_proposer (PRO)",
                     config: [
                         {
                             key: "object_of_study",
@@ -1031,13 +1030,13 @@
                         break;
                     }
 
-                    case "main_concern": {
+                    case "pattern_of_interest": {
                         log(
                             "  Main Concern: dispatching task_a14_main_concern...",
                             "agent",
                         );
                         const result = await api(
-                            `/projects/${pid}/pipeline/run-stage/main_concern`,
+                            `/projects/${pid}/pipeline/run-stage/pattern_of_interest`,
                             { method: "POST" },
                         );
                         if (result.task_ids.length > 0) {
@@ -1045,11 +1044,14 @@
                             const taskResult = await pollTask(tid, 120000);
                             if (taskResult.status === "SUCCESS") {
                                 log(
-                                    "    Main concern analysis complete",
+                                    "    Pattern of interest analysis complete",
                                     "success",
                                 );
                             } else {
-                                log("    Main concern still running", "warn");
+                                log(
+                                    "    Pattern of interest still running",
+                                    "warn",
+                                );
                             }
                         }
                         break;

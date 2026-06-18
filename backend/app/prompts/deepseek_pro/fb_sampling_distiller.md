@@ -27,7 +27,7 @@ Analytical framework: {population_assumption}.
 
 [TASK]
 From the accumulated data, identify dimensions of variation
-among interviewees. For each dimension, define concrete
+among participants. For each dimension, define concrete
 sampling criteria.
 
 ## Output Schema
@@ -46,7 +46,7 @@ sampling criteria.
         "properties": {
           "name": {"type": "string", "description": "Short name."},
           "description": {"type": "string", "description": "What varies and why it matters."},
-          "evidence_of_variation": {"type": "string", "description": "Concrete evidence citing interviewees."},
+          "evidence_of_variation": {"type": "string", "description": "Concrete evidence citing participants."},
           "contrast_criteria": {"type": "string", "description": "Opposite profile."},
           "extreme_criteria": {"type": "string", "description": "Most intense case."},
           "consistent_criteria": {"type": "string", "description": "Similar profile."}

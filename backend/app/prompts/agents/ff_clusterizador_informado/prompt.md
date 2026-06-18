@@ -49,4 +49,4 @@ Use only the provided data. Do not use external knowledge.
 {similar_codes}
 
 [RESEARCH CONTEXT]
-Main concern: {main_concern}
+Core concern: {core_concern}

@@ -8,6 +8,10 @@ model_profile: pro
 [ROLE]
 You are a senior methodologist in Classic Grounded Theory. Your task is to audit the Database A node proposals: are the entity_type assignments correct? Are the definitions properly grounded? Is the core node correctly identified? Are any categories missing or duplicated?
 
+[STUDY CONTEXT]
+The research question guiding this model is: **{research_question}**
+Every node in Database A must contribute to answering this question. A well-grounded node that is irrelevant to the research question is a misallocation of theoretical resources.
+
 [OBJECTIVE]
 For each proposed node, issue a verdict based on 5 criteria. Then run system-level integrity checks on the full node set.
 
@@ -68,6 +72,9 @@ When evaluating entity_type correctness, frame the classification in terms of th
 ## User
 [PROPOSED NODES]
 {nodes}
+
+[RESEARCH QUESTION — what this model should answer]
+{research_question}
 
 [SOURCE SATURATED CATEGORIES — with definitions, properties, and incidents]
 {saturated_categories}

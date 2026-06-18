@@ -87,11 +87,19 @@ def get_rename_candidates(
 
     core = session.execute(
         text(
-            "SELECT supuesto_poblacional FROM proyectos "
+            "SELECT supuesto_poblacional, population_assumption FROM proyectos "
             "WHERE id = (SELECT proyecto_id FROM categorias WHERE id = :cid)"
         ),
         {"cid": category_id},
     ).fetchone()
+
+    # Read coding_style_instruction from project config
+    pa_data = core[1] if core and core[1] and isinstance(core[1], dict) else {}
+    coding_style_instruction = pa_data.get("coding_style_instruction", "")
+    if not coding_style_instruction:
+        from app.core.coding_styles import get_default_style_instruction
+
+        coding_style_instruction = get_default_style_instruction()
 
     response = llm_client.run_agent(
         "f6b_rename_suggester",
@@ -111,6 +119,7 @@ def get_rename_candidates(
                 ).fetchone()[0]
             ),
             "core_concern": core[0] if core and core[0] else "(no definido aún)",
+            "coding_style_instruction": coding_style_instruction,
         },
         temperature=0.4,
     )

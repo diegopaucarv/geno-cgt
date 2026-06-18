@@ -1,6 +1,6 @@
 # backend/app/models/domain/document_process.py
 """
-Proceso central que cada documento/entrevistado intenta resolver.
+Proceso central que cada documento/participante intenta resolver.
 
 Agente A2 (PROCESS_IDENTIFIER) identifica este proceso para cada
 documento y lo compara con el documento anterior.
@@ -24,7 +24,7 @@ class DocumentProcess(Base, TimestampMixin):
 
     # ── Proceso identificado ──────────────────────────
     process_description: Mapped[str] = mapped_column(Text)
-    """Descripción en gerundio del proceso central que este entrevistado
+    """Descripción en gerundio del proceso central que este participante
     intenta resolver continuamente. Ej: 'Negociando permanencia en la
     plataforma', 'Balanceando riesgo y visibilidad'."""
 

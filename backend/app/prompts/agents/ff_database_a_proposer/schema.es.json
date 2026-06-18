@@ -23,7 +23,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerundio o sustantivo conceptual. El nombre formal de este nodo teórico."
+            "description": "Etiqueta o sustantivo conceptual. El nombre formal de este nodo teórico."
           },
           "entity_type": {
             "type": "string",

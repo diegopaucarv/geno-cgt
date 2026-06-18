@@ -27,7 +27,7 @@
           },
           "suggested_gerundio": {
             "type": "string",
-            "description": "Possible code name in gerund (-ing form)."
+            "description": "Possible code name per coding style (-ing form)."
           }
         }
       }

@@ -32,10 +32,10 @@ def check_output_references(
     proyecto_id: str,
 ) -> dict:
     """
-    Verifica que las referencias a entrevistados y segmentos en el output
+    Verifica que las referencias a participantes y segmentos en el output
     del LLM correspondan a datos reales en la base de datos.
 
-    Busca patrones como "Entrevistado 3", "el entrevistado 1", "Doc 2"
+    Busca patrones como "Participante 3", "el participante 1", "Doc 2"
     y verifica que existan document_processes con esos índices.
 
     Returns:
@@ -44,9 +44,9 @@ def check_output_references(
     issues: list[str] = []
     all_text = str(output)
 
-    # Buscar referencias a entrevistados por índice
+    # Buscar referencias a participantes por índice
     refs = re.findall(
-        r"(?:entrevistado|doc(?:umento)?|participante)\s*#?\s*(\d+)",
+        r"(?:doc(?:umento)?|participante)\s*#?\s*(\d+)",
         all_text,
         re.IGNORECASE,
     )
@@ -61,7 +61,7 @@ def check_output_references(
             idx = int(ref)
             if idx > max_doc_count:
                 issues.append(
-                    f"Referencia a entrevistado {idx} pero solo hay "
+                    f"Referencia a participante {idx} pero solo hay "
                     f"{max_doc_count} procesados"
                 )
 
@@ -93,7 +93,7 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
     o que solo mencionan variables demográficas sin citar datos.
 
     Una dimensión es válida si:
-    - evidence_of_variation cita al menos un entrevistado o proceso específico
+    - evidence_of_variation cita al menos un participante o proceso específico
     - NO es puramente demográfica sin respaldo en los datos
 
     Returns:
@@ -118,7 +118,7 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
         # ¿Tiene evidencia cualitativa?
         has_evidence = len(evidence) > 30 and any(
             kw in evidence.lower()
-            for kw in ["entrevistado", "doc", "participante", "describe", "menciona"]
+            for kw in ["doc", "participante", "describe", "menciona"]
         )
 
         if is_demographic_only and not has_evidence:
@@ -147,7 +147,7 @@ def preclassify_glaser(segments_text: str) -> dict:
 
     Señales:
     - properline: hedging ("yo creo que", "supongo"), lenguaje de deseabilidad
-    - interpreted: preguntas del entrevistador visibles, respuestas forzadas
+    - interpreted: preguntas del autor visibles, respuestas forzadas
     - vague: respuestas muy cortas, cambios de tema, "no sé"
     - baseline: ninguno de los anteriores, narrativa fluida
 

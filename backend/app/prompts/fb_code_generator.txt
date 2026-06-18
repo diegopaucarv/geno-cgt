@@ -42,7 +42,7 @@ SCHEMA
           "code_name": {{"type": "string", "description": "Nombre en gerundio que captura la acción."}},
           "definition": {{"type": "string", "description": "1-2 oraciones. Qué comportamiento captura."}},
           "indicators": {{"type": "array", "items": {{"type": "string"}}, "description": "Frases clave que señalan este código (de las extraídas por B2a)."}},
-          "variations": {{"type": "string", "description": "Variaciones entre entrevistados."}},
+          "variations": {{"type": "string", "description": "Variaciones entre participantes."}},
           "relationship_to_existing": {{
             "type": "string",
             "enum": ["new", "same_as_existing", "variation_of_existing", "subcategory_of", "merge_with"],

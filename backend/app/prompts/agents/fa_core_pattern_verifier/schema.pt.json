@@ -32,7 +32,7 @@
             },
             "supporting_patterns": {
               "type": "array",
-              "description": "Quais dos 3 padrões (por seus nomes em gerúndio ou índices 1-3) respaldam este elemento convergente.",
+              "description": "Quais dos 3 padrões (por seus nomes conforme estilo de codificação ou índices 1-3) respaldam este elemento convergente.",
               "items": {
                 "type": "string"
               }

@@ -9,7 +9,7 @@
   "properties": {
     "main_concern": {
       "type": "string",
-      "description": "{object_of_study} central expresado como gerundio o frase verbal."
+      "description": "{object_of_study} central expresado según estilo de codificación o frase verbal."
     },
     "rationale": {
       "type": "string",

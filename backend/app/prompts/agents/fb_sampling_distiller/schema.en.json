@@ -28,7 +28,7 @@
           },
           "evidence_of_variation": {
             "type": "string",
-            "description": "Concrete evidence citing interviewees."
+            "description": "Concrete evidence citing participants."
           },
           "contrast_criteria": {
             "type": "string",

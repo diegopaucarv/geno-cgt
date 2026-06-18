@@ -90,7 +90,9 @@ def compare_literature(
         session.close()
 
 
-def critique_literature_dialogue(comparison_table: dict) -> dict:
+def critique_literature_dialogue(
+    comparison_table: dict, proyecto_id: str = None
+) -> dict:
     """Critique the literature comparison for forcing, authority bias, name-dropping.
 
     Detects:
@@ -102,17 +104,55 @@ def critique_literature_dialogue(comparison_table: dict) -> dict:
 
     Args:
         comparison_table: Output from compare_literature (must include comparison_table key)
+        proyecto_id: Optional. If provided, fetches theory, literature_fragments,
+                     object_of_study, and research_question from DB for deeper evaluation.
 
     Returns:
         dict with {verdict: SAT|MOD|FORCED,
                    issues: [{type, detail, suggestion}]}
     """
+    session = SessionLocal() if proyecto_id else None
     try:
         logger.info("LiteratureCritic: evaluating comparison table")
+
+        # ── Fetch full context from DB if proyecto_id provided ──
+        theory = ""
+        literature_fragments = ""
+        object_of_study = ""
+        research_question = ""
+
+        if proyecto_id and session:
+            theory = _read_full_theory(session, proyecto_id)
+            ctx = session.execute(
+                text(
+                    "SELECT object_of_study, population_assumption "
+                    "FROM proyectos WHERE id = :pid"
+                ),
+                {"pid": proyecto_id},
+            ).fetchone()
+            if ctx:
+                object_of_study = ctx[0] if ctx[0] else "concern"
+                pa = ctx[1] if ctx[1] else {}
+                rq_data = (
+                    pa.get("research_question", {}) if isinstance(pa, dict) else {}
+                )
+                research_question = rq_data.get("research_question", "(not generated)")
+            logger.info(
+                "LiteratureCritic: loaded context — OOS=%s, theory=%d chars",
+                object_of_study,
+                len(theory),
+            )
+
         result = llm.run_agent(
             "f6c_literature_critic",
             variables={
                 "comparison_table": json.dumps(comparison_table, ensure_ascii=False),
+                "theory": theory[:8000] if theory else "(not available)",
+                "literature_fragments": literature_fragments[:3000]
+                if literature_fragments
+                else "(not available)",
+                "object_of_study": object_of_study or "(not provided)",
+                "research_question": research_question or "(not generated)",
             },
         )
         logger.info(
@@ -125,6 +165,9 @@ def critique_literature_dialogue(comparison_table: dict) -> dict:
     except Exception:
         logger.exception("critique_literature_dialogue failed")
         return {"error": "critique_literature_dialogue failed"}
+    finally:
+        if session:
+            session.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════

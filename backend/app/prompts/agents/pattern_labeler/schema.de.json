@@ -26,7 +26,7 @@
           },
           "label": {
             "type": "string",
-            "description": "Gerundium, das das Verhaltensmuster benennt"
+            "description": "Label, das das Verhaltensmuster benennt"
           },
           "definition": {
             "type": "string",

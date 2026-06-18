@@ -220,8 +220,13 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
         {"pid": proyecto_id},
     ).fetchone()[0]
 
-    if listos < 3:
-        return None
+    total_docs = session.execute(
+        text("SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    if listos < 3 and listos < total_docs:
+        return None  # Not enough docs and not the last batch
 
     # Dedup by active pipeline run, not by doc count
     run_id = _get_active_run(session, proyecto_id)

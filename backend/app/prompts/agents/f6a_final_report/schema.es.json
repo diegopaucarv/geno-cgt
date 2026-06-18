@@ -45,7 +45,7 @@
                 },
                 "pattern_identification": {
                   "type": "string",
-                  "description": "El gerundio que nombra el patrón central. Explicación de qué ES el patrón y por qué este gerundio lo captura."
+                  "description": "La etiqueta que nombra el patrón central. Explicación de qué ES el patrón y por qué esta etiqueta lo captura."
                 },
                 "emergence_narrative": {
                   "type": "string",

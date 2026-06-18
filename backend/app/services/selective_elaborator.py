@@ -233,14 +233,18 @@ class SelectiveElaborator:
             {"cid": category_id},
         ).fetchone()
         if not row:
-            return "Nombra códigos y renombres como GERUNDIOS (-ando/-iendo)."
+            from app.core.coding_styles import get_default_style_instruction
+
+            return get_default_style_instruction()
         config = self.db.execute(
             text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
             {"pid": row[0]},
         ).fetchone()
-        style_key = "gerundio"
+        from app.core.coding_styles import get_default_style
+
+        style_key = get_default_style()
         if config and config[0] and isinstance(config[0], dict):
-            style_key = config[0].get("coding_style", "gerundio")
+            style_key = config[0].get("coding_style", style_key)
         from app.core.coding_styles import get_rename_instruction
 
         return get_rename_instruction(style_key)

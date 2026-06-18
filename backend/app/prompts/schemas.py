@@ -25,7 +25,7 @@ A1_SCHEMA: dict[str, Any] = {
         },
         "data_production_context": {
             "type": "string",
-            "description": "Condiciones de producción de los datos: entorno de entrevista, señales de deseabilidad social, fatiga, dinámicas de poder.",
+            "description": "Condiciones de producción de los datos: entorno del documento, señales de deseabilidad social, fatiga, dinámicas de poder.",
         },
     },
 }
@@ -40,7 +40,7 @@ A2_FIRST_SCHEMA: dict[str, Any] = {
     "properties": {
         "process_description": {
             "type": "string",
-            "description": "Descripción en gerundio del proceso central que el entrevistado intenta resolver continuamente, con 2-3 oraciones de explicación.",
+            "description": "Descripción en gerundio del proceso central que el participante intenta resolver continuamente, con 2-3 oraciones de explicación.",
         }
     },
 }
@@ -55,15 +55,15 @@ A2_COMPARE_SCHEMA: dict[str, Any] = {
     "properties": {
         "process_description": {
             "type": "string",
-            "description": "Descripción en gerundio del proceso central de ESTE entrevistado.",
+            "description": "Descripción en gerundio del proceso central de ESTE participante.",
         },
         "similarity_to_previous": {
             "type": "string",
-            "description": "En qué se PARECE al proceso del entrevistado anterior.",
+            "description": "En qué se PARECE al proceso del participante anterior.",
         },
         "difference_from_previous": {
             "type": "string",
-            "description": "En qué se DIFERENCIA del proceso del entrevistado anterior.",
+            "description": "En qué se DIFERENCIA del proceso del participante anterior.",
         },
     },
 }
@@ -241,9 +241,9 @@ D2_SCHEMA: dict[str, Any] = {
 
 S1_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "required": ["main_concern_candidates"],
+    "required": ["core_concern_candidates"],
     "properties": {
-        "main_concern_candidates": {
+        "core_concern_candidates": {
             "type": "array",
             "minItems": 2,
             "maxItems": 4,

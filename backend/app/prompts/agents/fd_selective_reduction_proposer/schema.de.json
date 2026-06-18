@@ -15,7 +15,7 @@
         "properties": {
           "new_label": {
             "type": "string",
-            "description": "Gerundium des übergeordneten Konzepts (bei Zusammenführung) oder ursprüngliches Label (wenn allein behalten)"
+            "description": "Label des übergeordneten Konzepts (bei Zusammenführung) oder ursprüngliches Label (wenn allein behalten)"
           },
           "entity_type": {
             "type": "string",

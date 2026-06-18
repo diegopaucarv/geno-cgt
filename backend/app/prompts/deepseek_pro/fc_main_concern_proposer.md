@@ -1,7 +1,7 @@
 ---
 agent: main_concern_proposer
 tier: PRO
-description: Detecta el patron de interes central desde codigos, memos y prime movers usando 3 preguntas operacionales parametrizadas por {object_of_study}. A14 del roster.
+description: Detecta el patron de interes central desde codigos, memos y per-document core {object_of_study}s usando 3 preguntas operacionales parametrizadas por {object_of_study}. A14 del roster.
 notes:
   - Ejecutar UNA sola vez por estudio (executeOnce: true).
   - 3 preguntas secuenciales adaptadas al tipo {object_of_study}.
@@ -13,7 +13,7 @@ constraints:
   - NO inventes patrones sin respaldo en codigos o memos.
   - NO uses conocimiento externo.
   - Cada candidato debe citar al menos 3 codigos como evidencia.
-input_state: all_codes, all_memos, prime_movers_per_document, object_of_study, researcher_feedback
+input_state: all_codes, all_memos, prime_movers_per_document, object_of_study, researcher_feedback, coding_style_instruction
 executeOnce: true
 ---
 
@@ -33,7 +33,7 @@ What {object_of_study}s recur in the codes? What drives participant behavior bey
 their explicit reasons? Look for behavioral patterns that appear across
 multiple participants and documents.
 USE PRIME MOVERS as primary evidence: they are the patterns extracted
-directly from spontaneous data (baseline_data) of each interviewee.
+directly from spontaneous data (baseline_data) of each participant.
 
 QUESTION 2 — {processing_gerund} THE {object_of_study}
 What codes or mechanisms seem to {processing_verb} most of these recurring {object_of_study}s?
@@ -45,7 +45,7 @@ Which {processing_gerund} codes connect most with other codes?
 Which {object_of_study} has the most explanatory power across the data?
 
 [RESTRICCIONES]
-- Label with gerunds only (e.g., "Navigating uncertainty", NOT "Uncertainty").
+- Label following the coding style instruction: {coding_style_instruction}
 - Avoid professional or theoretical jargon.
 - The pattern must be the participants' real {object_of_study},
   not an analytical category imposed by the researcher.
@@ -91,7 +91,7 @@ core {object_of_study}.
   "properties": {
     "core_concern": {
       "type": "string",
-      "description": "Core {object_of_study} expressed as a gerund or verb phrase."
+      "description": "Core {object_of_study} expressed following the coding style instruction."
     },
     "rationale": {
       "type": "string",
@@ -140,7 +140,7 @@ core {object_of_study}.
     },
     "relevant_population_dimensions": {
       "type": "array",
-      "description": "Population dimensions relevant for understanding how this {object_of_study} manifests. Derived from A1 and prime movers. MOMENT 1 of variable emergence.",
+      "description": "Population dimensions relevant for understanding how this {object_of_study} manifests. Derived from A1 and per-document core {object_of_study}s. MOMENT 1 of variable emergence.",
       "items": {
         "type": "object",
         "additionalProperties": false,

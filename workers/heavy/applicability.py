@@ -54,12 +54,28 @@ def generate_applicability(proyecto_id: str) -> dict:
         # ── 2. Derive application context from project metadata ──
         app_context = _get_application_context(session, proyecto_id)
 
-        # ── 2.5 Fetch object_of_study ──
+        # ── 2.5 Fetch object_of_study, research_question, core_concern ──
         oos_row = session.execute(
-            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            text(
+                "SELECT object_of_study, population_assumption FROM proyectos WHERE id = :pid"
+            ),
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+        pa = oos_row[1] if oos_row and oos_row[1] else {}
+        rq_data = pa.get("research_question", {}) if isinstance(pa, dict) else {}
+        research_question = rq_data.get("research_question", "(not generated)")
+
+        # ── Fetch core_concern from HITL (G35) ──
+        cc = session.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = cc[0] if cc and cc[0] else "(not yet identified)"
 
         # ── 3. Call applicability_engine PRO agent ──
         logger.info("ApplicabilityEngine: generating guidelines")
@@ -69,6 +85,8 @@ def generate_applicability(proyecto_id: str) -> dict:
                 "theory": theory,
                 "application_context": app_context,
                 "object_of_study": object_of_study,
+                "research_question": research_question,
+                "core_concern": core_concern,
             },
         )
         logger.info(
@@ -86,7 +104,7 @@ def generate_applicability(proyecto_id: str) -> dict:
         session.close()
 
 
-def critique_applicability(directrices: dict) -> dict:
+def critique_applicability(directrices: dict, proyecto_id: str = None) -> dict:
     """Critique the applicability guidelines for genuineness, limits, accessibility.
 
     Evaluates:
@@ -99,13 +117,45 @@ def critique_applicability(directrices: dict) -> dict:
     Args:
         directrices: Full output from generate_applicability (includes
                      control_variables, access_variables, guidelines, etc.)
+        proyecto_id: Optional. If provided, fetches theory and object_of_study
+                     from DB for deeper genuineness and domain-context evaluation.
 
     Returns:
         dict with {verdict: SAT|MOD|FORCED,
                    issues: [{type, guideline_index, detail, suggestion}]}
     """
+    session = SessionLocal() if proyecto_id else None
     try:
         logger.info("ApplicabilityCritic: evaluating guidelines")
+
+        # ── Fetch full context from DB if proyecto_id provided ──
+        theory = ""
+        object_of_study = ""
+        processing_verb = "resolve"
+
+        if proyecto_id and session:
+            theory = _read_full_theory(session, proyecto_id)
+            oos_row = session.execute(
+                text(
+                    "SELECT object_of_study, population_assumption "
+                    "FROM proyectos WHERE id = :pid"
+                ),
+                {"pid": proyecto_id},
+            ).fetchone()
+            if oos_row:
+                object_of_study = oos_row[0] if oos_row[0] else "concern"
+                pa = oos_row[1] if oos_row[1] else {}
+                processing_verb = (
+                    pa.get("processing_verb", "resolve")
+                    if isinstance(pa, dict)
+                    else "resolve"
+                )
+            logger.info(
+                "ApplicabilityCritic: loaded context — OOS=%s, theory=%d chars",
+                object_of_study,
+                len(theory),
+            )
+
         guidelines_str = json.dumps(
             directrices.get("guidelines", []), ensure_ascii=False
         )
@@ -122,6 +172,9 @@ def critique_applicability(directrices: dict) -> dict:
             variables={
                 "guidelines": guidelines_str,
                 "variables": variables_str,
+                "theory": theory[:8000] if theory else "(not available)",
+                "object_of_study": object_of_study or "(not provided)",
+                "processing_verb": processing_verb,
             },
         )
         logger.info(
@@ -134,6 +187,9 @@ def critique_applicability(directrices: dict) -> dict:
     except Exception:
         logger.exception("critique_applicability failed")
         return {"error": "critique_applicability failed"}
+    finally:
+        if session:
+            session.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════

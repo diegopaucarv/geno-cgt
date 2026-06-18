@@ -50,7 +50,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Acción concreta sugerida. Solo si MOD. Ej.: 'Reformular gerundio a X', 'Reducir abstracción anclando en código Y', 'Revisar si el código Z realmente respalda'."
+            "description": "Acción concreta sugerida. Solo si MOD. Ej.: 'Reformular etiqueta a X', 'Reducir abstracción anclando en código Y', 'Revisar si el código Z realmente respalda'."
           },
           "confidence": {
             "type": "number",

@@ -19,7 +19,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerundium des gruppierten Konstrukts."
+            "description": "Label des gruppierten Konstrukts."
           },
           "definition": {
             "type": "string",

@@ -4,13 +4,13 @@ version: 1.1.0
 model_profile: pro
 description: Identify core category candidates from the confirmed {object_of_study}. Evaluates theoretical grab, qualitative centrality, and unifying power. Parametrized by {object_of_study}. Corresponds to A15 (Core_Emergence_Detector). Step A3 of Selective Coding.
 langgraph_node: propose_core_emergence
-execution_order: "5.3 (after HITL on main_concern)"
+execution_order: "5.3 (after HITL on pattern_of_interest)"
 input_state: core_concern, all_codes_with_definitions, code_statistics, object_of_study
 output_state: core_category_candidates
 depends_on: main_concern_critic
 prerequisite_for: core_emergence_critic
 agent_id: A15
-triggers_on: Coordinator after researcher confirms main_concern via HITL
+triggers_on: Coordinator after researcher confirms pattern_of_interest via HITL
 ---
 
 ## System

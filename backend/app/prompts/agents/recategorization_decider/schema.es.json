@@ -68,7 +68,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Gerundio de la nueva categoría."
+            "description": "Etiqueta de la nueva categoría."
           },
           "definition": {
             "type": "string",

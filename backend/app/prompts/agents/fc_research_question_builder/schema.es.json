@@ -14,7 +14,7 @@
     },
     "operational_question": {
       "type": "string",
-      "description": "Pregunta operativa para agentes LLM durante el descubrimiento. Sigue la estructura: '¿Cómo [verbo de proceso] [población] su [patrón]?' SINGULAR (el sustantivo del patrón siempre es singular), orientada al proceso, concisa, guía la observación de patrones. Usar forma verbal conjugada cuando las instrucciones estén en un idioma con flexión."
+      "description": "Pregunta operativa para agentes LLM durante DESCUBRIMIENTO. Usa SUSTANTIVOS EN PLURAL porque el patrón específico aún no se ha identificado. Formato: '¿Cómo [verbo de proceso] [población] sus [patrón_plural]?' Orientada al proceso, concisa, guía la observación de patrones. Usar forma verbal conjugada cuando las instrucciones estén en un idioma con flexión."
     },
     "rationale": {
       "type": "string",
@@ -26,10 +26,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "dimension",
-          "rationale"
-        ],
+        "required": ["dimension", "rationale"],
         "properties": {
           "dimension": {
             "type": "string",

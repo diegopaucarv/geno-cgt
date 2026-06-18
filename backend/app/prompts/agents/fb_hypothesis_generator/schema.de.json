@@ -42,7 +42,7 @@
           },
           "evidence": {
             "type": "string",
-            "description": "Konkrete Evidenz unter Nennung von Interviewpartnern."
+            "description": "Konkrete Evidenz unter Nennung von Teilnehmern."
           },
           "related_codes": {
             "type": "array",

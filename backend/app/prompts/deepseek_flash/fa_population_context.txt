@@ -3,12 +3,12 @@
 -- description: Memoria de largo plazo — versión directa para modelo rápido.
 
 [INSTRUCCIÓN — lee esto primero]
-Vas a analizar segmentos de un nuevo entrevistado. Tu tarea:
+Vas a analizar segmentos de un nuevo participante. Tu tarea:
 1. Determina qué aporta de NUEVO a cada dimensión del contexto poblacional.
 2. Si no hay nada nuevo en una dimensión, responde EXACTAMENTE: "Sin cambios."
 3. Si no hay suficiente información para evaluar: "Sin evidencia suficiente."
 4. Output: SOLO el JSON. Nada de texto fuera.
-5. NO inventes datos, entrevistados ni citas. Usa solo lo proporcionado.
+5. NO inventes datos, participantes ni citas. Usa solo lo proporcionado.
 
 Marco analítico: {population_assumption}.
 
@@ -26,9 +26,9 @@ Nuevos segmentos:
 
 [EJEMPLO de output esperado]
 {{
-  "surprising_details": "Este entrevistado revela que la desconfianza no es hacia la plataforma sino hacia otros repartidores que 'rompen las reglas'. Esto contradice el patrón anterior donde la desconfianza se dirigía al algoritmo.",
+  "surprising_details": "Este participante revela que la desconfianza no es hacia la plataforma sino hacia otros repartidores que 'rompen las reglas'. Esto contradice el patrón anterior donde la desconfianza se dirigía al algoritmo.",
   "language_patterns": "Usa 'estar limpio' para referirse a no tener sanciones. Metáfora recurrente: 'el juego' para describir su relación con la app.",
-  "data_production_context": "Entrevista realizada en su vehículo. Se muestra más abierto que entrevistados anteriores. Sin señales de fatiga."
+  "data_production_context": "Contexto producido en su vehículo. Se muestra más abierto que participantes anteriores. Sin señales de fatiga."
 }}
 
 ---
@@ -39,7 +39,7 @@ SCHEMA
   "properties": {{
     "surprising_details": {{
       "type": "string",
-      "description": "Qué revela este entrevistado que no sabías. Si nada nuevo: 'Sin cambios respecto a la versión anterior.' Si no hay suficiente info: 'Sin evidencia suficiente en este documento.'"
+      "description": "Qué revela este participante que no sabías. Si nada nuevo: 'Sin cambios respecto a la versión anterior.' Si no hay suficiente info: 'Sin evidencia suficiente en este documento.'"
     }},
     "language_patterns": {{
       "type": "string",

@@ -6,7 +6,7 @@
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "Beschreibung des zentralen Prozesses, den der Interviewpartner kontinuierlich zu lösen versucht, als Gerundium, mit 2-3 Sätzen Erklärung."
+      "description": "Beschreibung des zentralen Prozesses, den der Teilnehmer kontinuierlich zu lösen versucht, je nach Codierungsstil, mit 2-3 Sätzen Erklärung."
     }
   }
 }

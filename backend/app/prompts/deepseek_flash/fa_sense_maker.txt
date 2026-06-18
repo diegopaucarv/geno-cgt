@@ -26,7 +26,7 @@ El investigador investiga: {object_of_study}
   "sense_status": "no_change",
   "hypotheses": [
     {{
-      "text": "Los entrevistados con más experiencia desarrollan estrategias proactivas de modulación de visibilidad.",
+      "text": "Los participantes con más experiencia desarrollan estrategias proactivas de modulación de visibilidad.",
       "level": "emergent",
       "evidence": "Entrevistado 1 (3 meses): reacciones impulsivas. Entrevistado 3 (14 meses): sistema de 'horas buenas y malas'."
     }}

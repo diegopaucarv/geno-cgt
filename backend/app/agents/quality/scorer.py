@@ -117,7 +117,7 @@ def _suggest_style_example(name: str, style: str) -> str:
             return name[:-2] + "iendo"
         return name + " (convertir a gerundio: -ando/-iendo)"
     if style == "in_vivo":
-        return f'"{name}" (usar cita textual del entrevistado)'
+        return f'"{name}" (usar cita textual del participante)'
     return name
 
 

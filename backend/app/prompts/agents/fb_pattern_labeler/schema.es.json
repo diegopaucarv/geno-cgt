@@ -26,7 +26,7 @@
           },
           "label": {
             "type": "string",
-            "description": "Gerundio que nombra el patrón de conducta"
+            "description": "Etiqueta que nombra el patrón de conducta"
           },
           "definition": {
             "type": "string",

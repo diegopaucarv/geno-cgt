@@ -8,15 +8,15 @@
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "Descrição em gerúndio do processo central DESTE entrevistado."
+      "description": "Descrição conforme estilo de codificação do processo central DESTE participante."
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "Em que se ASSEMELHA ao processo do entrevistado anterior."
+      "description": "Em que se ASSEMELHA ao processo do participante anterior."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "Em que DIFERE do processo do entrevistado anterior."
+      "description": "Em que DIFERE do processo do participante anterior."
     }
   }
 }

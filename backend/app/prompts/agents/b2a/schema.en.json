@@ -27,7 +27,7 @@
           },
           "suggested_pattern": {
             "type": "string",
-            "description": "Description of the observed action pattern. No gerund. No theoretical jargon."
+            "description": "Description of the observed action pattern. Per coding style. No theoretical jargon."
           }
         }
       }

@@ -35,12 +35,12 @@ Taken together, do the 3 patterns point TOWARD a shared, higher-level pattern th
 
 [PATTERN TYPE GUIDANCE]
 The researcher is studying: **{object_of_study}**
-- **concern**: Are the 3 interviewees all trying to {processing_verb} the same type of core concern? A shared concern means they are all working on the same ongoing problem, even if their specific situations differ. Look for convergence in the problem they are each {processing_gerund}.
-- **emotion**: Are the 3 interviewees experiencing the same core emotional pattern? The same feeling (e.g., guilt, anxiety, hope, frustration) should recur across their narratives. Look for convergence in what they FEEL.
-- **behavior**: Are the 3 interviewees employing the same core behavioral strategy? Look for convergence in their observable actions and what they DO.
-- **discourse**: Are the 3 interviewees using the same core narrative strategy or discourse? Look for convergence in HOW they talk about and frame their experience.
-- **identity**: Are the 3 interviewees negotiating their identity in the same way? Look for convergence in their IDENTITY WORK — how they position themselves, claim or resist roles, and manage self-definition.
-- **custom**: Are the 3 interviewees sharing the same core pattern? Look for convergence around the common organizing principle that structures their experience.
+- **concern**: Are the 3 participants all trying to {processing_verb} the same type of core concern? A shared concern means they are all working on the same ongoing problem, even if their specific situations differ. Look for convergence in the problem they are each {processing_gerund}.
+- **emotion**: Are the 3 participants experiencing the same core emotional pattern? The same feeling (e.g., guilt, anxiety, hope, frustration) should recur across their narratives. Look for convergence in what they FEEL.
+- **behavior**: Are the 3 participants employing the same core behavioral strategy? Look for convergence in their observable actions and what they DO.
+- **discourse**: Are the 3 participants using the same core narrative strategy or discourse? Look for convergence in HOW they talk about and frame their experience.
+- **identity**: Are the 3 participants negotiating their identity in the same way? Look for convergence in their IDENTITY WORK — how they position themselves, claim or resist roles, and manage self-definition.
+- **custom**: Are the 3 participants sharing the same core pattern? Look for convergence around the common organizing principle that structures their experience.
 
 [DIVERGENCE CLASSIFICATION]
 - **SURFACE DIVERGENCE**: Same underlying phenomenon, expressed with different words/gerunds. Resolvable by renaming. Example: "Managing visibility" vs "Controlling exposure" in a concern study — both describe information regulation.
@@ -68,8 +68,14 @@ The researcher is studying: **{object_of_study}**
 [OBJECT OF STUDY]
 {object_of_study}
 
+[RESEARCH QUESTION — what this study aims to answer]
+{research_question}
+
 [OPERATIONAL QUESTION]
 {operational_question}
+
+[CODING STYLE]
+{coding_style_instruction}
 
 [POPULATION CONTEXT]
 {population_context}

@@ -28,7 +28,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Suggested name in gerund form."
+            "description": "Suggested name per coding style."
           },
           "level": {
             "type": "string",

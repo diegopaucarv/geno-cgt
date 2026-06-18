@@ -66,3 +66,6 @@ Type: {entity_type}
 
 [PATTERN TYPE]
 {object_of_study}
+
+[OPERATIONAL QUESTION — what the research is observing]
+{operational_question}

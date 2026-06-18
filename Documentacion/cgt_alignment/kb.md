@@ -98,17 +98,19 @@ Y no es algo que **encontrás** de una sola vez. Emerge. Se refina. A veces camb
 
 ### Cómo emerge
 
-El proceso es progresivo. Con el primer entrevistado, el sistema extrae un patrón tentativo — una hipótesis de qué es lo que estructura la experiencia de esta persona. Con el segundo, extrae otro. Con el tercero, el sistema se detiene y te pregunta: *"Tres entrevistados. Sus patrones individuales son: A, B, y A'. ¿Convergen hacia algo compartido? ¿O son distintos?"*
+El patrón de interés se **descubre progresivamente**, a medida que los datos se acumulan. No se fuerza al inicio ni se asume desde el primer documento — se deja que los propios datos revelen qué es lo que realmente estructura la experiencia de esta población.
 
-Ahí es donde entrás vos. Ves los tres patrones. Ves la evidencia que los respalda. Y decidís: *"Sí, esto es lo que está pasando"*, o *"No, en realidad es otra cosa"*, o *"Cambiemos el lente — esto no es una preocupación, es una emoción"*.
+Cada tres documentos, el sistema hace una pausa deliberada y te propone posibles preocupaciones subyacentes — expresadas como gerundios, con evidencia de los segmentos que las sugieren. Estas propuestas no son definitivas. Son hipótesis, y son **tuyas** para evaluar.
 
-Con cada tres documentos nuevos, el sistema vuelve a preguntarte. El patrón se refina. Y lo más importante: **podés cambiar de rumbo**. Si descubrís que tu población real son solo los redactores, no todos los periodistas, lo decís y el sistema reconfigura todo — sin perder lo que ya analizaste.
+Una población puede tener **múltiples preocupaciones coexistiendo**. Los periodistas pueden estar simultáneamente "manteniendo relevancia profesional" Y "negociando autonomía editorial". Durante la fase de open coding, podés seleccionar varias. El sistema no te obliga a elegir una sola todavía — sería prematuro. Pero al final del recorrido, cuando toda la evidencia está sobre la mesa, **elegís UNA**. Una sola preocupación será el ancla del resto del análisis.
+
+Cada categoría que el sistema produce está siempre vinculada a una preocupación específica y a una población concreta. Esto es fundamental: una misma conducta puede significar cosas distintas en poblaciones distintas. "Evitando" en profesores veteranos no es lo mismo que "evitando" en profesores recién egresados. La CGT compara unidades conceptuales, no unidades demográficas estrictas.
 
 ---
 
 ## 4. Open Coding — la fase de descubrimiento
 
-Esta es la fase más artesanal. Vas documento por documento, segmento por segmento, dejando que los patrones emerjan.
+Esta es la fase más artesanal. Vas documento por documento, dejando que los patrones emerjan — pero ahora con un flujo simplificado y unificado.
 
 ### Lo que pasa antes de codificar
 
@@ -119,64 +121,96 @@ Antes de extraer cualquier patrón, el sistema clasifica cada segmento de la ent
 - **Bronce** — `interpreted_data`: opinión forzada por la pregunta del entrevistador. *"¿Qué opino de la IA? Es un tema complejo..."*
 - **Anomalía** — `vague_data`: evasión. *"No sé, la verdad no tengo una opinión formada."*
 
-Solo el **oro** avanza a la codificación. Lo demás se archiva como contexto. Esto no es un capricho metodológico: si codificás properline data creyendo que es experiencia real, tu teoría va a describir normas sociales, no comportamiento real.
+Esta clasificación corre en agente **PRO**, pero no se hace segmento por segmento como antes. El sistema procesa el documento completo en un solo llamado, clasificando todos los segmentos juntos. Esto le da al modelo contexto suficiente para distinguir baseline de properline con precisión — no es lo mismo un segmento aislado que uno leído en el flujo completo de la entrevista.
 
-### La extracción de incidentes
+Solo el **oro** avanza. Lo demás se archiva como contexto. Esto no es un capricho metodológico: si codificás properline data creyendo que es experiencia real, tu teoría va a describir normas sociales, no comportamiento real.
 
-Para cada segmento de oro, el sistema aplica **cuatro preguntas** que Glaser enseñó a hacerle a los datos:
+### La extracción unificada de incidentes y patrones
 
-1. *"¿De qué trata este dato?"*
-2. *"¿Qué categoría o propiedad indica este incidente?"*
-3. *"¿Qué está sucediendo realmente aquí?"*
-4. *"¿Cuál es el patrón del participante?"* (preocupación, emoción, conducta — según tu objeto de estudio)
+En la versión anterior del sistema, la extracción de incidentes y la identificación del patrón individual corrían como pasos separados. En la arquitectura rediseñada, **se unifican en un solo llamado PRO por documento**.
 
-El sistema produce un **jot**: una anotación rápida de una o dos palabras, un gerundio. "Evitando". "Negociando". "Resistiendo". No es una categoría todavía — es una semilla.
+El agente recibe el documento completo con sus segmentos de oro ya clasificados. En una sola pasada, produce:
 
-El extractor de incidentes usa un modelo rápido porque corre cientos de veces por proyecto. La profundidad no viene del análisis individual de cada incidente — viene de la acumulación. Cada extracción queda registrada para trazabilidad. Si falla un segmento, no pierde todo el documento — solo ese segmento se marca como error y el sistema continúa.
+1. **Incidentes extraídos**: para cada segmento de oro, un jot — una anotación rápida de una o dos palabras, un gerundio. "Evitando". "Negociando". "Resistiendo". Con su vínculo al segmento de origen. No es una categoría todavía — es una semilla.
+2. **El patrón individual (prime_mover)**: el patrón de interés de **ese** entrevistado. Usa solo sus datos de oro. No compara con otros. Te dice: *"Para esta persona, el patrón recurrente parece ser X"*, con citas que lo respaldan y un nivel de confianza.
+
+Esta unificación no es un capricho de eficiencia. Es una decisión metodológica: el mismo agente que extrae los incidentes está en la mejor posición para detectar el patrón que los une. Separarlos introducía una brecha artificial donde el patrón individual se infería de incidentes que otro agente había extraído con otro lente.
+
+El extractor está **aislado**. No ve otros documentos. No ve categorías existentes. No ve patrones previos. Solo ve los segmentos de oro del documento actual, tu objeto de estudio, y tu estilo de codificación. Si viera categorías existentes, forzaría el incidente nuevo a encajar en moldes viejos. Es el equivalente a que un investigador lea una transcripción fresca sin tener sus notas anteriores a la vista.
 
 > **Implementación:** Para detalles técnicos (tier del modelo, AbortableTask, checkpoints), ver `4-Patrones_de_desarrollo.md` §2.1 y `5-Adaptacion_Sistema_Agencial.md` §2.3.
 
 Y aquí hay una regla crucial que Glaser insistía en enseñar: **Keep Moving**. No te detengas a sobre-analizar un incidente. Si es ambiguo, anotalo y avanza. Confiá en que el patrón se revelará cuando tengas docenas de incidentes, no cuando le des cien vueltas a uno solo. El sistema te ayuda con esto: si un incidente es ambiguo, lo marca como `keep_moving=true` y sigue.
 
-**El extractor de incidentes está aislado.** No ve otros documentos. No ve categorías existentes. No ve patrones previos. Solo ve el segmento actual, tu objeto de estudio, y tu estilo de codificación. Esto no es un bug — es una protección. Si el extractor viera categorías existentes, forzaría el incidente nuevo a encajar en moldes viejos. Es el equivalente a que un investigador lea una transcripción fresca sin tener sus notas anteriores a la vista.
+---
 
-### El patrón individual de cada entrevistado
+### 4.5 Cada tres documentos: la pausa que estructura todo
 
-Después de extraer los incidentes de un documento, el sistema sintetiza el patrón de interés de **ese** entrevistado. Usa solo sus datos de oro. No compara con otros. Te dice: *"Para esta persona, el patrón recurrente parece ser X"*, con citas que lo respaldan y un nivel de confianza.
+Esta pausa es el corazón del rediseño. Ya no es una simple verificación de población y patrón como en la versión anterior. Ahora es un **ritual metodológico de cuatro actos** donde el sistema sintetiza, propone, evalúa y — sobre todo — te pregunta.
 
-### Cada tres documentos: una pausa para pensar
+Cada tres documentos (doc 3, 6, 9...), después de que la Fase B del batch actual produjo nuevas categorías, el sistema ejecuta lo siguiente:
 
-Cuando llegás al tercer documento (y luego cada tres), el sistema hace una pausa y te muestra dos cosas:
+#### Acto 1 — Synthesizer 1: Unificación de categorías
 
-1. **¿Tu población sigue siendo la correcta?** El sistema te muestra qué ha aprendido sobre la población hasta ahora — detalles sorprendentes, patrones de lenguaje, diferencias entre entrevistados. Y te pregunta. Podés acotar, ampliar o cambiar completamente. Si cambiás, el sistema se reconfigura sin perder lo analizado.
+El primer sintetizador recibe **todas** las categorías acumuladas hasta ahora: las que venían de batches anteriores Y las que la Fase B acaba de producir para el batch actual. Su trabajo es producir un **conjunto unificado y deduplicado**.
 
-2. **¿Tu patrón de interés es el correcto?** El `core_pattern_verifier` (PRO) toma los patrones individuales de todos los documentos procesados y evalúa si convergen. Te muestra cuántos convergen, cuáles divergen, y por qué. Y te pregunta. Podés confirmar, modificar, o cambiar el lente completamente.
+Las categorías que vienen de batches anteriores llegan con indicadores: cuántos documentos las manifiestan, cuántos incidentes las respaldan, cuándo fueron creadas. Las categorías nuevas del batch actual fueron generadas **sin ver** las anteriores — por diseño. El sintetizador detecta solapamientos ("Negociando visibilidad" del batch 1 y "Gestionando exposición" del batch 2 probablemente son la misma categoría), propone fusiones, y produce una taxonomía limpia para que vos evalúes.
 
-> **Nota:** Este `core_pattern_verifier` que corre cada 3 docs durante open coding es distinto del `main_concern_proposer` + `main_concern_critic` de la codificación selectiva (§6.1). Aquel corre una sola vez, con el sistema completo de categorías + memos, para confirmar formalmente el patrón de interés antes del selective coding. Son dos rituales metodológicos distintos.
+#### Acto 2 — Synthesizer 2: Hipótesis acumuladas
+
+El segundo sintetizador toma la salida del Synthesizer 1 (el conjunto unificado de categorías) y **todas las hipótesis previas** generadas en batches anteriores. Produce una **nota de hipótesis actualizada y creciente** — un documento vivo que registra relaciones entre categorías.
+
+Cada hipótesis es específica: "La categoría 'Escaneando el horizonte' aparece siempre ANTES de 'Calibrando rutinas' en los documentos 1, 3 y 5" — con referencias precisas a incidentes y segmentos. Las hipótesis no son opiniones. Son patrones observados, documentados, trazables.
+
+Estas hipótesis son el insumo clave para la selección de la categoría central más adelante (§7). Cuantas más conexiones documenta una hipótesis entre categorías, más fuerte es la señal de que ahí hay estructura teórica.
+
+#### Acto 3 — Configuration Critic: ¿estamos mirando bien?
+
+El crítico de configuración revisa la salida de ambos sintetizadores más los segmentos baseline del batch actual. Su rol es **meta-analítico**: no evalúa categorías individuales, evalúa si el encuadre general es el correcto. Emite tres evaluaciones:
+
+1. **Posibles preocupaciones subyacentes** (gerundios): *"Los datos sugieren que esta población podría tener estas preocupaciones latentes: 'Manteniendo relevancia profesional', 'Negociando autonomía editorial', 'Preservando identidad gremial'. ¿Cuál o cuáles resuenan?"* La población puede tener múltiples preocupaciones — y por ahora, podés seleccionar varias.
+
+2. **Posibles reconfiguraciones de población**: *"Los documentos 4 y 5 muestran un patrón marcadamente distinto al de los documentos 1-3. ¿Estamos ante dos poblaciones diferentes? Por ejemplo: 'profesores veteranos' vs 'profesores recién egresados'. ¿Querés separarlas?"* El sistema no decide por vos — te muestra la evidencia y te pregunta.
+
+3. **Recomendación de estilo de codificación**: *"El estilo actual ('gerundios de procesamiento') captura bien las conductas, pero las emociones subyacentes ('miedo', 'orgullo') están quedando fuera. ¿Querés añadir un estilo complementario?"* o *"El estilo actual está funcionando bien. Los patrones emergen con claridad."*
+
+#### Acto 4 — HITL Overlay: vos decidís
+
+Acá es donde el sistema te muestra todo junto y **no avanza sin tu decisión**:
+
+- **Categorías unificadas**: las ves en una tabla. Podés aceptar, modificar (editar nombre, definición) o rechazar categorías individualmente. Podés hacer selección múltiple. Las que rechaces no se eliminan — se archivan con el motivo.
+- **Hipótesis actualizadas**: la nota de hipótesis está disponible para que la leas. Es tu mapa de cómo las categorías se relacionan entre sí. No necesitás "aceptar" cada hipótesis — es un documento informativo, no un gate.
+- **Preocupaciones**: ves las opciones que el critic propuso. Podés seleccionar **varias** (durante todo el open coding). Recién en la pausa del último batch tendrás que elegir UNA.
+- **Variantes de población**: si el critic detectó posibles sub-poblaciones, elegís si mantener la población unificada o separar. También podés seleccionar múltiples variantes mientras explorás.
+- **Estilo de codificación**: aceptás o rechazás la recomendación del critic. Es una decisión binaria (una sola).
+
+El sistema bloquea el avance hasta que respondas. Cada decisión tuya queda registrada. Y cuando avances, el pipeline continúa con el siguiente batch de documentos, ahora con tu feedback incorporado.
 
 ---
 
 ## 5. Síntesis Cross-Document — cuando los patrones individuales se encuentran
 
-Hasta ahora, cada documento se procesó por separado. Pero la CGT no es sobre individuos — es sobre **patrones compartidos**. La Fase B es donde los incidentes de todos los documentos se ponen sobre la mesa y se comparan entre sí.
+Hasta ahora, cada documento se procesó por separado. Pero la CGT no es sobre individuos — es sobre **patrones compartidos**. La Fase B es donde los incidentes de todos los documentos del batch actual se ponen sobre la mesa y se comparan entre sí.
 
 ### Tres agentes, tres roles
 
-Esta fase implementa una separación fundamental que evita el sesgo más común en la codificación cualitativa: forzar incidentes nuevos a encajar en categorías viejas.
+Esta fase implementa una separación fundamental que evita el sesgo más común en la codificación cualitativa: forzar incidentes nuevos a encajar en categorías viejas. **Ni B1 ni B2 ven categorías previas ni preocupaciones confirmadas.** Solo ven los incidentes del batch actual. El aislamiento es total.
 
 > **Implementación:** Para detalles de la arquitectura Celery, checkpoints y tracking de esta fase, ver `4-Patrones_de_desarrollo.md` §2.1 y `5-Adaptacion_Sistema_Agencial.md` §2.1.
 
-**El Comparador** (B1) recibe todos los incidentes extraídos de todos los documentos — y **solo** los incidentes. No ve categorías existentes. No ve etiquetas previas. Su trabajo es puramente comparativo: toma pares de incidentes y evalúa si describen el mismo patrón subyacente. Agrupa los que son intercambiables. Separa los que no. Es el equivalente a imprimir todos los incidentes en tarjetas y ordenarlas sobre una mesa — solo ves las tarjetas, no las etiquetas que les pusiste antes.
+**El Agrupador** (B1) recibe todos los incidentes extraídos de los documentos del batch actual — y **solo** esos incidentes. No ve categorías existentes. No ve etiquetas previas. No ve preocupaciones confirmadas. Su trabajo es puramente agrupacional: un agente PRO que, en una sola pasada, organiza los incidentes en grupos por patrón subyacente compartido. No hay pre-filtro por embedding, no hay comparación pairwise, no hay Union-Find. Es una agrupación conceptual directa, como si imprimieras todas las tarjetas de incidentes y las ordenaras sobre una mesa — solo ves las tarjetas, no las etiquetas que les pusiste antes.
 
-**El Etiquetador** (B2) recibe los grupos del Comparador. Para cada grupo, propone una etiqueta en gerundio (o en el formato que hayas elegido), escribe una definición inicial, e identifica las variaciones internas — ¿todos los incidentes del grupo son iguales o hay matices?
+**El Etiquetador** (B2) recibe los grupos del Agrupador. Pero a diferencia de la versión anterior que procesaba todos los grupos en batch, ahora itera **un grupo por vez** — un concepto a la vez. Para cada grupo, propone una etiqueta en gerundio (o en el formato que hayas elegido), escribe una definición inicial, e identifica las variaciones internas. Procesar grupo por grupo le da al modelo el contexto completo de ese grupo sin diluirse entre decenas de conceptos simultáneos.
 
-**El Crítico** (B3) evalúa cada etiqueta del Etiquetador. ¿Realmente captura el patrón de todos los incidentes del grupo? ¿Es suficientemente abstracta? ¿Hay incidentes que no encajan? Si encuentra problemas, **le devuelve la etiqueta al Etiquetador con feedback** — "este nombre es muy concreto, probá algo más abstracto" o "dos de los incidentes no pertenecen a este grupo". El Etiquetador mejora la etiqueta y la reenvía. Este bucle generativo-crítico se repite hasta tres veces.
+**El Crítico** (B3) evalúa cada etiqueta del Etiquetador. Su rol ahora es **solo feedback**: ¿la etiqueta captura el patrón de todos los incidentes del grupo? ¿Es suficientemente abstracta? ¿Hay incidentes que no encajan? Si encuentra problemas, le devuelve la etiqueta al Etiquetador con sugerencias — pero **no emite veredictos SAT/MOD/FORCED**. Es una conversación generativa, no un tribunal. El Etiquetador mejora la etiqueta y la reenvía. Este bucle generativo-crítico se repite hasta tres veces.
 
 Este diálogo entre el Etiquetador y el Crítico es el corazón de la síntesis. No es un pipeline lineal — es una conversación.
 
-### Evidencia textual para cada categoría
+### Evidencia textual para cada categoría (B2.5 — Grounding)
 
-Después de que el Crítico aprueba una etiqueta, el sistema hace algo importante: busca en todo el corpus segmentos que respalden esa categoría. Usa el nombre y la definición como consulta, y encuentra evidencia textual — citas exactas, con su documento de origen. Esto te permite ver, para cada categoría, qué entrevistados la manifiestan y con qué palabras.
+Después de que el Crítico da su feedback final sobre una etiqueta, el sistema hace algo importante: busca en el corpus segmentos que respalden esa categoría. Pero a diferencia de la versión anterior que usaba similitud de embeddings, ahora el grounding usa **los vínculos incidente→segmento** que ya existen desde la fase de extracción. Cada incidente sabe exactamente de qué segmento de qué documento proviene. El sistema simplemente recorre esos vínculos y recolecta las citas textuales. Esto es más preciso, más rápido, y no introduce falsos positivos por similitud semántica superficial.
+
+Esto te permite ver, para cada categoría, qué entrevistados la manifiestan y con qué palabras exactas.
 
 ---
 
@@ -186,13 +220,15 @@ Con las categorías ya formadas, empieza la fase de **delimitación y saturació
 
 ---
 
-### 6.1 Primer acto — encontrar el patrón de interés formalmente
+### 6.1 Primer acto — confirmación formal del patrón de interés
 
-Durante el open coding, el patrón de interés fue una hipótesis de trabajo que refinaste cada tres documentos. Ahora, con todas las categorías formadas, el sistema hace una pausa formal para **reconfirmarlo** antes de comprometer todo el análisis restante a su alrededor.
+Durante el open coding, el patrón de interés fue una hipótesis de trabajo que exploraste cada tres documentos, seleccionando múltiples preocupaciones posibles. Ahora, **después de que todos los batches están completos**, el sistema hace una pausa formal para la confirmación definitiva. Este es el momento de elegir UNA.
 
-**Proposer** (`main_concern_proposer`, agente PRO): recibe todos los códigos abiertos, todos los memos, y todo el contexto poblacional acumulado. No puntúa. Sensa. Busca tensiones latentes — no lo que los participantes dicen que les preocupa, sino lo que sus comportamientos revelan que intentan resolver. Propone de 2 a 4 candidatos, cada uno expresado como gerundio, con razonamiento cualitativo, códigos que lo respaldan, y — esto es crucial — los patrones que quedarían **huérfanos** si ese candidato fuera el core.
+**Precondiciones.** El sistema verifica dos cosas antes de ejecutar este acto: (1) hay **exactamente UNA** preocupación confirmada — si todavía tenés varias seleccionadas, el sistema te pide que elijas una; (2) **todas las categorías** tienen un `concern_label` que las vincula a una preocupación — si hay categorías huérfanas, el sistema te pide que las asignes o las descartes.
 
-**Critic** (`main_concern_critic`, agente PRO): evalúa cada candidato con criterios CGT. ¿El grounding empírico es sólido o son conexiones superficiales? ¿La cobertura es aceptable (<30% de códigos huérfanos)? ¿Es una preocupación latente o solo un tema descriptivo disfrazado? Emite SAT, MOD o FORCED para cada uno.
+**Proposer** (`main_concern_proposer`, agente PRO): recibe la preocupación confirmada, **todas las categorías** del sistema unificado, y **todas las hipótesis acumuladas** de los Synthesizers. Con este contexto completo, sensa el patrón de interés formal. No puntúa. Busca tensiones latentes — no lo que los participantes dicen que les preocupa, sino lo que sus comportamientos revelan que intentan resolver. Propone de 2 a 4 candidatos de patrón de interés, cada uno expresado como gerundio, con razonamiento cualitativo, categorías que lo respaldan, y — esto es crucial — las categorías que quedarían **huérfanas** si ese candidato fuera el patrón definitivo.
+
+**Critic** (`main_concern_critic`, agente PRO): evalúa cada candidato con criterios CGT. ¿El grounding empírico es sólido o son conexiones superficiales? ¿La cobertura es aceptable (<30% de categorías huérfanas)? ¿Es una preocupación latente o solo un tema descriptivo disfrazado? Emite SAT, MOD o FORCED para cada uno.
 
 **Vos**: ves los candidatos, los veredictos del critic, y decidís. Podés aceptar uno, pedir que se refine, o rechazar todos y pedir una nueva ronda. El patrón de interés que elijas ahora será el ancla de todo lo que sigue.
 
@@ -273,8 +309,10 @@ Y aquí hay un detalle importante: el TheoSampler **no corre al inicio** de la c
 ### 6.7 Resumen del flujo de codificación selectiva
 
 ```
-Fase A: Core Category Detection
+Fase A: Confirmación del Patrón de Interés y Categoría Central
+  [Guardrails: 1 concern confirmado + todas las categorías con concern_label]
   A1. main_concern_proposer (PRO) → A2. main_concern_critic (PRO) → 🛑 HITL
+  [Maturity gate: 3 saturadas + 2 relaciones + 3 vinculadas al patrón]
   A3. core_emergence_proposer (PRO) → A4. core_emergence_critic (FLASH) → 🛑 HITL
 
 Fase B: Selective Reduction
@@ -304,17 +342,28 @@ La **categoría central** (core category) es el concepto del sistema de códigos
 
 En la práctica: el patrón de interés podría ser "Manteniendo relevancia profesional ante la amenaza de obsolescencia". La categoría central podría ser "Escaneando el horizonte de amenazas" — porque es la categoría que mejor explica cómo los periodistas procesan esa preocupación. El patrón de interés es el PROBLEMA. La categoría central es la RESPUESTA.
 
-El primer acto de la codificación selectiva (6.1) ya identificó el patrón de interés. Ahora necesitamos encontrar, entre nuestras categorías, cuál es la central.
+El primer acto de la codificación selectiva (6.1) ya confirmó formalmente el patrón de interés. Ahora necesitamos encontrar, entre nuestras categorías, cuál es la central.
 
-### 7.1 No se "detecta" — emerge
+### 7.1 No se "detecta" — emerge de las hipótesis acumuladas
 
 La categoría central no es la que aparece más veces. No es la que tiene más incidentes. Es la que **conecta** con todas las demás, la que **explica** la mayor variación, la que **procesa** el patrón de interés de una manera que ninguna otra categoría logra.
 
-Y no se "detecta" con un algoritmo. **Emerge.** Pero solo puede emerger cuando hay suficiente masa crítica.
+Y no se "detecta" con un algoritmo. **Emerge.** Pero no emerge del vacío — emerge de las **hipótesis acumuladas** que los Synthesizers fueron construyendo batch a batch durante las pausas de cada tres documentos (§4.5). Cada hipótesis documenta una relación observada entre categorías. La categoría con más conexiones en ese grafo de hipótesis — la que aparece como nodo central una y otra vez — es la candidata más fuerte. No porque "aparezca más", sino porque **el sistema ya documentó, incidente por incidente, que otras categorías giran a su alrededor**.
 
-### 7.2 El maturity gate — ¿estamos listos?
+Pero solo puede emerger cuando hay suficiente masa crítica.
 
-Antes de siquiera proponer candidatos, el sistema verifica tres condiciones de forma **determinística** (sin LLM, consultando la DB):
+### 7.2 Dos guardrails antes de empezar
+
+Antes de siquiera proponer candidatos a categoría central, el sistema verifica dos condiciones de forma **determinística** (sin LLM, consultando la DB):
+
+1. **¿Hay exactamente UNA preocupación confirmada?** Si el investigador todavía tiene múltiples preocupaciones seleccionadas del open coding, el sistema no avanza. La categoría central necesita un único patrón de interés como ancla.
+2. **¿Todas las categorías tienen `concern_label`?** Si hay categorías sin vincular a una preocupación, el sistema te pide que las asignes o las descartes. Una categoría sin preocupación es una categoría sin propósito teórico.
+
+Estos dos guardrails son binarios. Si alguno falla, el sistema te lo dice con precisión y no avanza hasta que lo resuelvas.
+
+### 7.3 El maturity gate — ¿estamos listos?
+
+Superados los guardrails, el sistema verifica tres condiciones adicionales:
 
 - ¿Hay al menos 3 categorías completamente saturadas (las 4 señales en verde)?
 - ¿Hay al menos 2 relaciones documentadas entre esas categorías (con evidencia sólida en `conceptual_relationships`)?
@@ -324,19 +373,19 @@ Si falta algo, el sistema te lo dice con precisión. Si faltan categorías satur
 
 **Implementación:** `PipelineOrchestrator.maturity_gate(project_id)` — chequeo puramente SQL, sin LLM. Retorna `{passed: bool, missing: [{condition, detail}]}`.
 
-### 7.3 El flujo de emergencia — proposer → critic → HITL
+### 7.4 El flujo de emergencia — proposer → critic → HITL
 
-Cuando el gate se abre, el sistema aplica el mismo ritmo de siempre, pero con una variación importante: el critic de esta etapa evalúa **intercambiabilidad**, y por eso corre en FLASH.
+Cuando los guardrails pasan y el gate se abre, el sistema aplica el mismo ritmo de siempre, pero con una variación importante: el critic de esta etapa evalúa **intercambiabilidad**, y por eso corre en FLASH.
 
-**Proposer** (`core_emergence_proposer`, agente PRO): recibe el patrón de interés confirmado y todas las categorías del sistema reducido. Evalúa cada una con criterios glaserianos: centralidad (¿cuántas otras categorías conectan con esta?), poder unificador (¿explica por qué los participantes hacen lo que hacen?), frecuencia con variación (¿aparece en múltiples documentos con matices?), y grab teórico (¿genera "aha moments" al conectarla con otras?). Propone una lista priorizada de candidatos. Solo puede proponer categorías que YA EXISTEN en el sistema — no inventa nuevas.
+**Proposer** (`core_emergence_proposer`, agente PRO): recibe el patrón de interés confirmado, todas las categorías del sistema reducido, y — esto es lo nuevo — **el grafo completo de hipótesis acumuladas**. Usa ese grafo para rankear candidatos: la categoría con más conexiones entrantes y salientes en las hipótesis es la candidata más fuerte. Evalúa cada candidata con criterios glaserianos: centralidad (¿cuántas otras categorías conectan con esta según las hipótesis?), poder unificador (¿explica por qué los participantes hacen lo que hacen?), frecuencia con variación (¿aparece en múltiples documentos con matices?), y grab teórico (¿genera "aha moments" al conectarla con otras?). Propone una lista priorizada de candidatos. Solo puede proponer categorías que YA EXISTEN en el sistema — no inventa nuevas.
 
 **Critic** (`core_emergence_critic`, agente **FLASH**): aquí está la novedad. El critic no evalúa grounding abstracto — evalúa **intercambiabilidad de incidentes**. Para cada candidato, toma sus incidentes en diferentes documentos y pregunta: ¿son intercambiables? ¿El incidente en el documento A y el incidente en el documento B cuentan la misma historia de comportamiento? Si son intercambiables, la categoría es sólida (verdict: valid). Si hay variaciones importantes que la definición no captura (refine). Si revelan patrones distintos (split — esta categoría debería dividirse).
 
 Esta es una tarea estructurada con criterios claros, por eso corre en FLASH. Comparar incidentes para ver si son intercambiables es más parecido a un diff que a una generación teórica.
 
-**Vos**: ves los candidatos, sus puntajes de intercambiabilidad, el theoretical grab de cada uno. Y decidís cuál es tu categoría central.
+**Vos**: ves los candidatos rankeados por fuerza en el grafo de hipótesis, sus puntajes de intercambiabilidad, el theoretical grab de cada uno. Y **seleccionás UNA**. Una sola. Esa decisión **desbloquea** el resto de la codificación selectiva: el sistema reducido, el loop de saturación, las Databases A y B — todo se organiza alrededor de la categoría que elegiste.
 
-### 7.4 La categoría central puede cambiar
+### 7.5 La categoría central puede cambiar
 
 Más adelante, en el Theoretical Playground, mientras elaborás relaciones y absorbés ghosts, puede pasar que un blob crezca tanto que supere al core actual. El sistema te lo sugiere: *"Este blob tiene 7 conexiones, el core actual tiene 5. ¿Promover?"*. El core anterior no se pierde — queda registrado en el historial como lo que fue.
 
@@ -563,8 +612,11 @@ En cada decisión teórica importante, el sistema se detiene y te pregunta. No e
 Los momentos donde el sistema te pide tu decisión son:
 
 **Durante el open coding y la síntesis:**
-- **¿Tu población sigue siendo la correcta?** (cada 3 documentos)
-- **¿Tu patrón de interés es el correcto?** (cada 3 documentos)
+- **Pausa cada 3 documentos** (§4.5) — cuatro decisiones integradas:
+  - ¿Aceptás, modificás o rechazás las categorías unificadas? (selección múltiple)
+  - ¿Qué preocupaciones seleccionás? (múltiples hasta el batch final, luego UNA)
+  - ¿Mantenés la población unificada o separás variantes? (múltiples hasta el final)
+  - ¿Aceptás la recomendación de estilo de codificación? (binario)
 
 **Durante la codificación selectiva (Fase 5b):**
 - **¿Confirmás este patrón de interés?** — después de main_concern_proposer → main_concern_critic (A1+A2)
@@ -628,25 +680,26 @@ Configuración inicial
   │
   ▼
 Open Coding (por documento)
-  │  Cada segmento se clasifica (oro, plata, bronce, anomalía).
-  │  Los segmentos de oro se interrogan con 4 preguntas.
-  │  Cada documento revela su patrón individual.
-  │  Cada 3 documentos, el sistema te pregunta: ¿vamos bien?
+  │  Cada segmento se clasifica (oro, plata, bronce, anomalía) en batch PRO.
+  │  Extracción unificada: incidentes + patrón individual en un solo llamado.
+  │  Cada 3 documentos: pausa de 4 actos (Synthesizers + Critic + HITL).
   │
   ▼
-Síntesis Cross-Document
-  │  Todos los incidentes se comparan entre sí (Comparator).
-  │  Los grupos se etiquetan (Labeler ↔ Critic, en diálogo).
-  │  Cada etiqueta recibe evidencia textual del corpus.
+Síntesis Cross-Document (por batch)
+  │  Incidentes del batch se agrupan por patrón (Agrupador, sin ver previas).
+  │  Los grupos se etiquetan uno por uno (Etiquetador ↔ Crítico, feedback sin veredictos).
+  │  Grounding vía vínculos incidente→segmento (sin embeddings).
   │
   ▼
-Codificación Selectiva — Fase A: Core Category Detection
-  │  A1. main_concern_proposer (PRO): sensa el patrón de interés.
+Codificación Selectiva — Fase A: Confirmación del Patrón de Interés
+  │  A1. main_concern_proposer (PRO): sensa con categorías + hipótesis.
   │  A2. main_concern_critic (PRO): evalúa SAT/MOD/FORCED.
-  │  🛑 HITL: confirmás el patrón de interés.
-  │  A3. core_emergence_proposer (PRO): propone categorías centrales.
+  │  🛑 HITL: confirmás UNA preocupación.
+  │  [Guardrails: 1 concern confirmado + todas las categorías con concern_label]
+  │  [Maturity gate: 3 saturadas, 2 relaciones, 3 vinculadas al patrón]
+  │  A3. core_emergence_proposer (PRO): rankea por grafo de hipótesis.
   │  A4. core_emergence_critic (FLASH): test de intercambiabilidad.
-  │  🛑 HITL: confirmás la categoría central.
+  │  🛑 HITL: seleccionás UNA categoría central → desbloquea el resto.
   │
   ▼
 Codificación Selectiva — Fase B: Selective Reduction

@@ -28,7 +28,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Vorgeschlagener Name in Gerundium-Form."
+            "description": "Vorgeschlagener Name je nach Codierungsstil."
           },
           "level": {
             "type": "string",

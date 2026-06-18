@@ -28,7 +28,7 @@
           },
           "evidence_of_variation": {
             "type": "string",
-            "description": "Evidência concreta citando entrevistados."
+            "description": "Evidência concreta citando participantes."
           },
           "contrast_criteria": {
             "type": "string",

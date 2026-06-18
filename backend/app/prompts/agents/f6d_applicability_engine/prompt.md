@@ -12,6 +12,8 @@ You are an applicability engine for Classic Grounded Theory. Your task is to tra
 ## User
 [STUDY CONTEXT]
 Pattern type under investigation: {object_of_study}
+Research question: {research_question}
+Core concern (confirmed by HITL): {core_concern}
 
 Complete grounded theory:
 ```

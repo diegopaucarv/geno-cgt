@@ -17,7 +17,7 @@
         "properties": {
           "code_name": {
             "type": "string",
-            "description": "Gerund of the code."
+            "description": "Label of the code."
           },
           "definition": {
             "type": "string",

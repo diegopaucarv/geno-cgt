@@ -9,7 +9,7 @@
   "properties": {
     "main_concern": {
       "type": "string",
-      "description": "Kern-{object_of_study}, ausgedrückt als Gerundium oder Verbalphrase."
+      "description": "Kern-{object_of_study}, ausgedrückt je nach Codierungsstil oder Verbalphrase."
     },
     "rationale": {
       "type": "string",

@@ -48,7 +48,7 @@ SCHEMA
           "text": {{"type": "string", "description": "Hipótesis como afirmación testeable."}},
           "level": {{"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"}},
           "type": {{"type": "string", "enum": ["descriptive", "relational", "causal", "process", "typological"], "description": "Tipo de hipótesis."}},
-          "evidence": {{"type": "string", "description": "Evidencia concreta citando entrevistados."}},
+          "evidence": {{"type": "string", "description": "Evidencia concreta citando participantes."}},
           "related_codes": {{"type": "array", "items": {{"type": "string"}}, "description": "Códigos relacionados."}}
         }}
       }}

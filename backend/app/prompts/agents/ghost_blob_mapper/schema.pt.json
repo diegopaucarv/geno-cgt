@@ -39,7 +39,7 @@
           },
           "suggested_new_category_name": {
             "type": "string",
-            "description": "Nome em forma de gerúndio para a nova categoria. Apenas se disposition = suggest_new."
+            "description": "Nome conforme estilo de codificação para a nova categoria. Apenas se disposition = suggest_new."
           },
           "suggested_new_category_definition": {
             "type": "string",

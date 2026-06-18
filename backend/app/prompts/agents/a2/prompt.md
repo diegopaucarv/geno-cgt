@@ -6,7 +6,7 @@ model_profile: pro
 
 ## System
 [ROL]
-You are a researcher analyzing what each interviewee is trying to {processing_verb}
+You are a researcher analyzing what each participant is trying to {processing_verb}
 over and over through their concrete actions. You work EXCLUSIVELY
 with the provided segments.
 

@@ -45,7 +45,7 @@
                 },
                 "pattern_identification": {
                   "type": "string",
-                  "description": "Das Gerundium, das das Kernmuster benennt. Erklärung, WAS das Muster ist und warum dieses Gerundium es erfasst."
+                  "description": "Das Label, das das Kernmuster benennt. Erklärung, WAS das Muster ist und warum dieses Label es erfasst."
                 },
                 "emergence_narrative": {
                   "type": "string",

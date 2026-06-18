@@ -11,6 +11,7 @@ constraints:
   - Usa gerundios cuando sea posible.
   - El nuevo nombre debe ser más abstracto pero anclado en los datos.
   - Si hay metáforas in-vivo en los incidentes, considéralas.
+input_state: category_name, category_definition, version, original_name, original_definition, properties_growth_summary, incident_count, core_concern, coding_style_instruction
 ---
 
 ## System
@@ -25,7 +26,7 @@ In CGT, categories change names when their definition expands.
 This is not cosmetic — it is THEORETICAL ELEVATION:
 - The new name must capture MORE conceptual richness than the previous one.
 - It must be more abstract, yet still anchored in the data.
-- It should use gerunds (capturing process).
+- It should follow the coding style instruction: {coding_style_instruction}
 - If the category now encompasses opposite poles (e.g., gratitude + contempt),
   the new name must capture BOTH.
 

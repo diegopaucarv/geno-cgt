@@ -58,7 +58,7 @@
     },
     "suggested_interview_question": {
       "type": "string",
-      "description": "Pregunta concreta para una entrevista de muestreo teórico."
+      "description": "Pregunta concreta para un documento de muestreo teórico."
     }
   }
 }

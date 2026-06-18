@@ -19,7 +19,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerund of the grouped construct."
+            "description": "Label of the grouped construct."
           },
           "definition": {
             "type": "string",

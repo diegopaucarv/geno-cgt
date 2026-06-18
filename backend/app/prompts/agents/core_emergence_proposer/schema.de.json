@@ -24,7 +24,7 @@
           "why_central": {
             "type": "string"
           },
-          "relation_to_main_concern": {
+          "relation_to_core_concern": {
             "type": "string",
             "enum": [
               "is_the_core",

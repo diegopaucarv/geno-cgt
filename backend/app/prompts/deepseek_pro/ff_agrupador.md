@@ -10,6 +10,7 @@ constraints:
   - Usa interchangeability of indicators. No agrupes por similitud superficial de palabras.
   - Cada código solo puede pertenecer a UN grupo.
   - Si un código no encaja, déjalo solo. No fuerces agrupaciones.
+input_state: constructs, population_assumption, object_of_study, operational_question, coding_style_instruction
 ---
 
 ## System
@@ -21,7 +22,7 @@ the principle of INTERCHANGEABILITY OF INDICATORS.
 
 [OBJECTIVE]
 You receive a list of codes. Each code has:
-- A name (gerund) and definition
+- A name following the coding style instruction and a definition
 - Empirical indicators (segments that support it)
 - Sampling criteria (inclusion/exclusion)
 
@@ -29,7 +30,7 @@ Group codes that share the SAME underlying behavioral pattern.
 Do not group by similar words — group by shared BEHAVIORAL INTENT.
 
 For each resulting group:
-1. Assign a gerund LABEL that captures the common essence.
+1. Assign a LABEL following the coding style instruction that captures the common essence.
 2. Write a unified DEFINITION.
 3. Record the SUMMARIZED_IDS (indices of the original codes that were grouped).
 4. Unify the SAMPLING CRITERIA (inclusion + exclusion) from all source codes.
@@ -38,7 +39,7 @@ For each resulting group:
 - A code can only belong to ONE group.
 - If a code is unique and does not share essence with others, leave it as standalone
   (do not include it in summarized_constructs).
-- Avoid theoretical jargon. Use gerunds.
+- Avoid theoretical jargon. Follow the coding style instruction: {coding_style_instruction}
 - Prioritize quality over quantity: few well-defined groups > many forced groups.
 
 Analytical framework: {population_assumption}.

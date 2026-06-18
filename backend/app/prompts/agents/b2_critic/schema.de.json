@@ -20,7 +20,7 @@
         "properties": {
           "code_label": {
             "type": "string",
-            "description": "Name des bewerteten Codes (exaktes Gerundium)"
+            "description": "Name des bewerteten Codes (exaktes Label)"
           },
           "verdict": {
             "type": "string",
@@ -41,7 +41,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Nur wenn MOD. Konkrete Maßnahme: neues Gerundium, angepasste Definition oder Aufteilung in Subcodes. Wenn nicht zutreffend, leeren String lassen."
+            "description": "Nur wenn MOD. Konkrete Maßnahme: neues Label, angepasste Definition oder Aufteilung in Subcodes. Wenn nicht zutreffend, leeren String lassen."
           },
           "overlap_with_existing": {
             "type": "array",

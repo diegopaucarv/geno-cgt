@@ -58,7 +58,7 @@
     },
     "suggested_interview_question": {
       "type": "string",
-      "description": "Pergunta concreta para uma entrevista de amostragem teórica."
+      "description": "Pergunta concreta para um documento de amostragem teórica."
     }
   }
 }

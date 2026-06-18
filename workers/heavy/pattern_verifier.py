@@ -78,15 +78,37 @@ def verify_core_pattern(proyecto_id: str) -> dict:
         pa = pa_row[0] if pa_row and pa_row[0] else {}
         rq = pa.get("research_question", {}) if isinstance(pa, dict) else {}
         operational_question = rq.get("operational_question", "(not yet generated)")
+        research_question = rq.get("research_question", "(not yet generated)")
+        processing_verb = (
+            pa.get("processing_verb", "resolve") if isinstance(pa, dict) else "resolve"
+        )
+        processing_gerund = (
+            pa.get("processing_gerund", "resolving")
+            if isinstance(pa, dict)
+            else "resolving"
+        )
+
+        # 5b. Get coding_style_instruction (G21)
+        coding_style_instruction = (
+            pa.get("coding_style_instruction", "") if isinstance(pa, dict) else ""
+        )
+        if not coding_style_instruction:
+            from app.core.coding_styles import get_default_style_instruction
+
+            coding_style_instruction = get_default_style_instruction()
 
         # 6. Call PRO agent
         result = llm.run_agent(
-            "core_pattern_verifier",
+            "fa_core_pattern_verifier",
             variables={
                 "patterns": patterns_text[:8000],
                 "population_context": population_context[:2000],
                 "object_of_study": object_of_study,
                 "operational_question": operational_question,
+                "research_question": research_question,
+                "coding_style_instruction": coding_style_instruction,
+                "processing_verb": processing_verb,
+                "processing_gerund": processing_gerund,
             },
         )
 

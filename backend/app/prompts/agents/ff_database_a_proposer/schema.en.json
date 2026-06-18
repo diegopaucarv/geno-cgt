@@ -23,7 +23,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerund or conceptual noun. The formal name of this theoretical node."
+            "description": "Label or conceptual noun. The formal name of this theoretical node."
           },
           "entity_type": {
             "type": "string",

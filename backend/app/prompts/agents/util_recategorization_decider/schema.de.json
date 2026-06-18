@@ -68,7 +68,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Gerundium der neuen Kategorie."
+            "description": "Label der neuen Kategorie."
           },
           "definition": {
             "type": "string",

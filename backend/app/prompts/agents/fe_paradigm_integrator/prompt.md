@@ -55,6 +55,7 @@ For each new incident:
 
 [STUDY CONTEXT]
 Pattern type: {object_of_study}
+Operational question: {operational_question}
 
 [CATEGORY]
 Name: {code_name}

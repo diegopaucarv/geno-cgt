@@ -15,7 +15,7 @@
         "properties": {
           "new_label": {
             "type": "string",
-            "description": "Gerundio del concepto de orden superior (si fusión) o etiqueta original (si se mantiene solo)"
+            "description": "Etiqueta del concepto de orden superior (si fusión) o etiqueta original (si se mantiene solo)"
           },
           "entity_type": {
             "type": "string",

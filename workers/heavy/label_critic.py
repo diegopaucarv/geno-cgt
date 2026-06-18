@@ -1,13 +1,13 @@
 """
 B3 — Label Critic (FLASH, structured evaluation).
 
-Evalúa etiquetas propuestas por el pattern_labeler (B2).
-Emite veredictos SAT | MOD | FORCED para cada etiqueta.
+Evalúa UNA etiqueta propuesta por el pattern_labeler (B2) contra sus
+incidentes fuente. FLASH — solo evalúa, no genera.
 
-FLASH: 10x más barato que PRO. Solo evalúa, no genera.
+Retorna issues si la etiqueta tiene problemas; array vacío si es correcta.
 
-Usado tanto en el SelfRefinement loop de B2 como standalone
-para evaluación post-hoc.
+Usado tanto en el SelfRefinement loop de B2 (concepto por concepto)
+como standalone para evaluación post-hoc.
 
 See AGENTES.md §label_critic for I/O spec.
 """
@@ -28,14 +28,13 @@ def b3_critique_labels(groups_json: str, labels_json: str) -> dict:
     FLASH — structured evaluation. No generation.
 
     Args:
-        groups_json: JSON string con los grupos de incidentes fuente.
-        labels_json: JSON string con las etiquetas propuestas a evaluar.
+        groups_json: JSON string con los incidentes fuente del grupo.
+        labels_json: JSON string con la(s) etiqueta(s) a evaluar.
 
     Returns:
         dict con:
-          - all_valid: bool — true si TODAS las etiquetas son SAT.
-          - issues: list[dict] — [{label, verdict: SAT|MOD|FORCED, type, description}]
-          - summary: dict — {total, sat, mod, forced}
+          - issues: list[dict] — [{label, description, suggestion}]
+            Empty issues array = labels are good.
     """
     try:
         response = llm.run_agent(
@@ -47,33 +46,15 @@ def b3_critique_labels(groups_json: str, labels_json: str) -> dict:
             temperature=0.1,
         )
 
-        all_valid = response.get("all_valid", False)
         issues = response.get("issues", [])
 
-        # ── Calcular summary ───────────────────────────────────────
-        sat_count = sum(1 for i in issues if i.get("verdict") == "SAT")
-        mod_count = sum(1 for i in issues if i.get("verdict") == "MOD")
-        forced_count = sum(1 for i in issues if i.get("verdict") == "FORCED")
-        total = len(issues)
-
         logger.info(
-            "B3 critique: %d labels — %d SAT, %d MOD, %d FORCED, all_valid=%s",
-            total,
-            sat_count,
-            mod_count,
-            forced_count,
-            all_valid,
+            "B3 critique: %d issues found",
+            len(issues),
         )
 
         return {
-            "all_valid": all_valid,
             "issues": issues,
-            "summary": {
-                "total": total,
-                "sat": sat_count,
-                "mod": mod_count,
-                "forced": forced_count,
-            },
         }
 
     except Exception:

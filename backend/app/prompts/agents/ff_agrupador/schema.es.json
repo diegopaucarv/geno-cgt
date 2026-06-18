@@ -19,7 +19,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerundio del constructo agrupado."
+            "description": "Etiqueta del constructo agrupado."
           },
           "definition": {
             "type": "string",

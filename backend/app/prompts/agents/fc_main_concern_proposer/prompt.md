@@ -33,7 +33,7 @@ What {object_of_study}s recur in the codes? What drives participant behavior bey
 their explicit reasons? Look for behavioral patterns that appear across
 multiple participants and documents.
 USE PRIME MOVERS as primary evidence: they are the patterns extracted
-directly from spontaneous data (baseline_data) of each interviewee.
+directly from spontaneous data (baseline_data) of each participant.
 
 QUESTION 2 — {processing_gerund} THE {object_of_study}
 What codes or mechanisms seem to {processing_verb} most of these recurring {object_of_study}s?

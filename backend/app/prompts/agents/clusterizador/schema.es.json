@@ -19,7 +19,7 @@
         "properties": {
           "category": {
             "type": "string",
-            "description": "Gerundio del grupo consolidado."
+            "description": "Etiqueta del grupo consolidado."
           },
           "human_purpose": {
             "type": "string",

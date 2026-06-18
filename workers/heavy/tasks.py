@@ -24,7 +24,10 @@ from sqlalchemy import text
 
 sys.path.insert(0, "/app")
 
-from algorithmic_checks import check_output_references, preclassify_glaser
+from algorithmic_checks import (
+    check_output_references,
+    classify_segments_batch,
+)
 from database import SessionLocal
 from llm_client import LLMClient
 
@@ -45,6 +48,24 @@ def _set_language_from_project(session, proyecto_id: str) -> str:
     except Exception:
         LLMClient.set_user_language("es")
         return "es"
+
+
+def _get_coding_style_instruction(session, proyecto_id: str) -> str:
+    """Read coding_style_instruction from project config, with fallback."""
+    try:
+        from app.core.coding_styles import get_default_style_instruction
+
+        row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        if row and row[0] and isinstance(row[0], dict):
+            instr = row[0].get("coding_style_instruction", "")
+            if instr:
+                return instr
+        return get_default_style_instruction()
+    except Exception:
+        return "Nombra cada código con un GERUNDIO (-ando/-iendo)."
 
 
 # ── Pipeline log streaming ──────────────────────
@@ -192,17 +213,17 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
         if response.get("mock_note"):
             return {"error": "mock fallback", "note": response["mock_note"]}
 
-        # Validate: don't save empty outputs
+        # Validate: don't save empty outputs, but don't block the pipeline
         sd = (response.get("surprising_details") or "").strip()
         lp = (response.get("language_patterns") or "").strip()
         dpc = (response.get("data_production_context") or "").strip()
         all_empty = not sd and not lp and not dpc
-        all_no_evidence = all("Sin evidencia" in v for v in [sd, lp, dpc] if v)
-        if all_empty or all_no_evidence:
-            logger.warning(
-                "A1: empty/invalid response for doc=%s — marking as error", documento_id
+        if all_empty:
+            logger.info(
+                "A1: empty response for doc=%s — skipping population context update (non-fatal)",
+                documento_id,
             )
-            return {"error": "empty_llm_response", "documento_id": documento_id}
+            return {"status": "skipped_empty", "documento_id": documento_id}
 
         new_version = (existing[4] + 1) if existing else 1
         new_source_ids = list(existing[3]) if existing else []
@@ -262,6 +283,11 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
         pa_data = pa_row[0] if pa_row and pa_row[0] else {}
         rq_data = pa_data.get("research_question", {})
         operational_question = rq_data.get("operational_question", "")
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
         oos_row = session.execute(
             text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
             {"pid": proyecto_id},
@@ -291,28 +317,38 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
 
         task_section = (
             "[TAREA]\n"
-            "Identifica el proceso central que este entrevistado intenta resolver\n"
+            "Identifica el proceso central que este participante intenta resolver\n"
             "continuamente. Nómbralo con un gerundio y explica en 2-3 oraciones\n"
             "qué acciones concretas en los segmentos revelan este proceso.\n"
-            "No busques lo que el entrevistado dice explícitamente que le preocupa.\n"
+            "No busques lo que el participante dice explícitamente que le preocupa.\n"
             "Busca el patrón de comportamiento que subyace a sus acciones.\n"
             "Para similarity_to_previous y difference_from_previous, responde 'N/A'."
             if is_first
             else "[TAREA]\n"
-            "1. Identifica el proceso central de ESTE entrevistado (gerundio + 2-3 oraciones).\n"
-            "2. ¿En qué se PARECE al proceso del entrevistado anterior?\n"
+            "1. Identifica el proceso central de ESTE participante (gerundio + 2-3 oraciones).\n"
+            "2. ¿En qué se PARECE al proceso del participante anterior?\n"
             "   ¿Es el mismo proceso con distinta manifestación?\n"
             "3. ¿En qué se DIFERENCIA ESENCIALMENTE?\n"
             "   No detalles superficiales sino diferencias en el patrón de comportamiento."
         )
 
-        # Pattern 4: pre-clasificar tipo de dato Glaser
-        glaser_hint = preclassify_glaser(segments_text)
+        # F2.1: Leer clasificación Glaser ya persistida para este documento
+        glaser_summary = session.execute(
+            text(
+                "SELECT tipo_dato_glaser, COUNT(*) FROM segmentos "
+                "WHERE documento_id = :did AND tipo_dato_glaser IS NOT NULL "
+                "GROUP BY tipo_dato_glaser"
+            ),
+            {"did": documento_id},
+        ).fetchall()
+        glaser_hint_text = (
+            ", ".join(f"{row[0]}: {row[1]}" for row in glaser_summary)
+            or "(sin clasificar)"
+        )
         task_section_with_hint = task_section + (
-            "\n\n[PISTA — el sistema detectó estas señales textuales]\n"
-            f"Señales encontradas: {glaser_hint['signals_found']}\n"
-            f"Clasificación sugerida: {glaser_hint['suggested_type']} (confianza: {glaser_hint['confidence']:.0%})\n"
-            "Puedes confirmar esta clasificación o corregirla si tu análisis difiere."
+            "\n\n[CLASIFICACIÓN GLASER DE ESTE DOCUMENTO]\n"
+            f"Distribución: {glaser_hint_text}\n"
+            "Usa esto como contexto para tu análisis del proceso."
         )
 
         response = llm.run_agent(
@@ -324,6 +360,10 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
                 "task_section": task_section_with_hint,
                 "object_of_study": object_of_study,
                 "operational_question": operational_question or "(not yet generated)",
+                "coding_style_instruction": _get_coding_style_instruction(
+                    session, proyecto_id
+                ),
+                "processing_verb": processing_verb,
             },
             temperature=0.3,
         )
@@ -336,8 +376,11 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
         stp = (response.get("similarity_to_previous") or "").strip()
         dfp = (response.get("difference_from_previous") or "").strip()
         if not pd:
-            logger.warning("A2: empty process_description for doc=%s", documento_id)
-            return {"error": "empty_llm_response", "documento_id": documento_id}
+            logger.info(
+                "A2: empty process_description for doc=%s — skipping (non-fatal)",
+                documento_id,
+            )
+            return {"status": "skipped_empty", "documento_id": documento_id}
 
         result = session.execute(
             text(
@@ -528,51 +571,117 @@ def _ensure_segmented(session, documento_id: str) -> None:
     )
 
 
+BATCH_SIZE = 25  # segments per AI call for large documents
+
+
 def _classify_glaser_types_for_doc(
-    session, documento_id: str, use_llm_fallback: bool = False
+    session, documento_id: str, use_llm_fallback: bool = True
 ) -> int:
-    """F2.1: Clasifica todos los segmentos de un documento con preclassify_glaser.
+    """F2.1: Clasifica todos los segmentos de un documento via AI en batch.
 
-    Layer 1 (algorithmic) siempre corre. Layer 2 (FLASH) solo si
-    use_llm_fallback=True y la confianza algorítmica es < 0.7.
+    Envía TODOS los segmentos en lotes de BATCH_SIZE a un modelo PRO.
+    La IA hace explication de texte: clasifica cada segmento y detecta
+    preguntas del autor (→ 'interviewer_context').
 
-    Persiste el resultado en segmentos.tipo_dato_glaser.
+    Sin capa algorítmica. Sin FLASH por segmento.
+
+    Persiste en segmentos.tipo_dato_glaser.
 
     Returns:
         Número de segmentos clasificados.
     """
-    segments = session.execute(
+    rows = session.execute(
         text(
-            "SELECT id, texto FROM segmentos "
+            "SELECT id, texto, posicion FROM segmentos "
             "WHERE documento_id = :did ORDER BY posicion"
         ),
         {"did": documento_id},
     ).fetchall()
 
-    if not segments:
+    if not rows:
         return 0
 
+    # Build segment list for the batch classifier
+    all_segments = [
+        {"id": str(r[0]), "text": r[1] or "", "posicion": r[2]} for r in rows
+    ]
+
+    # Check project config for interviewer flag
+    allow_interviewer = False
+    try:
+        proj = session.execute(
+            text(
+                "SELECT population_assumption FROM proyectos p "
+                "JOIN documentos d ON d.proyecto_id = p.id "
+                "WHERE d.id = :did"
+            ),
+            {"did": documento_id},
+        ).fetchone()
+        if proj and proj[0] and isinstance(proj[0], dict):
+            allow_interviewer = proj[0].get("allow_interviewer_as_baseline", False)
+    except Exception:
+        pass
+
     classified = 0
-    for seg_id, seg_text in segments:
-        result = preclassify_glaser(
-            seg_text,
-            use_llm_fallback=use_llm_fallback,
-            llm_client=llm if use_llm_fallback else None,
+    total = len(all_segments)
+    batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+
+    logger.info(
+        "Glaser batch classification: doc=%s, %d segments → %d batch(es) [BATCH_SIZE=%d]",
+        documento_id[:8],
+        total,
+        batches,
+        BATCH_SIZE,
+    )
+
+    for batch_idx in range(batches):
+        start = batch_idx * BATCH_SIZE
+        end = min(start + BATCH_SIZE, total)
+        batch = all_segments[start:end]
+
+        logger.info(
+            "Glaser batch %d/%d: %d segments",
+            batch_idx + 1,
+            batches,
+            len(batch),
         )
-        glaser_type = result.get("glaser_data_type")
-        if glaser_type:
-            session.execute(
-                text("UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"),
-                {"tipo": glaser_type, "sid": str(seg_id)},
-            )
-            classified += 1
+
+        if not use_llm_fallback:
+            # Conservative default: everything baseline
+            for s in batch:
+                session.execute(
+                    text(
+                        "UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"
+                    ),
+                    {"tipo": "baseline_data", "sid": s["id"]},
+                )
+                classified += 1
+            continue
+
+        results = classify_segments_batch(
+            batch,
+            llm_client=llm,
+            allow_interviewer_as_baseline=allow_interviewer,
+        )
+
+        for r in results:
+            glaser_type = r.get("glaser_data_type")
+            if glaser_type:
+                session.execute(
+                    text(
+                        "UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"
+                    ),
+                    {"tipo": glaser_type, "sid": r["segment_id"]},
+                )
+                classified += 1
 
     session.commit()
     logger.info(
-        "Glaser pre-classification: %d/%d segments classified (doc=%s)",
+        "Glaser classification complete: %d/%d segments (doc=%s, batches=%d)",
         classified,
-        len(segments),
-        documento_id,
+        total,
+        documento_id[:8],
+        batches,
     )
     return classified
 
@@ -695,6 +804,9 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
             "baseline_segments": segments_text[:6000],
             "object_of_study": obj,
             "operational_question": operational_question or "(not yet generated)",
+            "coding_style_instruction": _get_coding_style_instruction(
+                session, proyecto_id
+            ),
         },
         temperature=0.3,
     )
@@ -829,57 +941,35 @@ def process_document_agents_a(
             _classify_glaser_types_for_doc(session, documento_id, use_llm_fallback=True)
             checkpoint(session, documento_id, STEP, "completed")
 
-        # ── Step 0.5: F2.2 — Extract incidents per baseline segment (FLASH) ──
+        # ── Step 0.5: F2.3 — Extract patterns & incidents (unified PRO call) ──
+        # Replaces old per-segment extract_incident (~13 FLASH) + extract_core_pattern (1 PRO)
+        # + _extract_prime_mover (1 FLASH). ONE PRO call does all three.
         STEP = "extract_incidents"
         if self._aborted:
             raise TaskCancelledError()
         if STEP not in completed:
             checkpoint(session, documento_id, STEP, "in_progress")
-            logger.info("F2.2: Extrayendo incidentes doc %s", documento_id)
+            logger.info("F2.3: Extracting patterns & incidents doc %s", documento_id)
             try:
-                from incident_extractor import extract_incident as _extract_inc
+                from pattern_extractor import (
+                    extract_patterns_and_incidents as _extract_pi,
+                )
 
-                baseline_segs = session.execute(
-                    text(
-                        "SELECT id FROM segmentos WHERE documento_id = :did "
-                        "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL)"
-                    ),
-                    {"did": documento_id},
-                ).fetchall()
-                n = 0
-                for (sid,) in baseline_segs:
-                    if self._aborted:
-                        raise TaskCancelledError()
-                    try:
-                        _extract_inc(str(sid), proyecto_id)
-                        n += 1
-                    except Exception as e:
-                        logger.warning(
-                            "Incident extraction failed for seg %s: %s", sid, e
-                        )
-                results["incidents_extracted"] = n
-                logger.info("F2.2: %d incidentes extraidos doc %s", n, documento_id)
+                pi_result = _extract_pi(documento_id, proyecto_id)
+                results["patterns"] = pi_result.get("patterns", [])
+                results["incidents_extracted"] = pi_result.get("incidents_count", 0)
+                results["document_signals"] = pi_result.get("document_signals", {})
+                logger.info(
+                    "F2.3: %d patterns, %d incidents doc %s",
+                    len(results["patterns"]),
+                    results["incidents_extracted"],
+                    documento_id,
+                )
             except Exception as e:
-                logger.warning("Incident extraction batch failed: %s", e)
+                logger.warning("Pattern extraction failed: %s", e)
+                results["patterns"] = []
                 results["incidents_extracted"] = 0
-            checkpoint(session, documento_id, STEP, "completed")
-
-        # ── Step 0.6: F2.4 — Extract core pattern per document (PRO) ──
-        STEP = "extract_core_pattern"
-        if self._aborted:
-            raise TaskCancelledError()
-        if STEP not in completed and results.get("incidents_extracted", 0) > 0:
-            checkpoint(session, documento_id, STEP, "in_progress")
-            logger.info("F2.4: Extrayendo patron central doc %s", documento_id)
-            try:
-                from pattern_extractor import extract_core_pattern as _extract_cp
-
-                cp_result = _extract_cp(documento_id, proyecto_id)
-                results["core_pattern"] = cp_result
-                logger.info("F2.4: Patron central extraido doc %s", documento_id)
-            except Exception as e:
-                logger.warning("Core pattern extraction failed: %s", e)
-                results["core_pattern"] = None
+                results["document_signals"] = {}
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Step 0.7: F2.5 — Every 3 documents, verify pattern convergence (PRO) ──
@@ -928,16 +1018,7 @@ def process_document_agents_a(
                 documento_id, proyecto_id
             )
             checkpoint(session, documento_id, STEP, "completed")
-            if "error" in results["population_context"]:
-                transit(
-                    session,
-                    documento_id,
-                    proyecto_id,
-                    "procesando",
-                    "process_document_agents_a",
-                    False,
-                )
-                return results
+            # A1 is auxiliary — don't block the pipeline on empty context
 
         # ── Step 2: A2 — Process Identification ──
         STEP = "a2_identify_process"
@@ -948,46 +1029,10 @@ def process_document_agents_a(
             logger.info("A2: Proceso doc %s", documento_id)
             results["document_process"] = a2_identify_process(documento_id, proyecto_id)
             checkpoint(session, documento_id, STEP, "completed")
-            if "error" in results["document_process"]:
-                transit(
-                    session,
-                    documento_id,
-                    proyecto_id,
-                    "procesando",
-                    "process_document_agents_a",
-                    False,
-                )
-                return results
+            # A2 is auxiliary — don't block pipeline on empty process description
 
-        # ── Step 3: C06 — Prime Mover ──
-        STEP = "extract_prime_mover"
-        if self._aborted:
-            raise TaskCancelledError()
-        if STEP not in completed:
-            checkpoint(session, documento_id, STEP, "in_progress")
-            logger.info("C06: Prime mover doc %s", documento_id)
-            try:
-                pm_result = _extract_prime_mover(session, documento_id, proyecto_id)
-                results["prime_mover"] = pm_result
-                if pm_result and pm_result.get("prime_mover"):
-                    session.execute(
-                        text(
-                            "UPDATE document_processes SET prime_mover = :pm, "
-                            "prime_mover_confidence = :pmc "
-                            "WHERE documento_id = :did AND proyecto_id = :pid"
-                        ),
-                        {
-                            "pm": pm_result["prime_mover"],
-                            "pmc": pm_result.get("confidence", "LOW"),
-                            "did": documento_id,
-                            "pid": proyecto_id,
-                        },
-                    )
-                    session.commit()
-            except Exception as e:
-                logger.warning("Prime mover extraction fallo: %s", e)
-                results["prime_mover"] = None
-            checkpoint(session, documento_id, STEP, "completed")
+        # ── Step 3: Prime Mover (already extracted by F2.3 unified call) ──
+        # skip — prime_mover is in results["document_signals"] from extract_patterns_and_incidents
 
         # ── Step 4: A3 — Sense Making ──
         STEP = "a3_make_sense"
@@ -1040,12 +1085,16 @@ from agents_b import (
     b2_5_assign_codes_to_segments,
     b2_open_code,
     b3_generate_hypotheses,
+    update_hypotheses_incremental,
 )
 
 # ── New F2.3 agent imports ──
-from comparator import b1_compare_incidents
+from comparator import b1_group_incidents
+from config_critic import critique_configuration
+from core_category_proposer import propose_core_categories as _propose_core_categories
 from label_critic import b3_critique_labels
 from labeler import b2_label_groups
+from synthesizer import synthesize_categories as _synthesize_categories
 
 # ── Legacy tasks (deprecated — kept for backward compatibility) ──
 
@@ -1070,7 +1119,8 @@ def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
 
 @app.task(name="b1_compare_incidents")
 def task_b1_compare_incidents(proyecto_id: str, incremental: bool = False) -> dict:
-    return b1_compare_incidents(proyecto_id, incremental)
+    """Redirect to new AI-only grouper."""
+    return b1_group_incidents(proyecto_id, incremental)
 
 
 @app.task(name="b2_label_groups")
@@ -1080,27 +1130,157 @@ def task_b2_label_groups(proyecto_id: str) -> dict:
 
 @app.task(name="b3_critique_labels")
 def task_b3_critique_labels(groups_json: str, labels_json: str) -> dict:
+    """Standalone label critique (FLASH). Returns {issues: [...]} — empty issues = good.
+
+    Also called internally by B2's concept-by-concept SelfRefinement loop.
+    """
     return b3_critique_labels(groups_json, labels_json)
 
 
+@app.task(name="synthesize_categories")
+def task_synthesize_categories(
+    proyecto_id: str, batch_start_doc_index: int = 1
+) -> dict:
+    """Category synthesizer: merges new categories from the current 3-doc batch
+    with previous categories from earlier batches.
+
+    Runs AFTER B2/B3 completes. Receives ALL categories, separates them into
+    previous (docs < batch_start) and new (docs >= batch_start), and calls the
+    AI (fd_category_synthesizer, PRO) to produce a unified deduplicated set.
+
+    Args:
+            proyecto_id: Project UUID.
+            batch_start_doc_index: 1-based index of the first doc in the current batch.
+                    Batch 1 (docs 1-3) → batch_start=1 (no previous, just records).
+                    Batch 2 (docs 4-6) → batch_start=4 (merges with docs 1-3).
+                    Batch 3 (docs 7-9) → batch_start=7 (merges with docs 1-6).
+    """
+    return _synthesize_categories(proyecto_id, batch_start_doc_index)
+
+
+@app.task(name="critique_configuration")
+def task_critique_configuration(proyecto_id: str, batch_start: int) -> dict:
+    """Configuration Critic: reviews emerging theoretical configuration after every
+    3-doc batch (post-synthesizer). Evaluates concerns, population reconfigurations,
+    and coding style adequacy.
+
+    Dispatched from process_synthesis_agents_b after the synthesizer and
+    update_hypotheses complete.
+
+    Reads current categories and hypotheses from DB, then calls the critic.
+
+    Args:
+        proyecto_id: Project UUID.
+        batch_start: 1-based index of the first document in the current batch.
+    """
+    s = SessionLocal()
+    try:
+        # ── Load categories (same shape as synthesizer produces) ──
+        cat_rows = s.execute(
+            text(
+                "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        categories = []
+        for cr in cat_rows:
+            cat_id = str(cr[0])
+            # Count incident groups linked to this category
+            inc_count = s.execute(
+                text(
+                    "SELECT COUNT(*) FROM incident_groups "
+                    "WHERE proyecto_id = :pid AND label = :name"
+                ),
+                {"pid": proyecto_id, "name": cr[1]},
+            ).fetchone()
+
+            # Count docs linked to this category
+            doc_count = s.execute(
+                text(
+                    "SELECT COUNT(DISTINCT d.id) "
+                    "FROM codigos_segmento cs "
+                    "JOIN segmentos seg ON cs.segmento_id = seg.id "
+                    "JOIN documentos d ON seg.documento_id = d.id "
+                    "WHERE cs.categoria_id = :cid "
+                    "AND d.proyecto_id = :pid"
+                ),
+                {"cid": cat_id, "pid": proyecto_id},
+            ).fetchone()
+
+            categories.append(
+                {
+                    "id": cat_id,
+                    "label": cr[1] or "",
+                    "definition": cr[2] or "",
+                    "incident_count": inc_count[0] if inc_count else 0,
+                    "doc_count": doc_count[0] if doc_count else 0,
+                }
+            )
+
+        # ── Load hypotheses ──
+        hyp_rows = s.execute(
+            text(
+                "SELECT text, level, confidence "
+                "FROM hypotheses "
+                "WHERE project_id = :pid AND status = 'candidate'"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+
+        hypotheses = []
+        for hr in hyp_rows:
+            hypotheses.append(
+                {
+                    "text": hr[0] or "",
+                    "level": hr[1] or "general",
+                    "confidence": float(hr[2]) if hr[2] else 0.0,
+                }
+            )
+
+        return critique_configuration(proyecto_id, batch_start, categories, hypotheses)
+    finally:
+        s.close()
+
+
+@app.task(name="update_hypotheses")
+def task_update_hypotheses(proyecto_id: str) -> dict:
+    """Recurring hypotheses agent: runs after each synthesizer to update
+    relationship notes between categories. Grows over time.
+
+    Reads all existing hypotheses memos + all current categories with their
+    indicators + which documents they appear in. Calls AI to evaluate
+    cross-category relationships and stores the growing note in memos.
+    """
+    return update_hypotheses_incremental(proyecto_id)
+
+
 # ═══════════════════════════════════════════════════════════════════════
-# F2.2 / F2.4 — Incident Extractor + Core Pattern Extractor
+# F2.3 — Pattern & Incident Extractor (replaces old per-segment extract_incident)
 # ═══════════════════════════════════════════════════════════════════════
 
-from incident_extractor import extract_incident as _extract_incident_impl
-from pattern_extractor import extract_core_pattern as _extract_core_pattern_impl
+from pattern_extractor import extract_patterns_and_incidents as _extract_pi_impl
 
 
 @app.task(name="extract_incident")
 def task_extract_incident(segment_id: str, proyecto_id: str) -> dict:
-    """F2.2: Extrae un incidente por segmento con las 4 preguntas de Glaser (FLASH)."""
-    return _extract_incident_impl(segment_id, proyecto_id)
+    """DEPRECATED: Use extract_patterns_and_incidents (unified PRO call per doc).
+    Kept for backward compatibility. Redirects to unified extractor."""
+    logger.warning(
+        "extract_incident called directly for seg=%s — redirecting to unified extractor",
+        segment_id[:8],
+    )
+    return {
+        "status": "deprecated",
+        "message": "Use extract_patterns_and_incidents instead",
+    }
 
 
 @app.task(name="extract_core_pattern")
 def task_extract_core_pattern(documento_id: str, proyecto_id: str) -> dict:
-    """F2.4: Sintetiza el patrón central de un documento a partir de sus incidentes (PRO)."""
-    return _extract_core_pattern_impl(documento_id, proyecto_id)
+    """DEPRECATED: Core pattern now extracted as part of extract_patterns_and_incidents.
+    Kept for backward compatibility."""
+    return _extract_pi_impl(documento_id, proyecto_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1118,9 +1298,9 @@ def task_literature_comparer(proyecto_id: str, literature_fragments: list[str]) 
 
 
 @app.task(name="f6c_literature_critic")
-def task_literature_critic(comparison_table: dict) -> dict:
+def task_literature_critic(comparison_table: dict, proyecto_id: str = None) -> dict:
     """F5.4: Evalúa si el diálogo con literatura fuerza coincidencias o trata la literatura como autoridad (PRO)."""
-    return _critique_literature_impl(comparison_table)
+    return _critique_literature_impl(comparison_table, proyecto_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1138,9 +1318,9 @@ def task_applicability_engine(proyecto_id: str) -> dict:
 
 
 @app.task(name="f6d_applicability_critic")
-def task_applicability_critic(directrices: dict) -> dict:
+def task_applicability_critic(directrices: dict, proyecto_id: str = None) -> dict:
     """F5.5: Evalúa si las directrices de aplicabilidad son genuinas, accesibles y modificables (PRO)."""
-    return _critique_applicability_impl(directrices)
+    return _critique_applicability_impl(directrices, proyecto_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1207,7 +1387,10 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
       4. B17: update saturation
       5. B18: rebuild prototype cache
       6. B3: generate hypotheses (updated to use incident_groups)
-      7. Transition all docs: listo → sintetizado
+      7. Synthesizer: merge new categories with previous ones (async)
+      8. Recurring Hypotheses: update relationship notes (async)
+      9. Configuration Critic: review concerns, population, coding style (async)
+      10. Transition all docs: listo → sintetizado
     """
     results: dict[str, Any] = {"proyecto_id": proyecto_id}
 
@@ -1221,12 +1404,12 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         _pipeline_log_to(proyecto_id)
         logger.info("🔗 Phase B iniciado — proyecto=%s", proyecto_id)
 
-        # ── F2.3 B1: Incident Comparator (PRO, 1-pass) ──
+        # ── B1: Incident Grouper (AI-only, no pre-filter) ──
         if self._aborted:
             raise TaskCancelledError()
         _checkpoint_step(s, proyecto_id, "b1_compare_incidents", "in_progress")
-        logger.info("B1: Comparando incidentes %s", proyecto_id)
-        results["comparator"] = b1_compare_incidents(proyecto_id)
+        logger.info("B1: Grouping incidents %s", proyecto_id)
+        results["comparator"] = b1_group_incidents(proyecto_id)
         _checkpoint_step(s, proyecto_id, "b1_compare_incidents", "completed")
 
         # ── F2.3 B2: Pattern Labeler (PRO + SelfRefinement loop) ──
@@ -1265,6 +1448,59 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         results["hypotheses"] = b3_generate_hypotheses(proyecto_id)
         _checkpoint_step(s, proyecto_id, "b3_generate_hypotheses", "completed")
 
+        # ── Synthesizer: merge new categories with previous ones ──
+        # Calculate batch_start_doc_index based on total document count.
+        # Batch 1: docs 1-3 (batch_start=1), Batch 2: docs 4-6 (batch_start=4), etc.
+        batch_start = 1
+        try:
+            total_docs = s.execute(
+                text("SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid"),
+                {"pid": proyecto_id},
+            ).fetchone()[0]
+            batch_start = ((total_docs - 1) // 3) * 3 + 1 if total_docs > 0 else 1
+            logger.info(
+                "Dispatching synthesizer: project=%s batch_start=%d (total_docs=%d)",
+                proyecto_id[:8],
+                batch_start,
+                total_docs,
+            )
+            app.send_task(
+                "synthesize_categories",
+                args=[proyecto_id, batch_start],
+                queue="heavy",
+            )
+        except Exception:
+            logger.exception("Failed to dispatch synthesizer for %s", proyecto_id)
+
+        # ── Recurring Hypotheses: update relationship notes after each synthesizer ──
+        try:
+            logger.info(
+                "Dispatching update_hypotheses (recurring) for project %s",
+                proyecto_id[:8],
+            )
+            app.send_task(
+                "update_hypotheses",
+                args=[proyecto_id],
+                queue="heavy",
+            )
+        except Exception:
+            logger.exception("Failed to dispatch update_hypotheses for %s", proyecto_id)
+
+        # ── Configuration Critic: review concerns, population, coding style ──
+        try:
+            logger.info(
+                "Dispatching config_critic for project %s (batch_start=%d)",
+                proyecto_id[:8],
+                batch_start,
+            )
+            app.send_task(
+                "critique_configuration",
+                args=[proyecto_id, batch_start],
+                queue="heavy",
+            )
+        except Exception:
+            logger.exception("Failed to dispatch config_critic for %s", proyecto_id)
+
         # ── Transition all docs: listo → sintetizado ──
         _transition_docs_to_sintetizado(s, proyecto_id)
 
@@ -1295,7 +1531,7 @@ def _checkpoint_step(session, proyecto_id: str, step_name: str, status: str) -> 
             text(
                 "INSERT INTO task_step_checkpoints "
                 "(id, document_id, step_name, status, affected_rows) "
-                "VALUES (gen_random_uuid(), NULL, :step, :status, '{}'::jsonb)"
+                "VALUES (gen_random_uuid(), NULL, :step, :status, CAST('{}' AS jsonb))"
             ),
             {"step": step_name, "status": status},
         )
@@ -1624,6 +1860,17 @@ def task_a01_integrate_paradigm(code_id: str, proyecto_id: str) -> dict:
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
 
+        # Fetch operational_question for paradigm context (G26)
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+
         response = llm.run_agent(
             "fe_paradigm_integrator",
             variables={
@@ -1632,6 +1879,7 @@ def task_a01_integrate_paradigm(code_id: str, proyecto_id: str) -> dict:
                 "code_name": code_def[0],
                 "code_definition": code_def[1] or "",
                 "object_of_study": object_of_study,
+                "operational_question": operational_question or "",
             },
         )
 
@@ -1821,6 +2069,9 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
                 "operational_question": operational_question or "(not yet generated)",
+                "coding_style_instruction": _get_coding_style_instruction(
+                    s, proyecto_id
+                ),
             },
         )
         return {
@@ -1881,6 +2132,25 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
         }
     finally:
         s.close()
+
+
+@app.task(name="propose_core_categories")
+def task_propose_core_categories(proyecto_id: str) -> dict:
+    """Core Category Proposer: evalúa todas las categorías existentes contra
+    los criterios CGT de categoría central.
+
+    Se ejecuta después de que todas las pausas every-3-doc están resueltas
+    y el usuario ha seleccionado exactamente UNA concern y UNA población.
+
+    Guardrails (enforced in code):
+        1. Exactly ONE confirmed concern must exist.
+        2. All categories must have a concern_label assigned.
+
+    Returns:
+        dict con core_category_candidates (rankeados), recommendation,
+        confirmed_concern, no_suitable_core, no_suitable_rationale.
+    """
+    return _propose_core_categories(proyecto_id)
 
 
 @app.task(name="a16_test_interchangeability")
@@ -1965,7 +2235,9 @@ def task_research_question_builder(proyecto_id: str) -> dict:
         generalized_population = pa.get("generalized_population", "")
         spatial_frame = pa.get("spatial_frame", "")
         temporal_frame = pa.get("temporal_frame", "")
-        coding_styles_list = pa.get("coding_styles", ["gerundio", "in_vivo"])
+        from app.core.coding_styles import get_default_styles
+
+        coding_styles_list = pa.get("coding_styles", get_default_styles())
         coding_styles = (
             ", ".join(coding_styles_list)
             if isinstance(coding_styles_list, list)
@@ -2033,7 +2305,7 @@ def task_research_question_builder(proyecto_id: str) -> dict:
 
         s.execute(
             text(
-                "UPDATE proyectos SET population_assumption = :pa::jsonb "
+                "UPDATE proyectos SET population_assumption = CAST(:pa AS jsonb) "
                 "WHERE id = :pid"
             ),
             {"pa": json.dumps(updated_pa), "pid": proyecto_id},
@@ -2114,6 +2386,9 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
                 "population_assumption": _get_population_assumption(s, proyecto_id),
                 "object_of_study": object_of_study,
                 "operational_question": operational_question or "(not yet generated)",
+                "coding_style_instruction": _get_coding_style_instruction(
+                    s, proyecto_id
+                ),
             },
         )
 
@@ -2477,7 +2752,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             ).fetchone()
             researcher_feedback = (fb_row[0] or "") if fb_row else ""
             logger.info(
-                "Re-executing main_concern with feedback: %s", researcher_feedback[:100]
+                "Re-executing core_concern with feedback: %s", researcher_feedback[:100]
             )
 
         # ── Proposer ──
@@ -2499,6 +2774,16 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         )
         operational_question = rq_data.get("operational_question", "")
         research_question = rq_data.get("question", "")
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
+        processing_gerund = (
+            pa_data.get("processing_gerund", "resolving")
+            if isinstance(pa_data, dict)
+            else "resolving"
+        )
 
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
@@ -2539,6 +2824,11 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
                 "operational_question": operational_question or "(not yet generated)",
+                "coding_style_instruction": _get_coding_style_instruction(
+                    s, proyecto_id
+                ),
+                "processing_verb": processing_verb,
+                "processing_gerund": processing_gerund,
             },
         )
 
@@ -2550,8 +2840,42 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "all_codes": all_codes,
                 "prime_movers_per_document": prime_movers_text,
                 "object_of_study": object_of_study,
+                "all_memos": all_memos,
+                "research_question": research_question or "",
+                "operational_question": operational_question or "",
+                "researcher_feedback": researcher_feedback or "",
+                "processing_verb": processing_verb,
             },
         )
+
+        # ── Synthesizer (Pattern 2): refine MOD proposals before HITL ──
+        critic_verdict = critic.get("verdict", "SAT")
+        if critic_verdict in ("MOD", "FORCED"):
+            logger.info(
+                "Synthesizer: refining proposal (verdict=%s, %d issues)",
+                critic_verdict,
+                len(critic.get("issues", [])),
+            )
+            try:
+                synthesized = llm.run_agent(
+                    "fc_synthesizer",
+                    variables={
+                        "original_proposal": json.dumps(proposal, ensure_ascii=False),
+                        "critic_verdict": critic_verdict,
+                        "critic_issues": json.dumps(
+                            critic.get("issues", []), ensure_ascii=False
+                        ),
+                        "object_of_study": object_of_study,
+                        "research_question": research_question or "",
+                        "processing_verb": processing_verb,
+                    },
+                )
+                # Merge: keep original fields, override with synthesized
+                if isinstance(synthesized, dict):
+                    proposal = {**proposal, **synthesized}
+                    logger.info("Synthesizer: merged refined proposal")
+            except Exception:
+                logger.exception("Synthesizer failed — using original proposal")
 
         # ── HITL gate ──
         from agents.transitions import hitl_gate
@@ -2632,9 +2956,11 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = "concern"
+        processing_verb = "resolve"
         if oos_row and oos_row[0]:
             config = oos_row[0] if isinstance(oos_row[0], dict) else {}
             object_of_study = config.get("object_of_study", "concern")
+            processing_verb = config.get("processing_verb", "resolve")
 
         # Fetch confirmed core_concern from HITL decisions
         mc_row = s.execute(
@@ -2654,6 +2980,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                 "object_of_study": object_of_study,
                 "all_codes": all_codes,
                 "code_statistics": stats_text,
+                "processing_verb": processing_verb,
             },
         )
 
@@ -2694,6 +3021,11 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                     candidate_incidents
                 ),
                 "document_list": document_list,
+                "all_codes": all_codes,
+                "core_concern": core_concern,
+                "object_of_study": object_of_study,
+                "code_statistics": stats_text,
+                "processing_verb": processing_verb,
             },
         )
 
@@ -2754,9 +3086,11 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = "concern"
+        processing_verb = "resolve"
         if oos_row and oos_row[0]:
             config = oos_row[0] if isinstance(oos_row[0], dict) else {}
             object_of_study = config.get("object_of_study", "concern")
+            processing_verb = config.get("processing_verb", "resolve")
 
         # Fetch confirmed core_concern from HITL decisions
         mc_row = s.execute(
@@ -2816,6 +3150,10 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
                 "discarded_codes": json.dumps(discarded_codes),
                 "all_open_codes": all_codes,
                 "object_of_study": object_of_study,
+                "core_concern": core_concern,
+                "core_category": core_category,
+                "existing_categories": existing_categories,
+                "processing_verb": processing_verb,
             },
         )
 
@@ -3026,7 +3364,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             text(
                 "SELECT id, nombre, definicion, version, puntaje_relevancia, entity_type "
                 "FROM categorias "
-                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 4 "
+                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) > 2 "
                 "ORDER BY puntaje_relevancia DESC"
             ),
             {"pid": proyecto_id},
@@ -3050,6 +3388,28 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
+        # ── Obtener operational_question (G24-G25) ──
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
+        processing_gerund = (
+            pa_data.get("processing_gerund", "resolving")
+            if isinstance(pa_data, dict)
+            else "resolving"
+        )
 
         results = {"project_id": proyecto_id, "categories": {}}
         total_expansions = 0
@@ -3204,6 +3564,8 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         "document_name": doc_name,
                         "document_id": doc_id,
                         "object_of_study": object_of_study,
+                        "operational_question": operational_question or "",
+                        "processing_gerund": processing_gerund,
                     },
                 )
 
@@ -3214,6 +3576,11 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         "proposed_expansions": json.dumps(proposal),
                         "current_paradigm_state": _get_paradigm_snapshot(s, cat_id),
                         "new_incidents": incident_text,
+                        "object_of_study": object_of_study,
+                        "category_label": cat_name,
+                        "category_definition": cat_def,
+                        "operational_question": operational_question or "",
+                        "processing_verb": processing_verb,
                     },
                     tier="FAST",
                 )
@@ -3401,7 +3768,7 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
             text(
                 "SELECT id, nombre, definicion, puntaje_relevancia "
                 "FROM categorias WHERE proyecto_id = :pid "
-                "AND COALESCE(puntaje_relevancia, 0) >= 4 "
+                "AND COALESCE(puntaje_relevancia, 0) > 2 "
                 "ORDER BY puntaje_relevancia DESC"
             ),
             {"pid": proyecto_id},
@@ -3416,9 +3783,9 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
 
-        # Fetch research_question from population_assessment JSONB
+        # Fetch research_question from population_assumption JSONB
         pa_row = s.execute(
-            text("SELECT population_assessment FROM proyectos WHERE id = :pid"),
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
             {"pid": proyecto_id},
         ).fetchone()
         pa_data = pa_row[0] if pa_row and pa_row[0] else {}
@@ -3426,6 +3793,16 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
             pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
         )
         research_question = rq_data.get("question", "")
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
+        processing_gerund = (
+            pa_data.get("processing_gerund", "resolving")
+            if isinstance(pa_data, dict)
+            else "resolving"
+        )
 
         # Fetch core_category from accepted core_emergence HITL decision
         cc_row = s.execute(
@@ -3455,6 +3832,8 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
                 "core_category": core_category,
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
+                "processing_verb": processing_verb,
+                "processing_gerund": processing_gerund,
             },
         )
 
@@ -3465,6 +3844,9 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
                 "saturated_categories": saturated_cats,
                 "object_of_study": object_of_study,
                 "core_category": core_category,
+                "research_question": research_question or "",
+                "processing_verb": processing_verb,
+                "processing_gerund": processing_gerund,
             },
         )
 
@@ -3579,9 +3961,9 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
 
-        # Fetch research_question from population_assessment JSONB
+        # Fetch research_question from population_assumption JSONB
         pa_row = s.execute(
-            text("SELECT population_assessment FROM proyectos WHERE id = :pid"),
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
             {"pid": proyecto_id},
         ).fetchone()
         pa_data = pa_row[0] if pa_row and pa_row[0] else {}
@@ -3589,6 +3971,11 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
         )
         research_question = rq_data.get("question", "")
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
 
         # Fetch core_concern from accepted HITL decision
         mc_row = s.execute(
@@ -3610,6 +3997,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
                 "core_concern": core_concern,
+                "processing_verb": processing_verb,
             },
         )
 
@@ -3621,6 +4009,9 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
                 "hypotheses": hyps_text,
                 "object_of_study": object_of_study,
                 "core_concern": core_concern,
+                "research_question": research_question or "",
+                "conceptual_relationships": rels_text,
+                "processing_verb": processing_verb,
             },
         )
 

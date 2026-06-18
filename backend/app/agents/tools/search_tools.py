@@ -44,7 +44,7 @@ def _run_async(coro):
     "usando RRF (Reciprocal Rank Fusion: búsqueda semántica + "
     "léxica). Devuelve los segmentos más relevantes con su score. "
     "Útil para encontrar evidencia textual sobre cualquier tema "
-    "o patrón mencionado en las entrevistas.",
+    "o patrón mencionado en los documentos.",
     parameters={
         "query": "texto de búsqueda en lenguaje natural "
         "(ej: 'negociando límites con el algoritmo')",

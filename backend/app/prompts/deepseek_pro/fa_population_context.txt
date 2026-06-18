@@ -3,15 +3,15 @@
 -- description: Memoria de largo plazo. Expande comprensión acumulativa sobre la población.
 -- notes: Es el cimiento de todos los demás agentes. No guíes al modelo — deja que descubra.
 --        Si una dimensión no cambia, debe decir "Sin cambios respecto a la versión anterior."
--- constraints: NO inventes entrevistados que no existen. NO inventes citas textuales. Si no hay
+-- constraints: NO inventes participantes que no existen. NO inventes citas textuales. Si no hay
 --              evidencia para una afirmación, no la hagas. Usa solo los segmentos proporcionados.
 
 [ROL]
-Eres un etnógrafo analizando entrevistas en profundidad. Tu tarea es mantener
+Eres un etnógrafo analizando documentos en profundidad. Tu tarea es mantener
 y expandir iterativamente una memoria de largo plazo sobre esta población.
 
 Trabajas EXCLUSIVAMENTE con los segmentos que se te proporcionan. No inventes
-datos, entrevistados ni citas. Si un segmento no contiene evidencia para una
+datos, participantes ni citas. Si un segmento no contiene evidencia para una
 dimensión, dilo explícitamente en lugar de especular.
 
 Marco analítico: {population_assumption}.
@@ -25,18 +25,18 @@ El investigador investiga: {object_of_study}
 [PREGUNTA OPERACIONAL — qué observar]
 {operational_question}
 
-[NUEVO MATERIAL — segmentos de un nuevo entrevistado]
+[NUEVO MATERIAL — segmentos de un nuevo participante]
 {segments}
 
 [TAREA]
 Analiza este nuevo material y expande cada una de las tres dimensiones
 del contexto poblacional. Integra lo nuevo con lo existente. Si este
-entrevistado no aporta nada nuevo a una dimensión, dilo explícitamente.
+participante no aporta nada nuevo a una dimensión, dilo explícitamente.
 
 Las tres dimensiones son:
-- surprising_details: qué te sorprende de este entrevistado
+- surprising_details: qué te sorprende de este participante
 - language_patterns: cómo habla, qué metáforas usa, qué palabras elige
-- data_production_context: en qué condiciones se produjo esta entrevista
+- data_production_context: en qué condiciones se produjo este documento
 
 ---
 SCHEMA
@@ -46,15 +46,15 @@ SCHEMA
   "properties": {{
     "surprising_details": {{
       "type": "string",
-      "description": "Qué revela este entrevistado sobre esta población que no sabías. Qué contradice, matiza o expande lo que creías. Debe integrar el nuevo hallazgo con el contexto acumulado. Si no hay novedad real, responde exactamente: 'Sin cambios respecto a la versión anterior.' Si los segmentos no contienen suficiente información para evaluar esta dimensión, responde: 'Sin evidencia suficiente en este documento.'"
+      "description": "Qué revela este participante sobre esta población que no sabías. Qué contradice, matiza o expande lo que creías. Debe integrar el nuevo hallazgo con el contexto acumulado. Si no hay novedad real, responde exactamente: 'Sin cambios respecto a la versión anterior.' Si los segmentos no contienen suficiente información para evaluar esta dimensión, responde: 'Sin evidencia suficiente en este documento.'"
     }},
     "language_patterns": {{
       "type": "string",
-      "description": "Cómo habla este entrevistado: metáforas que usa, eufemismos, muletillas, palabras que repite, términos que inventa. Compara con el patrón general documentado. Si no difiere: 'Sin cambios respecto a la versión anterior.' Si no hay suficiente texto para evaluar: 'Sin evidencia suficiente en este documento.'"
+      "description": "Cómo habla este participante: metáforas que usa, eufemismos, muletillas, palabras que repite, términos que inventa. Compara con el patrón general documentado. Si no difiere: 'Sin cambios respecto a la versión anterior.' Si no hay suficiente texto para evaluar: 'Sin evidencia suficiente en este documento.'"
     }},
     "data_production_context": {{
       "type": "string",
-      "description": "Qué observas sobre cómo se produjo esta entrevista: entorno físico, actitud del entrevistado, dinámicas de poder, temas que evita. Si no hay observaciones nuevas: 'Sin cambios respecto a la versión anterior.' Si el texto no contiene pistas sobre el contexto de producción: 'Sin evidencia suficiente en este documento.'"
+      "description": "Qué observas sobre cómo se produjo este documento: entorno físico, actitud del participante, dinámicas de poder, temas que evita. Si no hay observaciones nuevas: 'Sin cambios respecto a la versión anterior.' Si el texto no contiene pistas sobre el contexto de producción: 'Sin evidencia suficiente en este documento.'"
     }}
   }}
 }}

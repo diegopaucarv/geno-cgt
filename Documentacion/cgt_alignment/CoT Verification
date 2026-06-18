@@ -1,0 +1,450 @@
+
+---
+
+# GT System: Chain-of-Thought (CoT) Architectural Audit
+
+## Executive Summary
+
+The GT system has **partial CoT across agent calls** — proposers and critics in the main pipelines share context — but there are **systematic gaps** in what critics receive, and the self-refinement loop has **fragile context accumulation**. The system is closer to CoT than isolated calls, but with **10+ specific context deficiencies** that weaken progressive reasoning.
+
+---
+
+## Pattern 1: Proposer → Critic → HITL
+
+### 1A: `fc_main_concern` (main_concern_pipeline)
+
+| Role | Receives |
+|------|----------|
+| **Proposer** | `all_codes`, `all_memos`, `prime_movers_per_document`, `researcher_feedback`, `object_of_study`, `research_question`, `operational_question`, `coding_style_instruction` |
+| **Critic** | `core_concern` (proposer output), `all_codes`, `prime_movers_per_document`, `object_of_study` |
+
+**Verdict: PARTIAL CoT** — Critic has the proposal AND original data (`all_codes`, `prime_movers`). ✅
+
+**Gaps:**
+| # | Missing Context | Impact |
+|---|---|---|
+| **G1** | `all_memos` | Critic cannot check if core_concern integrates theoretical memos (hypotheses, properties, relations). |
+| **G2** | `research_question` | Critic evaluates the core_concern's fit to codes but cannot verify alignment with the research question. |
+| **G3** | `operational_question` | Same — critic cannot verify the concern answers the operational framing. |
+| **G4** | `researcher_feedback` | If the researcher asked for modifications, the critic can't verify if those were addressed. |
+
+**Lines:** `tasks.py:2611-2619`
+
+---
+
+### 1B: `fc_core_emergence` (core_emergence_pipeline)
+
+| Role | Receives |
+|------|----------|
+| **Proposer** | `core_concern`, `object_of_study`, `all_codes`, `code_statistics` |
+| **Critic** | `core_category_candidates_with_incidents` (samples), `document_list` |
+
+**Verdict: WEAK CoT** — Critic only sees samples + doc list, NOT the full code landscape.
+
+**Gaps:**
+| # | Missing Context | Impact |
+|---|---|---|
+| **G5** | `all_codes` | Critic evaluates candidates against 3 sample incidents each, but can't compare to ALL available codes to flag missing candidates. |
+| **G6** | `core_concern` | Critic judges if candidates are "core" but doesn't know what main concern they should serve. |
+| **G7** | `object_of_study` | Critic doesn't know the study domain (concern/emotion/behavior). |
+| **G8** | `code_statistics` | Statistical grounding (segments per code, docs per code) not available to critic. |
+
+**Lines:** `tasks.py:2755-2763`
+
+---
+
+### 1C: `fd_selective_reduction` (selective_reduction_pipeline)
+
+| Role | Receives |
+|------|----------|
+| **Proposer** | `core_concern`, `object_of_study`, `core_category`, `all_open_codes`, `existing_categories` |
+| **Critic** | `reduced_codes`, `discarded_codes`, `all_open_codes`, `object_of_study` |
+
+**Verdict: PARTIAL CoT** — Critic has the proposal and the code list. ✅ BUT:
+
+**Gaps:**
+| # | Missing Context | Impact |
+|---|---|---|
+| **G9** | `core_concern` | Critic can't verify that retained codes actually relate to the main concern. Discarding codes unrelated to the wrong concern is possible. |
+| **G10** | `core_category` | Same — the reduction should be around the core category. |
+| **G11** | `existing_categories` (entity_type) | Critic can't verify consistency with already-typed categories. |
+
+**Lines:** `tasks.py:2877-2885`
+
+---
+
+### 1D: `ff_database_a` (database_a_pipeline)
+
+| Role | Receives |
+|------|----------|
+| **Proposer** | `saturated_categories`, `core_category`, `object_of_study`, `research_question` |
+| **Critic** | `nodes`, `saturated_categories`, `object_of_study`, `core_category` |
+
+**Gaps:**
+| # | Missing Context | Impact |
+|---|---|---|
+| **G12** | `research_question` | Critic evaluates nodes without knowing the research question they should model. |
+
+**Lines:** `tasks.py:3526-3534`
+
+---
+
+### 1E: `ff_database_b` (database_b_pipeline)
+
+| Role | Receives |
+|------|----------|
+| **Proposer** | `nodes`, `conceptual_relationships`, `hypotheses`, `object_of_study`, `research_question`, `core_concern` |
+| **Critic** | `edges`, `nodes`, `hypotheses`, `object_of_study`, `core_concern` |
+
+**Gaps:**
+| # | Missing Context | Impact |
+|---|---|---|
+| **G13** | `research_question` | Critic evaluates edges without research framing. |
+| **G14** | `conceptual_relationships` | Critic can't verify edges against the pre-existing conceptual relationships discovered in saturation. |
+
+**Lines:** `tasks.py:3681-3690`
+
+---
+
+## Pattern 2: Proposer → Critic → Synthesizer → HITL
+
+**Verdict: NOT IMPLEMENTED.** This is a desired future pattern. No agent currently performs the "synthesize modifications based on critic" role before HITL.
+
+The closest existing pattern is the **SelfRefinement loop** (Pattern 3), but that is labeler ↔ critic (bidirectional), not a three-step chain with a separate synthesizer.
+
+The open coding pipeline is: `comparator (B1) → labeler (B2) → critic embedded in B2 loop`. There is no "synthesizer" agent between the critic and HITL. The `selective_coding_coordinator` dispatches pipelines sequentially but doesn't synthesize between them.
+
+---
+
+## Pattern 3: Self-Refinement Loop (labeler ↔ critic)
+
+**File:** `labeler.py:35-362` (`b2_label_groups`)
+
+**Verdict: FRAGILE CoT.** The loop works but has accumulation issues.
+
+### What happens per iteration:
+
+| Iteration | Labeler receives | Critic receives |
+|-----------|-----------------|-----------------|
+| 1 | `groups_json`, `object_of_study`, `existing_labels`, `operational_question`, `coding_style_instruction` | `output_to_evaluate` (full gen response), `source_incidents` (groups_json) |
+| 2+ | Same as iteration 1 + `[FEEDBACK DE ITERACIÓN ANTERIOR]\n{issues[:800]}` concatenated to `groups_json` | Same as iteration 1 |
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G15** | **Labeler's own previous output** | The labeler in iteration 2 re-generates from scratch. It sees the critic's feedback (truncated to 800 chars) but NOT its own previous labels. It can't do targeted refinement — it has to re-infer what it previously proposed. |
+| **G16** | **Accumulated history across iterations** | Only the LAST feedback message is appended. If iteration 2 has different issues than iteration 1, the labeler in iteration 3 only sees iteration 2's feedback. The laborer in iteration 3 has NO memory of iteration 1's problems. |
+| **G17** | **Structured critic output** (verdict per label) | Feedback is raw JSON truncated to 800 chars (`labeler.py:233`). Full structured issues with per-label SAT/MOD/FORCED verdicts are not passed as typed data. |
+| **G18** | **Critic does not receive previous iteration context** | The critic evaluates each proposal fresh against `source_incidents`. It doesn't know what was wrong last time, so it may repeat the same criticism or miss that a previously-MOD label is still MOD. |
+
+**Lines:** `labeler.py:178-189`, `232-236`
+
+---
+
+## Pattern 4: Per-Document Isolation
+
+### 4A: Unified Pattern Extractor (`extract_patterns_and_incidents`)
+
+**File:** `pattern_extractor.py:52-273`
+
+Receives: `segments_text`, `document_name`, `object_of_study`, `operational_question`
+
+**Verdict: ✅ GOOD.** Has both `object_of_study` and `operational_question`. Deliberately isolated from cross-document context by design.
+
+---
+
+### 4B: Legacy Incident Extractor (`extract_incident`, per-segment)
+
+**File:** `incident_extractor.py:174-369`
+
+Receives: `segment_text`, `object_of_study` (implicit in the Q4 prompt)
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G19** | `operational_question` | The per-segment extractor knows WHAT to look for (concern/emotion/behavior) via the Q4 mapping, but not the SPECIFIC operational framing. The extractor asks "What is the participant's main concern?" but doesn't know the operational question like "How do teachers resolve classroom disruptions?" |
+
+**Note:** This agent is largely deprecated in favor of the unified `extract_patterns_and_incidents` PRO call.
+
+---
+
+### 4C: Prime Mover Extractor (`_extract_prime_mover`)
+
+**File:** `tasks.py:755-810`
+
+Receives: `document_name`, `baseline_segments`, `object_of_study`, `operational_question`, `coding_style_instruction`
+
+**Verdict: ✅ GOOD.** Has all study-level context.
+
+---
+
+### 4D: Population Context Builder (`a1_build_population_context`)
+
+**File:** `tasks.py:161-264`
+
+Receives: `population_assumption`, `existing_context`, `segments`, `object_of_study`, `operational_question`
+
+**Verdict: ✅ GOOD.**
+
+---
+
+### 4E: Process Identifier (`a2_identify_process`)
+
+**File:** `tasks.py:273-399`
+
+Receives: `population_assumption`, `previous_process` (from last doc!), `segments`, `task_section`, `object_of_study`, `operational_question`, `coding_style_instruction`, `glaser_hint_text`
+
+**Verdict: ✅ GOOD.** Notably, this is the one per-document agent that DOES receive cross-document context (`previous_process`), by design.
+
+---
+
+## Pattern 5: Convergence (every 3 docs)
+
+### `verify_core_pattern`
+
+**File:** `pattern_verifier.py:22-119`
+
+Receives: `patterns` (last 3), `population_context`, `object_of_study`, `operational_question`
+
+**Verdict: PARTIAL.**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G20** | `research_question` (full question, not just operational) | The verifier assesses convergence of patterns but can't verify they converge toward ANSWERING the research question. It only has the operational sub-question. |
+| **G21** | `coding_style_instruction` | The verifier evaluates pattern quality without knowing the coding style (Glaser/Strauss/Constructivist). |
+
+**Lines:** `pattern_verifier.py:83-91`
+
+---
+
+## Pattern 6: Saturation Loop
+
+### `task_core_saturation_loop`
+
+**File:** `tasks.py:3068-3380`
+
+**Proposer** (`fe_core_saturation_proposer`):
+- Receives: `category_label`, `category_definition`, `category_id`, `entity_type`, `current_paradigm_state`, `new_incidents`, `document_name`, `document_id`, `object_of_study`
+
+**Critic** (`fe_core_saturation_critic`):
+- Receives: `proposed_expansions` (entire proposal), `current_paradigm_state`, `new_incidents`
+
+**Verdict: PARTIAL CoT** — The critic correctly receives the pre-expansion paradigm state to evaluate whether expansion is justified. ✅
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G22** | `object_of_study` (in critic) | Critic evaluates expansions without knowing the study domain. |
+| **G23** | `category_label` + `category_definition` (in critic) | Critic evaluates whether `did_state_expand` is correct but can't verify the expanded definition matches the category's formal definition. |
+| **G24** | `operational_question` (in proposer) | The proposer expands the paradigm without the operational question to guide what new dimensions are relevant. |
+| **G25** | `operational_question` (in critic) | Same — critic can't assess if expansions are relevant to the research framing. |
+
+**Lines:** `tasks.py:3260-3284` (proposer), `3276-3284` (critic)
+
+---
+
+### Paradigm Integrator (`task_a01_integrate_paradigm`, standalone)
+
+**File:** `tasks.py:1632-1716`
+
+Receives: `current_paradigm`, `new_incidents`, `code_name`, `code_definition`, `object_of_study`
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G26** | `operational_question` | The integrator evaluates paradigm expansion without research framing. |
+
+---
+
+## Pattern 7: Single-Agent (No Chain)
+
+### 7A: Research Question Builder (`task_research_question_builder`)
+
+**File:** `tasks.py:1994-2117`
+
+Has its own internal proposer → critic:
+- Proposer: `object_of_study`, `population_description`, `generalized_population`, `spatial_frame`, `temporal_frame`, `coding_styles`, `processing_verb/gerund`
+- Critic: `research_question`, `operational_question`, `object_of_study`, `population_description`, `processing_verb`, `key_dimensions`
+
+**Verdict: ✅ GOOD.** Critic has both the proposal AND the original data.
+
+---
+
+### 7B: Natural Writer (`write_section`)
+
+**File:** `writer.py:28-148`
+
+Writer receives: `memos_ordered`, `researcher_instructions`, `section_structure`, `object_of_study`, `research_question`, `core_concern`
+
+**Verdict: ✅ GOOD for writer.**
+
+**Writing Critic** (`critique_section`, `writer.py:150-203`):
+
+Receives: `draft`, `source_memos`
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G27** | `object_of_study` (in critic) | Critic evaluates CGT rules but can't verify if the draft is about the right topic. |
+| **G28** | `core_concern` (in critic) | Critic can't verify the draft centers on the main concern. |
+| **G29** | `research_question` (in critic) | Critic can't verify the draft answers the research question. |
+
+---
+
+### 7C: Gap Feeler (`feel_gaps`)
+
+**File:** `writer.py:206-259`
+
+Receives: `draft`, `project_id`, `object_of_study`, `core_concern`
+
+**Verdict: PARTIAL.**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G30** | `research_question` | The gap feeler detects structural gaps (transitions, unipolar properties) but can't detect gaps relative to the research question. |
+
+---
+
+### 7D: Literature Comparer (`compare_literature`)
+
+**File:** `literature.py:28-90`
+
+Receives: `theory` (full), `literature_fragments`, `object_of_study`, `research_question`
+
+**Verdict: ✅ GOOD.**
+
+**Literature Critic** (`critique_literature_dialogue`, `literature.py:93-127`):
+
+Receives: `comparison_table` ONLY
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G31** | `theory` (full) | Critic evaluates for "forcing" but can't verify whether matches are genuine because it doesn't see the theory. |
+| **G32** | `literature_fragments` | Critic can't check if the comparison_table faithfully represents the literature. |
+| **G33** | `object_of_study` / `research_question` | Same — no domain context. |
+
+**Lines:** `literature.py:112-116`
+
+---
+
+### 7E: Applicability Engine (`generate_applicability`)
+
+**File:** `applicability.py:28-86`
+
+Receives: `theory`, `application_context`, `object_of_study`
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G34** | `research_question` | Guidelines generated without knowing the research question. |
+| **G35** | `core_concern` | Guidelines may not address the main concern. |
+
+**Applicability Critic** (`critique_applicability`, `applicability.py:89-136`):
+
+Receives: `guidelines`, `variables` (control/access) ONLY
+
+**Gaps:**
+
+| # | Missing Context | Impact |
+|---|---|---|
+| **G36** | `theory` (full) | Critic evaluates genuineness but can't trace guidelines back to theory properties. |
+| **G37** | `object_of_study` | No domain context for critic. |
+
+---
+
+### 7F: Final Report (`generate_final_report`)
+
+**File:** `reporter.py:22-167`
+
+Receives: `object_of_study`, `research_question`, `core_concern`, `core_category`, `nodes`, `edges`, `hypotheses`, `population_description`, `literature_dialogue`, `applicability_guidelines`, `Pattern`, `processing_verb`, `processing_gerund`
+
+**Verdict: ✅ GOOD.** Terminal node with all accumulated context.
+
+---
+
+## Summary Table: All Gaps
+
+| ID | Pattern | Agent | Missing Variable | Where to Add |
+|----|---------|-------|-----------------|--------------|
+| G1 | 1A | `fc_main_concern_critic` | `all_memos` | `tasks.py:2611-2619` |
+| G2 | 1A | `fc_main_concern_critic` | `research_question` | `tasks.py:2611-2619` |
+| G3 | 1A | `fc_main_concern_critic` | `operational_question` | `tasks.py:2611-2619` |
+| G4 | 1A | `fc_main_concern_critic` | `researcher_feedback` | `tasks.py:2611-2619` |
+| G5 | 1B | `fc_core_emergence_critic` | `all_codes` | `tasks.py:2755-2763` |
+| G6 | 1B | `fc_core_emergence_critic` | `core_concern` | `tasks.py:2755-2763` |
+| G7 | 1B | `fc_core_emergence_critic` | `object_of_study` | `tasks.py:2755-2763` |
+| G8 | 1B | `fc_core_emergence_critic` | `code_statistics` | `tasks.py:2755-2763` |
+| G9 | 1C | `fd_selective_reduction_critic` | `core_concern` | `tasks.py:2877-2885` |
+| G10 | 1C | `fd_selective_reduction_critic` | `core_category` | `tasks.py:2877-2885` |
+| G11 | 1C | `fd_selective_reduction_critic` | `existing_categories` | `tasks.py:2877-2885` |
+| G12 | 1D | `ff_database_a_critic` | `research_question` | `tasks.py:3526-3534` |
+| G13 | 1E | `ff_database_b_critic` | `research_question` | `tasks.py:3681-3690` |
+| G14 | 1E | `ff_database_b_critic` | `conceptual_relationships` | `tasks.py:3681-3690` |
+| G15 | 3 | `pattern_labeler` (iter 2+) | own previous output | `labeler.py:178-189` |
+| G16 | 3 | `pattern_labeler` (iter 3+) | accumulated history | `labeler.py:178-189` |
+| G17 | 3 | `pattern_labeler` | structured verdict per label | `labeler.py:232-236` |
+| G18 | 3 | `label_critic` | previous iteration issues | `label_critic.py:41-47` |
+| G19 | 4B | `incident_extractor` (legacy) | `operational_question` | `incident_extractor.py:164-171` |
+| G20 | 5 | `core_pattern_verifier` | `research_question` | `pattern_verifier.py:83-91` |
+| G21 | 5 | `core_pattern_verifier` | `coding_style_instruction` | `pattern_verifier.py:83-91` |
+| G22 | 6 | `fe_core_saturation_critic` | `object_of_study` | `tasks.py:3276-3284` |
+| G23 | 6 | `fe_core_saturation_critic` | `category_label` + `category_definition` | `tasks.py:3276-3284` |
+| G24 | 6 | `fe_core_saturation_proposer` | `operational_question` | `tasks.py:3260-3273` |
+| G25 | 6 | `fe_core_saturation_critic` | `operational_question` | `tasks.py:3276-3284` |
+| G26 | 6 | `fe_paradigm_integrator` | `operational_question` | `tasks.py:1681-1690` |
+| G27 | 7B | `writing_critic` | `object_of_study` | `writer.py:171-174` |
+| G28 | 7B | `writing_critic` | `core_concern` | `writer.py:171-174` |
+| G29 | 7B | `writing_critic` | `research_question` | `writer.py:171-174` |
+| G30 | 7C | `gap_feeler` | `research_question` | `writer.py:240-247` |
+| G31 | 7D | `literature_critic` | `theory` | `literature.py:112-116` |
+| G32 | 7D | `literature_critic` | `literature_fragments` | `literature.py:112-116` |
+| G33 | 7D | `literature_critic` | `object_of_study` / `research_question` | `literature.py:112-116` |
+| G34 | 7E | `applicability_engine` | `research_question` | `applicability.py:66-72` |
+| G35 | 7E | `applicability_engine` | `core_concern` | `applicability.py:66-72` |
+| G36 | 7E | `applicability_critic` | `theory` | `applicability.py:120-125` |
+| G37 | 7E | `applicability_critic` | `object_of_study` | `applicability.py:120-125` |
+
+---
+
+## Critical vs. Non-Critical Classification
+
+### Critical (would cause wrong agent decisions):
+- **G5, G6, G7** (core_emergence_critic missing all_codes, core_concern, object_of_study) — critic can't evaluate if a candidate is actually "core"
+- **G9, G10** (selective_reduction_critic missing core_concern, core_category) — critic can't verify reduction is around the right concern
+- **G15, G16** (labeler missing own previous output in refinement loop) — cannot do targeted refinement
+- **G31, G32** (literature_critic missing theory + fragments) — can't verify forcing claims
+- **G36** (applicability_critic missing theory) — can't verify genuineness
+
+### Medium (weakens evaluation quality):
+- **G1-G4** (main_concern_critic missing memos, RQ, OQ)
+- **G12-G14** (database critics missing RQ, relationships)
+- **G17-G18** (refinement loop missing structured context)
+- **G27-G29** (writing_critic missing study context)
+
+### Low (minor, nice-to-have):
+- **G19** (legacy incident extractor — largely deprecated)
+- **G20-G21** (pattern verifier missing RQ, coding style)
+- **G30** (gap_feeler missing RQ)
+- **G34-G35** (applicability engine missing RQ, core_concern)
+
+---
+
+## Conclusion
+
+The GT system is **NOT purely isolated calls** — there is deliberate CoT in the main pipelines (proposer → critic → HITL). However, the system is also **NOT a true progressive CoT** because:
+
+1. **Critics systematically receive fewer variables than proposers** — critics evaluate outputs against partial context, not the full original data the proposer saw.
+
+2. **The self-refinement loop has no memory** — the labeler doesn't see its own previous output, only truncated critic feedback.
+
+3. **Cross-pipeline context is not carried** — e.g., the `operational_question` is loaded fresh in many functions but inconsistently passed to critics.
+
+4. **The "Proposer → Critic → Synthesizer" pattern is aspirational** — not yet implemented. The closest is the labeler self-refinement loop, which is proposer ↔ critic without synthesis.

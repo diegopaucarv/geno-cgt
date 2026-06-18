@@ -28,7 +28,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Nombre sugerido en forma de gerundio."
+            "description": "Nombre sugerido según estilo de codificación."
           },
           "level": {
             "type": "string",

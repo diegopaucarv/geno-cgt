@@ -35,7 +35,7 @@ def build_contextualized_text(
     Args:
         segment_text: texto del segmento a embeber.
         doc_title: título o nombre del documento (original_filename).
-        source_type: tipo de fuente (entrevista, grupo_focal, etc.).
+        source_type: tipo de fuente (documento, grupo_focal, etc.).
         global_summary: resumen del documento completo (Fase 2.1).
         previous_segment: texto del segmento inmediatamente anterior.
         max_prev_chars: truncar contexto previo a N caracteres.
@@ -53,7 +53,7 @@ def build_contextualized_text(
         parts.append(f"[Documento: {title}]")
 
     # ── 2. Tipo de fuente (modula la interpretación) ─────
-    # "entrevista" sugiere primera persona, "grupo_focal" sugiere interacción
+    # "documento" sugiere primera persona, "grupo_focal" sugiere interacción
     if source_type:
         parts.append(f"[Fuente: {source_type}]")
 
@@ -64,7 +64,7 @@ def build_contextualized_text(
         parts.append(f"[Contexto del documento: {summary}]")
 
     # ── 4. Contexto local: qué se dijo justo antes ────────
-    # Crítico para entrevistas: el segmento actual puede ser
+    # Crítico para documentos: el segmento actual puede ser
     # una respuesta a una pregunta implícita en el segmento previo
     if previous_segment:
         prev = previous_segment[:max_prev_chars]

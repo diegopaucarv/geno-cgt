@@ -50,7 +50,7 @@
           },
           "suggestion": {
             "type": "string",
-            "description": "Suggested concrete action. Only if MOD. E.g.: 'Reformulate gerund to X', 'Reduce abstraction by anchoring in code Y', 'Review whether code Z actually supports'."
+            "description": "Suggested concrete action. Only if MOD. E.g.: 'Reformulate label to X', 'Reduce abstraction by anchoring in code Y', 'Review whether code Z actually supports'."
           },
           "confidence": {
             "type": "number",

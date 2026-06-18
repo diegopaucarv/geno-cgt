@@ -107,7 +107,7 @@ _INCIDENT_SCHEMA: dict[str, Any] = {
                 "Clasificación Glaser del dato: "
                 "baseline = dato espontáneo del participante, "
                 "properline = dato esperado/socialmente deseable, "
-                "interpreted = interpretación del entrevistador, "
+                "interpreted = interpretación del autor, "
                 "vague = dato ambiguo o vago."
             ),
         },
@@ -138,6 +138,9 @@ Tu tarea es analizar UN segmento de datos y aplicar las 4 preguntas de Glaser.
 [OBJETO DE ESTUDIO]
 object_of_study = {object_of_study}
 
+[PREGUNTA OPERACIONAL]
+{operational_question}
+
 [INSTRUCCIONES]
 - El jot (jot_text) debe ser un gerundio de 1-4 palabras que capture la esencia del incidente.
 - keep_moving = true SIEMPRE, a menos que el segmento esté COMPLETAMENTE vacío o sea ininteligible.
@@ -161,12 +164,15 @@ def _get_object_of_study(session, proyecto_id: str) -> str:
     return "concern"
 
 
-def _build_prompt(segment_text: str, object_of_study: str) -> str:
+def _build_prompt(
+    segment_text: str, object_of_study: str, operational_question: str
+) -> str:
     """Construye el system prompt con las 4 preguntas de Glaser."""
     q4 = _Q4_MAP.get(object_of_study, _Q4_MAP["concern"])
     return _SYSTEM_PROMPT.format(
         q4=q4,
         object_of_study=object_of_study,
+        operational_question=operational_question or "(not yet generated)",
         segment_text=segment_text,
     )
 
@@ -233,6 +239,18 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
 
         # ── 2. Obtener object_of_study ────────────────────────────────
         object_of_study = _get_object_of_study(session, proyecto_id)
+
+        # ── 2b. Obtener operational_question ─────────────────────────
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+
         logger.info(
             "extract_incident: seg=%s obj=%s chars=%d",
             segment_id[:8],
@@ -241,7 +259,9 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
         )
 
         # ── 3. Construir prompt y llamar LLM (FLASH) ──────────────────
-        system_prompt = _build_prompt(segment_text, object_of_study)
+        system_prompt = _build_prompt(
+            segment_text, object_of_study, operational_question
+        )
 
         response = llm._call_llm(
             tier="FLASH",

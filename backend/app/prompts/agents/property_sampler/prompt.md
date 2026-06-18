@@ -27,7 +27,7 @@ at BOTH extremes (and intermediate points) to densify the concept.
    - Does it reveal something new about this property?
 4. If you find nothing in the current corpus:
    - Suggest what type of participant or context could manifest that extreme
-   - Draft an interview question to search for it
+   - Draft a data-collection question to search for it
 
 ## User
 [CATEGORY]

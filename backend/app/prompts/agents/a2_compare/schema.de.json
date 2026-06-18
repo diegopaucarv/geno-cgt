@@ -8,15 +8,15 @@
   "properties": {
     "process_description": {
       "type": "string",
-      "description": "Beschreibung des zentralen Prozesses DIESES Interviewpartners als Gerundium."
+      "description": "Beschreibung des zentralen Prozesses DIESES Teilnehmers je nach Codierungsstil."
     },
     "similarity_to_previous": {
       "type": "string",
-      "description": "Worin es dem Prozess des vorherigen Interviewpartners ÄHNLICH ist."
+      "description": "Worin es dem Prozess des vorherigen Teilnehmers ÄHNLICH ist."
     },
     "difference_from_previous": {
       "type": "string",
-      "description": "Worin es sich vom Prozess des vorherigen Interviewpartners UNTERSCHEIDET."
+      "description": "Worin es sich vom Prozess des vorherigen Teilnehmers UNTERSCHEIDET."
     }
   }
 }

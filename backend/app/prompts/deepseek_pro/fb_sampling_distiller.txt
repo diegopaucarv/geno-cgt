@@ -20,7 +20,7 @@ Marco analítico: {population_assumption}.
 
 [TAREA]
 A partir de los datos acumulados, identifica dimensiones de variación
-entre los entrevistados. Para cada dimensión, define criterios concretos
+entre los participantes. Para cada dimensión, define criterios concretos
 de muestreo.
 
 ---
@@ -38,7 +38,7 @@ SCHEMA
         "properties": {{
           "name": {{"type": "string", "description": "Nombre breve."}},
           "description": {{"type": "string", "description": "Qué varía y por qué importa."}},
-          "evidence_of_variation": {{"type": "string", "description": "Evidencia concreta citando entrevistados."}},
+          "evidence_of_variation": {{"type": "string", "description": "Evidencia concreta citando participantes."}},
           "contrast_criteria": {{"type": "string", "description": "Perfil opuesto."}},
           "extreme_criteria": {{"type": "string", "description": "Caso más intenso."}},
           "consistent_criteria": {{"type": "string", "description": "Perfil similar."}}

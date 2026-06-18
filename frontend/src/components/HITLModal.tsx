@@ -11,7 +11,7 @@ interface HITLModalProps {
 }
 
 const GATE_LABELS: Record<string, string> = {
-  main_concern: "hitl.gatePatternOfInterest",
+  pattern_of_interest: "hitl.gatePatternOfInterest",
   core_emergence: "hitl.gateCoreEmergence",
   selective_reduction: "hitl.gateSelectiveReduction",
   core_saturation: "hitl.gateCoreSaturation",
@@ -47,7 +47,7 @@ function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
   };
   const valStyle: React.CSSProperties = { color: "#E6EDF3" };
 
-  if (gate === "main_concern") {
+  if (gate === "pattern_of_interest") {
     return (
       <div style={s}>
         <div>

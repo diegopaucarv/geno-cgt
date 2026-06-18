@@ -122,9 +122,14 @@ class Proyecto(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+    concerns = relationship(
+        "Concern", back_populates="proyecto", cascade="all, delete-orphan"
+    )
+
 
 # Importar aquí para que SQLAlchemy registre la clase antes de resolver relaciones
 from app.models.domain.canvas import LienzoDelPlanDeAnalisis  # noqa: E402,F401
+from app.models.domain.concern import Concern  # noqa: E402,F401
 from app.models.domain.project_config_history import (
     ProjectConfigHistory,  # noqa: E402,F401
 )

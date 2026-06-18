@@ -16,7 +16,7 @@ The researcher has configured the object of study as: **{object_of_study}**
 
 [PATTERN TYPE GUIDANCE]
 The core pattern type is: **{object_of_study}**
-- **concern**: What core concern is this participant continuously trying to {processing_verb}? Synthesize across all incidents the recurring problem they are {processing_gerund}. Look for the behavioral pattern: what does this interviewee try to resolve over and over? Express it as a gerund (e.g., "Negotiating permanence", "Balancing risk and visibility").
+- **concern**: What core concern is this participant continuously trying to {processing_verb}? Synthesize across all incidents the recurring problem they are {processing_gerund}. Look for the behavioral pattern: what does this participant try to resolve over and over? Express it as a gerund (e.g., "Negotiating permanence", "Balancing risk and visibility").
 - **emotion**: What dominant emotion recurs across this participant's incidents? Synthesize the emotional pattern: what do they feel over and over? Express it as a gerund (e.g., "Feeling guilt about delegating", "Regretting decisions").
 - **behavior**: What recurring behavioral strategy anchors this participant's experience? Look for the observable conduct they repeat. Express it as a gerund (e.g., "Avoiding responsibility", "Seeking external validation").
 - **discourse**: What shared narrative or framing pattern emerges from this participant's incidents? How do they construct their story? Express it as a gerund or nominalization (e.g., "Justifying to peers", "Minimizing conflict").

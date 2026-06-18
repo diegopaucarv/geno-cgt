@@ -27,7 +27,7 @@
           },
           "suggested_pattern": {
             "type": "string",
-            "description": "Descripción del patrón de acción observado. Sin gerundio. Sin jerga teórica."
+            "description": "Descripción del patrón de acción observado. Sin estilo de codificación. Sin jerga teórica."
           }
         }
       }

@@ -43,7 +43,7 @@ def generate_final_report(proyecto_id: str) -> dict:
         cc = session.execute(
             text(
                 "SELECT proposal->>'core_concern' FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
                 "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
@@ -131,6 +131,9 @@ def generate_final_report(proyecto_id: str) -> dict:
                 "population_description": population_description,
                 "literature_dialogue": literature_dialogue,
                 "applicability_guidelines": applicability_guidelines,
+                "Pattern": object_of_study,
+                "processing_verb": pa.get("processing_verb", "resolve"),
+                "processing_gerund": pa.get("processing_gerund", "resolving"),
             },
             max_tokens=8000,
             temperature=0.3,
