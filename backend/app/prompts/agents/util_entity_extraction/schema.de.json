@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "segment_id": {
+      "type": "string",
+      "description": "UUID des analysierten Segments"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name der Entität"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "person",
+              "organization",
+              "concept",
+              "event",
+              "location",
+              "other"
+            ],
+            "description": "Art der Entität"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Exakter Name der Quellentität"
+          },
+          "target": {
+            "type": "string",
+            "description": "Exakter Name der Zielentität"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": [
+              "causes",
+              "conditions",
+              "consequences",
+              "co-occurs_with",
+              "opposes",
+              "is_part_of",
+              "is_a"
+            ],
+            "description": "Art der Relation"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Kurze Rechtfertigung basierend auf dem Text"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "relation_type"
+        ]
+      }
+    }
+  },
+  "required": [
+    "entities",
+    "relations"
+  ]
+}

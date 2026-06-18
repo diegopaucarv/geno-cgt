@@ -1,0 +1,292 @@
+{
+  "type": "object",
+  "required": [
+    "node_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "node_evaluations": {
+      "type": "array",
+      "description": "Avaliação para cada nó proposto.",
+      "items": {
+        "type": "object",
+        "required": [
+          "node_label",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "node_label": {
+            "type": "string",
+            "description": "Rótulo do nó sendo avaliado."
+          },
+          "source_category_id": {
+            "type": "string",
+            "description": "UUID da categoria fonte."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=passa em todos os critérios, MOD=precisa de correções específicas, FORCED=fundamentalmente problemático."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa narrativa do veredito, referenciando os critérios mais relevantes."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Avaliação de cada critério.",
+            "properties": {
+              "entity_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "definition_grounding": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "abstraction_level": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "incident_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "core_identification": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Se MOD ou FORCED: correção concreta e acionável. O que mudar e como."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "missing_categories",
+        "duplicate_nodes",
+        "is_core_count",
+        "entity_type_distribution"
+      ],
+      "properties": {
+        "missing_categories": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category_id": {
+                    "type": "string"
+                  },
+                  "category_label": {
+                    "type": "string"
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "duplicate_nodes": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "node_labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "is_core_count": {
+          "type": "object",
+          "required": [
+            "count",
+            "is_correct",
+            "issue"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "description": "Número de nós com is_core=true. Deve ser exatamente 1."
+            },
+            "is_correct": {
+              "type": "boolean"
+            },
+            "issue": {
+              "type": "string",
+              "description": "Se não estiver correto: descrição do problema."
+            }
+          }
+        },
+        "entity_type_distribution": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "counts",
+            "notes"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "counts": {
+              "type": "object",
+              "properties": {
+                "core_category": {
+                  "type": "integer"
+                },
+                "condition": {
+                  "type": "integer"
+                },
+                "consequence": {
+                  "type": "integer"
+                },
+                "strategy": {
+                  "type": "integer"
+                },
+                "dimension": {
+                  "type": "integer"
+                }
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Notas sobre a distribuição: tipos faltantes, tipos excessivos, padrões suspeitos."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true se o sistema completo de nós for metodologicamente sólido e estiver pronto para Database B."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Avaliação global: o que é sólido? O que precisa de atenção? O sistema está pronto para modelagem de arestas?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Problemas que DEVEM ser resolvidos antes de prosseguir para Database B."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Preocupações não bloqueantes a anotar para o pesquisador."
+        }
+      }
+    }
+  }
+}

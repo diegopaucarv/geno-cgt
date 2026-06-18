@@ -2,7 +2,7 @@
 
 Motor de elaboración conceptual para el Theoretical Playground.
 Orquesta: proponer relaciones, expandir con datos divergentes, absorber ghost-blobs.
-Usa conceptual_elaborator.md (PRO) para evaluar relaciones.
+Usa f6b_conceptual_elaborator.md (PRO) para evaluar relaciones.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class ElaborationEngine:
 
         1. Carga categorías con incidentes
         2. Carga el código teórico
-        3. Invoca conceptual_elaborator.md (PRO)
+        3. Invoca f6b_conceptual_elaborator.md (PRO)
         4. Crea ConceptualRelationship + ElaborationMemo
         """
         # 1. Cargar categorías con incidentes
@@ -99,7 +99,7 @@ class ElaborationEngine:
 
         # 3. Invocar LLM
         response = self.llm.run_agent(
-            "conceptual_elaborator",
+            "f6b_conceptual_elaborator",
             variables={
                 "categories_with_incidents": json.dumps(cat_data, ensure_ascii=False),
                 "theoretical_code_name": tc[0],

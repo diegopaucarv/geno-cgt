@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "required": [
+    "process_description",
+    "data_classification"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "Der zentrale Prozess, den dieser Interviewpartner kontinuierlich zu {processing_verb} versucht, ausgedrückt als Gerundium. Erklären Sie in 2-3 Sätzen, welche konkreten Handlungen diesen Prozess offenbaren. Wenn die Segmente keinen klaren Prozess erkennen lassen: 'Ungenügende Evidenz.'"
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "properline",
+        "interpreted",
+        "vague",
+        "mixed"
+      ],
+      "description": "Vorherrschender Datentyp. baseline: ehrlich. properline: soziale Erwünschtheit. interpreted: erzwungen. vague: ausweichend. mixed: verschieden."
+    },
+    "similarity_to_previous": {
+      "type": "string",
+      "description": "Worin es dem vorherigen ÄHNLICH ist. Wenn es der erste Interviewpartner ist: 'N/A — erster Interviewpartner'."
+    },
+    "difference_from_previous": {
+      "type": "string",
+      "description": "Worin es sich vom vorherigen UNTERSCHEIDET. Wenn es der erste Interviewpartner ist: 'N/A — erster Interviewpartner'."
+    }
+  }
+}

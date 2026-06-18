@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "indicators"
+  ],
+  "properties": {
+    "indicators": {
+      "type": "array",
+      "description": "Behavioral indicators extracted from the segments.",
+      "items": {
+        "type": "object",
+        "required": [
+          "key_phrases",
+          "suggested_pattern"
+        ],
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "description": "0-based index of the segment in the input array."
+          },
+          "key_phrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact verbatim phrases that reveal the behavior."
+          },
+          "suggested_pattern": {
+            "type": "string",
+            "description": "Description of the observed action pattern. No gerund. No theoretical jargon."
+          }
+        }
+      }
+    }
+  }
+}

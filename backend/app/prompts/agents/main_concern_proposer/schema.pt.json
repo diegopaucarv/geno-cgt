@@ -1,0 +1,112 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "core_concern",
+    "recurring_problems",
+    "resolving_mechanisms"
+  ],
+  "properties": {
+    "core_concern": {
+      "type": "string",
+      "description": "{object_of_study} central expresso como gerúndio ou frase verbal."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Raciocínio qualitativo conectando as 3 perguntas. Citar códigos específicos."
+    },
+    "recurring_problems": {
+      "type": "array",
+      "description": "{object_of_study}s recorrentes identificados (Pergunta 1). Array vazio se nenhum identificado.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolving_mechanisms": {
+      "type": "array",
+      "description": "Códigos ou mecanismos que resolvem os problemas (Pergunta 2). Array vazio se nenhum identificado.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "most_connected_codes": {
+      "type": "array",
+      "description": "Códigos com maior centralidade e poder explicativo (Pergunta 3). Array vazio se nenhum identificado.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Confiança no {object_of_study} identificado."
+    },
+    "alternative_concerns": {
+      "type": "array",
+      "description": "Preocupações alternativas plausíveis se a confiança não for HIGH.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "concern",
+          "why_less_likely"
+        ],
+        "properties": {
+          "concern": {
+            "type": "string",
+            "description": "Preocupação alternativa."
+          },
+          "why_less_likely": {
+            "type": "string",
+            "description": "Por que é menos provável que a principal."
+          }
+        }
+      }
+    },
+    "no_clear_concern": {
+      "type": "boolean",
+      "description": "true se os dados não respaldam um {object_of_study} claro."
+    },
+    "no_concern_rationale": {
+      "type": "string",
+      "description": "Se no_clear_concern=true: o que falta nos dados para identificar um {object_of_study}."
+    },
+    "relevant_population_dimensions": {
+      "type": "array",
+      "description": "Dimensões populacionais relevantes para entender como este {object_of_study} se manifesta. Derivadas de A1 e prime movers. MOMENTO 1 de emergência de variáveis.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_name",
+          "observed_values",
+          "emergence_rationale"
+        ],
+        "properties": {
+          "dimension_name": {
+            "type": "string"
+          },
+          "observed_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "emergence_rationale": {
+            "type": "string"
+          },
+          "missing_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

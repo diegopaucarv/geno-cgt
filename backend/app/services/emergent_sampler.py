@@ -6,8 +6,8 @@ basado en las propiedades de las categorías.
 
 Flujo:
   1. Detecta propiedades con gradientes desbalanceados
-  2. Escanea el corpus (corpus_scanner FLASH) buscando el extremo faltante
-  3. Si no encuentra → property_sampler (PRO) sugiere muestreo externo
+  2. Escanea el corpus (fe_corpus_scanner FLASH) buscando el extremo faltante
+  3. Si no encuentra → fe_property_sampler (PRO) sugiere muestreo externo
   4. Si encuentra → retorna incidentes para codificar
 """
 
@@ -134,8 +134,8 @@ class EmergentSampler:
         """
         Busca incidentes que manifiesten una propiedad en un extremo específico.
 
-        1. Escanea corpus existente (corpus_scanner FLASH)
-        2. Si no encuentra → property_sampler (PRO) para sugerencia externa
+        1. Escanea corpus existente (fe_corpus_scanner FLASH)
+        2. Si no encuentra → fe_property_sampler (PRO) para sugerencia externa
         """
         cat = self.db.execute(
             text("SELECT nombre, definicion FROM categorias WHERE id = :cid"),
@@ -167,7 +167,7 @@ class EmergentSampler:
             batch = all_segments[i : i + BATCH]
             batch_text = "\n---\n".join(f"[{r[0]}] {r[2]}: {r[1][:300]}" for r in batch)
             flash_result = self.llm.run_agent(
-                "corpus_scanner",
+                "fe_corpus_scanner",
                 variables={
                     "category_label": cat[0],
                     "category_definition": cat[1] or "",
@@ -202,7 +202,7 @@ class EmergentSampler:
 
         # Paso 2: no hay matches → PRO para sugerencia externa
         pro_result = self.llm.run_agent(
-            "property_sampler",
+            "fe_property_sampler",
             variables={
                 "category_label": cat[0],
                 "category_definition": cat[1] or "",

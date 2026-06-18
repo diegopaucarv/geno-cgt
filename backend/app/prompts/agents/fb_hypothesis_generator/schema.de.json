@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "required": [
+    "hypotheses"
+  ],
+  "properties": {
+    "hypotheses": {
+      "type": "array",
+      "description": "Vorgeschlagene Hypothesen.",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "level",
+          "evidence",
+          "type"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Hypothese als überprüfbare Aussage."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific",
+              "emergent"
+            ],
+            "description": "allgemein | spezifisch | emergent"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "descriptive",
+              "relational",
+              "causal",
+              "process",
+              "typological"
+            ],
+            "description": "Art der Hypothese."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Konkrete Evidenz unter Nennung von Interviewpartnern."
+          },
+          "related_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Verwandte Codes."
+          }
+        }
+      }
+    }
+  }
+}

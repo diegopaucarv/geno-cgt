@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "required": [
+    "core_category_candidates"
+  ],
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "why_central",
+          "theoretical_grab"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "why_central": {
+            "type": "string"
+          },
+          "relation_to_main_concern": {
+            "type": "string",
+            "enum": [
+              "is_the_core",
+              "processes",
+              "conditions",
+              "consequences",
+              "strategies"
+            ]
+          },
+          "theoretical_grab": {
+            "type": "string",
+            "enum": [
+              "Alto",
+              "Medio",
+              "Bajo"
+            ]
+          },
+          "connected_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connected_code_count": {
+            "type": "integer"
+          },
+          "limitations": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "no_core_detected": {
+      "type": "boolean"
+    },
+    "no_core_rationale": {
+      "type": "string"
+    }
+  }
+}

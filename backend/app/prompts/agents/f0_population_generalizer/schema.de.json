@@ -1,0 +1,49 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "population_generalizer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "generalized_population": {
+          "type": "string",
+          "description": "Generalisierte Population mit theoretischem Umfang. 1-2 Sätze."
+        },
+        "spatial_frame": {
+          "type": "string",
+          "enum": [
+            "cohabiting_group",
+            "sparse",
+            "high_diversity"
+          ]
+        },
+        "temporal_frame": {
+          "type": "string",
+          "enum": [
+            "present_continuous",
+            "retrospective",
+            "prospective",
+            "longitudinal"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Konfidenz in der Generalisierung (0,0-1,0)"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Kurze Rechtfertigung der Generalisierung (2-3 Sätze)"
+        }
+      },
+      "required": [
+        "generalized_population",
+        "spatial_frame",
+        "temporal_frame",
+        "confidence",
+        "rationale"
+      ]
+    }
+  }
+}

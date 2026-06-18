@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "required": [
+    "sense_status",
+    "hypotheses"
+  ],
+  "properties": {
+    "sense_status": {
+      "type": "string",
+      "enum": [
+        "modifies",
+        "changes_substantially",
+        "no_change"
+      ],
+      "description": "modifies: matiza. changes_substantially: refuta. no_change: consistente."
+    },
+    "hypotheses": {
+      "type": "array",
+      "description": "Hipótesis ancladas en evidencia. Array vacío si no hay respaldo.",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "level",
+          "evidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Hipótesis como enunciado comprobable."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific",
+              "emergent"
+            ],
+            "description": "general | específica | emergente"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Evidencia concreta. Sin evidencia: no incluir."
+          }
+        }
+      }
+    }
+  }
+}

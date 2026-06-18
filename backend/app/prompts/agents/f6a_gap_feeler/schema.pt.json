@@ -1,0 +1,73 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "gap_feeler",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gaps",
+        "total_gaps",
+        "summary"
+      ],
+      "properties": {
+        "gaps": {
+          "type": "array",
+          "description": "Lacunas teóricas detectadas. Pode estar vazio se o rascunho for estruturalmente sólido.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "description",
+              "severity",
+              "location"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MISSING_EVIDENCE",
+                  "UNDERDEVELOPED_PROPERTY",
+                  "DISCONNECTED_CATEGORY",
+                  "CONCEPTUAL_LEAP",
+                  "ORPHAN_CLAIM"
+                ],
+                "description": "Classificação de lacuna dos cinco tipos canônicos."
+              },
+              "description": {
+                "type": "string",
+                "description": "Descrição da lacuna em uma frase: o que falta ou está enfraquecido."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
+                "description": "Severidade após escalonamento sensível ao contexto. HIGH=bloqueia publicação, MEDIUM=precisa de expansão, LOW=cosmético."
+              },
+              "location": {
+                "type": "string",
+                "description": "Localização específica: nome da seção, número do parágrafo ou fragmento de frase citado."
+              },
+              "proximity_to_core": {
+                "type": "boolean",
+                "description": "true se a lacuna estiver em ou perto de um parágrafo que referencia a preocupação central."
+              }
+            }
+          }
+        },
+        "total_gaps": {
+          "type": "integer",
+          "description": "Número total de lacunas detectadas."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Resumo diagnóstico em uma frase, ex. '3 lacunas: 1 HIGH (falta evidência na afirmação central), 1 MEDIUM, 1 LOW'."
+        }
+      }
+    }
+  }
+}

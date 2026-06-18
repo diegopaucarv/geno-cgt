@@ -1,0 +1,139 @@
+{
+  "type": "object",
+  "required": [
+    "reduced_codes",
+    "discarded_codes",
+    "reduction_summary"
+  ],
+  "properties": {
+    "reduced_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "entity_type",
+          "definition",
+          "source_code_ids",
+          "relation_to_core"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "core_category",
+              "related_category",
+              "secondary_code"
+            ]
+          },
+          "definition": {
+            "type": "string"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relation_to_core": {
+            "type": "string",
+            "enum": [
+              "is_the_core",
+              "processes",
+              "conditions",
+              "consequences",
+              "strategies"
+            ]
+          },
+          "properties_inherited": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "gradient": {
+                  "type": "string"
+                },
+                "source_code_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "interchangeability_rationale": {
+            "type": "string"
+          },
+          "needs_more_data": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "discarded_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "discard_rationale",
+          "discard_category"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "discard_rationale": {
+            "type": "string"
+          },
+          "discard_category": {
+            "type": "string",
+            "enum": [
+              "unrelated_to_core",
+              "descriptive_not_behavioral",
+              "single_occurrence",
+              "superseded_by_fusion"
+            ]
+          }
+        }
+      }
+    },
+    "reduction_summary": {
+      "type": "object",
+      "required": [
+        "original_code_count",
+        "reduced_code_count",
+        "discarded_count",
+        "fusion_groups_count"
+      ],
+      "properties": {
+        "original_code_count": {
+          "type": "integer"
+        },
+        "reduced_code_count": {
+          "type": "integer"
+        },
+        "discarded_count": {
+          "type": "integer"
+        },
+        "fusion_groups_count": {
+          "type": "integer"
+        },
+        "reduction_ratio": {
+          "type": "number"
+        },
+        "methodological_notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

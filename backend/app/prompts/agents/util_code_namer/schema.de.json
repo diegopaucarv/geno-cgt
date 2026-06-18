@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "required": [
+    "suggestions"
+  ],
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "style_used",
+          "rationale"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Kandidatenname."
+          },
+          "style_used": {
+            "type": "string",
+            "enum": [
+              "gerundio",
+              "in_vivo",
+              "nominalizacion",
+              "parafrasis",
+              "tema_subtema",
+              "causal"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Warum dieser Name das Muster erfasst."
+          }
+        }
+      }
+    }
+  }
+}

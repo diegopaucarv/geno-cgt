@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "expansion_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_index",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "expansion_index": {
+            "type": "integer",
+            "description": "Index der Erweiterung in proposed_expansions"
+          },
+          "expansion_type": {
+            "type": "string",
+            "description": "Art der vorgeschlagenen Erweiterung"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=echte Erweiterung, MOD=ungenau, FORCED=bereits abgedeckt"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Rechtfertigung: welche bestehende Eigenschaft deckt dies bereits ab (wenn FORCED)? Welche Anpassung ist nötig (wenn MOD)?"
+          },
+          "covered_by_property": {
+            "type": "string",
+            "description": "Wenn FORCED: Name der paradigm_state-Eigenschaft, die diesen Incident bereits abdeckt"
+          },
+          "suggested_refinement": {
+            "type": "string",
+            "description": "Wenn MOD: konkreter Anpassungsvorschlag"
+          }
+        }
+      }
+    },
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "true wenn MINDESTENS eine Erweiterung als SAT bewertet wurde"
+    },
+    "expansion_count": {
+      "type": "integer",
+      "description": "Wie viele Erweiterungen SAT waren (echt neu)"
+    },
+    "confirmation_count": {
+      "type": "integer",
+      "description": "Wie viele Erweiterungen FORCED waren (bereits abgedeckt — Sättigung bestätigend)"
+    },
+    "saturation_note": {
+      "type": "string",
+      "description": "Notiz zum Sättigungsstatus: Stabilisiert sich die Kategorie?"
+    }
+  },
+  "required": [
+    "expansion_verdicts",
+    "did_state_expand"
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "core_pattern",
+      "description",
+      "evidence_quotes",
+      "confidence"
+    ],
+    "properties": {
+      "core_pattern": {
+        "type": "string",
+        "description": "Gerundium (Verbalphrase mit -ing Endung, 2-6 Wörter), das das einzige Kernmuster benennt, das alle Incidente in diesem Dokument synthetisiert. Muss die Essenz dessen erfassen, was der Teilnehmer wiederholt {processing_gerund}. Beispiele: 'Verhandeln von Dauerhaftigkeit auf der Plattform', 'Abwägen von Risiko und Sichtbarkeit', 'Verteidigen des beruflichen Status'."
+      },
+      "description": {
+        "type": "string",
+        "description": "Mehr-Absatz-Synthese, die erklärt: (1) was das Muster ist und wie es sich über Incidente hinweg manifestiert, (2) welche Incidente die stärkste Evidenz liefern und warum, (3) wie die Incidente zusammenwirken, um das Muster zu bilden, (4) jegliche Spannung, Variation oder Widerspruch innerhalb des Musters."
+      },
+      "evidence_quotes": {
+        "type": "array",
+        "description": "Exakte wörtliche Zitate aus den Incidenten, die das Muster am besten stützen. Minimum 2, Maximum 5. Jedes Zitat MUSS von einem UNTERSCHIEDLICHEN Incident stammen.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 5
+      },
+      "key_incident_ids": {
+        "type": "array",
+        "description": "UUIDs der Incidente, die die evidence_quotes enthalten. Muss 1:1 mit evidence_quotes korrespondieren — gleiche Reihenfolge, gleiche Anzahl.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "confidence": {
+        "type": "string",
+        "enum": [
+          "HIGH",
+          "MEDIUM",
+          "LOW"
+        ],
+        "description": "Konfidenz im extrahierten Muster. HIGH: Muster ist klar, mehrere Incidente konvergieren stark. MEDIUM: Muster ist erkennbar, aber mit bemerkenswerter Variation oder fehlenden Dimensionen. LOW: Muster ist vorläufig, wenige stützende Incidente oder widersprüchliche Signale."
+      },
+      "no_clear_pattern": {
+        "type": "boolean",
+        "description": "true wenn die Incidente KEIN klares, kohärentes Muster stützen. Auf true setzen, wenn Daten zu spärlich, widersprüchlich oder fragmentiert sind, um ein einzelnes Muster zu synthetisieren."
+      },
+      "no_pattern_rationale": {
+        "type": "string",
+        "description": "Wenn no_clear_pattern=true: Erklärung, warum kein Muster emergiert — was in den Daten fehlt, widersprüchlich oder unzureichend ist."
+      },
+      "alternative_patterns": {
+        "type": "array",
+        "description": "Plausible alternative Musterinterpretationen, wenn Konfidenz MEDIUM oder LOW ist. Jede Alternative nennt ein anderes Gerundium, das die Daten plausibel erklären könnte.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pattern",
+            "why_different"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "Alternativer Gerundium-Mustername."
+            },
+            "why_different": {
+              "type": "string",
+              "description": "Wie sich diese alternative Interpretation vom Haupt-core_pattern unterscheidet und welche Incidente sie stützen würden."
+            }
+          }
+        }
+      }
+    }
+  }
+}

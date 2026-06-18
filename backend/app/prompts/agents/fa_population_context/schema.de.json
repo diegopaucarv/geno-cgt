@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "surprising_details",
+    "language_patterns",
+    "data_production_context"
+  ],
+  "properties": {
+    "surprising_details": {
+      "type": "string",
+      "description": "Was dieser Interviewpartner über diese Population offenbart, das Sie nicht wussten. Was Ihren bisherigen Annahmen widerspricht, sie nuanciert oder erweitert. Muss die neue Erkenntnis mit dem angesammelten Kontext integrieren. Wenn es keine echte Neuheit gibt, antworten Sie genau: 'Keine Änderungen zur vorherigen Version.' Wenn die Segmente nicht genügend Informationen enthalten, um diese Dimension zu bewerten, antworten Sie: 'Ungenügende Evidenz in diesem Dokument.'"
+    },
+    "language_patterns": {
+      "type": "string",
+      "description": "Wie dieser Interviewpartner spricht: verwendete Metaphern, Euphemismen, Füllwörter, wiederholte Wörter, erfundene Begriffe. Mit dem dokumentierten allgemeinen Muster vergleichen. Wenn kein Unterschied: 'Keine Änderungen zur vorherigen Version.' Wenn Text für Bewertung unzureichend: 'Ungenügende Evidenz in diesem Dokument.'"
+    },
+    "data_production_context": {
+      "type": "string",
+      "description": "Was Sie zur Entstehung dieses Interviews beobachten: physische Umgebung, Haltung des Interviewten, Machtdynamiken, vermiedene Themen. Wenn keine neuen Beobachtungen: 'Keine Änderungen zur vorherigen Version.' Wenn der Text keine Hinweise zum Produktionskontext enthält: 'Ungenügende Evidenz in diesem Dokument.'"
+    }
+  }
+}

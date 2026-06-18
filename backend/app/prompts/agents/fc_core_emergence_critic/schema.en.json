@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID of the evaluated code"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Code label"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "refine",
+              "split"
+            ],
+            "description": "Interchangeability verdict"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justification citing specific incidents from different documents"
+          },
+          "interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_interchangeable": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pairs of incidents that are clearly interchangeable"
+          },
+          "non_interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_different": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pairs that reveal distinct patterns"
+          },
+          "suggested_action_if_not_valid": {
+            "type": "string",
+            "description": "Concrete action: refine definition, split into subcodes, or seek more data?"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "verdicts"
+  ]
+}

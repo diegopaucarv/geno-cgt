@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "surprising_details",
+    "language_patterns",
+    "data_production_context"
+  ],
+  "properties": {
+    "surprising_details": {
+      "type": "string",
+      "description": "O que este entrevistado revela sobre esta população que você não sabia. O que contradiz, matiza ou expande o que você acreditava. Deve integrar o novo achado com o contexto acumulado. Se não houver novidade real, responda exatamente: 'Sem alterações em relação à versão anterior.' Se os segmentos não contiverem informações suficientes para avaliar esta dimensão, responda: 'Evidência insuficiente neste documento.'"
+    },
+    "language_patterns": {
+      "type": "string",
+      "description": "Como este entrevistado fala: metáforas utilizadas, eufemismos, palavras de preenchimento, palavras repetidas, termos inventados. Comparar com o padrão geral documentado. Se não houver diferença: 'Sem alterações em relação à versão anterior.' Se o texto for insuficiente para avaliar: 'Evidência insuficiente neste documento.'"
+    },
+    "data_production_context": {
+      "type": "string",
+      "description": "O que você observa sobre como esta entrevista foi produzida: ambiente físico, atitude do entrevistado, dinâmicas de poder, temas evitados. Se não houver observações novas: 'Sem alterações em relação à versão anterior.' Se o texto não contiver pistas sobre o contexto de produção: 'Evidência insuficiente neste documento.'"
+    }
+  }
+}

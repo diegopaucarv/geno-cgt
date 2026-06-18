@@ -84,6 +84,8 @@ class ProjectCreate(_BaseProjectCreate):
 
     custom_label: str | None = None
 
+    model_config = ConfigDict(from_attributes=True, extra="allow")
+
 
 # ── Document ──────────────────────────────────────────────────────────
 

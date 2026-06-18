@@ -1,0 +1,138 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "convergence_assessment",
+      "converging",
+      "diverging",
+      "recommendation"
+    ],
+    "properties": {
+      "convergence_assessment": {
+        "type": "string",
+        "description": "Síntese narrativa da avaliação de 4 perguntas. Deve responder explicitamente Q1 (similaridade superficial), Q2 (convergência estrutural), Q3 (coerência populacional) e Q4 (direcionalidade). Concluir com o panorama geral de convergência."
+      },
+      "converging": {
+        "type": "array",
+        "description": "Elementos que mostram convergência entre os 3 padrões. O que é consistente, compartilhado ou mutuamente reforçante?",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "element",
+            "supporting_patterns",
+            "strength"
+          ],
+          "properties": {
+            "element": {
+              "type": "string",
+              "description": "O elemento convergente (ex., um processo, mecanismo, preocupação, registro emocional, stakeholder ou característica estrutural compartilhada)."
+            },
+            "supporting_patterns": {
+              "type": "array",
+              "description": "Quais dos 3 padrões (por seus nomes em gerúndio ou índices 1-3) respaldam este elemento convergente.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "strength": {
+              "type": "string",
+              "enum": [
+                "STRONG",
+                "MODERATE",
+                "WEAK"
+              ],
+              "description": "Com que força este elemento converge. STRONG: todos os 3 padrões se alinham. MODERATE: 2 de 3 se alinham. WEAK: apenas 1 padrão mostra este elemento mas é notável."
+            }
+          }
+        }
+      },
+      "diverging": {
+        "type": "array",
+        "description": "Elementos que divergem entre os 3 padrões. O que difere, entra em conflito ou puxa em direções diferentes?",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "element",
+            "divergence_type",
+            "explanation"
+          ],
+          "properties": {
+            "element": {
+              "type": "string",
+              "description": "O elemento divergente (ex., um nome de processo, um mecanismo, um subgrupo populacional, um tom emocional)."
+            },
+            "divergence_type": {
+              "type": "string",
+              "enum": [
+                "surface",
+                "contextual",
+                "fundamental"
+              ],
+              "description": "Tipo de divergência. surface: mesmo fenômeno, palavras diferentes. contextual: mesmo fenômeno, papel ou sub-população diferente. fundamental: fenômenos genuinamente diferentes."
+            },
+            "explanation": {
+              "type": "string",
+              "description": "Explicação detalhada de COMO este elemento diverge e POR QUE é classificado como surface/contextual/fundamental. Referenciar padrões específicos."
+            }
+          }
+        }
+      },
+      "recommendation": {
+        "type": "string",
+        "enum": [
+          "CONTINUE_COLLECTING",
+          "READY_FOR_CROSS_DOC",
+          "NEEDS_DIFFERENT_POPULATION"
+        ],
+        "description": "Ação recomendada. CONTINUE_COLLECTING: padrões estão convergindo, coletar mais dados. READY_FOR_CROSS_DOC: forte convergência, prosseguir para análise entre documentos. NEEDS_DIFFERENT_POPULATION: divergência fundamental ou incoerência populacional, reconsiderar amostragem."
+      },
+      "recommendation_rationale": {
+        "type": "string",
+        "description": "Justificativa detalhada da recomendação. Explicar por que esta recomendação decorre da análise de convergência/divergência. Se READY_FOR_CROSS_DOC, explicar o que torna a convergência forte o suficiente. Se NEEDS_DIFFERENT_POPULATION, explicar quais mudanças de amostragem ajudariam."
+      },
+      "suggested_shared_pattern": {
+        "type": "string",
+        "description": "Se existir convergência: um nome tentativo em GERÚNDIO para o padrão compartilhado que unifica os 3 padrões individuais. Deve ser um gerúndio (frase verbal). Se a divergência for fundamental, deixar como string vazia."
+      },
+      "suggested_shared_pattern_rationale": {
+        "type": "string",
+        "description": "Por que este nome de padrão compartilhado foi escolhido. Como captura o que os 3 padrões individuais têm em comum. Referenciar elementos convergentes específicos."
+      },
+      "population_concerns": {
+        "type": "array",
+        "description": "Preocupações específicas sobre se a população assumida se ajusta aos padrões emergentes. Array vazio se não houver preocupações.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "concern",
+            "severity"
+          ],
+          "properties": {
+            "concern": {
+              "type": "string",
+              "description": "Descrição da preocupação populacional (ex., 'Padrão sugere duas sub-populações distintas com diferentes estratégias de processamento', 'População assumida muito ampla — padrões divergem ao longo do eixo idade/experiência')."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ],
+              "description": "Severidade da preocupação. HIGH: ameaça a validade do estudo. MEDIUM: merece atenção mas não bloqueia. LOW: observação menor."
+            },
+            "suggested_action": {
+              "type": "string",
+              "description": "O que o pesquisador deveria considerar fazer para abordar esta preocupação (ex., 'Adicionar uma dimensão populacional para nível de experiência', 'Estratificar amostragem por papel organizacional')."
+            }
+          }
+        }
+      }
+    }
+  }
+}

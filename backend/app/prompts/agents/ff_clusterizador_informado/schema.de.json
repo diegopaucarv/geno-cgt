@@ -1,0 +1,105 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "new_categories"
+  ],
+  "properties": {
+    "new_categories": {
+      "type": "array",
+      "description": "Konsolidierte Kategorien nach dem Clustering. Leeres Array, wenn keine Änderungen erforderlich sind.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "human_purpose",
+          "definition"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Gerundium der konsolidierten Gruppe."
+          },
+          "human_purpose": {
+            "type": "string",
+            "description": "Zugrundeliegende Verhaltensabsicht, die von den gruppierten Codes geteilt wird (Schritt 1)."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Konsolidierte Definition der Kategorie (Schritt 3)."
+          },
+          "source_codes": {
+            "type": "array",
+            "description": "Namen der ursprünglichen Codes, die in diese Kategorie zusammengeführt wurden.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "variations": {
+            "type": "array",
+            "description": "Dokumentierte interne Variationen. Leeres Array, wenn die Kategorie einheitlich ist.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "description"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Beschreibung der Variation."
+                },
+                "documents": {
+                  "type": "array",
+                  "description": "Namen der Dokumente, in denen diese Variation beobachtet wird.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "theoretical_hypotheses": {
+            "type": "array",
+            "description": "Hypothesen, die aus dieser Gruppe emergieren (Schritt 4). Leeres Array, wenn keine klaren Hypothesen emergieren.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sampling_criteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inclusion",
+              "exclusion"
+            ],
+            "properties": {
+              "inclusion": {
+                "type": "array",
+                "description": "Einschlusskriterien für zukünftige Stichproben.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusion": {
+                "type": "array",
+                "description": "Ausschlusskriterien.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "orphan_segments": {
+            "type": "array",
+            "description": "Nach Konsolidierung ohne Code verbliebene Segmente (Schritt 6). Leeres Array, wenn alle zugewiesen sind.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

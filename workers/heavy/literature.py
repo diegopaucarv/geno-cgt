@@ -13,7 +13,7 @@ import json
 import logging
 
 from database import SessionLocal
-from llm_client import LLMClient
+from llm_client import LLMClient as llm
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -51,18 +51,33 @@ def compare_literature(
         )
         theory = _read_full_theory(session, proyecto_id)
 
+        # ── 1.5 Fetch research context ──
+        ctx = session.execute(
+            text(
+                "SELECT object_of_study, population_assumption "
+                "FROM proyectos WHERE id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = ctx[0] if ctx and ctx[0] else "concern"
+        pa = ctx[1] if ctx and ctx[1] else {}
+        rq_data = pa.get("research_question", {}) if isinstance(pa, dict) else {}
+        research_question = rq_data.get("research_question", "(not generated)")
+
         # ── 2. Call literature_comparer PRO agent ──
         logger.info(
             "LiteratureComparer: comparing %d fragments against theory",
             len(literature_fragments),
         )
         result = llm.run_agent(
-            "literature_comparer",
+            "f6c_literature_comparer",
             variables={
                 "theory": theory,
                 "literature_fragments": json.dumps(
                     literature_fragments, ensure_ascii=False
                 ),
+                "object_of_study": object_of_study,
+                "research_question": research_question,
             },
         )
         logger.info("LiteratureComparer: completed for proyecto %s", proyecto_id[:8])
@@ -95,7 +110,7 @@ def critique_literature_dialogue(comparison_table: dict) -> dict:
     try:
         logger.info("LiteratureCritic: evaluating comparison table")
         result = llm.run_agent(
-            "literature_critic",
+            "f6c_literature_critic",
             variables={
                 "comparison_table": json.dumps(comparison_table, ensure_ascii=False),
             },

@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_statement",
+          "verdict",
+          "rationale",
+          "grounding_assessment"
+        ],
+        "properties": {
+          "candidate_statement": {
+            "type": "string",
+            "description": "A declaração do candidato avaliado (texto exato)."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Veredito metodológico."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa detalhada do veredito, citando códigos e memos específicos."
+          },
+          "grounding_assessment": {
+            "type": "string",
+            "description": "Os supporting_codes realmente respaldam este candidato? Avaliar cada código citado."
+          },
+          "coverage_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Proporção do total de códigos que este candidato explica (1 - orphan_count/total_codes)."
+          },
+          "abstraction_assessment": {
+            "type": "string",
+            "enum": [
+              "adequate",
+              "too_concrete",
+              "too_abstract"
+            ],
+            "description": "Avaliação do nível de abstração."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Ação concreta sugerida. Apenas se MOD. Ex.: 'Reformular gerúndio para X', 'Reduzir abstração ancorando no código Y', 'Revisar se o código Z realmente respalda'."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confiança do crítico neste veredito (0.0–1.0)."
+          }
+        }
+      }
+    },
+    "ranked_recommendation": {
+      "type": "string",
+      "description": "Recomendação final: qual candidato a {object_of_study} você recomenda ao pesquisador e por quê? Se nenhum for SAT, explicar o que falta."
+    }
+  },
+  "required": [
+    "evaluations",
+    "ranked_recommendation"
+  ]
+}

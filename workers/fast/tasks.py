@@ -100,7 +100,7 @@ def extract_graph_entities(segmento_id: str, proyecto_id: str) -> dict:
 
         # Usamos tier POWERFUL para extracción precisa
         response = llm.run_agent(
-            agent_id="graph_entity_extractor",
+            agent_id="util_graph_entity_extractor",
             variables={"segment_text": segment_text[:3000]},
             temperature=0.2,
         )
@@ -358,7 +358,7 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
     ) -> dict:
         """Llama al punctuator y valida integridad del texto."""
         response = llm.run_agent(
-            "punctuator",
+            "util_punctuator",
             variables={"raw_text": raw},
             temperature=0.3,
         )

@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "description": "Core category candidates, ordered by decreasing theoretical_grab",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "why_central",
+          "theoretical_grab"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID of the candidate code or category"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Current label of the code"
+          },
+          "why_central": {
+            "type": "string",
+            "description": "Qualitative reasoning: why this code emerges as a central candidate. Must reference the 5 criteria."
+          },
+          "relation_to_core_pattern": {
+            "type": "string",
+            "enum": [
+              "is_the_core",
+              "processes",
+              "conditions",
+              "consequences",
+              "strategies"
+            ],
+            "description": "Type of relationship to the core {object_of_study}"
+          },
+          "theoretical_grab": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "description": "Explanatory and unifying power of the candidate"
+          },
+          "connected_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UUIDs of codes that connect to this candidate"
+          },
+          "connected_code_count": {
+            "type": "integer",
+            "description": "Number of connected codes"
+          },
+          "limitations": {
+            "type": "string",
+            "description": "What aspects of the code system this candidate does NOT explain well"
+          }
+        }
+      }
+    },
+    "no_core_detected": {
+      "type": "boolean",
+      "description": "true if no current code reaches core category level"
+    },
+    "no_core_rationale": {
+      "type": "string",
+      "description": "If no_core_detected=true: explanation of what is missing from the data"
+    }
+  },
+  "required": [
+    "core_category_candidates"
+  ]
+}

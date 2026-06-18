@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "description": "Aus den Indikatoren generierte Codes.",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Gerundium des Codes."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definition: welches Verhaltensmuster es erfasst, in 1-2 Sätzen."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indikatoren, die diesen Code stützen."
+          },
+          "variations": {
+            "type": "string",
+            "description": "Beobachtete interne Variationen (Grade, Nuancen, Kontexte)."
+          },
+          "relationship_to_existing": {
+            "type": "string",
+            "description": "Beziehung zu bestehenden Codes: 'Neu', 'Subcode von X', 'Überlappung mit Y'."
+          }
+        }
+      }
+    }
+  }
+}

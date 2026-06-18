@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "required": [
+    "process_description",
+    "data_classification"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "O processo central que este entrevistado tenta continuamente {processing_verb}, expresso como gerúndio. Explique em 2-3 frases quais ações concretas revelam este processo. Se os segmentos não permitirem identificar um processo claro: 'Evidência insuficiente.'"
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "properline",
+        "interpreted",
+        "vague",
+        "mixed"
+      ],
+      "description": "Tipo de dado predominante. baseline: honesto. properline: desejabilidade social. interpreted: forçado. vague: evasivo. mixed: variado."
+    },
+    "similarity_to_previous": {
+      "type": "string",
+      "description": "Como é SEMELHANTE ao anterior. Se for o primeiro entrevistado: 'N/A — primeiro entrevistado'."
+    },
+    "difference_from_previous": {
+      "type": "string",
+      "description": "Como DIFERE do anterior. Se for o primeiro entrevistado: 'N/A — primeiro entrevistado'."
+    }
+  }
+}

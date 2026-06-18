@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "comparisons",
+    "groups",
+    "ungrouped"
+  ],
+  "properties": {
+    "comparisons": {
+      "type": "array",
+      "description": "Comparações por pares de incidentes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incident_a_id",
+          "incident_b_id",
+          "are_interchangeable",
+          "rationale",
+          "similarity_score"
+        ],
+        "properties": {
+          "incident_a_id": {
+            "type": "string",
+            "description": "UUID do primeiro incidente"
+          },
+          "incident_b_id": {
+            "type": "string",
+            "description": "UUID do segundo incidente"
+          },
+          "are_interchangeable": {
+            "type": "boolean",
+            "description": "São intercambiáveis?"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa em 1-2 frases"
+          },
+          "similarity_score": {
+            "type": "number",
+            "description": "Pontuação 0.0-1.0 de similaridade de padrão"
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Grupos de incidentes intercambiáveis. Cada grupo contém incidentes que medem o mesmo fenômeno.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incident_ids",
+          "common_pattern"
+        ],
+        "properties": {
+          "incident_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UUIDs dos incidentes neste grupo"
+          },
+          "common_pattern": {
+            "type": "string",
+            "description": "Descrição breve do padrão comportamental comum compartilhado por estes incidentes (1-2 frases)"
+          }
+        }
+      }
+    },
+    "ungrouped": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs de incidentes não intercambiáveis com nenhum outro"
+    }
+  }
+}

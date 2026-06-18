@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Kurzzusammenfassung von 3-5 Sätzen"
+    },
+    "topic_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "3-6 Themenlabels"
+    },
+    "inferred_document_type": {
+      "type": "string",
+      "description": "Abgeleiteter Dokumenttyp"
+    },
+    "language": {
+      "type": "string",
+      "description": "Primärsprache des Dokuments"
+    }
+  },
+  "required": [
+    "summary",
+    "topic_labels"
+  ]
+}

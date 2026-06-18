@@ -1,0 +1,73 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "gap_feeler",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gaps",
+        "total_gaps",
+        "summary"
+      ],
+      "properties": {
+        "gaps": {
+          "type": "array",
+          "description": "Detected theoretical gaps. May be empty if the draft is structurally sound.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "description",
+              "severity",
+              "location"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MISSING_EVIDENCE",
+                  "UNDERDEVELOPED_PROPERTY",
+                  "DISCONNECTED_CATEGORY",
+                  "CONCEPTUAL_LEAP",
+                  "ORPHAN_CLAIM"
+                ],
+                "description": "Gap classification from the five canonical types."
+              },
+              "description": {
+                "type": "string",
+                "description": "One-sentence description of the gap: what is missing or weakened."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
+                "description": "Severity after context-aware scaling. HIGH=blocks publication, MEDIUM=needs expansion, LOW=cosmetic."
+              },
+              "location": {
+                "type": "string",
+                "description": "Specific location: section name, paragraph number, or quoted sentence fragment."
+              },
+              "proximity_to_core": {
+                "type": "boolean",
+                "description": "true if the gap is in or near a paragraph referencing the core concern."
+              }
+            }
+          }
+        },
+        "total_gaps": {
+          "type": "integer",
+          "description": "Total number of gaps detected."
+        },
+        "summary": {
+          "type": "string",
+          "description": "One-sentence diagnostic summary, e.g. '3 gaps: 1 HIGH (missing evidence on core claim), 1 MEDIUM, 1 LOW'."
+        }
+      }
+    }
+  }
+}

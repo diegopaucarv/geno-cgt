@@ -73,6 +73,18 @@ const en: Translations = {
     studyObjectHint: "Type of human pattern you're looking for",
     studyObjectPlaceholder: "Select a pattern type…",
     customLabelPlaceholder: "Describe the custom pattern you're looking for…",
+    hintConcern:
+      "What problem is this population continuously trying to resolve?",
+    hintEmotion: "What emotional dynamic dominates their experience?",
+    hintBehavior: "What recurring behavioral strategy do they exhibit?",
+    hintDiscourse: "What shared narrative shapes their world?",
+    hintIdentity: "What identity negotiation is recurrent?",
+    hintCustom:
+      "Define your own pattern type. The system adapts its search lens.",
+    processingVerbLabel: "Processing verb",
+    processingVerbPlaceholder: "resolve / negotiate / cope with…",
+    processingVerbHint: "What does your population DO with this pattern?",
+    rqPreview: "Research question preview",
   },
   project: {
     backToProjects: "← Projects",
@@ -192,6 +204,21 @@ const en: Translations = {
     stageCheckmark: "✓",
     stageCross: "✕",
     stagePlay: "▶",
+    // Experimental Mode
+    // Population Configuration
+    populationConfig: "🧬 Population Configuration",
+    populationOriginal: "Original",
+    populationGeneralized: "Generalized",
+    populationGenerate: "Generate",
+    populationSpatialFrame: "Spatial frame",
+    populationTemporalFrame: "Temporal frame",
+    populationConfidence: "Confidence",
+    populationRationale: "Rationale",
+    populationEdit: "Edit",
+    populationSave: "Save",
+    populationGenerating: "Generating…",
+    populationGenerated: "Population generalized successfully.",
+    populationGenerateError: "Failed to generate population.",
     // Experimental Mode
     experimentalMode: "🔬 Experimental Mode",
     experimentalModeDesc:
@@ -670,6 +697,17 @@ const es: Translations = {
     studyObjectHint: "Tipo de patrón humano que buscas",
     studyObjectPlaceholder: "Selecciona un tipo de patrón…",
     customLabelPlaceholder: "Describe el patrón personalizado que buscas…",
+    hintConcern: "¿Qué problema intenta resolver continuamente esta población?",
+    hintEmotion: "¿Qué dinámica emocional domina su experiencia?",
+    hintBehavior: "¿Qué estrategia conductual recurrente exhiben?",
+    hintDiscourse: "¿Qué narrativa compartida moldea su mundo?",
+    hintIdentity: "¿Qué negociación de identidad es recurrente?",
+    hintCustom:
+      "Define tu propio tipo de patrón. El sistema adapta su lente de búsqueda.",
+    processingVerbLabel: "Verbo de procesamiento",
+    processingVerbPlaceholder: "resolver / negociar / lidiar con…",
+    processingVerbHint: "¿Qué hace tu población con este patrón?",
+    rqPreview: "Vista previa de la pregunta de investigación",
   },
   project: {
     backToProjects: "← Proyectos",
@@ -717,8 +755,8 @@ const es: Translations = {
     memoModificationApplied: "Modificación aplicada. Memos actualizados.",
     // HITL banner
     decisionRequired: "🛑 Decisión requerida: ",
-    mainConcern: "Main Concern",
-    coreCategory: "Core Category",
+    mainConcern: "Patrón de Interés",
+    coreCategory: "Categoría Central",
     selectiveReduction: "Selective Reduction",
     coreSaturation: "Core Saturation",
     databaseANodes: "Database A — Nodes",
@@ -789,6 +827,20 @@ const es: Translations = {
     stageCheckmark: "✓",
     stageCross: "✕",
     stagePlay: "▶",
+    // Configuración de Población
+    populationConfig: "🧬 Configuración de Población",
+    populationOriginal: "Original",
+    populationGeneralized: "Generalizado",
+    populationGenerate: "Generar",
+    populationSpatialFrame: "Marco espacial",
+    populationTemporalFrame: "Marco temporal",
+    populationConfidence: "Confianza",
+    populationRationale: "Justificación",
+    populationEdit: "Editar",
+    populationSave: "Guardar",
+    populationGenerating: "Generando…",
+    populationGenerated: "Población generalizada exitosamente.",
+    populationGenerateError: "Error al generalizar la población.",
     // Modo Experimental
     experimentalMode: "🔬 Modo Experimental",
     experimentalModeDesc:
@@ -813,7 +865,7 @@ const es: Translations = {
     gaps: "gaps",
     phase6b: "Fase 6b",
     corePrefix: "Core: ",
-    noCoreCategory: "Sin core category",
+    noCoreCategory: "Sin categoría central",
   },
   config: {
     title: "⚙ Configuración",
@@ -1137,8 +1189,8 @@ const es: Translations = {
     notRecommended: "✗ No recomendado",
     applyButton: "Aplicar",
     // PlaygroundDataPanel
-    gateMainConcern: "Main Concern",
-    gateCoreCategory: "Core Category",
+    gateMainConcern: "Patrón de Interés",
+    gateCoreCategory: "Categoría Central",
     gateSelectiveReduction: "Selective Reduction",
     gateSaturation: "Saturation",
     gateDatabaseA: "Database A — Nodes",
@@ -1272,6 +1324,18 @@ const de: Translations = {
     studyObjectHint: "Art des menschlichen Musters, das du suchst",
     studyObjectPlaceholder: "Wähle einen Mustertyp…",
     customLabelPlaceholder: "Beschreibe das benutzerdefinierte Muster…",
+    hintConcern:
+      "Welches Problem versucht diese Population kontinuierlich zu lösen?",
+    hintEmotion: "Welche emotionale Dynamik dominiert ihre Erfahrung?",
+    hintBehavior: "Welche wiederkehrende Verhaltensstrategie zeigen sie?",
+    hintDiscourse: "Welches gemeinsame Narrativ prägt ihre Welt?",
+    hintIdentity: "Welche Identitätsverhandlung ist wiederkehrend?",
+    hintCustom:
+      "Definiere deinen eigenen Mustertyp. Das System passt seine Suchlinse an.",
+    processingVerbLabel: "Verarbeitungsverb",
+    processingVerbPlaceholder: "lösen / verhandeln / umgehen mit…",
+    processingVerbHint: "Was macht deine Population mit diesem Muster?",
+    rqPreview: "Vorschau der Forschungsfrage",
   },
   project: {
     backToProjects: "← Projekte",
@@ -1319,8 +1383,8 @@ const de: Translations = {
     memoModificationApplied: "Änderung angewendet. Memos aktualisiert.",
     // HITL banner
     decisionRequired: "🛑 Entscheidung erforderlich: ",
-    mainConcern: "Main Concern",
-    coreCategory: "Core Category",
+    mainConcern: "Kernmuster",
+    coreCategory: "Kernkategorie",
     selectiveReduction: "Selective Reduction",
     coreSaturation: "Core Saturation",
     databaseANodes: "Database A — Nodes",
@@ -1394,6 +1458,20 @@ const de: Translations = {
     stageCheckmark: "✓",
     stageCross: "✕",
     stagePlay: "▶",
+    // Populationskonfiguration
+    populationConfig: "🧬 Populationskonfiguration",
+    populationOriginal: "Original",
+    populationGeneralized: "Generalisiert",
+    populationGenerate: "Generieren",
+    populationSpatialFrame: "Räumlicher Rahmen",
+    populationTemporalFrame: "Zeitlicher Rahmen",
+    populationConfidence: "Konfidenz",
+    populationRationale: "Begründung",
+    populationEdit: "Bearbeiten",
+    populationSave: "Speichern",
+    populationGenerating: "Generiere…",
+    populationGenerated: "Population erfolgreich generalisiert.",
+    populationGenerateError: "Fehler beim Generalisieren der Population.",
     // Experimenteller Modus
     experimentalMode: "🔬 Experimenteller Modus",
     experimentalModeDesc:
@@ -1741,7 +1819,7 @@ const de: Translations = {
     notRecommended: "✗ Nicht empfohlen",
     applyButton: "Anwenden",
     // PlaygroundDataPanel
-    gateMainConcern: "Hauptanliegen",
+    gateMainConcern: "Kernmuster",
     gateCoreCategory: "Kernkategorie",
     gateSelectiveReduction: "Selective Reduction",
     gateSaturation: "Sättigung",
@@ -1876,6 +1954,18 @@ const pt: Translations = {
     studyObjectHint: "Tipo de padrão humano que você procura",
     studyObjectPlaceholder: "Selecione um tipo de padrão…",
     customLabelPlaceholder: "Descreva o padrão personalizado que procura…",
+    hintConcern:
+      "Que problema esta população está continuamente tentando resolver?",
+    hintEmotion: "Que dinâmica emocional domina sua experiência?",
+    hintBehavior: "Que estratégia comportamental recorrente eles exibem?",
+    hintDiscourse: "Que narrativa compartilhada molda seu mundo?",
+    hintIdentity: "Que negociação de identidade é recorrente?",
+    hintCustom:
+      "Defina seu próprio tipo de padrão. O sistema adapta sua lente de busca.",
+    processingVerbLabel: "Verbo de processamento",
+    processingVerbPlaceholder: "resolver / negociar / lidar com…",
+    processingVerbHint: "O que sua população FAZ com esse padrão?",
+    rqPreview: "Pré-visualização da pergunta de pesquisa",
   },
   project: {
     backToProjects: "← Projetos",
@@ -1923,8 +2013,8 @@ const pt: Translations = {
     memoModificationApplied: "Modificação aplicada. Memos atualizados.",
     // HITL banner
     decisionRequired: "🛑 Decisão necessária: ",
-    mainConcern: "Main Concern",
-    coreCategory: "Core Category",
+    mainConcern: "Padrão Central",
+    coreCategory: "Categoria Central",
     selectiveReduction: "Selective Reduction",
     coreSaturation: "Core Saturation",
     databaseANodes: "Database A — Nós",
@@ -1995,6 +2085,20 @@ const pt: Translations = {
     stageCheckmark: "✓",
     stageCross: "✕",
     stagePlay: "▶",
+    // Configuração de População
+    populationConfig: "🧬 Configuração de População",
+    populationOriginal: "Original",
+    populationGeneralized: "Generalizado",
+    populationGenerate: "Gerar",
+    populationSpatialFrame: "Marco espacial",
+    populationTemporalFrame: "Marco temporal",
+    populationConfidence: "Confiança",
+    populationRationale: "Justificativa",
+    populationEdit: "Editar",
+    populationSave: "Salvar",
+    populationGenerating: "Gerando…",
+    populationGenerated: "População generalizada com sucesso.",
+    populationGenerateError: "Erro ao generalizar a população.",
     // Modo Experimental
     experimentalMode: "🔬 Modo Experimental",
     experimentalModeDesc:
@@ -2339,7 +2443,7 @@ const pt: Translations = {
     notRecommended: "✗ Não recomendado",
     applyButton: "Aplicar",
     // PlaygroundDataPanel
-    gateMainConcern: "Preocupação Principal",
+    gateMainConcern: "Padrão Central",
     gateCoreCategory: "Categoria Central",
     gateSelectiveReduction: "Selective Reduction",
     gateSaturation: "Saturação",

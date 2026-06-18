@@ -124,12 +124,23 @@ def b2_label_groups(proyecto_id: str) -> dict:
 
         # ── Obtener objeto de estudio ──────────────────────────────
         obj_row = session.execute(
-            text("SELECT objeto_estudio FROM proyectos WHERE id = :pid"),
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = (
             obj_row[0] if obj_row and obj_row[0] else "comportamiento humano"
         )
+
+        # Fetch operational question from Nemotron output
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
 
         # ── SelfRefinement Loop ────────────────────────────────────
         groups_json = json.dumps(groups, indent=2, ensure_ascii=False)
@@ -148,6 +159,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
                 "groups_json": groups_json,
                 "object_of_study": object_of_study,
                 "existing_labels": existing_labels,
+                "operational_question": operational_question or "(not yet generated)",
             }
 
             # Si hay feedback de iteración anterior, añadirlo
@@ -165,7 +177,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
                     )
 
             gen_response = llm.run_agent(
-                agent_id="pattern_labeler",
+                agent_id="fb_pattern_labeler",
                 variables=gen_vars,
             )
 
@@ -179,7 +191,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
 
             # 2. CRITIC (FLASH)
             critic_response = llm.run_agent(
-                agent_id="label_critic",
+                agent_id="fb_label_critic",
                 variables={
                     "output_to_evaluate": gen_text,
                     "source_incidents": groups_json,
@@ -234,7 +246,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
         if not all_valid:
             # Último critic issues para clasificar
             critic_check = llm.run_agent(
-                agent_id="label_critic",
+                agent_id="fb_label_critic",
                 variables={
                     "output_to_evaluate": json.dumps(
                         {"proposed_labels": final_labels}, ensure_ascii=False

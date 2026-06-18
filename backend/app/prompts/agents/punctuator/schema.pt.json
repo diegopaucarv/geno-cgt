@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "punctuated_text",
+    "changes_made"
+  ],
+  "properties": {
+    "punctuated_text": {
+      "type": "string",
+      "description": "Texto corrigido."
+    },
+    "changes_made": {
+      "type": "boolean",
+      "description": "true se pelo menos um caractere foi modificado."
+    }
+  }
+}

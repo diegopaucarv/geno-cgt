@@ -1,0 +1,224 @@
+{
+  "type": "object",
+  "required": [
+    "edges",
+    "processes_edge_present",
+    "edge_summary",
+    "missing_evidence_notes"
+  ],
+  "properties": {
+    "edges": {
+      "type": "array",
+      "description": "Alle vorgeschlagenen Kanten. PROCESSES-Kante MUSS als erste im Array sein.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relationship_type",
+          "rationale",
+          "evidence",
+          "direction",
+          "strength"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Label des Quellknotens. Für PROCESSES-Kante: das Kernknoten-Label."
+          },
+          "target": {
+            "type": "string",
+            "description": "Label des Zielknotens. Für PROCESSES-Kante: eine Beschreibung dessen, was verarbeitet wird (das {object_of_study})."
+          },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "PROCESSES",
+              "LEADS_TO",
+              "IS_A_STRATEGY_FOR",
+              "IS_A_CONSEQUENCE_OF",
+              "IS_A_CONDITION_FOR",
+              "VARIES_WITH",
+              "CO_OCCURS_WITH"
+            ],
+            "description": "Kanonischer Beziehungstyp aus den 7 glaserschen Familien."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Theoretische Rechtfertigung: warum diese Beziehung existiert und was sie über das {object_of_study} erklärt."
+          },
+          "evidence": {
+            "type": "object",
+            "required": [
+              "source_id",
+              "source_type",
+              "summary",
+              "strength"
+            ],
+            "properties": {
+              "source_id": {
+                "type": "string",
+                "description": "UUID der Hypothese oder conceptual_relationship."
+              },
+              "source_type": {
+                "type": "string",
+                "enum": [
+                  "hypothesis",
+                  "conceptual_relationship"
+                ],
+                "description": "Art der Evidenz."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Ein-Satz-Zusammenfassung dessen, was die Evidenz zeigt."
+              },
+              "strength": {
+                "type": "string",
+                "enum": [
+                  "strong",
+                  "moderate",
+                  "weak"
+                ],
+                "description": "Evidenzqualität: strong (mehrere konvergierende Quellen), moderate (eine solide Quelle), weak (andeutend)."
+              }
+            }
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "unidirectional",
+              "bidirectional",
+              "conceptual"
+            ],
+            "description": "Richtung der Beziehung. 'conceptual' nur für PROCESSES-Kante."
+          },
+          "strength": {
+            "type": "string",
+            "enum": [
+              "strong",
+              "moderate",
+              "tentative"
+            ],
+            "description": "Gesamtkonfidenz in dieser Kante unter Berücksichtigung von Evidenzqualität und theoretischer Kohärenz."
+          }
+        }
+      }
+    },
+    "processes_edge_present": {
+      "type": "boolean",
+      "description": "MUSS true sein für eine gültige Database B. Wenn false, ist der Kernmechanismus undefiniert."
+    },
+    "processes_edge_missing_rationale": {
+      "type": "string",
+      "description": "Wenn processes_edge_present=false: warum kann keine glaubwürdige PROCESSES-Kante konstruiert werden? Welche Evidenz fehlt?"
+    },
+    "edge_summary": {
+      "type": "object",
+      "required": [
+        "total_edges",
+        "by_type",
+        "coverage",
+        "narrative"
+      ],
+      "properties": {
+        "total_edges": {
+          "type": "integer"
+        },
+        "by_type": {
+          "type": "object",
+          "description": "Anzahl pro relationship_type.",
+          "properties": {
+            "PROCESSES": {
+              "type": "integer"
+            },
+            "LEADS_TO": {
+              "type": "integer"
+            },
+            "IS_A_STRATEGY_FOR": {
+              "type": "integer"
+            },
+            "IS_A_CONSEQUENCE_OF": {
+              "type": "integer"
+            },
+            "IS_A_CONDITION_FOR": {
+              "type": "integer"
+            },
+            "VARIES_WITH": {
+              "type": "integer"
+            },
+            "CO_OCCURS_WITH": {
+              "type": "integer"
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "description": "Wie viele Knoten mindestens eine Kante haben.",
+          "properties": {
+            "nodes_with_edges": {
+              "type": "integer"
+            },
+            "total_nodes": {
+              "type": "integer"
+            },
+            "isolated_nodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Labels von Knoten mit null Kanten."
+            }
+          }
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Eine 3–5-Satz-Narrativ des integrierten Modells: was verarbeitet was, unter welchen Bedingungen, über welche Strategien, welche Konsequenzen produzierend."
+        }
+      }
+    },
+    "missing_evidence_notes": {
+      "type": "array",
+      "description": "Plausible Beziehungen ohne ausreichende Evidenz. Methodologische Ehrlichkeit: Welche Kanten würden wir vorschlagen, wenn wir mehr Daten hätten?",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "proposed_type",
+          "why_plausible",
+          "what_evidence_needed"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Label des Quellknotens."
+          },
+          "target": {
+            "type": "string",
+            "description": "Label des Zielknotens."
+          },
+          "proposed_type": {
+            "type": "string",
+            "enum": [
+              "PROCESSES",
+              "LEADS_TO",
+              "IS_A_STRATEGY_FOR",
+              "IS_A_CONSEQUENCE_OF",
+              "IS_A_CONDITION_FOR",
+              "VARIES_WITH",
+              "CO_OCCURS_WITH"
+            ]
+          },
+          "why_plausible": {
+            "type": "string",
+            "description": "Warum diese Beziehung trotz fehlender Evidenz theoretisch plausibel ist."
+          },
+          "what_evidence_needed": {
+            "type": "string",
+            "description": "Welche Art von Daten oder Incidenten benötigt würde, um diese Beziehung zu etablieren."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "type": "object",
+  "required": [
+    "nodes",
+    "core_node_label",
+    "model_summary"
+  ],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "description": "Flache Liste aller theoretischen Knoten. Genau ein Knoten hat is_core=true.",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "entity_type",
+          "definition",
+          "source_category_id",
+          "is_core",
+          "grounding_incidents",
+          "properties_inherited"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerundium oder konzeptuelles Substantiv. Der formale Name dieses theoretischen Knotens."
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "core_category",
+              "condition",
+              "consequence",
+              "strategy",
+              "dimension"
+            ],
+            "description": "Kanonischer Entitätstyp. Genau ein Knoten muss core_category sein."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Integrierte formale Definition auf höherer Abstraktion als die Quellkategorie. Präsens, Konzepte als Subjekte."
+          },
+          "source_category_id": {
+            "type": "string",
+            "description": "UUID der ursprünglichen gesättigten Kategorie."
+          },
+          "source_category_label": {
+            "type": "string",
+            "description": "Ursprüngliches Label der Quellkategorie, zur Nachverfolgbarkeit."
+          },
+          "is_core": {
+            "type": "boolean",
+            "description": "true NUR für den Kernknoten. Genau ein Knoten im Array muss dies als true haben."
+          },
+          "grounding_incidents": {
+            "type": "array",
+            "description": "Repräsentative Incidente, die diesen Knoten in den Daten verankern.",
+            "items": {
+              "type": "object",
+              "required": [
+                "document_name",
+                "quote"
+              ],
+              "properties": {
+                "document_name": {
+                  "type": "string"
+                },
+                "incident_id": {
+                  "type": "string",
+                  "description": "UUID des Incidents"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Kurzes wörtliches Zitat (1–2 Sätze)."
+                }
+              }
+            }
+          },
+          "properties_inherited": {
+            "type": "array",
+            "description": "Alle von der Quellkategorie geerbten Eigenschaften.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "gradient",
+                "dimension"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Eigenschaftsname."
+                },
+                "gradient": {
+                  "type": "string",
+                  "description": "Polare Extreme (z.B. 'oberflächlich ↔ tiefgründig')."
+                },
+                "dimension": {
+                  "type": "string",
+                  "description": "Welche Dimension beschreibt diese Eigenschaft?"
+                },
+                "source_code_id": {
+                  "type": "string",
+                  "description": "UUID des Codes, aus dem diese Eigenschaft emergierte."
+                }
+              }
+            }
+          },
+          "needs_more_data": {
+            "type": "boolean",
+            "description": "true wenn dieser Knoten auf dünner Evidenz ruht (< 3 Incidente) und von mehr Daten profitieren würde."
+          },
+          "needs_more_data_rationale": {
+            "type": "string",
+            "description": "Wenn needs_more_data: welche Art von Daten würde diesen Knoten stärken?"
+          }
+        }
+      }
+    },
+    "core_node_label": {
+      "type": "string",
+      "description": "Das Label des einzigen Knotens mit is_core=true. Bequemlichkeitsfeld für schnelle Referenz."
+    },
+    "model_summary": {
+      "type": "object",
+      "required": [
+        "total_nodes",
+        "entity_type_distribution",
+        "narrative"
+      ],
+      "properties": {
+        "total_nodes": {
+          "type": "integer"
+        },
+        "entity_type_distribution": {
+          "type": "object",
+          "description": "Anzahl pro entity_type.",
+          "properties": {
+            "core_category": {
+              "type": "integer"
+            },
+            "condition": {
+              "type": "integer"
+            },
+            "consequence": {
+              "type": "integer"
+            },
+            "strategy": {
+              "type": "integer"
+            },
+            "dimension": {
+              "type": "integer"
+            }
+          }
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Eine narrative Zusammenfassung des theoretischen Modells in 3–5 Sätzen: was die Kernkategorie verarbeitet, unter welchen Bedingungen, mit welchen Strategien, welche Konsequenzen produzierend, entlang welcher Dimensionen variierend."
+        }
+      }
+    }
+  }
+}

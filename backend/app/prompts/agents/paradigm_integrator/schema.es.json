@@ -1,0 +1,132 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "did_state_expand",
+    "new_paradigm"
+  ],
+  "properties": {
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "TRUE si al menos un incidente nuevo expande el paradigma. FALSE si todos mapean a elementos existentes."
+    },
+    "expansion_type": {
+      "type": "string",
+      "enum": [
+        "NEW_DIMENSION",
+        "NEW_CONDITION",
+        "NEW_CONSEQUENCE",
+        "NEW_STRATEGY",
+        "NONE"
+      ],
+      "description": "Tipo de expansión. NONE si did_state_expand = FALSE."
+    },
+    "new_paradigm": {
+      "type": "object",
+      "description": "Paradigma actualizado con nuevas adiciones (si las hay).",
+      "properties": {
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "description"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "incident_refs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Índices base 0 de incidentes que respaldan esta dimensión."
+              }
+            }
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "description"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "incident_refs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "consequences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "description"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "incident_refs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "strategies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "description"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "incident_refs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "integration_memo": {
+      "type": "string",
+      "description": "Nota metodológica explicando qué se agregó y por qué, o por qué no se expandió."
+    }
+  }
+}

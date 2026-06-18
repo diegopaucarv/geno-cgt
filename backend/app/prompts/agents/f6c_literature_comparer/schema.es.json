@@ -1,0 +1,50 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "literature_comparer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "comparison_table": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string",
+                "description": "Nombre de la categoría teórica"
+              },
+              "extends": {
+                "type": "string",
+                "description": "La literatura confirma y extiende esta propiedad. Cómo."
+              },
+              "modifies": {
+                "type": "string",
+                "description": "La literatura sugiere una modificación. Cuál."
+              },
+              "integrates": {
+                "type": "string",
+                "description": "La teoría integra conceptos dispersos de la literatura. Cómo."
+              },
+              "transcends": {
+                "type": "string",
+                "description": "La teoría muestra algo que la literatura no había capturado."
+              }
+            },
+            "required": [
+              "category"
+            ]
+          }
+        },
+        "global_assessment": {
+          "type": "string",
+          "description": "Evaluación global: ¿la teoría dialoga con la literatura o se fuerza a encajar?"
+        }
+      },
+      "required": [
+        "comparison_table",
+        "global_assessment"
+      ]
+    }
+  }
+}

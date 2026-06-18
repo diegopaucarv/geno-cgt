@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "required": [
+    "recommended",
+    "confidence",
+    "reason",
+    "evidence_sufficient"
+  ],
+  "properties": {
+    "recommended": {
+      "type": "boolean",
+      "description": "true se a modificação for aconselhável"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confiança na decisão"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Explicação em 2-3 frases"
+    },
+    "evidence_sufficient": {
+      "type": "boolean",
+      "description": "true se houver evidência suficiente para decidir"
+    },
+    "modified_memo": {
+      "type": "object",
+      "description": "Versão modificada do memo (a original se não for aconselhável)"
+    },
+    "impact_summary": {
+      "type": "string",
+      "description": "O que mudaria no sistema se aplicado"
+    },
+    "missing_evidence": {
+      "type": "string",
+      "description": "Apenas se evidence_sufficient=false. O que mais você procuraria."
+    }
+  }
+}

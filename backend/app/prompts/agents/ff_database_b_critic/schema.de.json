@@ -1,0 +1,393 @@
+{
+  "type": "object",
+  "required": [
+    "edge_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "edge_evaluations": {
+      "type": "array",
+      "description": "Bewertung für jede vorgeschlagene Kante.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relationship_type",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Quellknoten-Label der zu bewertenden Kante."
+          },
+          "target": {
+            "type": "string",
+            "description": "Zielknoten-Label der zu bewertenden Kante."
+          },
+          "relationship_type": {
+            "type": "string",
+            "description": "Der vorgeschlagene relationship_type."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=korrekt, MOD=benötigt Anpassung, FORCED=sollte entfernt werden."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Narrative Rechtfertigung des Urteils unter Bezugnahme auf die relevantesten Kriterien."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Bewertung jedes Kriteriums.",
+            "properties": {
+              "relationship_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ],
+                    "description": "Wenn pass=false: der korrekte relationship_type."
+                  }
+                }
+              },
+              "evidence_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "directional_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_direction": {
+                    "type": "string",
+                    "enum": [
+                      "unidirectional",
+                      "bidirectional",
+                      "conceptual",
+                      "reversed"
+                    ],
+                    "description": "Wenn pass=false: die korrekte Richtung."
+                  }
+                }
+              },
+              "theoretical_coherence": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Wenn MOD: konkrete Korrektur (Typ zu X ändern, Richtung umkehren, Evidenz mit Y stärken). Wenn FORCED: warum diese Kante entfernt werden sollte."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "contradictions",
+        "missing_edges",
+        "orphan_nodes",
+        "processes_edge_verification"
+      ],
+      "properties": {
+        "contradictions": {
+          "type": "object",
+          "required": [
+            "has_contradictions",
+            "details"
+          ],
+          "properties": {
+            "has_contradictions": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "description",
+                  "edges_involved"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "circular_causation",
+                      "mutual_typing",
+                      "type_clash"
+                    ],
+                    "description": "Art des erkannten Widerspruchs."
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "edges_involved": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string"
+                        },
+                        "relationship_type": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "resolution_suggestion": {
+                    "type": "string",
+                    "description": "Wie der Widerspruch aufzulösen ist."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "missing_edges": {
+          "type": "object",
+          "required": [
+            "has_missing",
+            "suggestions"
+          ],
+          "properties": {
+            "has_missing": {
+              "type": "boolean"
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "target",
+                  "suggested_type",
+                  "rationale",
+                  "urgency"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Label des Quellknotens."
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Label des Zielknotens."
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ]
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "description": "Warum diese Kante logisch benötigt wird."
+                  },
+                  "urgency": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "important",
+                      "nice_to_have"
+                    ],
+                    "description": "critical=Modell ohne sie unvollständig, important=verbessert Kohärenz signifikant, nice_to_have=fügt Reichhaltigkeit hinzu."
+                  },
+                  "evidence_needed": {
+                    "type": "string",
+                    "description": "Welche Evidenz erforderlich wäre, um diese Kante zu etablieren."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "orphan_nodes": {
+          "type": "object",
+          "required": [
+            "has_orphans",
+            "details"
+          ],
+          "properties": {
+            "has_orphans": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node_label",
+                  "entity_type",
+                  "is_legitimate",
+                  "rationale"
+                ],
+                "properties": {
+                  "node_label": {
+                    "type": "string"
+                  },
+                  "entity_type": {
+                    "type": "string",
+                    "enum": [
+                      "core_category",
+                      "condition",
+                      "consequence",
+                      "strategy",
+                      "dimension"
+                    ]
+                  },
+                  "is_legitimate": {
+                    "type": "boolean",
+                    "description": "true wenn es theoretisch akzeptabel ist, dass dieser Knoten kantenlos ist (z.B. ein Dimensionsknoten)."
+                  },
+                  "rationale": {
+                    "type": "string"
+                  },
+                  "suggested_connection": {
+                    "type": "string",
+                    "description": "Wenn nicht legitim: mit welchem Knoten sollte dieser verbunden werden und wie?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "processes_edge_verification": {
+          "type": "object",
+          "required": [
+            "exists",
+            "has_correct_source",
+            "has_valid_target",
+            "is_theoretically_sound"
+          ],
+          "properties": {
+            "exists": {
+              "type": "boolean",
+              "description": "Existiert eine PROCESSES-Kante?"
+            },
+            "has_correct_source": {
+              "type": "boolean",
+              "description": "Ist die Quelle der Kernknoten (is_core=true)?"
+            },
+            "has_valid_target": {
+              "type": "boolean",
+              "description": "Beschreibt das Ziel korrekt das {object_of_study}?"
+            },
+            "is_theoretically_sound": {
+              "type": "boolean",
+              "description": "Erklärt die Begründung überzeugend, warum dies der zentrale Mechanismus ist?"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Irgendwelche Probleme mit der PROCESSES-Kante."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true wenn das gesamte Kantensystem methodologisch solide und bereit für Forscherprüfung ist."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Globale Bewertung: Was ist solide? Was braucht Aufmerksamkeit? Ist das integrierte Modell kohärent?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Probleme, die VOR der Fertigstellung des Modells gelöst werden MÜSSEN."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nicht-blockierende Bedenken zur Kenntnisnahme für den Forscher."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "type": "object",
+  "properties": {
+    "discard_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=korrekte Verwerfung, MOD=fragwürdig, FORCED=fehlerhaft (wiederherstellen)"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Rechtfertigung unter Nennung von Evidenz aus den Incidenten"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Wenn MOD oder FORCED: wiederherstellen, neu bewerten oder weitere Daten suchen?"
+          }
+        }
+      }
+    },
+    "fusion_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "source_code_ids",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=solide Zusammenführung, MOD=benötigt Anpassung, FORCED=keine empirische Basis"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Rechtfertigung mit Evidenz der Austauschbarkeit (oder deren Fehlen)"
+          },
+          "codes_to_remove_from_fusion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Wenn MOD: UUIDs von Codes, die NICHT in dieser Zusammenführung sein sollten"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Wenn MOD oder FORCED: konkrete Maßnahme"
+          }
+        }
+      }
+    },
+    "false_positives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs verworfener Codes, die WIEDERHERGESTELLT werden sollten"
+    },
+    "false_negatives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs überlebender Codes, die VERWORFEN werden sollten"
+    },
+    "overall_assessment": {
+      "type": "string",
+      "description": "Globale Bewertung des reduzierten Systems: Ist es methodologisch solide? Was fehlt?"
+    }
+  },
+  "required": [
+    "discard_evaluations",
+    "fusion_evaluations"
+  ]
+}

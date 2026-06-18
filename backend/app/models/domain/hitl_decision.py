@@ -20,7 +20,7 @@ class HitlDecision(Base, TimestampMixin):
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proyectos.id"))
 
     gate_name: Mapped[str] = mapped_column(String(100))
-    # "main_concern" | "core_emergence" | "selective_reduction"
+    # "pattern_of_interest" | "core_emergence" | "selective_reduction"
     # | "core_saturation" | "database_a" | "database_b" | "global_saturation"
 
     proposal: Mapped[dict] = mapped_column(JSONB)

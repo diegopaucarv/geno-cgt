@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "required": [
+    "process_description"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "Descrição em gerúndio do processo central que o entrevistado tenta resolver continuamente, com 2-3 frases de explicação."
+    }
+  }
+}

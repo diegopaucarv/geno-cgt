@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "elaboration_type",
+    "description"
+  ],
+  "properties": {
+    "elaboration_type": {
+      "type": "string",
+      "enum": [
+        "converges",
+        "diverges_dimension",
+        "diverges_property",
+        "diverges_condition",
+        "diverges_strong"
+      ],
+      "description": "converges=confirms existing properties. diverges_dimension=expands gradient. diverges_property=adds property. diverges_condition=reveals condition. diverges_strong=suggests subdividing."
+    },
+    "description": {
+      "type": "string",
+      "description": "Narrative description of how the incident relates to the category. What it reveals, confirms, or expands."
+    },
+    "expanded_definition": {
+      "type": "string",
+      "description": "New proposed definition IF the elaboration expands it. Empty string if unchanged."
+    },
+    "new_or_expanded_properties": {
+      "type": "array",
+      "description": "New or expanded properties. Empty array if elaboration_type=converges.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Property name as a noun."
+          },
+          "gradient": {
+            "type": "string",
+            "description": "Range of variation. E.g.: 'low ⟶ high'."
+          },
+          "is_new": {
+            "type": "boolean",
+            "description": "true if it is a new property, false if an existing gradient was expanded."
+          },
+          "previous_gradient": {
+            "type": "string",
+            "description": "Previous gradient. Only if an existing one was expanded."
+          }
+        }
+      }
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "update_definition",
+        "add_property",
+        "expand_gradient",
+        "suggest_subdivide",
+        "suggest_divide"
+      ],
+      "description": "Recommended action for the researcher. none if converges."
+    },
+    "rename_suggested": {
+      "type": "boolean",
+      "description": "true if the definition changed enough to suggest a rename."
+    },
+    "rename_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Suggested names following the configured coding style. Empty array if not."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Free note from the elaborator: what does this incident reveal about the category? What questions remain open?"
+    }
+  }
+}

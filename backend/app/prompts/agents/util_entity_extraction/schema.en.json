@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "segment_id": {
+      "type": "string",
+      "description": "UUID of the analyzed segment"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the entity"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "person",
+              "organization",
+              "concept",
+              "event",
+              "location",
+              "other"
+            ],
+            "description": "Type of entity"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Exact name of the source entity"
+          },
+          "target": {
+            "type": "string",
+            "description": "Exact name of the target entity"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": [
+              "causes",
+              "conditions",
+              "consequences",
+              "co-occurs_with",
+              "opposes",
+              "is_part_of",
+              "is_a"
+            ],
+            "description": "Type of relation"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Brief justification based on the text"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "relation_type"
+        ]
+      }
+    }
+  },
+  "required": [
+    "entities",
+    "relations"
+  ]
+}

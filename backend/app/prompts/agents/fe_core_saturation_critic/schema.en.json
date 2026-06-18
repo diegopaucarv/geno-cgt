@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "expansion_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_index",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "expansion_index": {
+            "type": "integer",
+            "description": "Index of the expansion in proposed_expansions"
+          },
+          "expansion_type": {
+            "type": "string",
+            "description": "Type of proposed expansion"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=genuine expansion, MOD=imprecise, FORCED=already covered"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justification: what existing property already covers this (if FORCED)? What adjustment is needed (if MOD)?"
+          },
+          "covered_by_property": {
+            "type": "string",
+            "description": "If FORCED: name of the paradigm_state property that already covers this incident"
+          },
+          "suggested_refinement": {
+            "type": "string",
+            "description": "If MOD: concrete adjustment suggestion"
+          }
+        }
+      }
+    },
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "true if AT LEAST one expansion was evaluated as SAT"
+    },
+    "expansion_count": {
+      "type": "integer",
+      "description": "How many expansions were SAT (genuinely new)"
+    },
+    "confirmation_count": {
+      "type": "integer",
+      "description": "How many expansions were FORCED (already covered — confirming saturation)"
+    },
+    "saturation_note": {
+      "type": "string",
+      "description": "Note on saturation status: is the category stabilizing?"
+    }
+  },
+  "required": [
+    "expansion_verdicts",
+    "did_state_expand"
+  ]
+}

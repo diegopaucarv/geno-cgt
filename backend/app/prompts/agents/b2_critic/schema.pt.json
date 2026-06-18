@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evaluations"
+  ],
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "description": "Avaliações de cada código proposto. Array vazio se não houver códigos a avaliar.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code_label",
+          "verdict",
+          "rationale",
+          "interchangeability_assessment"
+        ],
+        "properties": {
+          "code_label": {
+            "type": "string",
+            "description": "Nome do código avaliado (gerúndio exato)"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT: correto e bem definido. MOD: precisa de refinamento. FORCED: sem base empírica."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa detalhada do veredito, referenciando segmentos específicos."
+          },
+          "interchangeability_assessment": {
+            "type": "string",
+            "description": "Os incidentes são intercambiáveis? Como diferem se não forem? Se não houver incidentes suficientes para avaliar: 'Incidentes insuficientes para avaliar intercambialidade.'"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Apenas se MOD. Ação concreta: novo gerúndio, definição ajustada ou divisão em subcódigos. Se não aplicável, deixar string vazia."
+          },
+          "overlap_with_existing": {
+            "type": "array",
+            "description": "Nomes de códigos existentes com os quais este se sobrepõe significativamente. Array vazio se não houver sobreposição.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confiança do crítico neste veredito. 0.0 = dúvida total, 1.0 = certeza absoluta."
+          }
+        }
+      }
+    }
+  }
+}

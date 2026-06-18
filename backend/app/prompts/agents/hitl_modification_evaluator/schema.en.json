@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "required": [
+    "recommended",
+    "confidence",
+    "reason",
+    "evidence_sufficient"
+  ],
+  "properties": {
+    "recommended": {
+      "type": "boolean",
+      "description": "true if the modification is advisable"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence in the decision"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Explanation in 2-3 sentences"
+    },
+    "evidence_sufficient": {
+      "type": "boolean",
+      "description": "true if there is sufficient evidence to decide"
+    },
+    "modified_memo": {
+      "type": "object",
+      "description": "Modified version of the memo (the original if not advisable)"
+    },
+    "impact_summary": {
+      "type": "string",
+      "description": "What would change in the system if applied"
+    },
+    "missing_evidence": {
+      "type": "string",
+      "description": "Only if evidence_sufficient=false. What else you would look for."
+    }
+  }
+}

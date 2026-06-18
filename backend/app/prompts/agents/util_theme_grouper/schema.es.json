@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "themes"
+  ],
+  "properties": {
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "indicators",
+          "suggested_gerundio"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre del tema en 2-5 palabras."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicadores que componen este tema."
+          },
+          "suggested_gerundio": {
+            "type": "string",
+            "description": "Posible nombre de código en gerundio (forma -ing)."
+          }
+        }
+      }
+    }
+  }
+}

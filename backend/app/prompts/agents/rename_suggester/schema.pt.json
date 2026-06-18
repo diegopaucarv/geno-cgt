@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name_is_adequate",
+    "suggestions"
+  ],
+  "properties": {
+    "name_is_adequate": {
+      "type": "boolean",
+      "description": "true se o nome atual for adequado e nenhuma renomeação for sugerida."
+    },
+    "adequacy_rationale": {
+      "type": "string",
+      "description": "Se name_is_adequate=true: por que o nome atual ainda é bom."
+    },
+    "suggestions": {
+      "type": "array",
+      "description": "Sugestões de renomeação. Array vazio se name_is_adequate=true.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "level",
+          "rationale",
+          "what_it_gains"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nome sugerido em forma de gerúndio."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "conservative",
+              "moderate",
+              "transformative"
+            ],
+            "description": "Nível de abstração da renomeação."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Por que este nome é melhor."
+          },
+          "what_it_gains": {
+            "type": "string",
+            "description": "Qual dimensão ou propriedade captura que o nome atual omite."
+          },
+          "in_vivo_inspiration": {
+            "type": "string",
+            "description": "Se o nome for inspirado nas palavras exatas de um participante, citá-las aqui. String vazia se não."
+          }
+        }
+      }
+    }
+  }
+}

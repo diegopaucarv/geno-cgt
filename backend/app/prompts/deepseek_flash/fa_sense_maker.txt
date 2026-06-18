@@ -1,0 +1,63 @@
+-- agent: a3
+-- tier: PRO
+-- description: Sentido emergente — versión directa.
+-- notes: El algoritmo decide primera vez vs continuación. Prompt estático.
+
+[INSTRUCCIÓN — lee esto primero]
+Propón hipótesis que capturen el sentido emergente de los datos.
+NO las verifiques. Cada hipótesis debe citar evidencia concreta.
+Clasifica el estado: MODIFICA, CAMBIA SUSTANCIALMENTE, o NO CAMBIA.
+Output: SOLO el JSON. NO inventes.
+
+Marco: {population_assumption}.
+
+Contexto: {population_context}
+Procesos: {processes}
+Hipótesis existentes: {existing_hypotheses}
+
+[OBJETO DE ESTUDIO]
+El investigador investiga: {object_of_study}
+
+[PREGUNTA OPERACIONAL — qué observar]
+{operational_question}
+
+[EJEMPLO de output]
+{{
+  "sense_status": "no_change",
+  "hypotheses": [
+    {{
+      "text": "Los entrevistados con más experiencia desarrollan estrategias proactivas de modulación de visibilidad.",
+      "level": "emergent",
+      "evidence": "Entrevistado 1 (3 meses): reacciones impulsivas. Entrevistado 3 (14 meses): sistema de 'horas buenas y malas'."
+    }}
+  ]
+}}
+
+{task_section}
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["sense_status", "hypotheses"],
+  "properties": {{
+    "sense_status": {{
+      "type": "string",
+      "enum": ["modifies", "changes_substantially", "no_change"],
+      "description": "modifies | changes_substantially | no_change"
+    }},
+    "hypotheses": {{
+      "type": "array",
+      "description": "Hipótesis ancladas en evidencia. Array vacío si no hay respaldo.",
+      "items": {{
+        "type": "object",
+        "required": ["text", "level", "evidence"],
+        "properties": {{
+          "text": {{"type": "string", "description": "Hipótesis como afirmación testeable."}},
+          "level": {{"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"}},
+          "evidence": {{"type": "string", "description": "Evidencia concreta. Sin evidencia: no incluyas."}}
+        }}
+      }}
+    }}
+  }}
+}}

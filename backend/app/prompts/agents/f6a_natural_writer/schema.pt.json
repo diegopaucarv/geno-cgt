@@ -1,0 +1,61 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "natural_writer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "draft": {
+          "type": "string",
+          "description": "Rascunho completo em prosa acadêmica"
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "integer"
+              },
+              "memo_id": {
+                "type": "string"
+              },
+              "context": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "definition_in_text": {
+                "type": "string"
+              },
+              "first_introduced_at": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "orphan_memos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "UUIDs de memos que não se integraram naturalmente ao rascunho"
+        }
+      },
+      "required": [
+        "draft",
+        "citations",
+        "concepts"
+      ]
+    }
+  }
+}

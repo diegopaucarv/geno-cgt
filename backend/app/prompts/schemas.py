@@ -337,7 +337,7 @@ S3_SCHEMA: dict[str, Any] = {
                     "code_id": {"type": "string"},
                     "code_label": {"type": "string"},
                     "why_central": {"type": "string"},
-                    "relation_to_main_concern": {
+                    "relation_to_core_concern": {
                         "type": "string",
                         "enum": [
                             "is_the_core",

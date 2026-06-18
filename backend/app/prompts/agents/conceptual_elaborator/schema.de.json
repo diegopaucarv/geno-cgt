@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relationship_summary",
+    "converging_evidence",
+    "diverging_evidence",
+    "conceptual_fit"
+  ],
+  "properties": {
+    "relationship_summary": {
+      "type": "string",
+      "description": "Narrative Beschreibung der gefundenen Beziehung. Präsens. Theoretische Ebene."
+    },
+    "converging_evidence": {
+      "type": "array",
+      "description": "Incidente, die die Beziehung STÜTZEN (konvergieren). Leeres Array wenn keine.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_converges"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Exaktes wörtliches Zitat."
+          },
+          "how_it_converges": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diverging_evidence": {
+      "type": "array",
+      "description": "Incidente, die die Beziehung BELASTEN. Sie sind KEINE Widerlegungen — sie sind Erweiterungschancen.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_diverges",
+          "expansion_suggestion"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string"
+          },
+          "how_it_diverges": {
+            "type": "string"
+          },
+          "expansion_suggestion": {
+            "type": "string",
+            "description": "Wie die Beziehung erweitert werden kann, um diese divergierenden Daten aufzunehmen (Bedingung, Subtyp, Kontext, alternativer Pfad)."
+          }
+        }
+      }
+    },
+    "shared_documents_without_clear_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Dokumente mit beiden Kategorien, aber ohne klare Evidenz."
+    },
+    "conceptual_fit": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Wie gut diese Beziehung das Verhalten der Teilnehmer erklärt."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Freie Notiz: Welche Einsicht ist entstanden? Was bleibt zu erforschen?"
+    },
+    "suggested_next_elaborations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Vorschläge für als nächstes auszuarbeitende Beziehungen."
+    }
+  }
+}

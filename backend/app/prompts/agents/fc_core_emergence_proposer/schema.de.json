@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "core_category_candidates": {
+      "type": "array",
+      "description": "Kernkategorie-Kandidaten, geordnet nach absteigendem theoretical_grab",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "why_central",
+          "theoretical_grab"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID des Kandidaten-Codes oder der Kategorie"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Aktuelles Label des Codes"
+          },
+          "why_central": {
+            "type": "string",
+            "description": "Qualitative Begründung: warum dieser Code als zentraler Kandidat emergiert. Muss auf die 5 Kriterien verweisen."
+          },
+          "relation_to_core_pattern": {
+            "type": "string",
+            "enum": [
+              "is_the_core",
+              "processes",
+              "conditions",
+              "consequences",
+              "strategies"
+            ],
+            "description": "Art der Beziehung zum Kern-{object_of_study}"
+          },
+          "theoretical_grab": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "description": "Erklärungs- und Vereinigungskraft des Kandidaten"
+          },
+          "connected_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UUIDs von Codes, die mit diesem Kandidaten verbunden sind"
+          },
+          "connected_code_count": {
+            "type": "integer",
+            "description": "Anzahl verbundener Codes"
+          },
+          "limitations": {
+            "type": "string",
+            "description": "Welche Aspekte des Code-Systems dieser Kandidat NICHT gut erklärt"
+          }
+        }
+      }
+    },
+    "no_core_detected": {
+      "type": "boolean",
+      "description": "true wenn kein aktueller Code das Kernkategorie-Niveau erreicht"
+    },
+    "no_core_rationale": {
+      "type": "string",
+      "description": "Wenn no_core_detected=true: Erklärung, was in den Daten fehlt"
+    }
+  },
+  "required": [
+    "core_category_candidates"
+  ]
+}

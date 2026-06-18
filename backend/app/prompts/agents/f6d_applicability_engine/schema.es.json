@@ -1,0 +1,86 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "applicability_engine",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "control_variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "modifiable_by": {
+                "type": "string"
+              },
+              "theory_basis": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "access_variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "conditions_access": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "guidelines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "guideline": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "mechanism": {
+                "type": "string"
+              },
+              "evidence_from_theory": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "implications": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "future_agenda": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "control_variables",
+        "access_variables",
+        "guidelines",
+        "implications"
+      ]
+    }
+  }
+}

@@ -143,7 +143,13 @@ def _b2a_extract_indicators(segments_text: str) -> dict:
         stacklevel=2,
     )
     return llm.run_agent(
-        agent_id="b2a", variables={"segments": segments_text}, temperature=0.2
+        agent_id="fb_indicators_extractor",
+        variables={
+            "segments": segments_text,
+            "object_of_study": "concern",
+            "operational_question": "(not yet generated)",
+        },
+        temperature=0.2,
     )
 
 
@@ -163,12 +169,14 @@ def _b2b_generate_codes(
         stacklevel=2,
     )
     return llm.run_agent(
-        agent_id="b2b",
+        agent_id="fb_code_generator",
         variables={
             "population_assumption": pop_assumption,
             "population_context": pop_context,
             "existing_codes": existing_codes,
             "indicators": indicators_text,
+            "object_of_study": "concern",
+            "operational_question": "(not yet generated)",
         },
         temperature=0.3,
     )
@@ -501,6 +509,23 @@ def b3_generate_hypotheses(
             ),
             {"pid": proyecto_id},
         ).fetchone()
+
+        # Fetch operational question and object of study
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         processes = session.execute(
             text(
                 "SELECT process_description FROM document_processes WHERE proyecto_id = :pid ORDER BY creado_en"
@@ -588,16 +613,21 @@ def b3_generate_hypotheses(
                 processes_text,
                 codes_text,
                 hyp_text,
+                object_of_study,
+                operational_question,
             )
         else:
             response = llm.run_agent(
-                agent_id="b3",
+                agent_id="fb_hypothesis_generator",
                 variables={
                     "population_assumption": pop_assumption,
                     "population_context": pop_ctx[0] if pop_ctx else "",
                     "processes": processes_text,
                     "codes": codes_text,
                     "existing_hypotheses": hyp_text,
+                    "object_of_study": object_of_study,
+                    "operational_question": operational_question
+                    or "(not yet generated)",
                 },
                 temperature=0.4,
             )
@@ -662,10 +692,10 @@ def _b2b_generate_codes_agentic(
     from app.agents.self_refiner import SelfRefinementLoop
 
     loop = SelfRefinementLoop(
-        agent_id="b2b",
+        agent_id="fb_code_generator",
         llm_client=llm,
-        generate_prompt_id="b2b",
-        critic_prompt_id="code_critic",
+        generate_prompt_id="fb_code_generator",
+        critic_prompt_id="util_code_critic",
         max_iterations=3,
         timeout_seconds=300.0,
     )
@@ -677,6 +707,8 @@ def _b2b_generate_codes_agentic(
             "population_context": pop_context,
             "existing_codes": existing_codes,
             "indicators": indicators_text,
+            "object_of_study": "concern",
+            "operational_question": "(not yet generated)",
         },
     )
 
@@ -703,6 +735,8 @@ def b3_generate_hypotheses_agentic(
     processes_text: str,
     codes_text: str,
     hyp_text: str,
+    object_of_study: str = "concern",
+    operational_question: str = "",
 ) -> list[dict]:
     """B3 agentic: ReactRunner con tools para buscar evidencia antes de generar hipotesis.
 
@@ -748,7 +782,7 @@ def b3_generate_hypotheses_agentic(
     )
 
     runner = ReactRunner(
-        agent_id="b3",
+        agent_id="fb_hypothesis_generator",
         llm_client=llm,
         tool_registry=tools,
         max_iterations=5,
@@ -764,6 +798,8 @@ def b3_generate_hypotheses_agentic(
             "processes": processes_text,
             "codes": codes_text,
             "existing_hypotheses": hyp_text,
+            "object_of_study": object_of_study,
+            "operational_question": operational_question or "(not yet generated)",
         },
     )
 
@@ -780,13 +816,15 @@ def b3_generate_hypotheses_agentic(
     # Fallback to single-shot on failure
     logger.warning("Agentic B3 failed: %s. Falling back to single-shot.", result.error)
     response = llm.run_agent(
-        agent_id="b3",
+        agent_id="fb_hypothesis_generator",
         variables={
             "population_assumption": pop_assumption,
             "population_context": pop_context,
             "processes": processes_text,
             "codes": codes_text,
             "existing_hypotheses": hyp_text,
+            "object_of_study": object_of_study,
+            "operational_question": operational_question or "(not yet generated)",
         },
         temperature=0.4,
     )

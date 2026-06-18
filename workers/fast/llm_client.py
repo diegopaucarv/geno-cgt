@@ -244,7 +244,7 @@ def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
         "b2a": "b2a_extract_indicators",
         "b2b": "b2b_generate_codes",
         "b3": "b3_hypothesis_generator",
-        "graph_entity_extractor": "entity_extraction",
+        "util_graph_entity_extractor": "entity_extraction",
     }
     base_name = agent_files.get(agent_id, agent_id)
     extensions = [".md", ".txt"]

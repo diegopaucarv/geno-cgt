@@ -11,7 +11,6 @@ Refs: 3-memomaker.md §5, kb.md §9, AGENTES.md Fase 6a.
 from __future__ import annotations
 
 import logging
-import os
 
 from database import SessionLocal
 from llm_client import LLMClient
@@ -67,6 +66,30 @@ def write_section(sorting_group_id: str, proyecto_id: str) -> dict:
         # ── Load researcher instructions from proyecto ──
         instructions = _load_project_instructions(session, proyecto_id)
 
+        # ── Load research context for natural_writer ──
+        ctx = session.execute(
+            text(
+                "SELECT object_of_study, population_assumption "
+                "FROM proyectos WHERE id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = ctx[0] if ctx and ctx[0] else "concern"
+        pa = ctx[1] if ctx and ctx[1] else {}
+        rq_data = pa.get("research_question", {}) if isinstance(pa, dict) else {}
+        research_question = rq_data.get("research_question", "(not generated)")
+
+        # ── Fetch core_concern from HITL ──
+        cc = session.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = cc[0] if cc and cc[0] else "(not yet identified)"
+
         # ── Call natural_writer (PRO) ──
         logger.info(
             "Writer: drafting section for group %s (%d memos)",
@@ -84,10 +107,13 @@ def write_section(sorting_group_id: str, proyecto_id: str) -> dict:
                 "4. Estrategias y consecuencias\n"
                 "5. Relaciones con otras categorías"
             ),
+            "object_of_study": object_of_study,
+            "research_question": research_question,
+            "core_concern": core_concern,
         }
 
         response = llm.run_agent(
-            agent_id="natural_writer",
+            agent_id="f6a_natural_writer",
             variables=variables,
             max_tokens=4000,
             temperature=0.3,
@@ -148,7 +174,7 @@ def critique_section(draft: str, memo_ids: list[str], proyecto_id: str) -> dict:
         }
 
         response = llm.run_agent(
-            agent_id="writing_critic",
+            agent_id="f6a_writing_critic",
             variables=variables,
             max_tokens=3000,
             temperature=0.2,
@@ -188,64 +214,48 @@ def feel_gaps(draft: str, project_id: str) -> list[dict]:
     Returns:
         [{type, description, severity}]
     """
+    session = SessionLocal()
     try:
         logger.info("GapFeeler: scanning draft (%d chars) for gaps", len(draft))
 
-        flash_model = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
+        # ── Fetch object_of_study ──
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": project_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
 
-        response = llm._call_llm(
-            tier="FLASH",
-            model=flash_model,
-            system_prompt=(
-                "Eres un detector de huecos teóricos para Classic Grounded Theory. "
-                "Escaneas borradores de secciones teóricas en busca de:\n\n"
-                "1. **Claims sin backing**: Afirmaciones que no tienen evidencia "
-                "en memos o incidentes. Indica qué se afirma sin respaldo.\n"
-                "2. **Transiciones débiles**: Saltos abruptos entre conceptos "
-                "sin conectores lógicos. Indica la ubicación del salto.\n"
-                "3. **Propiedades unipolares**: Dimensiones mencionadas solo "
-                "en un extremo (ej: 'alto' sin 'bajo'). Indica la propiedad.\n\n"
-                "Responde SOLO en JSON."
+        # ── Fetch core_concern from HITL ──
+        cc = session.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
-            schema={
-                "type": "object",
-                "properties": {
-                    "gaps": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "enum": [
-                                        "claim_without_backing",
-                                        "weak_transition",
-                                        "unipolar_property",
-                                    ],
-                                },
-                                "description": {"type": "string"},
-                                "severity": {
-                                    "type": "string",
-                                    "enum": ["critical", "major", "minor"],
-                                },
-                            },
-                            "required": ["type", "description", "severity"],
-                        },
-                    }
-                },
-                "required": ["gaps"],
+            {"pid": project_id},
+        ).fetchone()
+        core_concern = cc[0] if cc and cc[0] else "(not yet identified)"
+
+        # ── Call gap_feeler agent (FLASH) ──
+        result = llm.run_agent(
+            "f6a_gap_feeler",
+            variables={
+                "draft": draft,
+                "project_id": project_id,
+                "object_of_study": object_of_study,
+                "core_concern": core_concern,
             },
-            max_tokens=2048,
-            temperature=0.1,
         )
 
-        gaps = response.get("gaps", [])
+        gaps = result.get("gaps", [])
         logger.info("GapFeeler: %d gaps detected in background scan", len(gaps))
         return gaps
 
     except Exception:
         logger.exception("feel_gaps failed (non-blocking, swallowing)")
         return []
+    finally:
+        session.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════

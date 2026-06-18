@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extracted_incidents"
+  ],
+  "properties": {
+    "extracted_incidents": {
+      "type": "array",
+      "description": "Incidents of the category found in the document. Empty array if the category does not appear.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exact_quote",
+          "proposed_property",
+          "paradigm_element"
+        ],
+        "properties": {
+          "exact_quote": {
+            "type": "string",
+            "description": "Exact verbatim quote from the document. Do not paraphrase. Between 10 and 300 words."
+          },
+          "proposed_property": {
+            "type": "string",
+            "description": "Category property this incident reveals (e.g., 'high intensity', 'work context')."
+          },
+          "paradigm_element": {
+            "type": "string",
+            "enum": [
+              "dimension",
+              "condition",
+              "consequence",
+              "strategy"
+            ],
+            "description": "CGT paradigm element: dimension (varying property), condition (circumstance), consequence (outcome), strategy (action)."
+          },
+          "ambiguity_note": {
+            "type": "string",
+            "description": "If the incident could belong to another category, note it here. Empty string if no ambiguity."
+          }
+        }
+      }
+    }
+  }
+}

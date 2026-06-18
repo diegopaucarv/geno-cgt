@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "INTERCAMBIABLES",
+        "NO_INTERCAMBIABLES",
+        "INSUFICIENTES_INCIDENTES"
+      ],
+      "description": "INTERCAMBIABLES: mismo patrón. NO_INTERCAMBIABLES: patrones distintos. INSUFICIENTES_INCIDENTES: menos de 2 incidentes para comparar."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Razonamiento detallado: esencias extraídas de cada incidente, comparación y justificación del veredicto."
+    },
+    "essence_1": {
+      "type": "string",
+      "description": "Esencia del incidente 1: patrón de conducta abstraído de su contexto específico."
+    },
+    "essence_2": {
+      "type": "string",
+      "description": "Esencia del incidente 2."
+    },
+    "essence_3": {
+      "type": "string",
+      "description": "Esencia del incidente 3. Cadena vacía si no se proporcionó un tercer incidente."
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "mantener",
+        "dividir",
+        "refinar",
+        ""
+      ],
+      "description": "Solo si NO_INTERCAMBIABLES. mantener: la categoría es correcta. dividir: crear categorías separadas. refinar: ampliar definición para abarcar la variación. Cadena vacía si INTERCAMBIABLES."
+    },
+    "suggested_action_detail": {
+      "type": "string",
+      "description": "Detalle de la acción sugerida: qué dividir, cómo refinar o por qué mantener. Cadena vacía si no aplica."
+    }
+  }
+}

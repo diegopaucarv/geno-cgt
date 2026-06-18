@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "required": [
+    "hypotheses"
+  ],
+  "properties": {
+    "hypotheses": {
+      "type": "array",
+      "description": "Hipóteses propostas.",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "level",
+          "evidence",
+          "type"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Hipótese como enunciado testável."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific",
+              "emergent"
+            ],
+            "description": "geral | específica | emergente"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "descriptive",
+              "relational",
+              "causal",
+              "process",
+              "typological"
+            ],
+            "description": "Tipo de hipótese."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Evidência concreta citando entrevistados."
+          },
+          "related_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Códigos relacionados."
+          }
+        }
+      }
+    }
+  }
+}

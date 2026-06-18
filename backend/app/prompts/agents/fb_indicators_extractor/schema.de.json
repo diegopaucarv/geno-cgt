@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "indicators"
+  ],
+  "properties": {
+    "indicators": {
+      "type": "array",
+      "description": "Aus den Segmenten extrahierte Verhaltensindikatoren.",
+      "items": {
+        "type": "object",
+        "required": [
+          "key_phrases",
+          "suggested_pattern"
+        ],
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "description": "0-basierter Index des Segments im Eingabe-Array."
+          },
+          "key_phrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exakte wörtliche Phrasen, die das Verhalten offenbaren."
+          },
+          "suggested_pattern": {
+            "type": "string",
+            "description": "Beschreibung des beobachteten Handlungsmusters. Kein Gerundium. Kein theoretischer Jargon."
+          }
+        }
+      }
+    }
+  }
+}

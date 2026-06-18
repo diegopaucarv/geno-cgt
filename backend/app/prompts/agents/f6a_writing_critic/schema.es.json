@@ -1,0 +1,62 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "writing_critic",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "SAT",
+            "MOD",
+            "FORCED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Tipo de infracción: tiempo | sujeto | cita | fidelidad | intro | abstracción"
+              },
+              "location": {
+                "type": "string",
+                "description": "Fragmento de texto donde ocurre la infracción"
+              },
+              "suggestion": {
+                "type": "string",
+                "description": "Corrección sugerida"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "location",
+              "suggestion",
+              "severity"
+            ]
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Resumen de 2-3 oraciones de la evaluación global"
+        }
+      },
+      "required": [
+        "verdict",
+        "issues",
+        "summary"
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "required": [
+    "process_description"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "Beschreibung des zentralen Prozesses, den der Interviewpartner kontinuierlich zu lösen versucht, als Gerundium, mit 2-3 Sätzen Erklärung."
+    }
+  }
+}

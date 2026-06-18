@@ -142,6 +142,20 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
     try:
         pop_assumption = _get_population_assumption(session, proyecto_id)
 
+        # Fetch operational question from Nemotron output
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = pa_data.get("research_question", {})
+        operational_question = rq_data.get("operational_question", "")
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         existing = session.execute(
             text(
                 "SELECT surprising_details, language_patterns, data_production_context, source_document_ids, version FROM population_contexts WHERE proyecto_id = :pid ORDER BY version DESC LIMIT 1"
@@ -164,11 +178,13 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
             existing_context = f"DETALLES: {existing[0]}\nLENGUAJE: {existing[1]}\nPRODUCCIÓN: {existing[2]}"
 
         response = llm.run_agent(
-            agent_id="a1",
+            agent_id="fa_population_context",
             variables={
                 "population_assumption": pop_assumption,
                 "existing_context": existing_context or "(sin contexto previo)",
                 "segments": "\n---\n".join(r[0] for r in segments)[:8000],
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
             },
             temperature=0.3,
         )
@@ -238,6 +254,20 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
     try:
         pop_assumption = _get_population_assumption(session, proyecto_id)
 
+        # Fetch operational question from Nemotron output
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = pa_data.get("research_question", {})
+        operational_question = rq_data.get("operational_question", "")
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         previous = session.execute(
             text(
                 "SELECT process_description, documento_id FROM document_processes WHERE proyecto_id = :pid ORDER BY creado_en DESC LIMIT 1"
@@ -253,7 +283,7 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
         ).fetchall()
         segments_text = "\n\n".join(r[0] for r in segments)
 
-        agent_id = "a2"
+        agent_id = "fa_process_identifier"
         prev_process = (
             previous[0] if previous else "(primer documento — sin comparación)"
         )
@@ -292,6 +322,8 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
                 "previous_process": prev_process,
                 "segments": segments_text,
                 "task_section": task_section_with_hint,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
             },
             temperature=0.3,
         )
@@ -355,6 +387,20 @@ def a3_make_sense(proyecto_id: str) -> dict:
 
         pop_assumption = _get_population_assumption(session, proyecto_id)
 
+        # Fetch operational question from Nemotron output
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = pa_data.get("research_question", {})
+        operational_question = rq_data.get("operational_question", "")
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         pop_ctx = session.execute(
             text(
                 "SELECT surprising_details FROM population_contexts WHERE proyecto_id = :pid ORDER BY version DESC LIMIT 1"
@@ -404,13 +450,15 @@ def a3_make_sense(proyecto_id: str) -> dict:
         )
 
         response = llm.run_agent(
-            agent_id="a3",
+            agent_id="fa_sense_maker",
             variables={
                 "population_assumption": pop_assumption,
                 "population_context": pop_ctx[0] if pop_ctx else "",
                 "processes": processes_text,
                 "existing_hypotheses": hyp_text,
                 "task_section": task_section,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
             },
             temperature=0.4,
         )
@@ -611,22 +659,15 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
         text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
         {"pid": proyecto_id},
     ).fetchone()
+    pa_data = config[0] if config and config[0] else {}
     obj = "concern"  # default
-    if config and config[0]:
-        obj = (
-            config[0].get("object_of_study", "concern")
-            if isinstance(config[0], dict)
-            else "concern"
+    if isinstance(pa_data, dict):
+        obj = pa_data.get("object_of_study", "concern")
+        operational_question = pa_data.get("research_question", {}).get(
+            "operational_question", ""
         )
-
-    # Instrucciones segun objeto de estudio
-    instructions = {
-        "concern": "Busca el patron de COMPORTAMIENTO recurrente. Que intenta resolver este entrevistado una y otra vez?",
-        "emotion": "Busca el patron EMOCIONAL recurrente. Que siente este entrevistado una y otra vez? Expresalo como gerundio (ej. 'Sintiendo culpa', 'Arrpentintiendose').",
-        "behavior": "Busca la CONDUCTA observable recurrente. Que hace este entrevistado una y otra vez?",
-        "discourse": "Busca el patron DISCURSIVO recurrente. Como construye su narrativa este entrevistado?",
-        "identity": "Busca el TRABAJO IDENTITARIO recurrente. Como negocia su identidad este entrevistado?",
-    }
+    else:
+        operational_question = ""
 
     # Obtener baseline_data segments
     baseline = session.execute(
@@ -648,14 +689,12 @@ def _extract_prime_mover(session, documento_id: str, proyecto_id: str) -> dict |
     ).fetchone()
 
     response = llm.run_agent(
-        "prime_mover_extractor",
+        "fa_prime_mover_extractor",
         variables={
             "document_name": doc_name[0] if doc_name else "",
             "baseline_segments": segments_text[:6000],
             "object_of_study": obj,
-            "object_of_study_instructions": instructions.get(
-                obj, instructions["concern"]
-            ),
+            "operational_question": operational_question or "(not yet generated)",
         },
         temperature=0.3,
     )
@@ -842,6 +881,34 @@ def process_document_agents_a(
                 logger.warning("Core pattern extraction failed: %s", e)
                 results["core_pattern"] = None
             checkpoint(session, documento_id, STEP, "completed")
+
+        # ── Step 0.7: F2.5 — Every 3 documents, verify pattern convergence (PRO) ──
+        if self._aborted:
+            raise TaskCancelledError()
+        doc_count = session.execute(
+            text(
+                "SELECT COUNT(*) FROM document_processes "
+                "WHERE proyecto_id = :pid AND prime_mover_confidence IS NOT NULL"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()[0]
+
+        if doc_count >= 3 and doc_count % 3 == 0:
+            logger.info(
+                "F2.5: Dispatching verify_core_pattern for project=%s (doc %d)",
+                proyecto_id[:8],
+                doc_count,
+            )
+            try:
+                app.send_task(
+                    "verify_core_pattern",
+                    args=[proyecto_id],
+                    queue="heavy",
+                )
+                results["pattern_verification_dispatched"] = True
+            except Exception as e:
+                logger.warning("F2.5 verify_core_pattern dispatch failed: %s", e)
+                results["pattern_verification_dispatched"] = False
 
         # ── Update estado → procesando ──
         session.execute(
@@ -1044,13 +1111,13 @@ from literature import compare_literature as _compare_literature_impl
 from literature import critique_literature_dialogue as _critique_literature_impl
 
 
-@app.task(name="literature_comparer")
+@app.task(name="f6c_literature_comparer")
 def task_literature_comparer(proyecto_id: str, literature_fragments: list[str]) -> dict:
     """F5.4: Compara fragmentos de literatura contra la teoría fundamentada (PRO)."""
     return _compare_literature_impl(proyecto_id, literature_fragments)
 
 
-@app.task(name="literature_critic")
+@app.task(name="f6c_literature_critic")
 def task_literature_critic(comparison_table: dict) -> dict:
     """F5.4: Evalúa si el diálogo con literatura fuerza coincidencias o trata la literatura como autoridad (PRO)."""
     return _critique_literature_impl(comparison_table)
@@ -1064,13 +1131,13 @@ from applicability import critique_applicability as _critique_applicability_impl
 from applicability import generate_applicability as _generate_applicability_impl
 
 
-@app.task(name="applicability_engine")
+@app.task(name="f6d_applicability_engine")
 def task_applicability_engine(proyecto_id: str) -> dict:
     """F5.5: Genera directrices de aplicabilidad desde la teoría fundamentada (PRO)."""
     return _generate_applicability_impl(proyecto_id)
 
 
-@app.task(name="applicability_critic")
+@app.task(name="f6d_applicability_critic")
 def task_applicability_critic(directrices: dict) -> dict:
     """F5.5: Evalúa si las directrices de aplicabilidad son genuinas, accesibles y modificables (PRO)."""
     return _critique_applicability_impl(directrices)
@@ -1085,19 +1152,19 @@ from writer import feel_gaps as _feel_gaps_impl
 from writer import write_section as _write_section_impl
 
 
-@app.task(name="natural_writer")
+@app.task(name="f6a_natural_writer")
 def task_natural_writer(sorting_group_id: str, proyecto_id: str) -> dict:
     """F5.3: Redacta una sección teórica desde memos ordenados (PRO)."""
     return _write_section_impl(sorting_group_id, proyecto_id)
 
 
-@app.task(name="writing_critic")
+@app.task(name="f6a_writing_critic")
 def task_writing_critic(draft: str, memo_ids: list[str], proyecto_id: str) -> dict:
     """F5.3: Evalúa un borrador contra reglas CGT (PRO)."""
     return _critique_section_impl(draft, memo_ids, proyecto_id)
 
 
-@app.task(name="gap_feeler")
+@app.task(name="f6a_gap_feeler")
 def task_gap_feeler(draft: str, project_id: str) -> list[dict]:
     """F5.3: Monitorea escritura en background detectando huecos (FLASH, non-blocking)."""
     return _feel_gaps_impl(draft, project_id)
@@ -1306,6 +1373,63 @@ def _prepare_playground_for_project(proyecto_id: str) -> None:
             connector = GhostConnector(s2, llm)
             ghosts = connector.generate_ghost_blobs(proyecto_id)
             logger.info("Playground prep: generated %d ghost blobs", len(ghosts))
+
+            # ── F6b: Tag all memos with theoretical coding families ──
+            try:
+                from theoretical import tag_memo_theoretically as _tmt
+
+                memos = s2.execute(
+                    text("SELECT id FROM memos WHERE proyecto_id = :pid"),
+                    {"pid": proyecto_id},
+                ).fetchall()
+                for memo_row in memos:
+                    try:
+                        _tmt(memo_row[0], proyecto_id)
+                    except Exception:
+                        pass  # per-memo failure is non-blocking
+                logger.info(
+                    "F6b: tagged %d memos for project=%s",
+                    len(memos),
+                    proyecto_id[:8],
+                )
+            except Exception as e:
+                logger.warning("F6b memo tagging failed (non-blocking): %s", e)
+
+            # ── F6b: Detect ecosystem gaps ──
+            try:
+                from llm_client import LLMClient as _llm
+
+                _lc = _llm()
+                gaps = s2.execute(
+                    text(
+                        "SELECT DISTINCT category_id FROM ghost_blobs "
+                        "WHERE proyecto_id = :pid AND suggested_category_id IS NULL"
+                    ),
+                    {"pid": proyecto_id},
+                ).fetchall()
+                unlinked_ghosts = len(gaps) if gaps else 0
+                if unlinked_ghosts > 0:
+                    logger.info(
+                        "F6b: %d unlinked ghost blobs in project=%s",
+                        unlinked_ghosts,
+                        proyecto_id[:8],
+                    )
+                    # Dispatch gap_alerter (PRO) if significant gaps
+                    if unlinked_ghosts >= 3:
+                        try:
+                            _lc.run_agent(
+                                "f6b_gap_alerter",
+                                variables={
+                                    "core_concern": "(see hitl_decisions)",
+                                    "object_of_study": "concern",
+                                    "gaps_summary": f"{unlinked_ghosts} unlinked ghost blobs",
+                                },
+                            )
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.debug("F6b gap detection skipped: %s", e)
+
         finally:
             s2.close()
     except Exception as e:
@@ -1493,13 +1617,21 @@ def task_a01_integrate_paradigm(code_id: str, proyecto_id: str) -> dict:
             {"cid": code_id},
         ).fetchone()
 
+        # Fetch object_of_study for paradigm context
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         response = llm.run_agent(
-            "paradigm_integrator",
+            "fe_paradigm_integrator",
             variables={
                 "current_paradigm": _json.dumps(current_state, ensure_ascii=False),
                 "new_incidents": "\n---\n".join(r[0] for r in new_incidents[:5]),
                 "code_name": code_def[0],
                 "code_definition": code_def[1] or "",
+                "object_of_study": object_of_study,
             },
         )
 
@@ -1637,6 +1769,18 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
 
+        # Fetch operational question and research question from Nemotron output
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+        research_question = rq_data.get("question", "")  # the full question Q1+Q2
+
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
             {"pid": proyecto_id},
@@ -1668,17 +1812,19 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
         )
 
         response = llm.run_agent(
-            "main_concern_proposer",
+            "fc_main_concern_proposer",
             variables={
                 "all_codes": all_codes,
                 "all_memos": all_memos,
                 "prime_movers_per_document": prime_movers_text,
                 "researcher_feedback": "",
                 "object_of_study": object_of_study,
+                "research_question": research_question or "",
+                "operational_question": operational_question or "(not yet generated)",
             },
         )
         return {
-            "main_concern": response.get("main_concern", ""),
+            "core_concern": response.get("core_concern", ""),
             "confidence": response.get("confidence", "LOW"),
             "recurring_problems": response.get("recurring_problems", []),
             "relevant_population_dimensions": response.get(
@@ -1721,8 +1867,10 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
         )
 
         response = llm.run_agent(
-            "core_emergence_proposer",
+            "fc_core_emergence_proposer",
             variables={
+                "core_concern": "(see task_a14 for confirmed core concern)",
+                "object_of_study": "concern",
                 "all_codes": all_codes,
                 "code_statistics": stats_text,
             },
@@ -1762,7 +1910,7 @@ def task_a16_interchangeability(code_id: str, proyecto_id: str) -> dict:
             inc_texts.append("")
 
         response = llm.run_agent(
-            "a16",
+            "ff_interchangeability_tester",
             variables={
                 "code_label": code[0],
                 "code_definition": code[1] or "",
@@ -1785,7 +1933,7 @@ def task_a16_interchangeability(code_id: str, proyecto_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@app.task(name="research_question_builder")
+@app.task(name="fc_research_question_builder")
 def task_research_question_builder(proyecto_id: str) -> dict:
     """F0.6: Generates formal CGT research question from population assumption.
 
@@ -1832,7 +1980,7 @@ def task_research_question_builder(proyecto_id: str) -> dict:
         )
 
         response = llm.run_agent(
-            "research_question_builder",
+            "fc_research_question_builder",
             variables={
                 "object_of_study": object_of_study,
                 "population_description": population_description or "(not specified)",
@@ -1840,6 +1988,11 @@ def task_research_question_builder(proyecto_id: str) -> dict:
                 "spatial_frame": spatial_frame or "(not specified)",
                 "temporal_frame": temporal_frame or "(not specified)",
                 "coding_styles": coding_styles,
+                "processing_verb": pa.get("processing_verb", "resolve"),
+                "processing_gerund": pa.get("processing_gerund", "resolving"),
+                "processing_verb_conjugated": pa.get(
+                    "processing_verb_conjugated", "resolve"
+                ),
             },
         )
 
@@ -1851,6 +2004,28 @@ def task_research_question_builder(proyecto_id: str) -> dict:
             "key_dimensions": response.get("key_dimensions", []),
             "generated_at": __import__("datetime").datetime.utcnow().isoformat(),
         }
+
+        # ── Critic: evaluate the generated research question ──
+        try:
+            critic = llm.run_agent(
+                "fc_research_question_critic",
+                variables={
+                    "research_question": result_data["research_question"],
+                    "operational_question": result_data["operational_question"],
+                    "object_of_study": object_of_study,
+                    "population_description": population_description
+                    or "(not specified)",
+                    "processing_verb": pa.get("processing_verb", "resolve"),
+                    "key_dimensions": json.dumps(result_data.get("key_dimensions", [])),
+                },
+            )
+            result_data["critic_verdict"] = critic.get("verdict", "SAT")
+            result_data["critic_rationale"] = critic.get("rationale", "")
+            result_data["critic_suggestions"] = critic.get("suggestions", [])
+            logger.info("RQ critic verdict: %s", result_data["critic_verdict"])
+        except Exception as e:
+            logger.warning("RQ critic failed (non-blocking): %s", e)
+            result_data["critic_verdict"] = "ERROR"
 
         # Merge into existing population_assumption
         updated_pa = dict(pa)
@@ -1888,6 +2063,22 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
     """A04: Agrupador. Toma codigos y los agrupa por interchangeability of indicators."""
     s = SessionLocal()
     try:
+        # Fetch operational question and object of study
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         codes = s.execute(
             text(
                 "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id=:pid"
@@ -1917,10 +2108,12 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
         constructs_text = "\n\n".join(constructs)
 
         response = llm.run_agent(
-            "agrupador",
+            "ff_agrupador",
             variables={
                 "constructs": constructs_text,
                 "population_assumption": _get_population_assumption(s, proyecto_id),
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
             },
         )
 
@@ -2078,7 +2271,7 @@ def invoke_graph(self, proyecto_id: str, documento_id: str = None) -> dict:
         return {
             "status": "completed",
             "current_step": result.get("current_step", ""),
-            "main_concern": result.get("main_concern", ""),
+            "core_concern": result.get("core_concern", ""),
             "hypotheses_count": len(result.get("candidate_hypotheses", [])),
         }
     except ImportError as e:
@@ -2152,7 +2345,7 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
         if current_state == "finding_cc":
             result_a = task_main_concern_pipeline(proyecto_id)
             if result_a.get("status") != "completed":
-                return {"status": "paused", "phase": "A", "gate": "main_concern"}
+                return {"status": "paused", "phase": "A", "gate": "pattern_of_interest"}
 
             result_cc = task_core_emergence_pipeline(proyecto_id)
             if result_cc.get("status") != "completed":
@@ -2217,6 +2410,30 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
         s.close()
 
 
+@app.task(name="verify_core_pattern", base=AbortableTask, bind=True)
+def task_verify_core_pattern(self, proyecto_id: str) -> dict:
+    """F2.5: Verifica convergencia de patrones cada 3 docs (PRO)."""
+    from pattern_verifier import verify_core_pattern as _impl
+
+    return _impl(proyecto_id)
+
+
+@app.task(name="f6b_memo_theoretical_tagger", base=AbortableTask, bind=True)
+def task_memo_theoretical_tagger(self, memo_id: str, proyecto_id: str) -> dict:
+    """F6b: Clasifica memo en 12 familias canónicas (FLASH)."""
+    from theoretical import tag_memo_theoretically as _impl
+
+    return _impl(memo_id, proyecto_id)
+
+
+@app.task(name="final_report", base=AbortableTask, bind=True)
+def task_final_report(self, proyecto_id: str) -> dict:
+    """F6e: Genera reporte teórico final (PRO, nodo terminal)."""
+    from reporter import generate_final_report as _impl
+
+    return _impl(proyecto_id)
+
+
 @app.task(
     name="main_concern_pipeline",
     base=AbortableTask,
@@ -2232,18 +2449,18 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         existing = s.execute(
             text(
                 "SELECT status FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
                 "ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
         ).fetchone()
 
         if existing and existing[0] == "accepted":
-            return {"status": "completed", "gate": "main_concern"}
+            return {"status": "completed", "gate": "pattern_of_interest"}
         if existing and existing[0] == "pending":
             return {
                 "status": "paused",
-                "gate": "main_concern",
+                "gate": "pattern_of_interest",
                 "awaiting": "researcher",
             }
 
@@ -2253,7 +2470,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             fb_row = s.execute(
                 text(
                     "SELECT researcher_feedback FROM hitl_decisions "
-                    "WHERE project_id = :pid AND gate_name = 'main_concern' "
+                    "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
                     "AND status = 'modified' ORDER BY creado_en DESC LIMIT 1"
                 ),
                 {"pid": proyecto_id},
@@ -2270,6 +2487,18 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
+        # Fetch operational question and research question from Nemotron output
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+        research_question = rq_data.get("question", "")
 
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
@@ -2301,21 +2530,23 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         )
 
         proposal = llm.run_agent(
-            "main_concern_proposer",
+            "fc_main_concern_proposer",
             variables={
                 "all_codes": all_codes,
                 "all_memos": all_memos,
                 "prime_movers_per_document": prime_movers_text,
                 "researcher_feedback": researcher_feedback,
                 "object_of_study": object_of_study,
+                "research_question": research_question or "",
+                "operational_question": operational_question or "(not yet generated)",
             },
         )
 
         # ── Critic ──
         critic = llm.run_agent(
-            "main_concern_critic",
+            "fc_main_concern_critic",
             variables={
-                "main_concern": proposal.get("main_concern", ""),
+                "core_concern": proposal.get("core_concern", ""),
                 "all_codes": all_codes,
                 "prime_movers_per_document": prime_movers_text,
                 "object_of_study": object_of_study,
@@ -2325,9 +2556,13 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         # ── HITL gate ──
         from agents.transitions import hitl_gate
 
-        hitl_gate(s, proyecto_id, "main_concern", proposal, critic)
+        hitl_gate(s, proyecto_id, "pattern_of_interest", proposal, critic)
 
-        return {"status": "paused", "gate": "main_concern", "awaiting": "researcher"}
+        return {
+            "status": "paused",
+            "gate": "pattern_of_interest",
+            "awaiting": "researcher",
+        }
 
     except Exception:
         logger.exception("main_concern_pipeline failed for %s", proyecto_id)
@@ -2391,18 +2626,74 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             f"- {r[0]}: {r[1]} segmentos en {r[2]} documentos" for r in stats_rows
         )
 
+        # Fetch object_of_study from project config
+        oos_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = "concern"
+        if oos_row and oos_row[0]:
+            config = oos_row[0] if isinstance(oos_row[0], dict) else {}
+            object_of_study = config.get("object_of_study", "concern")
+
+        # Fetch confirmed core_concern from HITL decisions
+        mc_row = s.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
+
         proposal = llm.run_agent(
-            "core_emergence_proposer",
-            variables={"all_codes": all_codes, "code_statistics": stats_text},
+            "fc_core_emergence_proposer",
+            variables={
+                "core_concern": core_concern,
+                "object_of_study": object_of_study,
+                "all_codes": all_codes,
+                "code_statistics": stats_text,
+            },
         )
 
-        critic = llm.run_agent(
-            "core_emergence_critic",
-            variables={
-                "core_category_candidates": proposal.get(
-                    "core_category_candidates", []
+        # Build incidents for each core category candidate
+        candidates = proposal.get("core_category_candidates", [])
+        candidate_incidents = []
+        for cand in candidates:
+            code_id = cand.get("code_id", "")
+            incidents = s.execute(
+                text(
+                    "SELECT s.texto, d.original_filename "
+                    "FROM codigos_segmento cs "
+                    "JOIN segmentos s ON cs.segmento_id = s.id "
+                    "JOIN documentos d ON s.documento_id = d.id "
+                    "WHERE cs.categoria_id = :cid LIMIT 3"
                 ),
-                "code_incidents": "(ver codigos_segmento)",
+                {"cid": code_id},
+            ).fetchall()
+            cand_with_incidents = dict(cand)
+            cand_with_incidents["incidents"] = [
+                {"text": inc[0], "document": inc[1]} for inc in incidents
+            ]
+            candidate_incidents.append(cand_with_incidents)
+
+        # Build document list
+        docs = s.execute(
+            text(
+                "SELECT id, original_filename FROM documentos WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        document_list = "\n".join(f"- {d[0]}: {d[1]}" for d in docs)
+
+        critic = llm.run_agent(
+            "fc_core_emergence_critic",
+            variables={
+                "core_category_candidates_with_incidents": json.dumps(
+                    candidate_incidents
+                ),
+                "document_list": document_list,
             },
         )
 
@@ -2457,37 +2748,74 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
         ).fetchall()
         all_codes = "\n".join(f"- {c[0]}: {c[1]}: {c[2]}" for c in codes)
 
-        cooc_rows = s.execute(
+        # Fetch object_of_study from project config
+        oos_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = "concern"
+        if oos_row and oos_row[0]:
+            config = oos_row[0] if isinstance(oos_row[0], dict) else {}
+            object_of_study = config.get("object_of_study", "concern")
+
+        # Fetch confirmed core_concern from HITL decisions
+        mc_row = s.execute(
             text(
-                "SELECT c1.nombre, c2.nombre, COUNT(*) "
-                "FROM codigos_segmento cs1 "
-                "JOIN codigos_segmento cs2 ON cs1.segmento_id = cs2.segmento_id "
-                "JOIN categorias c1 ON cs1.categoria_id = c1.id "
-                "JOIN categorias c2 ON cs2.categoria_id = c2.id "
-                "WHERE c1.proyecto_id = :pid AND c2.proyecto_id = :pid2 "
-                "AND c1.id < c2.id GROUP BY c1.nombre, c2.nombre LIMIT 100"
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
-            {"pid": proyecto_id, "pid2": proyecto_id},
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
+
+        # Fetch accepted core_category from HITL decisions
+        cc_row = s.execute(
+            text(
+                "SELECT proposal->>'core_category' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_category = cc_row[0] if cc_row and cc_row[0] else "(not yet confirmed)"
+
+        # Fetch existing categories with entity_type
+        existing_cats = s.execute(
+            text(
+                "SELECT id, nombre, entity_type, definicion "
+                "FROM categorias WHERE proyecto_id = :pid AND entity_type IS NOT NULL"
+            ),
+            {"pid": proyecto_id},
         ).fetchall()
-        cooc_text = "\n".join(
-            f"- {r[0]} ↔ {r[1]}: {r[2]} co-occurrences" for r in cooc_rows
+        existing_categories = (
+            "\n".join(f"- [{cat[2]}] {cat[1]}: {cat[3]}" for cat in existing_cats)
+            if existing_cats
+            else "(no existing categories with entity_type yet)"
         )
 
         proposal = llm.run_agent(
-            "selective_reduction_proposer",
+            "fd_selective_reduction_proposer",
             variables={
-                "core_category": "(ver hitl_decisions para core_category aceptada)",
-                "all_codes": all_codes,
-                "code_relationships": cooc_text,
+                "core_concern": core_concern,
+                "object_of_study": object_of_study,
+                "core_category": core_category,
+                "all_open_codes": all_codes,
+                "existing_categories": existing_categories,
             },
         )
 
+        # Extract reduced_codes and discarded_codes from proposal for the critic
+        reduced_codes = proposal.get("reduced_codes", [])
+        discarded_codes = proposal.get("discarded_codes", [])
+
         critic = llm.run_agent(
-            "selective_reduction_critic",
+            "fd_selective_reduction_critic",
             variables={
-                "reduction_proposal": proposal,
-                "core_category": "(ver hitl_decisions)",
-                "all_codes": all_codes,
+                "reduced_codes": json.dumps(reduced_codes),
+                "discarded_codes": json.dumps(discarded_codes),
+                "all_open_codes": all_codes,
+                "object_of_study": object_of_study,
             },
         )
 
@@ -2696,7 +3024,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
         # ── Obtener categorías con score ≥ 4 ──
         cats = s.execute(
             text(
-                "SELECT id, nombre, definicion, version, puntaje_relevancia "
+                "SELECT id, nombre, definicion, version, puntaje_relevancia, entity_type "
                 "FROM categorias "
                 "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 4 "
                 "ORDER BY puntaje_relevancia DESC"
@@ -2716,6 +3044,13 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             {"pid": proyecto_id},
         ).fetchall()
 
+        # ── Obtener object_of_study del proyecto ──
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         results = {"project_id": proyecto_id, "categories": {}}
         total_expansions = 0
         theosampler_activations = 0
@@ -2726,6 +3061,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             cat_name = cat_row[1]
             cat_def = cat_row[2] or ""
             cat_version = cat_row[3] or 1
+            cat_entity_type = cat_row[5] or "PROCESS"
 
             # ── F4.2: Compute 4-signal saturation panel ──
             panel = _compute_saturation_panel(s, cat_id, proyecto_id)
@@ -2857,25 +3193,27 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
 
                 # ── C1: Proposer (PRO) ──
                 proposal = llm.run_agent(
-                    "core_saturation_proposer",
+                    "fe_core_saturation_proposer",
                     variables={
                         "category_label": cat_name,
                         "category_definition": cat_def,
-                        "version": str(cat_version),
-                        "current_properties": _get_paradigm_snapshot(s, cat_id),
+                        "category_id": cat_id,
+                        "entity_type": cat_entity_type,
+                        "current_paradigm_state": _get_paradigm_snapshot(s, cat_id),
+                        "new_incidents": incident_text,
                         "document_name": doc_name,
-                        "incident_text": incident_text,
+                        "document_id": doc_id,
+                        "object_of_study": object_of_study,
                     },
                 )
 
                 # ── C2: Critic (FLASH) ──
                 critic = llm.run_agent(
-                    "core_saturation_critic",
+                    "fe_core_saturation_critic",
                     variables={
-                        "elaboration_result": proposal,
-                        "category_definition": cat_def,
-                        "paradigm_state": _get_paradigm_snapshot(s, cat_id),
-                        "incident_text": incident_text,
+                        "proposed_expansions": json.dumps(proposal),
+                        "current_paradigm_state": _get_paradigm_snapshot(s, cat_id),
+                        "new_incidents": incident_text,
                     },
                     tier="FAST",
                 )
@@ -3071,19 +3409,62 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
 
         saturated_cats = "\n".join(f"- [{c[3]}] {c[1]}: {c[2]}" for c in cats)
 
+        # Fetch object_of_study from proyectos
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
+        # Fetch research_question from population_assessment JSONB
+        pa_row = s.execute(
+            text("SELECT population_assessment FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        research_question = rq_data.get("question", "")
+
+        # Fetch core_category from accepted core_emergence HITL decision
+        cc_row = s.execute(
+            text(
+                "SELECT proposal FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        cc_data = cc_row[0] if cc_row else {}
+        core_candidates = (
+            cc_data.get("core_category_candidates", [])
+            if isinstance(cc_data, dict)
+            else []
+        )
+        core_category = (
+            core_candidates[0].get("name", "")
+            if core_candidates
+            else "(pending core_emergence HITL)"
+        )
+
         proposal = llm.run_agent(
-            "database_a_proposer",
+            "ff_database_a_proposer",
             variables={
                 "saturated_categories": saturated_cats,
-                "core_category": "(ver hitl_decisions)",
+                "core_category": core_category,
+                "object_of_study": object_of_study,
+                "research_question": research_question or "",
             },
         )
 
         critic = llm.run_agent(
-            "database_a_critic",
+            "ff_database_a_critic",
             variables={
                 "nodes": proposal.get("nodes", []),
                 "saturated_categories": saturated_cats,
+                "object_of_study": object_of_study,
+                "core_category": core_category,
             },
         )
 
@@ -3191,21 +3572,55 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             else "(sin hipótesis confirmadas)"
         )
 
+        # Fetch object_of_study from proyectos
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
+        # Fetch research_question from population_assessment JSONB
+        pa_row = s.execute(
+            text("SELECT population_assessment FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        research_question = rq_data.get("question", "")
+
+        # Fetch core_concern from accepted HITL decision
+        mc_row = s.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
+
         proposal = llm.run_agent(
-            "database_b_proposer",
+            "ff_database_b_proposer",
             variables={
                 "nodes": nodes_text,
                 "conceptual_relationships": rels_text,
                 "hypotheses": hyps_text,
+                "object_of_study": object_of_study,
+                "research_question": research_question or "",
+                "core_concern": core_concern,
             },
         )
 
         critic = llm.run_agent(
-            "database_b_critic",
+            "ff_database_b_critic",
             variables={
                 "edges": proposal.get("edges", []),
                 "nodes": nodes_text,
                 "hypotheses": hyps_text,
+                "object_of_study": object_of_study,
+                "core_concern": core_concern,
             },
         )
 

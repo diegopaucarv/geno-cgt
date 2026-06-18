@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "synthesis": {
+      "type": "string",
+      "description": "Resumo de no máximo 500 palavras"
+    },
+    "key_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "emerging_relationships": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "knowledge_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "synthesis"
+  ]
+}

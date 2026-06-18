@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prime_mover",
+    "confidence"
+  ],
+  "properties": {
+    "prime_mover": {
+      "type": "string",
+      "description": "Kernmuster, ausgedrückt als Gerundium."
+    },
+    "description": {
+      "type": "string",
+      "description": "Narrative Beschreibung (2-3 Sätze), wie dieses Muster im Dokument erscheint."
+    },
+    "evidence_quotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Wörtliche Zitate aus baseline_data, die den Prime Mover stützen."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Konfidenz in der Extraktion."
+    },
+    "insufficient_data": {
+      "type": "boolean",
+      "description": "true wenn nicht genügend baseline_data vorhanden ist, um einen Prime Mover zu extrahieren."
+    },
+    "alternative_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Plausible alternative Muster, wenn die Konfidenz nicht HIGH ist."
+    }
+  }
+}

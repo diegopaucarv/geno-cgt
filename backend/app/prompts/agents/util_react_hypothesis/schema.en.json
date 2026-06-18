@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "required": [
+    "hypotheses"
+  ],
+  "properties": {
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "level",
+          "related_codes",
+          "evidence_segments"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Hypothesis in 1-2 sentences."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific",
+              "emergent"
+            ],
+            "description": "Level of abstraction."
+          },
+          "related_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of the codes it relates."
+          },
+          "evidence_segments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs of segments that support the hypothesis."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence based on quantity and quality of evidence."
+          }
+        }
+      }
+    }
+  }
+}

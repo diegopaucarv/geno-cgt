@@ -1,0 +1,163 @@
+{
+  "type": "object",
+  "required": [
+    "nodes",
+    "core_node_label",
+    "model_summary"
+  ],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "description": "Lista plana de todos os nós teóricos. Exatamente um nó tem is_core=true.",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "entity_type",
+          "definition",
+          "source_category_id",
+          "is_core",
+          "grounding_incidents",
+          "properties_inherited"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerúndio ou substantivo conceitual. O nome formal deste nó teórico."
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "core_category",
+              "condition",
+              "consequence",
+              "strategy",
+              "dimension"
+            ],
+            "description": "Tipo de entidade canônico. Exatamente um nó deve ser core_category."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definição formal integrada com maior abstração que a categoria fonte. Tempo presente, conceitos como sujeitos."
+          },
+          "source_category_id": {
+            "type": "string",
+            "description": "UUID da categoria saturada de origem."
+          },
+          "source_category_label": {
+            "type": "string",
+            "description": "Rótulo original da categoria fonte, para rastreabilidade."
+          },
+          "is_core": {
+            "type": "boolean",
+            "description": "true APENAS para o nó central. Exatamente um nó no array deve ter isso como true."
+          },
+          "grounding_incidents": {
+            "type": "array",
+            "description": "Incidentes representativos que ancoram este nó nos dados.",
+            "items": {
+              "type": "object",
+              "required": [
+                "document_name",
+                "quote"
+              ],
+              "properties": {
+                "document_name": {
+                  "type": "string"
+                },
+                "incident_id": {
+                  "type": "string",
+                  "description": "UUID do incidente"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "Citação textual curta (1–2 frases)."
+                }
+              }
+            }
+          },
+          "properties_inherited": {
+            "type": "array",
+            "description": "Todas as propriedades herdadas da categoria fonte.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "gradient",
+                "dimension"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Nome da propriedade."
+                },
+                "gradient": {
+                  "type": "string",
+                  "description": "Extremos polares (ex., 'superficial ↔ profundo')."
+                },
+                "dimension": {
+                  "type": "string",
+                  "description": "Que dimensão esta propriedade descreve?"
+                },
+                "source_code_id": {
+                  "type": "string",
+                  "description": "UUID do código do qual esta propriedade emergiu."
+                }
+              }
+            }
+          },
+          "needs_more_data": {
+            "type": "boolean",
+            "description": "true se este nó se apoia em evidência escassa (< 3 incidentes) e se beneficiaria de mais dados."
+          },
+          "needs_more_data_rationale": {
+            "type": "string",
+            "description": "Se needs_more_data: que tipo de dados fortaleceria este nó?"
+          }
+        }
+      }
+    },
+    "core_node_label": {
+      "type": "string",
+      "description": "O rótulo do único nó com is_core=true. Campo de conveniência para referência rápida."
+    },
+    "model_summary": {
+      "type": "object",
+      "required": [
+        "total_nodes",
+        "entity_type_distribution",
+        "narrative"
+      ],
+      "properties": {
+        "total_nodes": {
+          "type": "integer"
+        },
+        "entity_type_distribution": {
+          "type": "object",
+          "description": "Contagem por entity_type.",
+          "properties": {
+            "core_category": {
+              "type": "integer"
+            },
+            "condition": {
+              "type": "integer"
+            },
+            "consequence": {
+              "type": "integer"
+            },
+            "strategy": {
+              "type": "integer"
+            },
+            "dimension": {
+              "type": "integer"
+            }
+          }
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Um resumo narrativo de 3–5 frases do modelo teórico: o que a categoria central processa, sob quais condições, usando quais estratégias, produzindo quais consequências, variando ao longo de quais dimensões."
+        }
+      }
+    }
+  }
+}

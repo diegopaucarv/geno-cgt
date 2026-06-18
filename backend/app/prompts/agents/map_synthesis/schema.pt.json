@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "variations_observed",
+    "key_evidence"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Resumo de 3-8 frases de como o código se manifesta neste documento. Se o código não aparecer: 'O código não se manifesta neste documento.'"
+    },
+    "variations_observed": {
+      "type": "array",
+      "description": "Variações internas observadas: graus, matizes, diferenças contextuais. Array vazio se o código for uniforme neste documento.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "key_evidence": {
+      "type": "array",
+      "description": "Evidência textual que respalda o resumo. Array vazio se não houver evidência.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exact_quote",
+          "claim"
+        ],
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "description": "Índice do segmento na lista fornecida (base 0). Opcional."
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Citação textual exata do segmento. Não parafrasear."
+          },
+          "claim": {
+            "type": "string",
+            "description": "O que a análise afirma que esta citação evidencia."
+          }
+        }
+      }
+    },
+    "is_anomaly": {
+      "type": "boolean",
+      "description": "true se este documento for um caso atípico para este código (comportamento que contradiz ou não se encaixa no padrão geral)."
+    },
+    "anomaly_note": {
+      "type": "string",
+      "description": "Se is_anomaly=true, explicar por que este documento é atípico. String vazia se não for anomalia."
+    }
+  }
+}

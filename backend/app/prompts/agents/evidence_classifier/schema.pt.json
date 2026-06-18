@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "classification"
+  ],
+  "properties": {
+    "classification": {
+      "type": "string",
+      "enum": [
+        "POSITIVE",
+        "CONTRAST",
+        "NO_EVIDENCE"
+      ],
+      "description": "POSITIVE: evidência direta a favor. CONTRAST: confirma por oposição. NO_EVIDENCE: sem dado relevante ou ambíguo."
+    },
+    "brief_rationale": {
+      "type": "string",
+      "description": "Uma frase justificando a classificação, citando o segmento-chave."
+    }
+  }
+}

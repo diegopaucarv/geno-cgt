@@ -1,0 +1,138 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "convergence_assessment",
+      "converging",
+      "diverging",
+      "recommendation"
+    ],
+    "properties": {
+      "convergence_assessment": {
+        "type": "string",
+        "description": "Narrative Synthese der 4-Fragen-Bewertung. Muss explizit Q1 (Oberflächenähnlichkeit), Q2 (strukturelle Konvergenz), Q3 (Populationskohärenz) und Q4 (Direktionalität) beantworten. Mit dem Gesamtbild der Konvergenz abschließen."
+      },
+      "converging": {
+        "type": "array",
+        "description": "Elemente, die Konvergenz über die 3 Muster zeigen. Was ist konsistent, geteilt oder gegenseitig verstärkend?",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "element",
+            "supporting_patterns",
+            "strength"
+          ],
+          "properties": {
+            "element": {
+              "type": "string",
+              "description": "Das konvergierende Element (z.B. ein geteilter Prozess, Mechanismus, Anliegen, emotionales Register, Stakeholder oder strukturelles Merkmal)."
+            },
+            "supporting_patterns": {
+              "type": "array",
+              "description": "Welche der 3 Muster (nach ihren Gerundium-Namen oder Indizes 1-3) dieses konvergierende Element stützen.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "strength": {
+              "type": "string",
+              "enum": [
+                "STRONG",
+                "MODERATE",
+                "WEAK"
+              ],
+              "description": "Wie stark dieses Element konvergiert. STRONG: alle 3 Muster stimmen überein. MODERATE: 2 von 3 stimmen überein. WEAK: nur 1 Muster zeigt dieses Element, aber es ist bemerkenswert."
+            }
+          }
+        }
+      },
+      "diverging": {
+        "type": "array",
+        "description": "Elemente, die über die 3 Muster divergieren. Was unterscheidet sich, steht im Konflikt oder zieht in verschiedene Richtungen?",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "element",
+            "divergence_type",
+            "explanation"
+          ],
+          "properties": {
+            "element": {
+              "type": "string",
+              "description": "Das divergierende Element (z.B. ein Prozessname, ein Mechanismus, eine Populationsuntergruppe, ein emotionaler Ton)."
+            },
+            "divergence_type": {
+              "type": "string",
+              "enum": [
+                "surface",
+                "contextual",
+                "fundamental"
+              ],
+              "description": "Art der Divergenz. surface: gleiches Phänomen, andere Worte. contextual: gleiches Phänomen, andere Rolle oder Sub-Population. fundamental: genuin andere Phänomene."
+            },
+            "explanation": {
+              "type": "string",
+              "description": "Detaillierte Erklärung, WIE dieses Element divergiert und WARUM es als surface/contextual/fundamental klassifiziert wird. Auf spezifische Muster verweisen."
+            }
+          }
+        }
+      },
+      "recommendation": {
+        "type": "string",
+        "enum": [
+          "CONTINUE_COLLECTING",
+          "READY_FOR_CROSS_DOC",
+          "NEEDS_DIFFERENT_POPULATION"
+        ],
+        "description": "Empfohlene Maßnahme. CONTINUE_COLLECTING: Muster konvergieren, weitere Daten sammeln. READY_FOR_CROSS_DOC: starke Konvergenz, mit dokumentübergreifender Analyse fortfahren. NEEDS_DIFFERENT_POPULATION: fundamentale Divergenz oder Populationsinkohärenz, Stichprobe überdenken."
+      },
+      "recommendation_rationale": {
+        "type": "string",
+        "description": "Detaillierte Begründung der Empfehlung. Erklären, warum diese Empfehlung aus der Konvergenz-/Divergenzanalyse folgt. Wenn READY_FOR_CROSS_DOC, erklären, was die Konvergenz stark genug macht. Wenn NEEDS_DIFFERENT_POPULATION, erklären, welche Änderungen der Stichprobe helfen würden."
+      },
+      "suggested_shared_pattern": {
+        "type": "string",
+        "description": "Wenn Konvergenz besteht: ein vorläufiger GERUNDIUM-Name für das geteilte Muster, das die 3 individuellen Muster vereint. Muss ein Gerundium sein (Verbalphrase mit -ing Endung). Wenn die Divergenz fundamental ist, als leeren String lassen."
+      },
+      "suggested_shared_pattern_rationale": {
+        "type": "string",
+        "description": "Warum dieser Name für das geteilte Muster gewählt wurde. Wie er erfasst, was die 3 individuellen Muster gemeinsam haben. Auf spezifische konvergierende Elemente verweisen."
+      },
+      "population_concerns": {
+        "type": "array",
+        "description": "Spezifische Bedenken, ob die angenommene Population zu den emergierenden Mustern passt. Leeres Array wenn keine Bedenken.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "concern",
+            "severity"
+          ],
+          "properties": {
+            "concern": {
+              "type": "string",
+              "description": "Beschreibung der Populationsbedenken (z.B. 'Muster deutet auf zwei verschiedene Sub-Populationen mit unterschiedlichen Verarbeitungsstrategien hin', 'Angenommene Population zu breit — Muster divergieren entlang der Alters-/Erfahrungsachse')."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ],
+              "description": "Schweregrad des Bedenkens. HIGH: bedroht Studienvalidität. MEDIUM: verdient Aufmerksamkeit, aber nicht blockierend. LOW: geringfügige Beobachtung."
+            },
+            "suggested_action": {
+              "type": "string",
+              "description": "Was der Forscher in Betracht ziehen sollte, um dieses Bedenken zu adressieren (z.B. 'Eine Populationsdimension für Erfahrungsniveau hinzufügen', 'Stichprobe nach organisatorischer Rolle stratifizieren')."
+            }
+          }
+        }
+      }
+    }
+  }
+}

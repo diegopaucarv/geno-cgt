@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "segment_id": {
+      "type": "string",
+      "description": "UUID do segmento analisado"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nome da entidade"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "person",
+              "organization",
+              "concept",
+              "event",
+              "location",
+              "other"
+            ],
+            "description": "Tipo de entidade"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Nome exato da entidade origem"
+          },
+          "target": {
+            "type": "string",
+            "description": "Nome exato da entidade destino"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": [
+              "causes",
+              "conditions",
+              "consequences",
+              "co-occurs_with",
+              "opposes",
+              "is_part_of",
+              "is_a"
+            ],
+            "description": "Tipo de relação"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa breve baseada no texto"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "relation_type"
+        ]
+      }
+    }
+  },
+  "required": [
+    "entities",
+    "relations"
+  ]
+}

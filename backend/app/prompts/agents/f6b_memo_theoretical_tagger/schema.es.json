@@ -1,0 +1,95 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "memo_theoretical_tagger",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_affinities",
+        "primary_family"
+      ],
+      "properties": {
+        "family_affinities": {
+          "type": "array",
+          "description": "Familias con puntaje ≥ 0.3, ordenadas por puntaje descendente.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "score",
+              "rationale"
+            ],
+            "properties": {
+              "family": {
+                "type": "string",
+                "enum": [
+                  "Causes",
+                  "Consequences",
+                  "Conditions",
+                  "Process",
+                  "Degree",
+                  "Dimension",
+                  "Type",
+                  "Strategy",
+                  "Structural",
+                  "Functional",
+                  "Interaction",
+                  "Identity"
+                ],
+                "description": "Una de las 12 familias canónicas de códigos teóricos."
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0.3,
+                "maximum": 1.0,
+                "description": "Puntaje de afinidad. Solo se incluyen familias ≥ 0.3."
+              },
+              "rationale": {
+                "type": "string",
+                "description": "Justificación en una oración citando contenido específico del memo que justifica este puntaje."
+              }
+            }
+          }
+        },
+        "primary_family": {
+          "type": "string",
+          "enum": [
+            "Causes",
+            "Consequences",
+            "Conditions",
+            "Process",
+            "Degree",
+            "Dimension",
+            "Type",
+            "Strategy",
+            "Structural",
+            "Functional",
+            "Interaction",
+            "Identity"
+          ],
+          "description": "Familia con el puntaje de afinidad más alto."
+        },
+        "secondary_family": {
+          "type": "string",
+          "enum": [
+            "Causes",
+            "Consequences",
+            "Conditions",
+            "Process",
+            "Degree",
+            "Dimension",
+            "Type",
+            "Strategy",
+            "Structural",
+            "Functional",
+            "Interaction",
+            "Identity"
+          ],
+          "description": "Familia con el segundo puntaje de afinidad más alto. Solo presente si ese puntaje ≥ 0.3."
+        }
+      }
+    }
+  }
+}

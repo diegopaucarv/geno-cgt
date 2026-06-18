@@ -1,0 +1,182 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "criteria_assessment",
+    "suggestions",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "SAT",
+        "MOD",
+        "FORCED"
+      ],
+      "description": "Veredito metodológico global para o par RQ-OQ. SAT: ambas as perguntas atendem a todos os critérios. MOD: uma ou ambas precisam de ajustes específicos. FORCED: violação fundamental das convenções CGT."
+    },
+    "criteria_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cgt_convention",
+        "operationalization",
+        "population",
+        "verb_match",
+        "dimensions"
+      ],
+      "properties": {
+        "cgt_convention": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "detail"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "SAT",
+                "MOD",
+                "FORCED"
+              ],
+              "description": "Status deste critério."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Avaliação específica: a RQ segue o formato canônico? O padrão corresponde ao tipo?"
+            }
+          }
+        },
+        "operationalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "detail"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "SAT",
+                "MOD",
+                "FORCED"
+              ],
+              "description": "Status deste critério."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Avaliação específica: a OQ é singular? Orientada ao processo? Operacionaliza diretamente a RQ?"
+            }
+          }
+        },
+        "population": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "detail"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "SAT",
+                "MOD",
+                "FORCED"
+              ],
+              "description": "Status deste critério."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Avaliação específica: são atores plurais? Ou é uma unidade de análise?"
+            }
+          }
+        },
+        "verb_match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "detail"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "SAT",
+                "MOD",
+                "FORCED"
+              ],
+              "description": "Status deste critério."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Avaliação específica: o verbo se ajusta ao tipo de object_of_study? É usado consistentemente entre RQ e OQ?"
+            }
+          }
+        },
+        "dimensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "detail"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "SAT",
+                "MOD",
+                "FORCED"
+              ],
+              "description": "Status deste critério."
+            },
+            "detail": {
+              "type": "string",
+              "description": "Avaliação específica: as key_dimensions são relevantes? Bem fundamentadas? Número apropriado?"
+            }
+          }
+        }
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "description": "Sugestões concretas e acionáveis de melhoria. Array vazio se o veredito for SAT. Cada sugestão deve referenciar o critério específico que aborda.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "suggestion"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "enum": [
+              "cgt_convention",
+              "operationalization",
+              "population",
+              "verb_match",
+              "dimensions"
+            ],
+            "description": "Qual critério esta sugestão aborda."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Ação concreta. Ex.: 'Mudar OQ de plural para singular: usar sua preocupação em vez de suas preocupações', 'Substituir unidade populacional sala de aula por atores humanos: professores e alunos', 'O verbo negociar se ajusta ao tipo identidade — mantê-lo.'"
+          }
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Síntese da avaliação. Explica o veredito global resumindo as forças e fraquezas em todos os cinco critérios. Se MOD ou FORCED, explica quais critérios motivaram o veredito e por quê."
+    }
+  }
+}

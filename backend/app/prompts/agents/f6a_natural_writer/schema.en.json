@@ -1,0 +1,61 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "natural_writer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "draft": {
+          "type": "string",
+          "description": "Complete draft in academic prose"
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "integer"
+              },
+              "memo_id": {
+                "type": "string"
+              },
+              "context": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "definition_in_text": {
+                "type": "string"
+              },
+              "first_introduced_at": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "orphan_memos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "UUIDs of memos that did not integrate naturally into the draft"
+        }
+      },
+      "required": [
+        "draft",
+        "citations",
+        "concepts"
+      ]
+    }
+  }
+}

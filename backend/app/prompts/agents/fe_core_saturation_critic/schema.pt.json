@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "expansion_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_index",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "expansion_index": {
+            "type": "integer",
+            "description": "Índice da expansão em proposed_expansions"
+          },
+          "expansion_type": {
+            "type": "string",
+            "description": "Tipo de expansão proposta"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=expansão genuína, MOD=imprecisa, FORCED=já coberta"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa: qual propriedade existente já cobre isto (se FORCED)? Qual ajuste é necessário (se MOD)?"
+          },
+          "covered_by_property": {
+            "type": "string",
+            "description": "Se FORCED: nome da propriedade de paradigm_state que já cobre este incidente"
+          },
+          "suggested_refinement": {
+            "type": "string",
+            "description": "Se MOD: sugestão de ajuste concreta"
+          }
+        }
+      }
+    },
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "true se PELO MENOS uma expansão foi avaliada como SAT"
+    },
+    "expansion_count": {
+      "type": "integer",
+      "description": "Quantas expansões foram SAT (genuinamente novas)"
+    },
+    "confirmation_count": {
+      "type": "integer",
+      "description": "Quantas expansões foram FORCED (já cobertas — confirmando saturação)"
+    },
+    "saturation_note": {
+      "type": "string",
+      "description": "Nota sobre o status de saturação: a categoria está se estabilizando?"
+    }
+  },
+  "required": [
+    "expansion_verdicts",
+    "did_state_expand"
+  ]
+}

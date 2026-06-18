@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Orchestrator integration (Fase 3)
 try:
     from app.agents.orchestrator import OrchestratorRuleEngine
+
     _orchestrator = OrchestratorRuleEngine()
     ORCHESTRATOR_AVAILABLE = True
 except ImportError:
@@ -71,7 +72,7 @@ class AnalysisState(TypedDict, total=False):
     cooccurrence_matrix: dict[str, dict]  # code_id → {code_id: count}
 
     # ── Core Concern ────────────────────────────────────────────────────
-    main_concern: str  # output of core_concern_finder
+    core_concern: str  # output of core_concern_finder
     core_category_candidates: list[dict]  # output of core_concern_finder
 
     # ── Hypotheses ──────────────────────────────────────────────────────
@@ -227,7 +228,7 @@ def node_reduce_synthesize(state: AnalysisState) -> AnalysisState:
 
 def node_find_core_concern(state: AnalysisState) -> AnalysisState:
     """Node 5.5: A14 Main Concern usando 3 preguntas operacionales."""
-    if state.get("main_concern"):
+    if state.get("core_concern"):
         return state
     state["current_step"] = "find_core_concern"
     try:
@@ -237,8 +238,8 @@ def node_find_core_concern(state: AnalysisState) -> AnalysisState:
         from workers.heavy.tasks import task_a14_main_concern
 
         result = task_a14_main_concern(state["project_id"])
-        state["main_concern"] = result.get("main_concern", "")
-        logger.info("Node 5.5: main_concern=%s", state["main_concern"][:60])
+        state["core_concern"] = result.get("core_concern", "")
+        logger.info("Node 5.5: core_concern=%s", state["core_concern"][:60])
     except Exception as e:
         logger.warning("Node 5.5 failed: %s", e)
     return state
@@ -320,15 +321,21 @@ def node_hitl_review(state: AnalysisState) -> AnalysisState:
 
 
 def node_final_report(state: AnalysisState) -> AnalysisState:
-    """Node 9: Final report — placeholder (Fase 14 del Plan.md)."""
+    """Node 9: Final report — dispatches terminal synthesis (PRO)."""
     state["current_step"] = "final_report"
-    state["final_report"] = {
-        "status": "placeholder",
-        "message": "Final report generation not yet implemented (Fase 14)",
-        "main_concern": state.get("main_concern", ""),
-        "hypotheses_count": len(state.get("candidate_hypotheses", [])),
-    }
-    logger.info("Node 9: final_report placeholder")
+    try:
+        from celery import current_app
+
+        result = current_app.send_task(
+            "final_report",
+            args=[state["project_id"]],
+            queue="heavy",
+        )
+        state["final_report"] = {"status": "generating", "task_id": result.id}
+        logger.info("Node 9: final_report dispatched (task=%s)", result.id)
+    except Exception as e:
+        logger.warning("Node 9: failed to dispatch final_report: %s", e)
+        state["final_report"] = {"status": "error", "error": str(e)}
     return state
 
 
@@ -339,8 +346,8 @@ def node_final_report(state: AnalysisState) -> AnalysisState:
 def should_find_core_concern(
     state: AnalysisState,
 ) -> Literal["find_core_concern", "generate_hypotheses"]:
-    """Skip core_concern_finder if main_concern already set."""
-    if state.get("main_concern"):
+    """Skip core_concern_finder if core_concern already set."""
+    if state.get("core_concern"):
         return "generate_hypotheses"
     return "find_core_concern"
 
@@ -367,9 +374,10 @@ def after_hitl(state: AnalysisState) -> Literal["segment_and_index", "final_repo
 def route_via_orchestrator(state: AnalysisState) -> str:
     """Route via OrchestratorRuleEngine if available, else deterministic fallback."""
     current = state.get("current_step", "")
-    
+
     if ORCHESTRATOR_AVAILABLE and _orchestrator is not None:
         import os as _os
+
         if _os.getenv("AGENTIC_ORCHESTRATOR", "false").lower() in ("1", "true", "yes"):
             try:
                 decision = _orchestrator.decide(current, dict(state))
@@ -377,7 +385,7 @@ def route_via_orchestrator(state: AnalysisState) -> str:
                 return decision
             except Exception as e:
                 logger.warning("Orchestrator failed: %s. Using fallback.", e)
-    
+
     # Deterministic fallback (same as RULES in orchestrator.py)
     fallback = {
         "segment_and_index": "extract_entities",
@@ -565,7 +573,7 @@ class RollingWindowStateManager:
             "text": result.get("text", ""),
             "study_question": result.get("study_question", ""),
             "data_type": result.get("glaser_data_type", ""),
-            "main_concern": result.get("main_concern", ""),
+            "core_concern": result.get("core_concern", ""),
             "code_label": result.get("code_label", ""),
             "checkpointed_at": __import__("datetime").datetime.utcnow().isoformat(),
         }

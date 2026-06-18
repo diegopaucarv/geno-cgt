@@ -1,0 +1,55 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "applicability_critic",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "SAT",
+            "MOD",
+            "FORCED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "generic",
+                  "no_limits",
+                  "jargon",
+                  "unmodifiable",
+                  "no_mechanism"
+                ]
+              },
+              "guideline_index": {
+                "type": "integer"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "suggestion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "detail",
+              "suggestion"
+            ]
+          }
+        }
+      },
+      "required": [
+        "verdict",
+        "issues"
+      ]
+    }
+  }
+}

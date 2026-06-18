@@ -1,0 +1,91 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gaps"
+  ],
+  "properties": {
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "gap_type",
+          "description",
+          "severity",
+          "suggested_action"
+        ],
+        "properties": {
+          "gap_type": {
+            "type": "string",
+            "enum": [
+              "orphan_category",
+              "uncovered_layer",
+              "isolated_cluster",
+              "low_density",
+              "unresolved_tension"
+            ],
+            "description": "Art der erkannten Lücke."
+          },
+          "description": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ]
+          },
+          "involved_category_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs der beteiligten Kategorien."
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Empfohlene konkrete Maßnahme."
+          },
+          "suggested_theoretical_code": {
+            "type": "string",
+            "description": "Vorgeschlagener theoretischer Code zur Ausarbeitung der fehlenden Beziehung."
+          },
+          "sampling_recommendation": {
+            "type": "string",
+            "description": "Wenn die Lücke Stichproben erfordert: welche Art von Daten zu suchen ist."
+          }
+        }
+      }
+    },
+    "ecosystem_health": {
+      "type": "object",
+      "properties": {
+        "total_categories": {
+          "type": "integer"
+        },
+        "connected_categories": {
+          "type": "integer"
+        },
+        "orphan_categories": {
+          "type": "integer"
+        },
+        "total_relationships": {
+          "type": "integer"
+        },
+        "layers_covered": {
+          "type": "integer",
+          "description": "Von 7 Schichten, wie viele mindestens 1 Beziehung haben."
+        },
+        "unresolved_tensions": {
+          "type": "integer"
+        },
+        "overall_assessment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

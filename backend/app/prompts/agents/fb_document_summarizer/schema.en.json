@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Executive summary of 3-5 sentences"
+    },
+    "topic_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "3-6 topic labels"
+    },
+    "inferred_document_type": {
+      "type": "string",
+      "description": "Inferred document type"
+    },
+    "language": {
+      "type": "string",
+      "description": "Primary language of the document"
+    }
+  },
+  "required": [
+    "summary",
+    "topic_labels"
+  ]
+}

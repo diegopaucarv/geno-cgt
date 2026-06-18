@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID do código avaliado"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Rótulo do código"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "refine",
+              "split"
+            ],
+            "description": "Veredito de intercambialidade"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa citando incidentes específicos de diferentes documentos"
+          },
+          "interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_interchangeable": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pares de incidentes que são claramente intercambiáveis"
+          },
+          "non_interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_different": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pares que revelam padrões distintos"
+          },
+          "suggested_action_if_not_valid": {
+            "type": "string",
+            "description": "Ação concreta: refinar definição, dividir em subcódigos ou buscar mais dados?"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "verdicts"
+  ]
+}

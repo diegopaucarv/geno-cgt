@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "properties": {
+    "extracted_incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cat_id": {
+            "type": "string",
+            "description": "UUID da categoria"
+          },
+          "doc_id": {
+            "type": "string",
+            "description": "UUID do documento"
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Citação textual exata do documento"
+          },
+          "proposed_property": {
+            "type": "string",
+            "description": "Propriedade da categoria que este incidente revela"
+          },
+          "paradigm_element": {
+            "type": "string",
+            "enum": [
+              "dimension",
+              "condition",
+              "consequence",
+              "strategy"
+            ],
+            "description": "Elemento do paradigma CGT"
+          }
+        },
+        "required": [
+          "exact_quote",
+          "proposed_property",
+          "paradigm_element"
+        ]
+      }
+    }
+  },
+  "required": [
+    "extracted_incidents"
+  ]
+}

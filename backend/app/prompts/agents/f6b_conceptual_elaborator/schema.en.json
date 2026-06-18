@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relationship_summary",
+    "converging_evidence",
+    "diverging_evidence",
+    "conceptual_fit"
+  ],
+  "properties": {
+    "relationship_summary": {
+      "type": "string",
+      "description": "Narrative description of the relationship found. Present tense. Theoretical level."
+    },
+    "converging_evidence": {
+      "type": "array",
+      "description": "Incidents that SUPPORT the relationship (converge). Empty array if none.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_converges"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Exact verbatim quote."
+          },
+          "how_it_converges": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diverging_evidence": {
+      "type": "array",
+      "description": "Incidents that STRAIN the relationship. They are NOT refutations — they are expansion opportunities.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_diverges",
+          "expansion_suggestion"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string"
+          },
+          "how_it_diverges": {
+            "type": "string"
+          },
+          "expansion_suggestion": {
+            "type": "string",
+            "description": "How to expand the relationship to accommodate this diverging data (condition, subtype, context, alternative path)."
+          }
+        }
+      }
+    },
+    "shared_documents_without_clear_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Documents with both categories but without clear evidence."
+    },
+    "conceptual_fit": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "How well this relationship explains the participants' behavior."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Free note: what insight emerged? What remains to be explored?"
+    },
+    "suggested_next_elaborations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Suggestions for next relationships to elaborate."
+    }
+  }
+}

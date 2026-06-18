@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "required": [
+    "sampling_dimensions"
+  ],
+  "properties": {
+    "sampling_dimensions": {
+      "type": "array",
+      "description": "Dimensions of variation supported by the data.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "evidence_of_variation",
+          "contrast_criteria",
+          "extreme_criteria",
+          "consistent_criteria"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Short name."
+          },
+          "description": {
+            "type": "string",
+            "description": "What varies and why it matters."
+          },
+          "evidence_of_variation": {
+            "type": "string",
+            "description": "Concrete evidence citing interviewees."
+          },
+          "contrast_criteria": {
+            "type": "string",
+            "description": "Opposite profile."
+          },
+          "extreme_criteria": {
+            "type": "string",
+            "description": "Most intense case."
+          },
+          "consistent_criteria": {
+            "type": "string",
+            "description": "Similar profile."
+          }
+        }
+      }
+    }
+  }
+}

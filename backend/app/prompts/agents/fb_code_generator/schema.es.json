@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "description": "Códigos generados a partir de los indicadores.",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Gerundio del código."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definición: qué patrón de conducta captura, en 1-2 oraciones."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicadores que respaldan este código."
+          },
+          "variations": {
+            "type": "string",
+            "description": "Variaciones internas observadas (grados, matices, contextos)."
+          },
+          "relationship_to_existing": {
+            "type": "string",
+            "description": "Relación con códigos existentes: 'Nuevo', 'Subcódigo de X', 'Superposición con Y'."
+          }
+        }
+      }
+    }
+  }
+}

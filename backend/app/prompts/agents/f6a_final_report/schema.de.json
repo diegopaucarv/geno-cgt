@@ -1,0 +1,415 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "final_report",
+    "schema": {
+      "type": "object",
+      "required": [
+        "report"
+      ],
+      "properties": {
+        "report": {
+          "type": "object",
+          "required": [
+            "title",
+            "abstract",
+            "core_pattern",
+            "core_category",
+            "theoretical_model",
+            "population_dimensions",
+            "literature_dialogue",
+            "applicability",
+            "research_trajectory"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Voller Berichtstitel: '{Kernmuster} — Eine klassische Grounded Theory der {generalisierten Population}'"
+            },
+            "abstract": {
+              "type": "string",
+              "description": "~200 Wörter eigenständige Zusammenfassung. Kernmuster, Kernkategorie, Population, Beitrag, Implikationen."
+            },
+            "core_pattern": {
+              "type": "object",
+              "required": [
+                "heading",
+                "pattern_identification",
+                "emergence_narrative",
+                "evidential_anchoring"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Abschnittsüberschrift angepasst an object_of_study: 'Kernanliegen', 'Kernemotion', 'Kernverhalten', etc."
+                },
+                "pattern_identification": {
+                  "type": "string",
+                  "description": "Das Gerundium, das das Kernmuster benennt. Erklärung, WAS das Muster ist und warum dieses Gerundium es erfasst."
+                },
+                "emergence_narrative": {
+                  "type": "string",
+                  "description": "Wie das Muster aus den Daten emergierte. Konvergenz über Dokumente hinweg, Schlüsselmomente der Entdeckung, Entwicklung des Verständnisses."
+                },
+                "evidential_anchoring": {
+                  "type": "string",
+                  "description": "Stärkste Daten-Incidente und Codes, die das Muster stützen. Variation darin, wie Teilnehmer es erleben. Auf spezifische Knoten/Incidente zurückverfolgen."
+                }
+              }
+            },
+            "core_category": {
+              "type": "object",
+              "required": [
+                "heading",
+                "definition",
+                "properties",
+                "relationship_to_core_pattern"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Kernkategorie' — dies ist ein formales CGT-Konstrukt, nicht an object_of_study angepasst."
+                },
+                "definition": {
+                  "type": "string",
+                  "description": "Präzise konzeptuelle Definition der Kernkategorie. Was sie IST, nicht was sie tut (das kommt ins Modell)."
+                },
+                "properties": {
+                  "type": "array",
+                  "description": "Eigenschaften der Kernkategorie, jede mit ihrem dimensionalen Bereich.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "dimensional_range"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Eigenschaftsname."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Was diese Eigenschaft über die Kernkategorie erfasst."
+                      },
+                      "dimensional_range": {
+                        "type": "string",
+                        "description": "Der für diese Eigenschaft beobachtete Variationsbereich (z.B. 'niedrige bis hohe Intensität', 'enger bis breiter Umfang')."
+                      }
+                    }
+                  }
+                },
+                "relationship_to_core_pattern": {
+                  "type": "string",
+                  "description": "Wie diese Kategorie das Kernmuster verarbeitet, löst oder adressiert. Die erklärende Verbindung zwischen Abschnitten 2 und 3."
+                }
+              }
+            },
+            "theoretical_model": {
+              "type": "object",
+              "required": [
+                "heading",
+                "model_overview",
+                "conditions",
+                "core_process",
+                "strategies",
+                "consequences",
+                "relational_architecture"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Theoretisches Modell'."
+                },
+                "model_overview": {
+                  "type": "string",
+                  "description": "Narrative Zusammenfassung des vollständigen theoretischen Modells. Wie Bedingungen, Strategien und Konsequenzen durch die Kernkategorie miteinander verbunden sind."
+                },
+                "conditions": {
+                  "type": "string",
+                  "description": "Vorgelagerte und strukturelle Bedingungen, die prägen, wie die Kernkategorie operiert. Kausale und kontextuelle Bedingungen von Knoten mit entity_type 'condition'."
+                },
+                "core_process": {
+                  "type": "string",
+                  "description": "Die zentrale PROCESSES-Kante: wie die Kernkategorie das Kernmuster verarbeitet/löst. Dies ist das obligatorische Rückgrat des Modells. Muss von der PROCESSES-Kante in der Eingabe abgeleitet sein."
+                },
+                "strategies": {
+                  "type": "string",
+                  "description": "Verhaltens- und kognitive Strategien, die Teilnehmer anwenden. Abgeleitet von Knoten mit entity_type 'strategy' und IS_A_STRATEGY_FOR-Kanten."
+                },
+                "consequences": {
+                  "type": "string",
+                  "description": "Ergebnisse und Resultate, sowohl beabsichtigt als auch unbeabsichtigt. Abgeleitet von Knoten mit entity_type 'consequence' und IS_A_CONSEQUENCE_OF-Kanten."
+                },
+                "relational_architecture": {
+                  "type": "array",
+                  "description": "Strukturierte Auflistung aller theoretischen Beziehungen (Kanten). PROCESSES-Kante MUSS zuerst sein. Nach Beziehungstyp organisiert.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "relationship_type",
+                      "source",
+                      "target",
+                      "narrative"
+                    ],
+                    "properties": {
+                      "relationship_type": {
+                        "type": "string",
+                        "enum": [
+                          "PROCESSES",
+                          "LEADS_TO",
+                          "IS_A_STRATEGY_FOR",
+                          "IS_A_CONSEQUENCE_OF",
+                          "IS_A_CONDITION_FOR",
+                          "VARIES_WITH",
+                          "CO_OCCURS_WITH"
+                        ],
+                        "description": "Kanonischer CGT-Beziehungstyp."
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "Label des Quellknotens."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Label des Zielknotens."
+                      },
+                      "narrative": {
+                        "type": "string",
+                        "description": "Ein-Satz-Narrativ der Beziehung in konzeptuellem Präsens."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "population_dimensions": {
+              "type": "object",
+              "required": [
+                "heading",
+                "population_profile",
+                "dimensional_variations",
+                "scope_boundaries"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Populationsdimensionen'."
+                },
+                "population_profile": {
+                  "type": "string",
+                  "description": "Die generalisierte Population, auf die die Theorie zutrifft. Abstrakt genug für Übertragbarkeit, spezifisch genug um bedeutsam zu sein."
+                },
+                "dimensional_variations": {
+                  "type": "string",
+                  "description": "Wie sich Kernmuster und Kernkategorie über Populationsdimensionen hinweg unterschiedlich manifestieren. Den Variationsbereich dokumentieren, nicht nur die zentrale Tendenz."
+                },
+                "scope_boundaries": {
+                  "type": "string",
+                  "description": "Wo die Theorie NICHT zutrifft. Ausgeschlossene Populationen, Kontexte oder Bedingungen. Ehrliche Umfangsbewertung."
+                }
+              }
+            },
+            "literature_dialogue": {
+              "type": "object",
+              "required": [
+                "heading",
+                "emergent_fit_assessment",
+                "extends",
+                "modifies",
+                "integrates",
+                "transcends"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Literaturdialog'."
+                },
+                "emergent_fit_assessment": {
+                  "type": "string",
+                  "description": "Globale Bewertung: Dialogisiert die Theorie genuin mit der Literatur oder wird sie eingepasst? Aufrichtige Einschätzung."
+                },
+                "extends": {
+                  "type": "string",
+                  "description": "Wo die Literatur bestätigt und die Theorie bestehendes Wissen mit neuen Eigenschaften, Dimensionen oder Beziehungen erweitert."
+                },
+                "modifies": {
+                  "type": "string",
+                  "description": "Wo die Literatur Modifikationen an übernommenen Konzepten vorschlägt und wie die emergente Theorie sie revidiert."
+                },
+                "integrates": {
+                  "type": "string",
+                  "description": "Wo die Theorie verstreute Konzepte aus der Literatur in einen kohärenten Erklärungsrahmen vereint."
+                },
+                "transcends": {
+                  "type": "string",
+                  "description": "Was die Theorie offenbart, das die Literatur nicht erfasst hatte. Der neuartige Beitrag dieser Grounded Theory."
+                }
+              }
+            },
+            "applicability": {
+              "type": "object",
+              "required": [
+                "heading",
+                "control_variables",
+                "access_variables",
+                "intervention_guidelines",
+                "practical_limitations"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Anwendbarkeit'."
+                },
+                "control_variables": {
+                  "type": "array",
+                  "description": "Aspekte des Phänomens, die in der Praxis modifiziert werden können. Jeder geht auf eine theoretische Eigenschaft zurück.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "theory_basis"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name der Kontrollvariable."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Was modifiziert werden kann und wie."
+                      },
+                      "theory_basis": {
+                        "type": "string",
+                        "description": "Welche theoretische Eigenschaft oder Beziehung dies als modifizierbar rechtfertigt."
+                      }
+                    }
+                  }
+                },
+                "access_variables": {
+                  "type": "array",
+                  "description": "Bedingungen, die Intervention ermöglichen oder einschränken.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "conditions_access"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name der Zugangsvariable."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Was diese Variable bedingt."
+                      },
+                      "conditions_access": {
+                        "type": "string",
+                        "description": "Wie diese Variable den Zugang zu den Kontrollvariablen ermöglicht oder einschränkt."
+                      }
+                    }
+                  }
+                },
+                "intervention_guidelines": {
+                  "type": "array",
+                  "description": "Konkrete Empfehlungen für Praktiker.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "guideline",
+                      "target",
+                      "mechanism"
+                    ],
+                    "properties": {
+                      "guideline": {
+                        "type": "string",
+                        "description": "Die umsetzbare Empfehlung."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Wer nach dieser Richtlinie handelt (z.B. Praktiker, Organisation, Teilnehmer)."
+                      },
+                      "mechanism": {
+                        "type": "string",
+                        "description": "Wie die Richtlinie Veränderung bewirkt, zurückverfolgt auf einen theoretischen Mechanismus."
+                      }
+                    }
+                  }
+                },
+                "practical_limitations": {
+                  "type": "string",
+                  "description": "Was die Theorie in Bezug auf Intervention NICHT stützt. Vor Überanwendung schützen."
+                }
+              }
+            },
+            "research_trajectory": {
+              "type": "object",
+              "required": [
+                "heading",
+                "open_questions",
+                "methodological_limitations",
+                "future_directions"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Immer 'Forschungsverlauf'."
+                },
+                "open_questions": {
+                  "type": "array",
+                  "description": "Theoretische Fragen, die die aktuellen Daten nicht beantworten können. Eigenschaften, die weiterer Dimensionierung bedürfen.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "question",
+                      "why_unresolved"
+                    ],
+                    "properties": {
+                      "question": {
+                        "type": "string",
+                        "description": "Die offene theoretische Frage."
+                      },
+                      "why_unresolved": {
+                        "type": "string",
+                        "description": "Warum aktuelle Daten diese Frage nicht lösen können (unzureichende Variation, untererfasste Dimension, etc.)."
+                      }
+                    }
+                  }
+                },
+                "methodological_limitations": {
+                  "type": "string",
+                  "description": "Einschränkungen, die dem Studiendesign, der Stichprobe oder analytischen Entscheidungen inhärent sind. Aufrichtige Selbsteinschätzung."
+                },
+                "future_directions": {
+                  "type": "array",
+                  "description": "Konkrete nächste Studien, zu beprobende Populationen, zu verfolgende Vergleiche.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "direction",
+                      "rationale"
+                    ],
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "description": "Vorgeschlagene zukünftige Forschungsrichtung."
+                      },
+                      "rationale": {
+                        "type": "string",
+                        "description": "Warum diese Richtung aus den aktuellen Lücken oder offenen Fragen der Theorie emergiert."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

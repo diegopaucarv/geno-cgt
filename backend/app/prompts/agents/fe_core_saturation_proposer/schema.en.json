@@ -1,0 +1,81 @@
+{
+  "type": "object",
+  "properties": {
+    "category_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "proposed_expansions": {
+      "type": "array",
+      "description": "Proposed expansions. Empty if no novelty.",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_type",
+          "description",
+          "evidence_quote"
+        ],
+        "properties": {
+          "expansion_type": {
+            "type": "string",
+            "enum": [
+              "new_property",
+              "dimensional_expansion",
+              "new_condition",
+              "new_consequence",
+              "new_strategy"
+            ],
+            "description": "Type of expansion"
+          },
+          "target_element": {
+            "type": "string",
+            "description": "Name of the existing property/condition/consequence being expanded. Only for dimensional_expansion."
+          },
+          "new_element_name": {
+            "type": "string",
+            "description": "Proposed name for the new property/condition/consequence/strategy. Only for 'new_*' types."
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the expansion: what it adds to the current paradigm_state"
+          },
+          "evidence_quote": {
+            "type": "string",
+            "description": "Exact textual quote from the incident supporting this expansion"
+          },
+          "incident_index": {
+            "type": "integer",
+            "description": "Index of the incident in new_incidents that originates this expansion"
+          },
+          "expansion_nature": {
+            "type": "string",
+            "enum": [
+              "dimensional",
+              "essential"
+            ],
+            "description": "dimensional=more of the same in new degree. essential=qualitatively new aspect."
+          },
+          "relation_to_core": {
+            "type": "string",
+            "description": "How this expansion relates to the core {object_of_study}"
+          }
+        }
+      }
+    },
+    "confirmed_only": {
+      "type": "boolean",
+      "description": "true if ALL incidents only confirm existing properties (no expansions)"
+    },
+    "synthesis_note": {
+      "type": "string",
+      "description": "Synthesis note: is the category stabilizing or still revealing variation?"
+    }
+  },
+  "required": [
+    "category_id",
+    "document_id",
+    "proposed_expansions"
+  ]
+}

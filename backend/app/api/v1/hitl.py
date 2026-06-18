@@ -82,7 +82,7 @@ async def get_pending_decisions(
             HitlPendingItem(
                 id=row[0],
                 gate_name=row[1],
-                proposal_summary=proposal.get("main_concern", "")
+                proposal_summary=proposal.get("core_concern", "")
                 or proposal.get("rationale", "")[:200],
                 critic_verdict=critic.get("verdict", "SAT"),
                 created_at=row[4],

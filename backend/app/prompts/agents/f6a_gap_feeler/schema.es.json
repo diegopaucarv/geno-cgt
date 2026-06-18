@@ -1,0 +1,73 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "gap_feeler",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gaps",
+        "total_gaps",
+        "summary"
+      ],
+      "properties": {
+        "gaps": {
+          "type": "array",
+          "description": "Brechas teóricas detectadas. Puede estar vacío si el borrador es estructuralmente sólido.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "description",
+              "severity",
+              "location"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MISSING_EVIDENCE",
+                  "UNDERDEVELOPED_PROPERTY",
+                  "DISCONNECTED_CATEGORY",
+                  "CONCEPTUAL_LEAP",
+                  "ORPHAN_CLAIM"
+                ],
+                "description": "Clasificación de brecha de los cinco tipos canónicos."
+              },
+              "description": {
+                "type": "string",
+                "description": "Descripción de la brecha en una oración: qué falta o está debilitado."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
+                "description": "Severidad después de escalado sensible al contexto. HIGH=bloquea publicación, MEDIUM=necesita expansión, LOW=cosmético."
+              },
+              "location": {
+                "type": "string",
+                "description": "Ubicación específica: nombre de sección, número de párrafo o fragmento de oración citado."
+              },
+              "proximity_to_core": {
+                "type": "boolean",
+                "description": "true si la brecha está en o cerca de un párrafo que referencia la preocupación central."
+              }
+            }
+          }
+        },
+        "total_gaps": {
+          "type": "integer",
+          "description": "Número total de brechas detectadas."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Resumen diagnóstico en una oración, ej. '3 brechas: 1 HIGH (falta evidencia en afirmación central), 1 MEDIUM, 1 LOW'."
+        }
+      }
+    }
+  }
+}

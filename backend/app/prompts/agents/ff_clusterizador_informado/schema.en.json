@@ -1,0 +1,105 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "new_categories"
+  ],
+  "properties": {
+    "new_categories": {
+      "type": "array",
+      "description": "Consolidated categories after clustering. Empty array if no changes are required.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "human_purpose",
+          "definition"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Gerund of the consolidated group."
+          },
+          "human_purpose": {
+            "type": "string",
+            "description": "Underlying behavioral intent shared by the grouped codes (Step 1)."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Consolidated definition of the category (Step 3)."
+          },
+          "source_codes": {
+            "type": "array",
+            "description": "Names of the original codes merged into this category.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "variations": {
+            "type": "array",
+            "description": "Documented internal variations. Empty array if the category is uniform.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "description"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Description of the variation."
+                },
+                "documents": {
+                  "type": "array",
+                  "description": "Names of documents where this variation is observed.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "theoretical_hypotheses": {
+            "type": "array",
+            "description": "Hypotheses that emerge from this group (Step 4). Empty array if no clear hypotheses emerge.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sampling_criteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inclusion",
+              "exclusion"
+            ],
+            "properties": {
+              "inclusion": {
+                "type": "array",
+                "description": "Inclusion criteria for future sampling.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusion": {
+                "type": "array",
+                "description": "Exclusion criteria.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "orphan_segments": {
+            "type": "array",
+            "description": "Segments left without a code after consolidation (Step 6). Empty array if all are assigned.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

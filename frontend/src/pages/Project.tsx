@@ -19,6 +19,8 @@ import {
   stopProjectPipeline,
   restartFailedTasks,
   updateProject,
+  updatePopulationAssumption,
+  generatePopulationGeneralization,
   Project,
   Document,
   Category,
@@ -134,6 +136,12 @@ export default function ProjectDetail() {
   const [showHITLModal, setShowHITLModal] = useState(false);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
+
+  // ── Population Configuration ──
+  const [popConfigOpen, setPopConfigOpen] = useState(false);
+  const [editingPop, setEditingPop] = useState(false);
+  const [popEditValue, setPopEditValue] = useState("");
+  const [popGenerating, setPopGenerating] = useState(false);
 
   // ── Experimental Mode ──
   const [expModeOpen, setExpModeOpen] = useState(false);
@@ -826,6 +834,68 @@ export default function ProjectDetail() {
     navigate("/login");
   }
 
+  // ── Population config handlers ──────────────
+
+  async function handleGeneratePop() {
+    if (!id) return;
+    setPopGenerating(true);
+    try {
+      const result = await generatePopulationGeneralization(id);
+      // Refresh project to get the new population_assumption
+      const updated = await getProject(id);
+      setProject(updated);
+      showToast(t("project.populationGenerated"));
+    } catch (err: any) {
+      showToast(
+        `❌ ${t("project.populationGenerateError")}: ${err.message || err}`,
+      );
+    } finally {
+      setPopGenerating(false);
+    }
+  }
+
+  async function handleSavePop() {
+    if (!id || !popEditValue.trim()) return;
+    setEditingPop(false);
+    try {
+      await updatePopulationAssumption(id, {
+        population_description: popEditValue.trim(),
+      });
+      // Refresh project to get updated data
+      const updated = await getProject(id);
+      setProject(updated);
+      showToast("✅ Population description updated.");
+    } catch (err: any) {
+      showToast(`❌ ${err.message || err}`);
+    }
+  }
+
+  function handleStartEditPop(currentValue: string) {
+    setPopEditValue(currentValue);
+    setEditingPop(true);
+  }
+
+  // ── Frame label translation helpers ─────────
+
+  function spatialFrameLabel(frame: string): string {
+    const map: Record<string, string> = {
+      cohabiting_group: "Cohabiting group",
+      sparse: "Sparse",
+      high_diversity: "High diversity",
+    };
+    return map[frame] || frame;
+  }
+
+  function temporalFrameLabel(frame: string): string {
+    const map: Record<string, string> = {
+      present_continuous: "Present continuous",
+      retrospective: "Retrospective",
+      prospective: "Prospective",
+      longitudinal: "Longitudinal",
+    };
+    return map[frame] || frame;
+  }
+
   async function handleSwitchPattern() {
     if (!id || !selectedOOS) return;
     setSwitchingPattern(true);
@@ -1383,6 +1453,421 @@ export default function ProjectDetail() {
               {/* Log toggle */}
             </div>
           </div>
+
+          {/* ── Population Configuration ──────────────── */}
+          {(project?.supuesto_poblacional ||
+            project?.population_assumption) && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: "14px 16px",
+                background: "#161B22",
+                borderRadius: 10,
+                border: "1px solid #21262D",
+              }}
+            >
+              <div
+                onClick={() => setPopConfigOpen(!popConfigOpen)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#E6EDF3",
+                  }}
+                >
+                  {t("project.populationConfig")}
+                </span>
+                <span style={{ color: "#8B949E", fontSize: 12 }}>
+                  {popConfigOpen ? "▲" : "▼"}
+                </span>
+              </div>
+              {popConfigOpen && (
+                <div style={{ marginTop: 14 }}>
+                  {/* Original population description */}
+                  {project.supuesto_poblacional && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#8B949E",
+                          marginBottom: 4,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        {t("project.populationOriginal")}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#C9D1D9",
+                          padding: "8px 12px",
+                          background: "#0D1117",
+                          borderRadius: 6,
+                          border: "1px solid #30363D",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {project.supuesto_poblacional}
+                      </div>
+                    </div>
+                  )}
+                  {/* Generalized population */}
+                  {(() => {
+                    const pa = project.population_assumption;
+                    const genPop =
+                      pa && typeof pa === "object"
+                        ? String(
+                            (pa as any).generalized_population ||
+                              (pa as any).population_description ||
+                              "",
+                          )
+                        : "";
+                    const hasGenPop = !!(
+                      pa &&
+                      typeof pa === "object" &&
+                      (pa as any).generalized_population
+                    );
+
+                    return (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginBottom: 4,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#8B949E",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {t("project.populationGeneralized")}
+                            </span>
+                            {hasGenPop && !editingPop && (
+                              <button
+                                onClick={() => handleStartEditPop(genPop)}
+                                style={{
+                                  padding: "2px 10px",
+                                  borderRadius: 4,
+                                  border: "1px solid #30363D",
+                                  background: "#21262D",
+                                  color: "#8B949E",
+                                  fontSize: 11,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {t("project.populationEdit")}
+                              </button>
+                            )}
+                          </div>
+
+                          {editingPop ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <input
+                                type="text"
+                                value={popEditValue}
+                                onChange={(e) =>
+                                  setPopEditValue(e.target.value)
+                                }
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  borderRadius: 6,
+                                  background: "#0D1117",
+                                  border: "1px solid #58A6FF",
+                                  color: "#E6EDF3",
+                                  fontSize: 13,
+                                  fontFamily: "monospace",
+                                }}
+                              />
+                              <button
+                                onClick={handleSavePop}
+                                style={{
+                                  padding: "6px 14px",
+                                  borderRadius: 6,
+                                  border: "none",
+                                  background: "#238636",
+                                  color: "#FFF",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {t("project.populationSave")}
+                              </button>
+                              <button
+                                onClick={() => setEditingPop(false)}
+                                style={{
+                                  padding: "6px 14px",
+                                  borderRadius: 6,
+                                  border: "1px solid #30363D",
+                                  background: "#21262D",
+                                  color: "#8B949E",
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {t("common.cancel")}
+                              </button>
+                            </div>
+                          ) : hasGenPop ? (
+                            <div
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: "#A371F7",
+                                padding: "8px 12px",
+                                background: "#A371F712",
+                                borderRadius: 6,
+                                border: "1px solid #A371F733",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {genPop}
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                padding: "10px 12px",
+                                background: "#D2992218",
+                                borderRadius: 6,
+                                border: "1px solid #D2992233",
+                                fontSize: 12,
+                                color: "#D29922",
+                              }}
+                            >
+                              No generalization yet.
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Generate button */}
+                        {!hasGenPop && project.supuesto_poblacional && (
+                          <div style={{ marginBottom: 12 }}>
+                            <button
+                              onClick={handleGeneratePop}
+                              disabled={popGenerating}
+                              style={{
+                                padding: "6px 16px",
+                                borderRadius: 6,
+                                border: "none",
+                                background: popGenerating
+                                  ? "#30363D"
+                                  : "#A371F7",
+                                color: popGenerating ? "#484F58" : "#FFF",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: popGenerating
+                                  ? "not-allowed"
+                                  : "pointer",
+                              }}
+                            >
+                              {popGenerating
+                                ? t("project.populationGenerating")
+                                : t("project.populationGenerate")}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Frame details & confidence */}
+                        {hasGenPop && pa && typeof pa === "object" && (
+                          <>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 12,
+                                marginBottom: 10,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  background: "#0D1117",
+                                  borderRadius: 6,
+                                  border: "1px solid #30363D",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#8B949E",
+                                    display: "block",
+                                    marginBottom: 2,
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {t("project.populationSpatialFrame")}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    color: "#E6EDF3",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {spatialFrameLabel(
+                                    String((pa as any).spatial_frame || ""),
+                                  )}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  flex: 1,
+                                  padding: "8px 12px",
+                                  background: "#0D1117",
+                                  borderRadius: 6,
+                                  border: "1px solid #30363D",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#8B949E",
+                                    display: "block",
+                                    marginBottom: 2,
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {t("project.populationTemporalFrame")}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    color: "#E6EDF3",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {temporalFrameLabel(
+                                    String((pa as any).temporal_frame || ""),
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Confidence bar */}
+                            {(() => {
+                              const conf = Number(
+                                (pa as any).generalizer_confidence,
+                              );
+                              if (isNaN(conf)) return null;
+                              const pct = Math.round(conf * 100);
+                              return (
+                                <div style={{ marginBottom: 10 }}>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      marginBottom: 4,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        color: "#8B949E",
+                                        textTransform: "uppercase",
+                                      }}
+                                    >
+                                      {t("project.populationConfidence")}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color:
+                                          pct >= 80
+                                            ? "#3FB950"
+                                            : pct >= 50
+                                              ? "#D29922"
+                                              : "#F85149",
+                                      }}
+                                    >
+                                      {pct}%
+                                    </span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      width: "100%",
+                                      height: 6,
+                                      borderRadius: 3,
+                                      background: "#21262D",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: `${pct}%`,
+                                        height: "100%",
+                                        borderRadius: 3,
+                                        background:
+                                          pct >= 80
+                                            ? "#3FB950"
+                                            : pct >= 50
+                                              ? "#D29922"
+                                              : "#F85149",
+                                        transition: "width 0.3s ease",
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Rationale */}
+                            {(pa as any).generalizer_rationale && (
+                              <div style={{ marginBottom: 4 }}>
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#8B949E",
+                                    display: "block",
+                                    marginBottom: 4,
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {t("project.populationRationale")}
+                                </span>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: "#8B949E",
+                                    padding: "8px 12px",
+                                    background: "#0D1117",
+                                    borderRadius: 6,
+                                    border: "1px solid #30363D",
+                                    lineHeight: 1.6,
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  {(pa as any).generalizer_rationale}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Experimental Mode ─────────────────────── */}
           <div

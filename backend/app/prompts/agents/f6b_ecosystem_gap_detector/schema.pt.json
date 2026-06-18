@@ -1,0 +1,91 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gaps"
+  ],
+  "properties": {
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "gap_type",
+          "description",
+          "severity",
+          "suggested_action"
+        ],
+        "properties": {
+          "gap_type": {
+            "type": "string",
+            "enum": [
+              "orphan_category",
+              "uncovered_layer",
+              "isolated_cluster",
+              "low_density",
+              "unresolved_tension"
+            ],
+            "description": "Tipo de lacuna detectada."
+          },
+          "description": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ]
+          },
+          "involved_category_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs das categorias envolvidas."
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Ação concreta recomendada."
+          },
+          "suggested_theoretical_code": {
+            "type": "string",
+            "description": "Código teórico sugerido para elaborar a relação faltante."
+          },
+          "sampling_recommendation": {
+            "type": "string",
+            "description": "Se a lacuna requer amostragem: que tipo de dado procurar."
+          }
+        }
+      }
+    },
+    "ecosystem_health": {
+      "type": "object",
+      "properties": {
+        "total_categories": {
+          "type": "integer"
+        },
+        "connected_categories": {
+          "type": "integer"
+        },
+        "orphan_categories": {
+          "type": "integer"
+        },
+        "total_relationships": {
+          "type": "integer"
+        },
+        "layers_covered": {
+          "type": "integer",
+          "description": "De 7 camadas, quantas têm pelo menos 1 relação."
+        },
+        "unresolved_tensions": {
+          "type": "integer"
+        },
+        "overall_assessment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

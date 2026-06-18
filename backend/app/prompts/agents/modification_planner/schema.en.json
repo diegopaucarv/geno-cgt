@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "required": [
+    "rewritten_request",
+    "verification_plan",
+    "falsification_hypothesis"
+  ],
+  "properties": {
+    "rewritten_request": {
+      "type": "string",
+      "description": "Request reworded in terms of the agent's key question"
+    },
+    "verification_plan": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "action",
+          "description",
+          "input"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "Step number"
+          },
+          "action": {
+            "type": "string",
+            "description": "Name of the tool to use"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this step looks for"
+          },
+          "input": {
+            "type": "object",
+            "description": "Parameters for the tool"
+          },
+          "success_criteria": {
+            "type": "string",
+            "description": "How I will know this step found what it was looking for"
+          }
+        }
+      }
+    },
+    "falsification_hypothesis": {
+      "type": "string",
+      "description": "What evidence would demonstrate that the modification is NOT advisable"
+    },
+    "expected_impact": {
+      "type": "string",
+      "description": "Which tables/outputs would be affected if the change is applied"
+    }
+  }
+}

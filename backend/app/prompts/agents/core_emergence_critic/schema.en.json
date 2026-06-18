@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "required": [
+    "verdicts"
+  ],
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "refine",
+              "split"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_interchangeable": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "non_interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_different": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "suggested_action_if_not_valid": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -20,9 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
-from typing import Any
 
 sys.path.insert(0, "/app")
 
@@ -32,142 +30,6 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 llm = LLMClient()
-
-# ── Output schema (PRO) ───────────────────────────────────────────────
-
-_PATTERN_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "core_pattern": {
-            "type": "string",
-            "description": (
-                "Gerundio que nombra el patrón central del documento. "
-                "Debe capturar la esencia de lo que el entrevistado "
-                "intenta resolver continuamente. "
-                "Ej: 'Negociando permanencia en la plataforma'"
-            ),
-        },
-        "description": {
-            "type": "string",
-            "description": (
-                "Síntesis multi-párrafo del patrón central. Explica: "
-                "1) Qué está sucediendo recurrentemente, "
-                "2) Qué evidencia de los incidentes lo sustenta, "
-                "3) Cómo se interrelacionan los incidentes para formar el patrón."
-            ),
-        },
-        "evidence_quotes": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": (
-                "Citas textuales exactas de los incidentes que mejor "
-                "sustentan el patrón. Mínimo 2, máximo 5. "
-                "Cada cita DEBE provenir de un incidente distinto."
-            ),
-        },
-        "confidence": {
-            "type": "string",
-            "enum": ["HIGH", "MEDIUM", "LOW"],
-            "description": (
-                "Confianza en la extracción. "
-                "HIGH: patrón claro, múltiples incidentes convergentes. "
-                "MEDIUM: patrón discernible pero con variación. "
-                "LOW: patrón tentativo, pocos incidentes o contradictorios."
-            ),
-        },
-        "key_incident_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": (
-                "UUIDs de los incidentes más representativos del patrón. "
-                "Los que contienen las evidence_quotes."
-            ),
-        },
-    },
-    "required": [
-        "core_pattern",
-        "description",
-        "evidence_quotes",
-        "confidence",
-    ],
-}
-
-# ── System prompt template ────────────────────────────────────────────
-
-_SYSTEM_PROMPT = """[ROL]
-Eres un sintetizador de patrones para Classic Grounded Theory.
-Tu tarea es leer TODOS los incidentes extraídos de UN documento
-y sintetizar el patrón central que subyace a la experiencia
-de este entrevistado.
-
-[CONTEXTO]
-Estás en la Fase A (Open Coding). Solo ves los incidentes de
-ESTE documento. No conoces otros documentos ni categorías existentes.
-
-[OBJETO DE ESTUDIO]
-object_of_study = {object_of_study}
-Instrucción: {object_of_study_instruction}
-
-[TAREA]
-1. Lee todos los incidentes del documento (abajo).
-2. Identifica el patrón central que emerge — qué está intentando
-   resolver continuamente este entrevistado.
-3. Nombra el patrón con un gerundio (core_pattern).
-4. Escribe una síntesis multi-párrafo (description) que explique
-   el patrón, su manifestación en los incidentes, y cómo se
-   interrelacionan.
-5. Selecciona 2-5 citas exactas de los incidentes que mejor
-   evidencian el patrón (evidence_quotes). Usa el texto de los jots
-   o de las respuestas a las preguntas de Glaser.
-6. Evalúa tu confianza (HIGH | MEDIUM | LOW).
-
-[INSTRUCCIONES]
-- Trabaja AISLADO. Solo ves los incidentes de este documento.
-- Sé riguroso: cada afirmación debe tener respaldo en los incidentes.
-- Responde en español.
-- El core_pattern debe ser un gerundio de 2-6 palabras.
-
-[INCIDENTES DEL DOCUMENTO]
-{incidents_text}"""
-
-# ── Mapeo object_of_study → instrucción ──────────────────────────────
-
-_OBJECT_INSTRUCTIONS: dict[str, str] = {
-    "concern": (
-        "Busca el patrón de COMPORTAMIENTO recurrente. "
-        "¿Qué intenta resolver este entrevistado una y otra vez? "
-        "Expresa el patrón como un gerundio de procesamiento "
-        "(ej. 'Negociando permanencia', 'Balanceando riesgo y visibilidad')."
-    ),
-    "emotion": (
-        "Busca el patrón EMOCIONAL recurrente. "
-        "¿Qué siente este entrevistado una y otra vez? "
-        "Expresa el patrón como un gerundio de sentir "
-        "(ej. 'Sintiendo culpa por delegar', 'Arrepintiéndose de decisiones')."
-    ),
-    "behavior": (
-        "Busca la CONDUCTA observable recurrente. "
-        "¿Qué hace este entrevistado una y otra vez? "
-        "Expresa el patrón como un gerundio de acción "
-        "(ej. 'Evadiendo responsabilidades', 'Buscando validación externa')."
-    ),
-    "discourse": (
-        "Busca el patrón DISCURSIVO recurrente. "
-        "¿Cómo construye su narrativa este entrevistado? "
-        "Expresa el patrón como un gerundio o nominalización "
-        "(ej. 'Justificándose ante pares', 'Minimizando el conflicto')."
-    ),
-    "identity": (
-        "Busca el TRABAJO IDENTITARIO recurrente. "
-        "¿Cómo negocia su identidad este entrevistado? "
-        "Expresa el patrón como un gerundio "
-        "(ej. 'Negociando pertenencia al gremio', 'Defendiendo estatus profesional')."
-    ),
-    "custom": (
-        "Busca el PATRÓN recurrente que estructura la experiencia "
-        "de este entrevistado. Expresa el patrón como un gerundio."
-    ),
-}
 
 
 def _get_object_of_study(session, proyecto_id: str) -> str:
@@ -259,9 +121,23 @@ def extract_core_pattern(documento_id: str, proyecto_id: str) -> dict:
 
         # ── 2. Obtener object_of_study ────────────────────────────────
         object_of_study = _get_object_of_study(session, proyecto_id)
-        instruction = _OBJECT_INSTRUCTIONS.get(
-            object_of_study, _OBJECT_INSTRUCTIONS["concern"]
+
+        # ── 2.5. Obtener operational_question y document_name ─────
+        pa_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
         )
+        operational_question = rq_data.get("operational_question", "")
+
+        doc_name_row = session.execute(
+            text("SELECT original_filename FROM documentos WHERE id = :did"),
+            {"did": documento_id},
+        ).fetchone()
+        doc_name = doc_name_row[0] if doc_name_row else documento_id
 
         # ── 3. Truncar si excede el contexto PRO (~6K chars para el texto de incidentes) ──
         max_incident_chars = 6000
@@ -275,20 +151,15 @@ def extract_core_pattern(documento_id: str, proyecto_id: str) -> dict:
                 "\n\n[... texto truncado por límite de contexto ...]"
             )
 
-        # ── 4. Construir prompt y llamar LLM (PRO) ────────────────────
-        system_prompt = _SYSTEM_PROMPT.format(
-            object_of_study=object_of_study,
-            object_of_study_instruction=instruction,
-            incidents_text=incidents_text,
-        )
-
-        response = llm._call_llm(
-            tier="PRO",
-            model=os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4"),
-            system_prompt=system_prompt,
-            schema=_PATTERN_SCHEMA,
-            max_tokens=4096,
-            temperature=0.3,
+        # ── 4. Llamar core_pattern_extractor agent (PRO) ──────────
+        response = llm.run_agent(
+            "core_pattern_extractor",
+            variables={
+                "document_name": doc_name,
+                "incidents_text": incidents_text,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
+            },
         )
 
         # ── 5. Validar respuesta ──────────────────────────────────────

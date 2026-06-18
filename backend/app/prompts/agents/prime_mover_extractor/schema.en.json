@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prime_mover",
+    "confidence"
+  ],
+  "properties": {
+    "prime_mover": {
+      "type": "string",
+      "description": "Core pattern expressed as a gerund."
+    },
+    "description": {
+      "type": "string",
+      "description": "Narrative description (2-3 sentences) of how this pattern manifests in the document."
+    },
+    "evidence_quotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Verbatim quotes from baseline_data supporting the prime mover."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Confidence in the extraction."
+    },
+    "insufficient_data": {
+      "type": "boolean",
+      "description": "true if there is insufficient baseline_data to extract a prime mover."
+    },
+    "alternative_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Plausible alternative patterns if confidence is not HIGH."
+    }
+  }
+}

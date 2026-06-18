@@ -1,0 +1,415 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "final_report",
+    "schema": {
+      "type": "object",
+      "required": [
+        "report"
+      ],
+      "properties": {
+        "report": {
+          "type": "object",
+          "required": [
+            "title",
+            "abstract",
+            "core_pattern",
+            "core_category",
+            "theoretical_model",
+            "population_dimensions",
+            "literature_dialogue",
+            "applicability",
+            "research_trajectory"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Título completo do relatório: '{Padrão Central} — Uma Teoria Fundamentada Clássica de {População Generalizada}'"
+            },
+            "abstract": {
+              "type": "string",
+              "description": "Resumo autônomo de ~200 palavras. Padrão central, categoria central, população, contribuição, implicações."
+            },
+            "core_pattern": {
+              "type": "object",
+              "required": [
+                "heading",
+                "pattern_identification",
+                "emergence_narrative",
+                "evidential_anchoring"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Cabeçalho de seção adaptado ao object_of_study: 'Preocupação Central', 'Emoção Central', 'Comportamento Central', etc."
+                },
+                "pattern_identification": {
+                  "type": "string",
+                  "description": "O gerúndio que nomeia o padrão central. Explicação do que o padrão É e por que este gerúndio o captura."
+                },
+                "emergence_narrative": {
+                  "type": "string",
+                  "description": "Como o padrão emergiu dos dados. Convergência entre documentos, momentos-chave de descoberta, evolução do entendimento."
+                },
+                "evidential_anchoring": {
+                  "type": "string",
+                  "description": "Incidentes e códigos de dados mais fortes que respaldam o padrão. Variação em como os participantes o experimentam. Rastrear a nós/incidentes específicos."
+                }
+              }
+            },
+            "core_category": {
+              "type": "object",
+              "required": [
+                "heading",
+                "definition",
+                "properties",
+                "relationship_to_core_pattern"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Categoria Central' — é um construto formal de CGT, não adaptado ao object_of_study."
+                },
+                "definition": {
+                  "type": "string",
+                  "description": "Definição conceitual precisa da categoria central. O que É, não o que faz (isso vai no modelo)."
+                },
+                "properties": {
+                  "type": "array",
+                  "description": "Propriedades da categoria central, cada uma com sua faixa dimensional.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "dimensional_range"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Nome da propriedade."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "O que esta propriedade captura sobre a categoria central."
+                      },
+                      "dimensional_range": {
+                        "type": "string",
+                        "description": "A faixa de variação observada para esta propriedade (ex., 'intensidade baixa a alta', 'escopo estreito a amplo')."
+                      }
+                    }
+                  }
+                },
+                "relationship_to_core_pattern": {
+                  "type": "string",
+                  "description": "Como esta categoria processa, resolve ou aborda o padrão central. O vínculo explicativo entre as Seções 2 e 3."
+                }
+              }
+            },
+            "theoretical_model": {
+              "type": "object",
+              "required": [
+                "heading",
+                "model_overview",
+                "conditions",
+                "core_process",
+                "strategies",
+                "consequences",
+                "relational_architecture"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Modelo Teórico'."
+                },
+                "model_overview": {
+                  "type": "string",
+                  "description": "Resumo narrativo do modelo teórico completo. Como condições, estratégias e consequências se interconectam através da categoria central."
+                },
+                "conditions": {
+                  "type": "string",
+                  "description": "Condições antecedentes e estruturais que moldam como a categoria central opera. Condições causais e contextuais de nós com entity_type 'condition'."
+                },
+                "core_process": {
+                  "type": "string",
+                  "description": "A aresta PROCESSES central: como a categoria central processa/resolve o padrão central. Esta é a espinha dorsal obrigatória do modelo. Deve ser derivada da aresta PROCESSES na entrada."
+                },
+                "strategies": {
+                  "type": "string",
+                  "description": "Estratégias comportamentais e cognitivas que os participantes empregam. Derivadas de nós com entity_type 'strategy' e arestas IS_A_STRATEGY_FOR."
+                },
+                "consequences": {
+                  "type": "string",
+                  "description": "Resultados e consequências, tanto intencionais quanto não intencionais. Derivados de nós com entity_type 'consequence' e arestas IS_A_CONSEQUENCE_OF."
+                },
+                "relational_architecture": {
+                  "type": "array",
+                  "description": "Listagem estruturada de todas as relações teóricas (arestas). A aresta PROCESSES DEVE vir primeiro. Organizada por tipo de relação.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "relationship_type",
+                      "source",
+                      "target",
+                      "narrative"
+                    ],
+                    "properties": {
+                      "relationship_type": {
+                        "type": "string",
+                        "enum": [
+                          "PROCESSES",
+                          "LEADS_TO",
+                          "IS_A_STRATEGY_FOR",
+                          "IS_A_CONSEQUENCE_OF",
+                          "IS_A_CONDITION_FOR",
+                          "VARIES_WITH",
+                          "CO_OCCURS_WITH"
+                        ],
+                        "description": "Tipo de relação CGT canônico."
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "Rótulo do nó origem."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Rótulo do nó destino."
+                      },
+                      "narrative": {
+                        "type": "string",
+                        "description": "Narrativa de uma frase da relação em presente conceitual."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "population_dimensions": {
+              "type": "object",
+              "required": [
+                "heading",
+                "population_profile",
+                "dimensional_variations",
+                "scope_boundaries"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Dimensões Populacionais'."
+                },
+                "population_profile": {
+                  "type": "string",
+                  "description": "A população generalizada à qual a teoria se aplica. Abstrata o suficiente para transferibilidade, específica o suficiente para ser significativa."
+                },
+                "dimensional_variations": {
+                  "type": "string",
+                  "description": "Como o padrão central e a categoria central se manifestam diferentemente conforme dimensões populacionais. Documentar a faixa de variação, não apenas a tendência central."
+                },
+                "scope_boundaries": {
+                  "type": "string",
+                  "description": "Onde a teoria NÃO se aplica. Populações, contextos ou condições excluídas. Avaliação honesta do escopo."
+                }
+              }
+            },
+            "literature_dialogue": {
+              "type": "object",
+              "required": [
+                "heading",
+                "emergent_fit_assessment",
+                "extends",
+                "modifies",
+                "integrates",
+                "transcends"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Diálogo com a Literatura'."
+                },
+                "emergent_fit_assessment": {
+                  "type": "string",
+                  "description": "Avaliação global: a teoria dialoga genuinamente com a literatura ou é forçada a se encaixar? Avaliação sincera."
+                },
+                "extends": {
+                  "type": "string",
+                  "description": "Onde a literatura confirma e a teoria estende o conhecimento existente com novas propriedades, dimensões ou relações."
+                },
+                "modifies": {
+                  "type": "string",
+                  "description": "Onde a literatura sugere modificações a conceitos recebidos, e como a teoria emergente os revisa."
+                },
+                "integrates": {
+                  "type": "string",
+                  "description": "Onde a teoria unifica conceitos dispersos da literatura em um quadro explicativo coerente."
+                },
+                "transcends": {
+                  "type": "string",
+                  "description": "O que a teoria revela que a literatura não havia capturado. A contribuição inovadora desta teoria fundamentada."
+                }
+              }
+            },
+            "applicability": {
+              "type": "object",
+              "required": [
+                "heading",
+                "control_variables",
+                "access_variables",
+                "intervention_guidelines",
+                "practical_limitations"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Aplicabilidade'."
+                },
+                "control_variables": {
+                  "type": "array",
+                  "description": "Aspectos do fenômeno que podem ser modificados na prática. Cada um remonta a uma propriedade teórica.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "theory_basis"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Nome da variável de controle."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "O que pode ser modificado e como."
+                      },
+                      "theory_basis": {
+                        "type": "string",
+                        "description": "Qual propriedade ou relação teórica justifica isso como modificável."
+                      }
+                    }
+                  }
+                },
+                "access_variables": {
+                  "type": "array",
+                  "description": "Condições que habilitam ou restringem a intervenção.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "conditions_access"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Nome da variável de acesso."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "O que esta variável condiciona."
+                      },
+                      "conditions_access": {
+                        "type": "string",
+                        "description": "Como esta variável habilita ou restringe o acesso às variáveis de controle."
+                      }
+                    }
+                  }
+                },
+                "intervention_guidelines": {
+                  "type": "array",
+                  "description": "Recomendações concretas para profissionais.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "guideline",
+                      "target",
+                      "mechanism"
+                    ],
+                    "properties": {
+                      "guideline": {
+                        "type": "string",
+                        "description": "A recomendação acionável."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Quem age sobre esta diretriz (ex., profissional, organização, participante)."
+                      },
+                      "mechanism": {
+                        "type": "string",
+                        "description": "Como a diretriz produz mudança, rastreada a um mecanismo teórico."
+                      }
+                    }
+                  }
+                },
+                "practical_limitations": {
+                  "type": "string",
+                  "description": "O que a teoria NÃO respalda em termos de intervenção. Proteger contra sobre-aplicação."
+                }
+              }
+            },
+            "research_trajectory": {
+              "type": "object",
+              "required": [
+                "heading",
+                "open_questions",
+                "methodological_limitations",
+                "future_directions"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Sempre 'Trajetória de Pesquisa'."
+                },
+                "open_questions": {
+                  "type": "array",
+                  "description": "Perguntas teóricas que os dados atuais não podem responder. Propriedades que precisam de mais dimensionalização.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "question",
+                      "why_unresolved"
+                    ],
+                    "properties": {
+                      "question": {
+                        "type": "string",
+                        "description": "A pergunta teórica aberta."
+                      },
+                      "why_unresolved": {
+                        "type": "string",
+                        "description": "Por que os dados atuais não podem resolver esta pergunta (variação insuficiente, dimensão subamostrada, etc.)."
+                      }
+                    }
+                  }
+                },
+                "methodological_limitations": {
+                  "type": "string",
+                  "description": "Limitações inerentes ao desenho do estudo, amostragem ou escolhas analíticas. Autoavaliação sincera."
+                },
+                "future_directions": {
+                  "type": "array",
+                  "description": "Estudos concretos seguintes, populações a amostrar, comparações a realizar.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "direction",
+                      "rationale"
+                    ],
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "description": "Direção de pesquisa futura proposta."
+                      },
+                      "rationale": {
+                        "type": "string",
+                        "description": "Por que esta direção emerge das lacunas atuais ou perguntas abertas da teoria."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

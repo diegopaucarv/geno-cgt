@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "process_description",
+    "similarity_to_previous",
+    "difference_from_previous"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "Beschreibung des zentralen Prozesses DIESES Interviewpartners als Gerundium."
+    },
+    "similarity_to_previous": {
+      "type": "string",
+      "description": "Worin es dem Prozess des vorherigen Interviewpartners ÄHNLICH ist."
+    },
+    "difference_from_previous": {
+      "type": "string",
+      "description": "Worin es sich vom Prozess des vorherigen Interviewpartners UNTERSCHEIDET."
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relationship_summary",
+    "converging_evidence",
+    "diverging_evidence",
+    "conceptual_fit"
+  ],
+  "properties": {
+    "relationship_summary": {
+      "type": "string",
+      "description": "Descripción narrativa de la relación encontrada. Tiempo presente. Nivel teórico."
+    },
+    "converging_evidence": {
+      "type": "array",
+      "description": "Incidentes que RESPALDAN la relación (convergen). Array vacío si no hay.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_converges"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Cita textual exacta."
+          },
+          "how_it_converges": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diverging_evidence": {
+      "type": "array",
+      "description": "Incidentes que TENSIONAN la relación. NO son refutaciones — son oportunidades de expansión.",
+      "items": {
+        "type": "object",
+        "required": [
+          "document_name",
+          "exact_quote",
+          "how_it_diverges",
+          "expansion_suggestion"
+        ],
+        "properties": {
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string"
+          },
+          "how_it_diverges": {
+            "type": "string"
+          },
+          "expansion_suggestion": {
+            "type": "string",
+            "description": "Cómo expandir la relación para acomodar este dato divergente (condición, subtipo, contexto, vía alternativa)."
+          }
+        }
+      }
+    },
+    "shared_documents_without_clear_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Documentos con ambas categorías pero sin evidencia clara."
+    },
+    "conceptual_fit": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Qué tan bien explica esta relación la conducta de los participantes."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Nota libre: ¿qué hallazgo emergió? ¿Qué queda por explorar?"
+    },
+    "suggested_next_elaborations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Sugerencias para próximas relaciones a elaborar."
+    }
+  }
+}

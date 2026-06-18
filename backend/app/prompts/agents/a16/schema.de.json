@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "INTERCAMBIABLES",
+        "NO_INTERCAMBIABLES",
+        "INSUFICIENTES_INCIDENTES"
+      ],
+      "description": "INTERCAMBIABLES: gleiches Muster. NO_INTERCAMBIABLES: unterschiedliche Muster. INSUFICIENTES_INCIDENTES: weniger als 2 Incidente zum Vergleichen."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Detaillierte Begründung: aus jedem Incident extrahierte Essenzen, Vergleich und Rechtfertigung des Urteils."
+    },
+    "essence_1": {
+      "type": "string",
+      "description": "Essenz von Incident 1: Verhaltensmuster, abstrahiert von seinem spezifischen Kontext."
+    },
+    "essence_2": {
+      "type": "string",
+      "description": "Essenz von Incident 2."
+    },
+    "essence_3": {
+      "type": "string",
+      "description": "Essenz von Incident 3. Leerer String, wenn kein dritter Incident bereitgestellt wurde."
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "mantener",
+        "dividir",
+        "refinar",
+        ""
+      ],
+      "description": "Nur wenn NO_INTERCAMBIABLES. mantener: Kategorie ist korrekt. dividir: separate Kategorien erstellen. refinar: Definition erweitern, um Variation einzuschließen. Leerer String wenn INTERCAMBIABLES."
+    },
+    "suggested_action_detail": {
+      "type": "string",
+      "description": "Detail der vorgeschlagenen Maßnahme: was aufteilen, wie verfeinern oder warum behalten. Leerer String wenn nicht zutreffend."
+    }
+  }
+}

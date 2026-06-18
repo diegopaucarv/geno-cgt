@@ -1,0 +1,224 @@
+{
+  "type": "object",
+  "required": [
+    "edges",
+    "processes_edge_present",
+    "edge_summary",
+    "missing_evidence_notes"
+  ],
+  "properties": {
+    "edges": {
+      "type": "array",
+      "description": "Todas las aristas propuestas. La arista PROCESSES DEBE ir primera en el array.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relationship_type",
+          "rationale",
+          "evidence",
+          "direction",
+          "strength"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Etiqueta del nodo origen. Para arista PROCESSES: la etiqueta del nodo central."
+          },
+          "target": {
+            "type": "string",
+            "description": "Etiqueta del nodo destino. Para arista PROCESSES: una descripción de lo que se está procesando (el {object_of_study})."
+          },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "PROCESSES",
+              "LEADS_TO",
+              "IS_A_STRATEGY_FOR",
+              "IS_A_CONSEQUENCE_OF",
+              "IS_A_CONDITION_FOR",
+              "VARIES_WITH",
+              "CO_OCCURS_WITH"
+            ],
+            "description": "Tipo de relación canónico de las 7 familias glaserianas."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación teórica: por qué existe esta relación y qué explica sobre el {object_of_study}."
+          },
+          "evidence": {
+            "type": "object",
+            "required": [
+              "source_id",
+              "source_type",
+              "summary",
+              "strength"
+            ],
+            "properties": {
+              "source_id": {
+                "type": "string",
+                "description": "UUID de la hipótesis o conceptual_relationship."
+              },
+              "source_type": {
+                "type": "string",
+                "enum": [
+                  "hypothesis",
+                  "conceptual_relationship"
+                ],
+                "description": "Tipo de evidencia."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Resumen en una oración de lo que muestra la evidencia."
+              },
+              "strength": {
+                "type": "string",
+                "enum": [
+                  "strong",
+                  "moderate",
+                  "weak"
+                ],
+                "description": "Calidad de evidencia: strong (múltiples fuentes convergentes), moderate (una fuente sólida), weak (sugestiva)."
+              }
+            }
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "unidirectional",
+              "bidirectional",
+              "conceptual"
+            ],
+            "description": "Dirección de la relación. 'conceptual' solo para arista PROCESSES."
+          },
+          "strength": {
+            "type": "string",
+            "enum": [
+              "strong",
+              "moderate",
+              "tentative"
+            ],
+            "description": "Confianza general en esta arista, considerando calidad de evidencia y coherencia teórica."
+          }
+        }
+      }
+    },
+    "processes_edge_present": {
+      "type": "boolean",
+      "description": "DEBE ser true para un Database B válido. Si false, el mecanismo central no está definido."
+    },
+    "processes_edge_missing_rationale": {
+      "type": "string",
+      "description": "Si processes_edge_present=false: ¿por qué no se puede construir una arista PROCESSES creíble? ¿Qué evidencia falta?"
+    },
+    "edge_summary": {
+      "type": "object",
+      "required": [
+        "total_edges",
+        "by_type",
+        "coverage",
+        "narrative"
+      ],
+      "properties": {
+        "total_edges": {
+          "type": "integer"
+        },
+        "by_type": {
+          "type": "object",
+          "description": "Conteo por relationship_type.",
+          "properties": {
+            "PROCESSES": {
+              "type": "integer"
+            },
+            "LEADS_TO": {
+              "type": "integer"
+            },
+            "IS_A_STRATEGY_FOR": {
+              "type": "integer"
+            },
+            "IS_A_CONSEQUENCE_OF": {
+              "type": "integer"
+            },
+            "IS_A_CONDITION_FOR": {
+              "type": "integer"
+            },
+            "VARIES_WITH": {
+              "type": "integer"
+            },
+            "CO_OCCURS_WITH": {
+              "type": "integer"
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "description": "Cuántos nodos tienen al menos una arista.",
+          "properties": {
+            "nodes_with_edges": {
+              "type": "integer"
+            },
+            "total_nodes": {
+              "type": "integer"
+            },
+            "isolated_nodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Etiquetas de nodos con cero aristas."
+            }
+          }
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Una narrativa de 3–5 oraciones del modelo integrado: qué procesa qué, bajo qué condiciones, mediante qué estrategias, produciendo qué consecuencias."
+        }
+      }
+    },
+    "missing_evidence_notes": {
+      "type": "array",
+      "description": "Relaciones plausibles que carecen de evidencia suficiente. Honestidad metodológica: ¿qué aristas propondríamos si tuviéramos más datos?",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "proposed_type",
+          "why_plausible",
+          "what_evidence_needed"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Etiqueta del nodo origen."
+          },
+          "target": {
+            "type": "string",
+            "description": "Etiqueta del nodo destino."
+          },
+          "proposed_type": {
+            "type": "string",
+            "enum": [
+              "PROCESSES",
+              "LEADS_TO",
+              "IS_A_STRATEGY_FOR",
+              "IS_A_CONSEQUENCE_OF",
+              "IS_A_CONDITION_FOR",
+              "VARIES_WITH",
+              "CO_OCCURS_WITH"
+            ]
+          },
+          "why_plausible": {
+            "type": "string",
+            "description": "Por qué esta relación es teóricamente plausible a pesar de carecer de evidencia."
+          },
+          "what_evidence_needed": {
+            "type": "string",
+            "description": "Qué tipo de datos o incidentes se necesitarían para establecer esta relación."
+          }
+        }
+      }
+    }
+  }
+}

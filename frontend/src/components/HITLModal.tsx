@@ -53,7 +53,7 @@ function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
         <div>
           <span style={labelStyle}>{t("hitl.patternOfInterestLabel")}</span>
           <span style={{ ...valStyle, fontSize: 14, fontWeight: 600 }}>
-            {(p.main_concern as string) || "?"}
+            {(p.core_concern as string) || "?"}
           </span>
         </div>
         <div style={{ marginTop: 4 }}>

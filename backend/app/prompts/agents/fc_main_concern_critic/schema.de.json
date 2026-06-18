@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_statement",
+          "verdict",
+          "rationale",
+          "grounding_assessment"
+        ],
+        "properties": {
+          "candidate_statement": {
+            "type": "string",
+            "description": "Die Aussage des bewerteten Kandidaten (exakter Text)."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Methodologisches Urteil."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Detaillierte Rechtfertigung des Urteils unter Nennung spezifischer Codes und Memos."
+          },
+          "grounding_assessment": {
+            "type": "string",
+            "description": "Stützen die supporting_codes diesen Kandidaten tatsächlich? Jeden zitierten Code bewerten."
+          },
+          "coverage_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Anteil der Gesamtcodes, den dieser Kandidat erklärt (1 - orphan_count/total_codes)."
+          },
+          "abstraction_assessment": {
+            "type": "string",
+            "enum": [
+              "adequate",
+              "too_concrete",
+              "too_abstract"
+            ],
+            "description": "Bewertung des Abstraktionsniveaus."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Vorgeschlagene konkrete Maßnahme. Nur wenn MOD. Z.B.: 'Gerundium zu X umformulieren', 'Abstraktion durch Verankerung in Code Y reduzieren', 'Prüfen, ob Code Z tatsächlich stützt'."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Konfidenz des Kritikers in diesem Urteil (0,0–1,0)."
+          }
+        }
+      }
+    },
+    "ranked_recommendation": {
+      "type": "string",
+      "description": "Endgültige Empfehlung: welchen {object_of_study}-Kandidaten empfehlen Sie dem Forscher und warum? Wenn keiner SAT ist, erklären was fehlt."
+    }
+  },
+  "required": [
+    "evaluations",
+    "ranked_recommendation"
+  ]
+}

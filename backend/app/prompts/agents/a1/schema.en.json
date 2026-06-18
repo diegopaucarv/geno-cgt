@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "surprising_details",
+    "language_patterns",
+    "data_production_context"
+  ],
+  "properties": {
+    "surprising_details": {
+      "type": "string",
+      "description": "What this interviewee reveals about this population that you didn't know. What contradicts, nuances, or expands what you believed. Must integrate the new finding with accumulated context. If there is no real novelty, respond exactly: 'No changes from the previous version.' If the segments do not contain sufficient information to evaluate this dimension, respond: 'Insufficient evidence in this document.'"
+    },
+    "language_patterns": {
+      "type": "string",
+      "description": "How this interviewee speaks: metaphors used, euphemisms, filler words, repeated words, invented terms. Compare with the documented general pattern. If no difference: 'No changes from the previous version.' If insufficient text to evaluate: 'Insufficient evidence in this document.'"
+    },
+    "data_production_context": {
+      "type": "string",
+      "description": "What you observe about how this interview was produced: physical setting, interviewee attitude, power dynamics, avoided topics. If no new observations: 'No changes from the previous version.' If the text contains no clues about the production context: 'Insufficient evidence in this document.'"
+    }
+  }
+}

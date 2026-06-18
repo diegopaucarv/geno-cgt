@@ -1,0 +1,110 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "global_definition",
+    "properties"
+  ],
+  "properties": {
+    "global_definition": {
+      "type": "string",
+      "description": "Consolidated definition of the code across all documents. More abstract than individual summaries but anchored in the data."
+    },
+    "properties": {
+      "type": "array",
+      "description": "Properties and dimensions of the category. Empty array if no clear properties are identified.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the property as a noun (e.g. 'intensity', 'frequency', 'context')."
+          },
+          "description": {
+            "type": "string",
+            "description": "What varies in this dimension and between what values."
+          },
+          "gradient": {
+            "type": "string",
+            "description": "Range of variation. E.g.: 'low → high', 'explicit → implicit'. Empty string if not applicable."
+          },
+          "evidence_doc_count": {
+            "type": "integer",
+            "description": "In how many documents evidence of this property is observed."
+          }
+        }
+      }
+    },
+    "internal_types": {
+      "type": "array",
+      "description": "Sub-patterns or profiles that emerge within the category. Empty array if no clear internal types.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Label of the type or profile."
+          },
+          "description": {
+            "type": "string",
+            "description": "What distinguishes this type from others within the category."
+          },
+          "distinguishing_property": {
+            "type": "string",
+            "description": "Property that differentiates this type. Empty string if there is no unique property."
+          }
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "description": "Circumstances under which the category manifests. Empty array if no conditions are identified.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "type"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "description": "Description of the circumstance."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "structural",
+              "contingent"
+            ],
+            "description": "structural: stable context condition. contingent: variable or situational condition."
+          }
+        }
+      }
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "enrich",
+        "subdivide",
+        "divide"
+      ],
+      "description": "none: robust category. enrich: add properties/dimensions. subdivide: create subcategories. divide: separate into distinct categories."
+    },
+    "suggested_action_rationale": {
+      "type": "string",
+      "description": "Justification of the suggested action, referencing evidence from the summaries."
+    }
+  }
+}

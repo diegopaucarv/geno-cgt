@@ -105,7 +105,7 @@ class OrchestratorRuleEngine:
 
         Heuristica (F1.4 — maturity_gate deterministico):
         - Si el maturity gate NO pasa → pausar, mostrar que falta
-        - Si pasa y tenemos main_concern → generate_hypotheses
+        - Si pasa y tenemos core_concern → generate_hypotheses
         - Si pasa y tenemos >= 3 codigos → find_core_concern
         - Si pasa y < 3 codigos → batch_code (seguir generando)
         """
@@ -118,9 +118,9 @@ class OrchestratorRuleEngine:
             )
             return "hitl_gap_review"  # Pausar: el investigador ve qué falta
 
-        if state.get("main_concern"):
+        if state.get("core_concern"):
             logger.info(
-                "Orchestrator: maturity gate OK + main_concern → generate_hypotheses"
+                "Orchestrator: maturity gate OK + core_concern → generate_hypotheses"
             )
             return "generate_hypotheses"
 
@@ -212,7 +212,7 @@ Project ID: {state.get("project_id", "")}
 Documentos procesados: {state.get("docs_processed", 0)}
 Codigos generados: {len(state.get("new_codes", []))}
 Hipotesis candidatas: {len(state.get("candidate_hypotheses", []))}
-Main concern: {"si" if state.get("main_concern") else "no"}
+Core concern: {"si" if state.get("core_concern") else "no"}
 Gaps pendientes: {len(state.get("pending_gaps", []))}
 Errores: {len(state.get("errors", []))}
 

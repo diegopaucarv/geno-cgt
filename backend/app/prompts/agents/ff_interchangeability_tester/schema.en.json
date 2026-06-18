@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "INTERCAMBIABLES",
+        "NO_INTERCAMBIABLES",
+        "INSUFICIENTES_INCIDENTES"
+      ],
+      "description": "INTERCAMBIABLES: same pattern. NO_INTERCAMBIABLES: distinct patterns. INSUFICIENTES_INCIDENTES: fewer than 2 incidents to compare."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Detailed reasoning: essences extracted from each incident, comparison, and justification of the verdict."
+    },
+    "essence_1": {
+      "type": "string",
+      "description": "Essence of incident 1: behavioral pattern abstracted from its specific context."
+    },
+    "essence_2": {
+      "type": "string",
+      "description": "Essence of incident 2."
+    },
+    "essence_3": {
+      "type": "string",
+      "description": "Essence of incident 3. Empty string if no third incident was provided."
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "mantener",
+        "dividir",
+        "refinar",
+        ""
+      ],
+      "description": "Only if NO_INTERCAMBIABLES. mantener: category is correct. dividir: create separate categories. refinar: broaden definition to encompass variation. Empty string if INTERCAMBIABLES."
+    },
+    "suggested_action_detail": {
+      "type": "string",
+      "description": "Detail of the suggested action: what to split, how to refine, or why to keep. Empty string if not applicable."
+    }
+  }
+}

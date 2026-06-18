@@ -224,13 +224,13 @@ def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
         "FLASH": "deepseek_flash",
     }
     agent_files = {
-        "a1": "a1_population_context",
-        "a2": "a2_process_identifier",
-        "a3": "a3_sense_maker",
+        "fa_population_context": "a1_population_context",
+        "fa_process_identifier": "a2_process_identifier",
+        "fa_sense_maker": "a3_sense_maker",
         "b1": "b1_sampling_distiller",
-        "b2a": "b2a_extract_indicators",
-        "b2b": "b2b_generate_codes",
-        "b3": "b3_hypothesis_generator",
+        "fb_indicators_extractor": "b2a_extract_indicators",
+        "fb_code_generator": "b2b_generate_codes",
+        "fb_hypothesis_generator": "b3_hypothesis_generator",
         "graph_entity_extractor": "entity_extraction",
     }
     base_name = agent_files.get(agent_id, agent_id)
@@ -261,16 +261,16 @@ def _load_agent_prompt(agent_id: str, tier: ModelTier) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════
 
 MOCK_RESPONSES: dict[str, dict] = {
-    "a1": {
+    "fa_population_context": {
         "surprising_details": "[MOCK] Tensión autonomía-dependencia.",
         "language_patterns": "[MOCK] Metáforas espaciales.",
         "data_production_context": "[MOCK] Entrevistas en zonas de espera.",
     },
-    "a2": {
+    "fa_process_identifier": {
         "process_description": "[MOCK] Negociando permanencia.",
         "data_classification": "baseline",
     },
-    "a3": {
+    "fa_sense_maker": {
         "sense_status": "no_change",
         "hypotheses": [
             {
@@ -292,7 +292,7 @@ MOCK_RESPONSES: dict[str, dict] = {
             }
         ]
     },
-    "b2a": {
+    "fb_indicators_extractor": {
         "indicators": [
             {
                 "segment_index": 0,
@@ -306,7 +306,7 @@ MOCK_RESPONSES: dict[str, dict] = {
             },
         ]
     },
-    "b2b": {
+    "fb_code_generator": {
         "codes": [
             {
                 "code_name": "Evadiendo control algorítmico",
@@ -317,7 +317,7 @@ MOCK_RESPONSES: dict[str, dict] = {
             }
         ]
     },
-    "b3": {
+    "fb_hypothesis_generator": {
         "hypotheses": [
             {
                 "text": "[MOCK] Experiencia → sofisticación de estrategias.",
@@ -328,7 +328,7 @@ MOCK_RESPONSES: dict[str, dict] = {
             }
         ]
     },
-    "incident_comparator": {
+    "fb_incident_comparator": {
         "comparisons": [
             {
                 "incident_a_id": "00000000-0000-0000-0000-000000000001",
@@ -349,7 +349,7 @@ MOCK_RESPONSES: dict[str, dict] = {
         ],
         "ungrouped": [],
     },
-    "pattern_labeler": {
+    "fb_pattern_labeler": {
         "proposed_labels": [
             {
                 "group_index": 0,
@@ -362,7 +362,7 @@ MOCK_RESPONSES: dict[str, dict] = {
         ],
         "anomalies": [],
     },
-    "label_critic": {"all_valid": True, "issues": []},
+    "fb_label_critic": {"all_valid": True, "issues": []},
 }
 
 
@@ -414,12 +414,22 @@ class LLMClient:
         variables: dict[str, str],
         max_tokens: int | None = None,
         temperature: float | None = None,
+        language: str | None = None,
     ) -> dict[str, Any]:
-        """Carga prompt, reemplaza variables, inyecta schema, llama al LLM.
+        """Carga prompt, reemplaza variables, inyecta schema i18n, llama al LLM.
 
-        Si max_tokens o temperature no se especifican, se usan defaults
-        según el tier del modelo (PRO → 8K/0.3, FLASH → 4K/0.1).
+        Args:
+            language: 'en','es','de','pt'. Default: class-level _user_language.
         """
+        lang = language or self._user_language
+        LANG_NAMES = {
+            "en": "English",
+            "es": "español",
+            "de": "Deutsch",
+            "pt": "português",
+        }
+        variables["language_code"] = lang
+        variables["language_name"] = LANG_NAMES.get(lang, "English")
         if self.is_mock:
             return dict(
                 MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
@@ -463,6 +473,25 @@ class LLMClient:
                 system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
         schema = parsed["schema"]
+        # Fase 2: override with i18n schema from agents/{id}/schema.{lang}.json
+        try:
+            import os as _os
+
+            agents_schema = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                "backend",
+                "app",
+                "prompts",
+                "agents",
+                agent_id,
+                f"schema.{lang}.json",
+            )
+            if _os.path.exists(agents_schema):
+                with open(agents_schema, "r") as f:
+                    schema = json.load(f)
+                logger.debug("Agent %s: loaded i18n schema %s", agent_id, agents_schema)
+        except Exception:
+            pass  # fallback to inline schema
         model = _TIER_MODELS[model_tier]
         return self._call_llm(
             model_tier, model, system_prompt, schema, max_tokens, temperature

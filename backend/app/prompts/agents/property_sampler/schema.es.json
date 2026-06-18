@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "found_incidents",
+    "gradient_expanded"
+  ],
+  "properties": {
+    "found_incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "segment_id",
+          "document_name",
+          "exact_quote"
+        ],
+        "properties": {
+          "segment_id": {
+            "type": "string"
+          },
+          "document_name": {
+            "type": "string"
+          },
+          "exact_quote": {
+            "type": "string"
+          },
+          "extreme_manifested": {
+            "type": "string",
+            "enum": [
+              "confirms_known_extreme",
+              "expands_extreme_further",
+              "reveals_new_extreme"
+            ],
+            "description": "¿Este incidente confirma el extremo conocido, lo empuja más allá o revela un nuevo extremo?"
+          },
+          "elaboration": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gradient_expanded": {
+      "type": "boolean",
+      "description": "true si algún incidente expandió el gradiente más allá de lo conocido."
+    },
+    "expanded_gradient_description": {
+      "type": "string",
+      "description": "Nuevo rango del gradiente si se expandió."
+    },
+    "corpus_gap": {
+      "type": "boolean",
+      "description": "true si el corpus actual NO contiene incidentes en el extremo buscado."
+    },
+    "sampling_recommendation": {
+      "type": "string",
+      "description": "Si corpus_gap=true: qué tipo de caso buscar."
+    },
+    "suggested_interview_question": {
+      "type": "string",
+      "description": "Pregunta concreta para una entrevista de muestreo teórico."
+    }
+  }
+}

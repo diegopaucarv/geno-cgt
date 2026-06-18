@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "elaboration_type",
+    "description"
+  ],
+  "properties": {
+    "elaboration_type": {
+      "type": "string",
+      "enum": [
+        "converges",
+        "diverges_dimension",
+        "diverges_property",
+        "diverges_condition",
+        "diverges_strong"
+      ],
+      "description": "converges=bestätigt bestehende Eigenschaften. diverges_dimension=erweitert Gradient. diverges_property=fügt Eigenschaft hinzu. diverges_condition=offenbart Bedingung. diverges_strong=schlägt Unterteilung vor."
+    },
+    "description": {
+      "type": "string",
+      "description": "Narrative Beschreibung, wie der Incident mit der Kategorie zusammenhängt. Was er offenbart, bestätigt oder erweitert."
+    },
+    "expanded_definition": {
+      "type": "string",
+      "description": "Neue vorgeschlagene Definition, WENN die Ausarbeitung sie erweitert. Leerer String wenn unverändert."
+    },
+    "new_or_expanded_properties": {
+      "type": "array",
+      "description": "Neue oder erweiterte Eigenschaften. Leeres Array wenn elaboration_type=converges.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Eigenschaftsname als Substantiv."
+          },
+          "gradient": {
+            "type": "string",
+            "description": "Variationsbereich. Z.B.: 'niedrig ⟶ hoch'."
+          },
+          "is_new": {
+            "type": "boolean",
+            "description": "true wenn es eine neue Eigenschaft ist, false wenn ein bestehender Gradient erweitert wurde."
+          },
+          "previous_gradient": {
+            "type": "string",
+            "description": "Vorheriger Gradient. Nur wenn ein bestehender erweitert wurde."
+          }
+        }
+      }
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "update_definition",
+        "add_property",
+        "expand_gradient",
+        "suggest_subdivide",
+        "suggest_divide"
+      ],
+      "description": "Empfohlene Maßnahme für den Forscher. none wenn konvergiert."
+    },
+    "rename_suggested": {
+      "type": "boolean",
+      "description": "true wenn die Definition sich genug geändert hat, um eine Umbenennung vorzuschlagen."
+    },
+    "rename_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Vorgeschlagene Namen gemäß dem konfigurierten Kodierungsstil. Leeres Array wenn nicht."
+    },
+    "elaboration_note": {
+      "type": "string",
+      "description": "Freie Notiz des Ausarbeiters: Was offenbart dieser Incident über die Kategorie? Welche Fragen bleiben offen?"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "INTERCAMBIABLES",
+        "NO_INTERCAMBIABLES",
+        "INSUFICIENTES_INCIDENTES"
+      ],
+      "description": "INTERCAMBIABLES: mesmo padrão. NO_INTERCAMBIABLES: padrões distintos. INSUFICIENTES_INCIDENTES: menos de 2 incidentes para comparar."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Raciocínio detalhado: essências extraídas de cada incidente, comparação e justificativa do veredito."
+    },
+    "essence_1": {
+      "type": "string",
+      "description": "Essência do incidente 1: padrão comportamental abstraído de seu contexto específico."
+    },
+    "essence_2": {
+      "type": "string",
+      "description": "Essência do incidente 2."
+    },
+    "essence_3": {
+      "type": "string",
+      "description": "Essência do incidente 3. String vazia se nenhum terceiro incidente foi fornecido."
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "mantener",
+        "dividir",
+        "refinar",
+        ""
+      ],
+      "description": "Apenas se NO_INTERCAMBIABLES. mantener: a categoria está correta. dividir: criar categorias separadas. refinar: ampliar definição para abranger a variação. String vazia se INTERCAMBIABLES."
+    },
+    "suggested_action_detail": {
+      "type": "string",
+      "description": "Detalhe da ação sugerida: o que dividir, como refinar ou por que manter. String vazia se não aplicável."
+    }
+  }
+}

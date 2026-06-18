@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "properties": {
+    "extracted_incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cat_id": {
+            "type": "string",
+            "description": "Category UUID"
+          },
+          "doc_id": {
+            "type": "string",
+            "description": "Document UUID"
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Exact verbatim quote from the document"
+          },
+          "proposed_property": {
+            "type": "string",
+            "description": "Category property this incident reveals"
+          },
+          "paradigm_element": {
+            "type": "string",
+            "enum": [
+              "dimension",
+              "condition",
+              "consequence",
+              "strategy"
+            ],
+            "description": "CGT paradigm element"
+          }
+        },
+        "required": [
+          "exact_quote",
+          "proposed_property",
+          "paradigm_element"
+        ]
+      }
+    }
+  },
+  "required": [
+    "extracted_incidents"
+  ]
+}

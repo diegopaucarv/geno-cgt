@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Resumen ejecutivo de 3-5 oraciones"
+    },
+    "topic_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "3-6 etiquetas temáticas"
+    },
+    "inferred_document_type": {
+      "type": "string",
+      "description": "Tipo de documento inferido"
+    },
+    "language": {
+      "type": "string",
+      "description": "Idioma principal del documento"
+    }
+  },
+  "required": [
+    "summary",
+    "topic_labels"
+  ]
+}

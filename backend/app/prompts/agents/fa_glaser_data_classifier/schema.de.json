@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "glaser_data_type",
+    "rationale"
+  ],
+  "properties": {
+    "glaser_data_type": {
+      "type": "string",
+      "enum": [
+        "baseline_data",
+        "properline_data",
+        "interpreted_data",
+        "vague_data"
+      ],
+      "description": "baseline_data: spontane reale Erfahrung. properline_data: normativer Diskurs. interpreted_data: erzwungene Antwort. vague_data: ausweichend."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Ein Satz zur Rechtfertigung der Klassifikation mit textueller Evidenz."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Konfidenzniveau der Klassifikation."
+    }
+  }
+}

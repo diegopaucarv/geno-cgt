@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "expansion_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_index",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "expansion_index": {
+            "type": "integer",
+            "description": "Índice de la expansión en proposed_expansions"
+          },
+          "expansion_type": {
+            "type": "string",
+            "description": "Tipo de expansión propuesta"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=expansión genuina, MOD=imprecisa, FORCED=ya cubierta"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación: ¿qué propiedad existente ya cubre esto (si FORCED)? ¿Qué ajuste se necesita (si MOD)?"
+          },
+          "covered_by_property": {
+            "type": "string",
+            "description": "Si FORCED: nombre de la propiedad de paradigm_state que ya cubre este incidente"
+          },
+          "suggested_refinement": {
+            "type": "string",
+            "description": "Si MOD: sugerencia de ajuste concreta"
+          }
+        }
+      }
+    },
+    "did_state_expand": {
+      "type": "boolean",
+      "description": "true si AL MENOS una expansión fue evaluada como SAT"
+    },
+    "expansion_count": {
+      "type": "integer",
+      "description": "Cuántas expansiones fueron SAT (genuinamente nuevas)"
+    },
+    "confirmation_count": {
+      "type": "integer",
+      "description": "Cuántas expansiones fueron FORCED (ya cubiertas — confirmando saturación)"
+    },
+    "saturation_note": {
+      "type": "string",
+      "description": "Nota sobre el estado de saturación: ¿se está estabilizando la categoría?"
+    }
+  },
+  "required": [
+    "expansion_verdicts",
+    "did_state_expand"
+  ]
+}

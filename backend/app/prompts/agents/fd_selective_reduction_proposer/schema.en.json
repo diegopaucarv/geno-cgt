@@ -1,0 +1,150 @@
+{
+  "type": "object",
+  "properties": {
+    "reduced_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "entity_type",
+          "definition",
+          "source_code_ids",
+          "relation_to_core"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string",
+            "description": "Gerund of the higher-order concept (if merger) or original label (if kept alone)"
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "core_category",
+              "related_category",
+              "secondary_code"
+            ],
+            "description": "Type in the reduced system"
+          },
+          "definition": {
+            "type": "string",
+            "description": "Integrated definition. If merger, must encompass variations from all source_codes"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UUIDs of original codes merged here. If single code kept, contains only its UUID"
+          },
+          "relation_to_core": {
+            "type": "string",
+            "enum": [
+              "is_the_core",
+              "processes",
+              "conditions",
+              "consequences",
+              "strategies"
+            ],
+            "description": "Type of relationship to the core {object_of_study}"
+          },
+          "properties_inherited": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "gradient": {
+                  "type": "string"
+                },
+                "source_code_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Properties inherited from source codes"
+          },
+          "interchangeability_rationale": {
+            "type": "string",
+            "description": "If merger: why the source_codes are interchangeable. If kept alone: 'N/A — single code'"
+          },
+          "needs_more_data": {
+            "type": "boolean",
+            "description": "true if the merger decision requires more empirical evidence"
+          }
+        }
+      }
+    },
+    "discarded_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "discard_rationale",
+          "discard_category"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "discard_rationale": {
+            "type": "string",
+            "description": "Methodological justification: why it does not relate meaningfully to the core {object_of_study}"
+          },
+          "discard_category": {
+            "type": "string",
+            "enum": [
+              "unrelated_to_core",
+              "descriptive_not_behavioral",
+              "single_occurrence",
+              "superseded_by_fusion"
+            ],
+            "description": "Discard category"
+          }
+        }
+      }
+    },
+    "reduction_summary": {
+      "type": "object",
+      "required": [
+        "original_code_count",
+        "reduced_code_count",
+        "discarded_count",
+        "fusion_groups_count"
+      ],
+      "properties": {
+        "original_code_count": {
+          "type": "integer"
+        },
+        "reduced_code_count": {
+          "type": "integer"
+        },
+        "discarded_count": {
+          "type": "integer"
+        },
+        "fusion_groups_count": {
+          "type": "integer"
+        },
+        "reduction_ratio": {
+          "type": "number",
+          "description": "reduced / original"
+        },
+        "methodological_notes": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "reduced_codes",
+    "discarded_codes",
+    "reduction_summary"
+  ]
+}

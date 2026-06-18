@@ -63,10 +63,8 @@ PROJECT_STATES: dict[str, str] = {
 
 # ═══════════════════════════════════════════════════════
 # Gate Names — constantes canonicas (F1.1)
-# El concepto metodologico es "patron de interes",
-# pero los gate names en BD se mantienen por compatibilidad.
 # ═══════════════════════════════════════════════════════
-GATE_MAIN_CONCERN = "main_concern"
+GATE_PATTERN_OF_INTEREST = "pattern_of_interest"
 GATE_CORE_EMERGENCE = "core_emergence"
 GATE_SELECTIVE_REDUCTION = "selective_reduction"
 GATE_CORE_SATURATION = "core_saturation"
@@ -366,7 +364,7 @@ def hitl_gate(
     decida via el endpoint POST /projects/{id}/hitl/{gate}/decide.
 
     Gates conocidos (ver constantes GATE_* arriba):
-      - GATE_MAIN_CONCERN ("main_concern") → Patron de Interes
+      - GATE_PATTERN_OF_INTEREST ("pattern_of_interest") → Patron de Interes / Core Pattern
       - GATE_CORE_EMERGENCE → Core Category Emergence
       - GATE_SELECTIVE_REDUCTION → Selective Reduction
       - GATE_CORE_SATURATION → Core Saturation

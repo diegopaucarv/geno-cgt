@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID del código evaluado"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Etiqueta del código"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "refine",
+              "split"
+            ],
+            "description": "Veredicto de intercambiabilidad"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación citando incidentes específicos de diferentes documentos"
+          },
+          "interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_interchangeable": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pares de incidentes que son claramente intercambiables"
+          },
+          "non_interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_different": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Pares que revelan patrones distintos"
+          },
+          "suggested_action_if_not_valid": {
+            "type": "string",
+            "description": "Acción concreta: ¿refinar definición, dividir en subcódigos o buscar más datos?"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "verdicts"
+  ]
+}

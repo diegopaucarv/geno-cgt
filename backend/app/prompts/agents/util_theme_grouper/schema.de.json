@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "themes"
+  ],
+  "properties": {
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "indicators",
+          "suggested_gerundio"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Themenname in 2-5 Wörtern."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indikatoren, die dieses Thema bilden."
+          },
+          "suggested_gerundio": {
+            "type": "string",
+            "description": "Möglicher Codename in Gerundium (-ing Form)."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summarized_constructs"
+  ],
+  "properties": {
+    "summarized_constructs": {
+      "type": "array",
+      "description": "Constructos de orden superior resultantes del agrupamiento.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "definition",
+          "summarized_ids"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerundio del constructo agrupado."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definición unificada que captura lo que comparten los códigos agrupados."
+          },
+          "summarized_ids": {
+            "type": "array",
+            "description": "Índices (base 1) de los códigos originales fusionados en este constructo.",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "theoretical_sampling_criteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inclusion",
+              "exclusion"
+            ],
+            "properties": {
+              "inclusion": {
+                "type": "array",
+                "description": "Criterios de inclusión unificados.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusion": {
+                "type": "array",
+                "description": "Criterios de exclusión unificados.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

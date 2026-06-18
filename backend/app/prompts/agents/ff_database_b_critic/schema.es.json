@@ -1,0 +1,393 @@
+{
+  "type": "object",
+  "required": [
+    "edge_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "edge_evaluations": {
+      "type": "array",
+      "description": "Evaluación para cada arista propuesta.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relationship_type",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Etiqueta del nodo origen de la arista que se evalúa."
+          },
+          "target": {
+            "type": "string",
+            "description": "Etiqueta del nodo destino de la arista que se evalúa."
+          },
+          "relationship_type": {
+            "type": "string",
+            "description": "El relationship_type propuesto."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=correcto, MOD=necesita ajuste, FORCED=debe eliminarse."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación narrativa del veredicto, referenciando los criterios más relevantes."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Evaluación de cada criterio.",
+            "properties": {
+              "relationship_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ],
+                    "description": "Si pass=false: el relationship_type correcto."
+                  }
+                }
+              },
+              "evidence_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "directional_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_direction": {
+                    "type": "string",
+                    "enum": [
+                      "unidirectional",
+                      "bidirectional",
+                      "conceptual",
+                      "reversed"
+                    ],
+                    "description": "Si pass=false: la dirección correcta."
+                  }
+                }
+              },
+              "theoretical_coherence": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Si MOD: corrección concreta (cambiar tipo a X, invertir dirección, fortalecer evidencia con Y). Si FORCED: por qué esta arista debe eliminarse."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "contradictions",
+        "missing_edges",
+        "orphan_nodes",
+        "processes_edge_verification"
+      ],
+      "properties": {
+        "contradictions": {
+          "type": "object",
+          "required": [
+            "has_contradictions",
+            "details"
+          ],
+          "properties": {
+            "has_contradictions": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "description",
+                  "edges_involved"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "circular_causation",
+                      "mutual_typing",
+                      "type_clash"
+                    ],
+                    "description": "Tipo de contradicción detectada."
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "edges_involved": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string"
+                        },
+                        "relationship_type": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "resolution_suggestion": {
+                    "type": "string",
+                    "description": "Cómo resolver la contradicción."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "missing_edges": {
+          "type": "object",
+          "required": [
+            "has_missing",
+            "suggestions"
+          ],
+          "properties": {
+            "has_missing": {
+              "type": "boolean"
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "target",
+                  "suggested_type",
+                  "rationale",
+                  "urgency"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Etiqueta del nodo origen."
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Etiqueta del nodo destino."
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ]
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "description": "Por qué esta arista es lógicamente necesaria."
+                  },
+                  "urgency": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "important",
+                      "nice_to_have"
+                    ],
+                    "description": "critical=modelo incompleto sin ella, important=mejora significativamente la coherencia, nice_to_have=agrega riqueza."
+                  },
+                  "evidence_needed": {
+                    "type": "string",
+                    "description": "Qué evidencia se requeriría para establecer esta arista."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "orphan_nodes": {
+          "type": "object",
+          "required": [
+            "has_orphans",
+            "details"
+          ],
+          "properties": {
+            "has_orphans": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node_label",
+                  "entity_type",
+                  "is_legitimate",
+                  "rationale"
+                ],
+                "properties": {
+                  "node_label": {
+                    "type": "string"
+                  },
+                  "entity_type": {
+                    "type": "string",
+                    "enum": [
+                      "core_category",
+                      "condition",
+                      "consequence",
+                      "strategy",
+                      "dimension"
+                    ]
+                  },
+                  "is_legitimate": {
+                    "type": "boolean",
+                    "description": "true si que este nodo esté sin aristas es teóricamente aceptable (ej., un nodo de dimensión)."
+                  },
+                  "rationale": {
+                    "type": "string"
+                  },
+                  "suggested_connection": {
+                    "type": "string",
+                    "description": "Si no es legítimo: ¿a qué nodo debería conectarse y cómo?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "processes_edge_verification": {
+          "type": "object",
+          "required": [
+            "exists",
+            "has_correct_source",
+            "has_valid_target",
+            "is_theoretically_sound"
+          ],
+          "properties": {
+            "exists": {
+              "type": "boolean",
+              "description": "¿Existe una arista PROCESSES?"
+            },
+            "has_correct_source": {
+              "type": "boolean",
+              "description": "¿Es el origen el nodo central (is_core=true)?"
+            },
+            "has_valid_target": {
+              "type": "boolean",
+              "description": "¿Describe el destino correctamente el {object_of_study}?"
+            },
+            "is_theoretically_sound": {
+              "type": "boolean",
+              "description": "¿Explica el rationale de manera convincente por qué este es el mecanismo central?"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Cualquier problema con la arista PROCESSES."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true si el sistema completo de aristas es metodológicamente sólido y está listo para revisión del investigador."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Evaluación global: ¿qué es sólido? ¿Qué necesita atención? ¿Es coherente el modelo integrado?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Problemas que DEBEN resolverse antes de que el modelo esté listo."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Preocupaciones no bloqueantes a señalar para el investigador."
+        }
+      }
+    }
+  }
+}

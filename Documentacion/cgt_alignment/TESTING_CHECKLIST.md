@@ -19,7 +19,7 @@
 | T0.7 | TEI embedding server responde | 👤 | `curl http://localhost:8080/health` | ✅ |
 | T0.8 | MinIO accesible | 👤 | `curl http://localhost:9001` | ✅ |
 | T0.9 | Seed de códigos teóricos funciona | 👤 | `seed_theoretical_codes()` → 12 built-in | ✅ |
-| T0.10 | Prompts se cargan sin errores | 🤖 | `PROMPT_REGISTRY` → 68 | ✅ 68 prompts, 29/29 AGENTES.md |
+| T0.10 | Prompts se cargan sin errores | 🤖 | `PROMPT_REGISTRY` → 70 | ✅ 70 prompts, naming prefijado (fa_, fb_, fc_, ...) |
 | T0.11 | Schemas Pydantic para tablas nuevas | 🤖 | `response_schema()` para 5 modelos | ✅ 5/5 schemas |
 
 ---
@@ -34,6 +34,27 @@
 | T1.4 | `object_of_study` default es "concern" | 🤖 | Columna `proyectos.object_of_study` tiene default en BD | ✅ |
 | T1.5 | `coding_style_instruction` es nullable | 🤖 | Columna existe, nullable=True | ✅ |
 | T1.6 | `GET /projects/{id}` incluye `object_of_study` | 👤 | Response JSON incluye el campo | ✅ |
+
+---
+
+### 1.1 Processing Verb System
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T1.1.1 | Crear proyecto con `processing_verb="resolver"` | 👤 | Verificar que `population_assumption.processing_verb` = "resolver" | ⬜ |
+| T1.1.2 | Crear proyecto con `processing_verb="negociar"` | 👤 | Verificar `population_assumption.processing_gerund` = "negociando" | ⬜ |
+| T1.1.3 | spaCy conjugation: population="recicladores" + verb="resolver" | 🤖 | `processing_verb_conjugated` = "resuelven" | ⬜ |
+| T1.1.4 | spaCy conjugation: English population + English verb | 🤖 | No conjugation applied | ⬜ |
+| T1.1.5 | Nemotrón genera RQ con `{processing_verb}` inyectado | 👤 | RQ contiene el verbo correcto | ⬜ |
+| T1.1.6 | Nemotrón critic evalúa RQ+OQ | 👤 | Verdict SAT\|MOD\|FORCED en `population_assumption` | ⬜ |
+| T1.1.7 | population_generalizer fuerza plural | 👤 | "un salón de clases" → "docentes y estudiantes" | ⬜ |
+| T1.1.8 | Frontend hints dinámicos: cambiar object_of_study | 👤 | Hint cambia según tipo seleccionado | ⬜ |
+| T1.1.9 | Frontend RQ preview: llenar población + verbo | 👤 | Preview se actualiza en vivo | ⬜ |
+| T1.1.10 | `generalize_population` endpoint re-runs generalizer | 👤 | POST .../generalize → `population_assumption` actualizado | ⬜ |
+| T1.1.11 | spaCy singular detection: "una escuela" → warning | 🤖 | `population_warning` en `population_assumption` | ⬜ |
+| T1.1.12 | Nemotrón OQ es SINGULAR ("their concern", no "concerns") | 👤 | OQ no contiene plural del patrón | ⬜ |
+| T1.1.13 | Processing verb defaults: cambiar concern→emotion → default cambia a "regulate" | 👤 | Frontend actualiza default del verbo al cambiar tipo | ⬜ |
+| T1.1.14 | `processing_verb_conjugated` se persiste en `population_assumption` | 👤 | Crear proyecto → verificar campo en JSONB | ⬜ |
 
 ---
 
@@ -86,6 +107,20 @@
 
 ---
 
+### 4.1 Core Pattern Extraction (Fase A4)
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T4.1.1 | `fa_core_pattern_extractor` genera patrón candidato por documento | 👤 | Patrón en gerundio por documento | ⬜ |
+| T4.1.2 | Patrón incluye evidence_quotes[2-5] de incidentes distintos | 👤 | evidence_quotes con 2–5 citas de incidentes diferentes | ⬜ |
+| T4.1.3 | `fa_core_pattern_verifier` corre cada 3 documentos | 👤 | Verifier se ejecuta tras acumular 3 docs | ⬜ |
+| T4.1.4 | Verifier emite recomendación | 👤 | CONTINUE_COLLECTING \| READY_FOR_CROSS_DOC \| NEEDS_DIFFERENT_POPULATION | ⬜ |
+| T4.1.5 | Verifier dispara HITL gate `pattern_of_interest` | 👤 | Modal HITL aparece con el patrón detectado | ⬜ |
+| T4.1.6 | Verifier usa `operational_question` del Nemotrón | 🤖 | Verifier recibe OQ como variable | ⬜ |
+| T4.1.7 | Verifier no recibe `_VERIFIER_GUIDANCE` dict (eliminado) | 🤖 | `pattern_verifier.py` no contiene el dict | ⬜ |
+
+---
+
 ## 5. Fase 5b-B: Selective Reduction
 
 | # | Test | Quién | Qué verificar | Estado |
@@ -121,6 +156,21 @@
 
 ---
 
+### 7.1 Database A/B Prompts
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T7.1.1 | `ff_database_a_proposer` transforma categorías en nodos | 👤 | entity_type correcto por nodo | ⬜ |
+| T7.1.2 | `ff_database_a_critic` evalúa nodos | 👤 | Verdict SAT\|MOD\|FORCED | ⬜ |
+| T7.1.3 | `ff_database_b_proposer` genera PROCESSES edge obligatorio | 👤 | Al menos un edge tipo PROCESSES presente | ⬜ |
+| T7.1.4 | `ff_database_b_critic` detecta contradicciones y missing edges | 👤 | Issues[] incluye contradictions y missing_edges | ⬜ |
+| T7.1.5 | `database_nodes` table existe con columnas correctas | 🤖 | Migration 3de4964dd68c aplicada | ⬜ |
+| T7.1.6 | `database_edges` table existe con FK a database_nodes | 🤖 | Migration aplicada, FK válidas | ⬜ |
+| T7.1.7 | `reporter.py` queries usan `database_nodes` (no `database_a_nodes`) | 🤖 | Nombres de tabla corregidos | ⬜ |
+| T7.1.8 | `reporter.py` edges query hace JOIN con nodes para labels | 🤖 | SQL con JOIN a database_nodes para src/tgt labels | ⬜ |
+
+---
+
 ## 8. Fase 6b: Theoretical Playground
 
 | # | Test | Quién | Qué verificar | Estado |
@@ -129,6 +179,9 @@
 | T8.2 | `conceptual_elaborator` propone relaciones | 👤 | POST elaboration → `conceptual_relationships` nueva fila | ⬜ |
 | T8.3 | `ghost_blob_mapper` absorbe memos huérfanos | 👤 | Memo vinculado a categoría | ⬜ |
 | T8.4 | `memo_theoretical_tagger` (FLASH) clasifica memos | 👤 | `memo_sorting_attempts` poblado con family affinities | ⬜ |
+| T8.5 | `memo_theoretical_tagger` se ejecuta en `_prepare_playground_for_project` | 👤 | Todos los memos reciben tag de 12 familias | ⬜ |
+| T8.6 | `f6b_gap_alerter` se despacha si ≥3 ghost blobs sin link | 🤖 | gap_alerter llamado con gaps_summary | ⬜ |
+| T8.7 | `ecosystem_gap_detector` cuenta ghost blobs huérfanos | 🤖 | SQL query retorna conteo correcto | ⬜ |
 
 ---
 
@@ -139,6 +192,17 @@
 | T9.1 | `natural_writer` (PRO) redacta desde memos | 👤 | `write_section` retorna draft + citations + concepts | ⬜ |
 | T9.2 | `writing_critic` (PRO) evalúa borrador | 👤 | Issues detectados: tense, subject, citation, fidelity, abstraction | ⬜ |
 | T9.3 | `gap_feeler` (FLASH) detecta huecos en background | 👤 | Gaps detectados sin bloquear escritura | ⬜ |
+
+---
+
+### 9.1 Gap Feeler + Memo Tagger
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T9.1.1 | `f6a_gap_feeler` (FLASH) detecta huecos | 👤 | MISSING_EVIDENCE, UNDERDEVELOPED_PROPERTY, etc. | ⬜ |
+| T9.1.2 | Gap feeler no bloquea — acumula señales | 👤 | Escritura continúa aunque haya gaps detectados | ⬜ |
+| T9.1.3 | `f6b_memo_theoretical_tagger` clasifica memos | 👤 | Memos clasificados en 12 familias canónicas | ⬜ |
+| T9.1.4 | Solo familias con score ≥ 0.3 aparecen en output | 👤 | Familias por debajo del umbral no incluidas | ⬜ |
 
 ---
 
@@ -160,6 +224,18 @@
 
 ---
 
+## 11b. Fase 6e: Final Report
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T11b.1 | `f6a_final_report` (PRO) genera reporte con 8 secciones | 👤 | Reporte estructurado con 8 headings | ⬜ |
+| T11b.2 | Abstract 180-220 palabras | 👤 | Conteo de palabras del abstract dentro del rango | ⬜ |
+| T11b.3 | Headings adaptados a `{object_of_study}` | 👤 | "Core Emotion" vs "Core Concern" según tipo | ⬜ |
+| T11b.4 | Título: "{Core Pattern} — A Classic Grounded Theory of {Population}" | 👤 | Formato de título correcto | ⬜ |
+| T11b.5 | Reporte se almacena en `final_reports` table | 👤 | O fallback graceful si tabla no existe | ⬜ |
+
+---
+
 ## 12. Transversales: HITL, Modificaciones, ReSpec
 
 | # | Test | Quién | Qué verificar | Estado |
@@ -174,6 +250,16 @@
 | T12.8 | `query_lower_level` baja de relación → categorías | 👤 | Retorna category_ids + converging/diverging | ⬜ |
 | T12.9 | PipelineTask tracking existe para tareas de proyecto | 👤 | `pipeline_tasks` con `document_id=NULL` para selective_coding_coordinator | ⬜ |
 | T12.10 | `AbortableTask.on_failure` marca pipeline_tasks como failed | 👤 | Si una tarea falla, `pipeline_tasks.status='failed'` | ⬜ |
+
+### 12.1 "Core" Terminology Consistency
+
+| # | Test | Quién | Qué verificar | Estado |
+|---|------|-------|--------------|--------|
+| T12.1.1 | Todos los prompts usan "core" no "main"/"dominant"/"primary" | 🤖 | Búsqueda en PROMPT_REGISTRY confirma consistencia terminológica | ⬜ |
+| T12.1.2 | Frontend i18n: es="Patrón de Interés", de="Kernmuster", pt="Padrão Central" | 👤 | Labels en 3 idiomas cargan correctamente | ⬜ |
+| T12.1.3 | Gate consolidado: solo `pattern_of_interest`, no `main_concern` | 🤖 | Búsqueda en codebase: `main_concern` no aparece en gates | ⬜ |
+| T12.1.4 | SQL queries usan `proposal->>'core_concern'` (no `main_concern`) | 🤖 | Búsqueda en codebase: `main_concern` solo en agent IDs, no en SQL | ⬜ |
+| T12.1.5 | `core_concern` como variable Python (no `main_concern`) | 🤖 | `tasks.py`, `workflow.py`, `orchestrator.py` usan `core_concern` | ⬜ |
 
 ---
 
@@ -266,24 +352,97 @@
 | T14.34 | Refrescar pagina mantiene estado | 👤 | Polling recupera, no empieza de cero | ⬜ |
 | T14.35 | Navegar proyectos no mezcla estados | 👤 | Pipeline del proyecto correcto | ⬜ |
 
+### 14.7 Processing Verb + RQ Preview
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T14.7.1 | Selector object_of_study muestra hint dinámico por tipo | 👤 | Hint cambia al seleccionar "concern" vs "emotion" | ⬜ |
+| T14.7.2 | Input processing_verb tiene default por tipo | 👤 | "resolver" para concern, default apropiado para emotion | ⬜ |
+| T14.7.3 | RQ preview se actualiza al cambiar población, verbo, o tipo | 👤 | Preview en vivo refleja cambios en los 3 campos | ⬜ |
+| T14.7.4 | Experimental Mode section permite cambiar object_of_study mid-project | 👤 | Cambio de tipo → estado vuelve a "coding" | ⬜ |
+| T14.7.5 | Cambiar object_of_study → estado vuelve a "coding" | 👤 | Proyecto reinicia pipeline desde coding | ⬜ |
+
+### 14.8 Population Configuration Panel
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T14.8.1 | Panel "🧬 Population Configuration" aparece si `supuesto_poblacional` existe | 👤 | Sección colapsable visible en Project detail | ⬜ |
+| T14.8.2 | Generalized population se muestra como pill | 👤 | Texto de población generalizada visible | ⬜ |
+| T14.8.3 | Botón "Generate" aparece si no hay generalized_population | 👤 | Botón visible, llama al endpoint generalize | ⬜ |
+| T14.8.4 | Edit inline: click en Edit → input aparece, Save persiste | 👤 | Edición inline de population_description funciona | ⬜ |
+| T14.8.5 | Spatial/Temporal frame labels traducidos | 👤 | "cohabiting_group" → "Grupo conviviente" | ⬜ |
+| T14.8.6 | Confidence bar coloreada: >=80% verde, >=50% ambar, <50% rojo | 👤 | Barra de confianza con color correcto | ⬜ |
+
+---
+
+## 15. Prompt System v2: Renaming + i18n + agents/
+
+> **Post-refactor verificacion.** 101 archivos renombrados, 125 carpetas agents/, 369 schemas traducidos.
+
+### 15.1 Registry + Naming
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T15.1 | PROMPT_REGISTRY carga >= 68 prompts | 🤖 | `len(PROMPT_REGISTRY)` >= 68 | ⬜ |
+| T15.2 | Todos los prompt_id usan prefijo de fase | 🤖 | Ningun prompt_id empieza sin fa_/fb_/fc_/f0_/f6a_/f6b_/f6c_/f6d_/ff_/fe_/fd_/hitl_/util_ | ⬜ |
+| T15.3 | 125 carpetas agents/{id}/ contienen prompt.md | 🤖 | `find agents/ -name prompt.md | wc -l` >= 120 | ⬜ |
+| T15.4 | Cada carpeta agents/{id}/ tiene schema.{en,es,de,pt}.json | 🤖 | 5 archivos por carpeta (prompt + 4 schemas) | ⬜ |
+
+### 15.2 i18n Schema Loading
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T15.5 | `build_messages(language="es")` inyecta language_code + language_name | 🤖 | kwargs contiene `language_code="es"`, `language_name="español"` | ⬜ |
+| T15.6 | `build_payload(language="es")` carga schema.es.json | 🤖 | response_format contiene descripciones en español | ⬜ |
+| T15.7 | Fallback a schema.en.json si schema.{lang}.json no existe | 🤖 | `_load_i18n_schema("fr")` carga schema.en.json | ⬜ |
+| T15.8 | Prompt sin agents_dir usa schema inline (legacy compat) | 🤖 | build_payload con prompt legacy mantiene schema original | ⬜ |
+
+### 15.3 LLMClient Integration
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T15.9 | `LLMClient.run_agent(agent_id, language="es")` pasa language a formato | 🤖 | system_prompt contiene language_code en variables | ⬜ |
+| T15.10 | `LLMClient.set_user_language("es")` configura idioma global | 👤 | Llamadas subsecuentes usan español por defecto | ⬜ |
+| T15.11 | Codigo legacy sin `language=` usa default de clase | 🤖 | `run_agent("fb_incident_comparator", {...})` → language="es" (default) | ⬜ |
+
+### 15.4 Pre-filtro B1 + Batching
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T15.12 | B1 comparator usa pre-filtro embedding (cosine > 0.75) | 👤 | Log: "Pre-filter: X/Y pairs survive (Z.Z%)" | ⬜ |
+| T15.13 | B1 batch size = 25 pares por llamada LLM | 👤 | Log: "N candidate pairs -> M LLM batches (batch_size=25)" | ⬜ |
+| T15.14 | B1 Union-Find agrupa pares intercambiables | 👤 | `incident_groups` creados con >= 2 incidentes por grupo | ⬜ |
+| T15.15 | B1 total pairs 9870 → pre-filter 295 (3.0%) para 141 incidentes | 👤 | Reduccion ~97% sin LLM | ⬜ |
+
+### 15.5 Prompt Language Audit
+
+| # | Test | Quien | Que verificar | Estado |
+|---|------|-------|--------------|--------|
+| T15.16 | System prompts en INGLES | 🤖 | Ningun system prompt contiene texto en español | ⬜ |
+| T15.17 | Schema KEYS en INGLES | 🤖 | Todas las property names en schemas son ingles | ⬜ |
+| T15.18 | Schema DESCRIPTIONS coinciden con idioma del schema file | 🤖 | schema.es.json tiene descriptions en español | ⬜ |
+| T15.19 | Sin referencias a prompt_id antiguos en codigo | 🤖 | `grep -r "population_generalizer" workers/ backend/` solo en legacy/deprecated | ⬜ |
+
 
 ## Resumen
 
 | Sección | Tests | 🤖 Agente | 👤 Investigador |
 |---------|-------|-----------|----------------|
 | 0. Infraestructura | 11 | 4 | 7 |
-| 1. Fase 0: Configuración | 6 | 2 | 4 |
+| 1. Fase 0: Configuración | 6 + 14 (1.1) | 2 + 3 (🤖 1.1) | 4 + 11 (👤 1.1) |
 | 2. Fase A: Open Coding | 11 | 1 | 10 |
 | 3. Fase B: Síntesis | 9 | 1 | 8 |
-| 4. Fase 5b-A: Core Category | 8 | 3 | 5 |
+| 4. Fase 5b-A: Core Category | 8 + 7 (4.1) | 3 + 2 (🤖 4.1) | 5 + 5 (👤 4.1) |
 | 5. Fase 5b-B: Reduction | 2 | 1 | 1 |
 | 6. Fase 5b-C: Saturation | 10 | 0 | 10 |
-| 7. Fase 5b-D: Database | 2 | 0 | 2 |
-| 8. Fase 6b: Playground | 4 | 0 | 4 |
-| 9. Fase 6a: Redacción | 3 | 0 | 3 |
+| 7. Fase 5b-D: Database | 2 + 8 (7.1) | 0 + 4 (🤖 7.1) | 2 + 4 (👤 7.1) |
+| 8. Fase 6b: Playground | 7 | 2 | 5 |
+| 9. Fase 6a: Redacción | 3 + 4 (9.1) | 0 | 3 + 4 (👤 9.1) |
 | 10. Fase 6c: Literatura | 2 | 0 | 2 |
 | 11. Fase 6d: Aplicabilidad | 2 | 0 | 2 |
-| 12. Transversales | 10 | 0 | 10 |
+| 11b. Fase 6e: Final Report | 5 | 0 | 5 |
+| 12. Transversales | 10 + 5 (12.1) | 0 + 4 (🤖 12.1) | 10 + 1 (👤 12.1) |
 | 13. Regresiones | 10 | 0 | 10 |
-| 14. Frontend UX Pipeline | 35 | 0 | 35 |
-| **TOTAL** | **125** | **12** | **113** |
+| 14. Frontend UX Pipeline | 35 + 5 (14.7) + 6 (14.8) | 0 | 35 + 5 (👤 14.7) + 6 (👤 14.8) |
+| 15. Prompt System v2 | 19 (15.1-15.5) | 16 (🤖 15.1-15.4) + 1 (🤖 15.5) | 3 (👤 15.3) |
+| **TOTAL** | **192 → 211** | **27 → 44** | **165 → 167** |

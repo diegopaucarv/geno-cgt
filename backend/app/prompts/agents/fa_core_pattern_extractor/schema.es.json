@@ -1,0 +1,78 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "core_pattern",
+      "description",
+      "evidence_quotes",
+      "confidence"
+    ],
+    "properties": {
+      "core_pattern": {
+        "type": "string",
+        "description": "Gerundio (frase verbal de 2-6 palabras) que nombra el patrón central único que sintetiza todos los incidentes en este documento. Debe capturar la esencia de lo que el participante está repetidamente {processing_gerund}. Ejemplos: 'Negociando permanencia en la plataforma', 'Equilibrando riesgo y visibilidad', 'Defendiendo estatus profesional'."
+      },
+      "description": {
+        "type": "string",
+        "description": "Síntesis de múltiples párrafos explicando: (1) qué es el patrón y cómo se manifiesta en los incidentes, (2) qué incidentes proporcionan la evidencia más fuerte y por qué, (3) cómo se interrelacionan los incidentes para formar el patrón, (4) cualquier tensión, variación o contradicción dentro del patrón."
+      },
+      "evidence_quotes": {
+        "type": "array",
+        "description": "Citas textuales exactas de los incidentes que mejor respaldan el patrón. Mínimo 2, máximo 5. Cada cita DEBE provenir de un incidente DISTINTO.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 5
+      },
+      "key_incident_ids": {
+        "type": "array",
+        "description": "UUIDs de los incidentes que contienen las evidence_quotes. Debe corresponder 1:1 con evidence_quotes — mismo orden, misma cantidad.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "confidence": {
+        "type": "string",
+        "enum": [
+          "HIGH",
+          "MEDIUM",
+          "LOW"
+        ],
+        "description": "Confianza en el patrón extraído. HIGH: patrón claro, múltiples incidentes convergen fuertemente. MEDIUM: patrón discernible pero con variación notable o dimensiones faltantes. LOW: patrón tentativo, pocos incidentes de respaldo o señales contradictorias."
+      },
+      "no_clear_pattern": {
+        "type": "boolean",
+        "description": "true si los incidentes NO respaldan un patrón claro y coherente. Establecer a true cuando los datos son demasiado escasos, contradictorios o fragmentados para sintetizar un patrón único."
+      },
+      "no_pattern_rationale": {
+        "type": "string",
+        "description": "Si no_clear_pattern=true: explicación de por qué no emerge un patrón — qué falta, es contradictorio o insuficiente en los datos."
+      },
+      "alternative_patterns": {
+        "type": "array",
+        "description": "Interpretaciones alternativas plausibles del patrón si la confianza es MEDIUM o LOW. Cada alternativa nombra un gerundio diferente que podría explicar plausiblemente los datos.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pattern",
+            "why_different"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "Nombre alternativo del patrón en gerundio."
+            },
+            "why_different": {
+              "type": "string",
+              "description": "Cómo esta interpretación alternativa difiere del core_pattern principal y qué incidentes la respaldarían."
+            }
+          }
+        }
+      }
+    }
+  }
+}

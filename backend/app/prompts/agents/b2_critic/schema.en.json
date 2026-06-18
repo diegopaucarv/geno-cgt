@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evaluations"
+  ],
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "description": "Evaluations of each proposed code. Empty array if no codes to evaluate.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code_label",
+          "verdict",
+          "rationale",
+          "interchangeability_assessment"
+        ],
+        "properties": {
+          "code_label": {
+            "type": "string",
+            "description": "Name of the evaluated code (exact gerund)"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT: correct and well defined. MOD: needs refinement. FORCED: no empirical basis."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Detailed justification of the verdict, referencing specific segments."
+          },
+          "interchangeability_assessment": {
+            "type": "string",
+            "description": "Are the incidents interchangeable? How do they differ if they are not? If not enough incidents to evaluate: 'Insufficient incidents to evaluate interchangeability.'"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Only if MOD. Concrete action: new gerund, adjusted definition, or split into subcodes. If not applicable, leave empty string."
+          },
+          "overlap_with_existing": {
+            "type": "array",
+            "description": "Names of existing codes with which this one significantly overlaps. Empty array if no overlap.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Critic's confidence in this verdict. 0.0 = total doubt, 1.0 = absolute certainty."
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,7 +4,7 @@ Conecta el Memo_Bank con el Theoretical Playground.
 Al entrar al Playground, clasifica memos de hipótesis no conectados
 como ghost-blobs que el investigador puede arrastrar hacia categorías.
 
-Usa ghost_blob_mapper.md (PRO) para sugerir mapeos.
+Usa f6b_ghost_blob_mapper.md (PRO) para sugerir mapeos.
 """
 
 from __future__ import annotations
@@ -64,11 +64,11 @@ class GhostConnector:
 
         cats_text = "\n".join(f"[{r[0]}] {r[1]}: {r[2][:200]}" for r in cats)
 
-        # 3. Clasificar memos con ghost_blob_mapper (PRO)
+        # 3. Clasificar memos con f6b_ghost_blob_mapper (PRO)
         memos_text = "\n---\n".join(f"[{r[0]}] {r[1][:500]}" for r in rows)
 
         response = self.llm.run_agent(
-            "ghost_blob_mapper",
+            "f6b_ghost_blob_mapper",
             variables={
                 "memos_to_map": memos_text[:8000],
                 "existing_categories": cats_text[:4000],

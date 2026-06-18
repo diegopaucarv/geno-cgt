@@ -1,0 +1,292 @@
+{
+  "type": "object",
+  "required": [
+    "node_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "node_evaluations": {
+      "type": "array",
+      "description": "Bewertung für jeden vorgeschlagenen Knoten.",
+      "items": {
+        "type": "object",
+        "required": [
+          "node_label",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "node_label": {
+            "type": "string",
+            "description": "Label des zu bewertenden Knotens."
+          },
+          "source_category_id": {
+            "type": "string",
+            "description": "UUID der Quellkategorie."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=besteht alle Kriterien, MOD=benötigt gezielte Korrekturen, FORCED=grundlegend problematisch."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Narrative Rechtfertigung des Urteils unter Bezugnahme auf die relevantesten Kriterien."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Bewertung jedes Kriteriums.",
+            "properties": {
+              "entity_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "definition_grounding": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "abstraction_level": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "incident_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "core_identification": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Wenn MOD oder FORCED: konkrete, umsetzbare Korrektur. Was zu ändern ist und wie."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "missing_categories",
+        "duplicate_nodes",
+        "is_core_count",
+        "entity_type_distribution"
+      ],
+      "properties": {
+        "missing_categories": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category_id": {
+                    "type": "string"
+                  },
+                  "category_label": {
+                    "type": "string"
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "duplicate_nodes": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "node_labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "is_core_count": {
+          "type": "object",
+          "required": [
+            "count",
+            "is_correct",
+            "issue"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "description": "Anzahl der Knoten mit is_core=true. Muss genau 1 sein."
+            },
+            "is_correct": {
+              "type": "boolean"
+            },
+            "issue": {
+              "type": "string",
+              "description": "Wenn nicht korrekt: Beschreibung des Problems."
+            }
+          }
+        },
+        "entity_type_distribution": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "counts",
+            "notes"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "counts": {
+              "type": "object",
+              "properties": {
+                "core_category": {
+                  "type": "integer"
+                },
+                "condition": {
+                  "type": "integer"
+                },
+                "consequence": {
+                  "type": "integer"
+                },
+                "strategy": {
+                  "type": "integer"
+                },
+                "dimension": {
+                  "type": "integer"
+                }
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Anmerkungen zur Verteilung: fehlende Typen, übermäßige Typen, verdächtige Muster."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true wenn das gesamte Knotensystem methodologisch solide und bereit für Database B ist."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Globale Bewertung: Was ist solide? Was braucht Aufmerksamkeit? Ist das System bereit für Kantenmodellierung?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Probleme, die VOR dem Fortfahren mit Database B gelöst werden MÜSSEN."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nicht-blockierende Bedenken zur Kenntnisnahme für den Forscher."
+        }
+      }
+    }
+  }
+}

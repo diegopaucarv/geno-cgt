@@ -1,0 +1,62 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "writing_critic",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "SAT",
+            "MOD",
+            "FORCED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Art des Verstoßes: Tempus | Subjekt | Zitat | Genauigkeit | Einleitung | Abstraktion"
+              },
+              "location": {
+                "type": "string",
+                "description": "Textfragment, in dem der Verstoß auftritt"
+              },
+              "suggestion": {
+                "type": "string",
+                "description": "Vorgeschlagene Korrektur"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "location",
+              "suggestion",
+              "severity"
+            ]
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Zusammenfassung der globalen Bewertung in 2-3 Sätzen"
+        }
+      },
+      "required": [
+        "verdict",
+        "issues",
+        "summary"
+      ]
+    }
+  }
+}

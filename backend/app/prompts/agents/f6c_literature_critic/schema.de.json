@@ -1,0 +1,52 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "literature_critic",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "SAT",
+            "MOD",
+            "FORCED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "forcing",
+                  "authority_bias",
+                  "name_dropping",
+                  "no_transcendence",
+                  "unidirectional"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              },
+              "suggestion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "detail",
+              "suggestion"
+            ]
+          }
+        }
+      },
+      "required": [
+        "verdict",
+        "issues"
+      ]
+    }
+  }
+}

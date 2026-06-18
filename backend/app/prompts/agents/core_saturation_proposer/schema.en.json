@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "required": [
+    "category_id",
+    "document_id",
+    "proposed_expansions"
+  ],
+  "properties": {
+    "category_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "proposed_expansions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_type",
+          "description",
+          "evidence_quote"
+        ],
+        "properties": {
+          "expansion_type": {
+            "type": "string",
+            "enum": [
+              "new_property",
+              "dimensional_expansion",
+              "new_condition",
+              "new_consequence",
+              "new_strategy"
+            ]
+          },
+          "target_element": {
+            "type": "string"
+          },
+          "new_element_name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence_quote": {
+            "type": "string"
+          },
+          "incident_index": {
+            "type": "integer"
+          },
+          "expansion_nature": {
+            "type": "string",
+            "enum": [
+              "dimensional",
+              "essential"
+            ]
+          },
+          "relation_to_core": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "confirmed_only": {
+      "type": "boolean"
+    },
+    "synthesis_note": {
+      "type": "string"
+    }
+  }
+}

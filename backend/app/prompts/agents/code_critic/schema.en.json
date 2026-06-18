@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "required": [
+    "all_valid",
+    "issues"
+  ],
+  "properties": {
+    "all_valid": {
+      "type": "boolean",
+      "description": "true if all codes pass review."
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "problem",
+          "suggestion"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Name of the code with problems."
+          },
+          "problem": {
+            "type": "string",
+            "enum": [
+              "vague_definition",
+              "overlap",
+              "not_grounded",
+              "missing_properties"
+            ],
+            "description": "Type of problem."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "How to fix it. One concrete sentence."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "description": "Codes generated from the indicators.",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Gerund of the code."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definition: what behavioral pattern it captures, in 1-2 sentences."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicators that support this code."
+          },
+          "variations": {
+            "type": "string",
+            "description": "Internal variations observed (degrees, nuances, contexts)."
+          },
+          "relationship_to_existing": {
+            "type": "string",
+            "description": "Relationship to existing codes: 'New', 'Subcode of X', 'Overlaps with Y'."
+          }
+        }
+      }
+    }
+  }
+}

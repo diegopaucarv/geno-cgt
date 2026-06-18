@@ -1,0 +1,111 @@
+{
+  "type": "object",
+  "properties": {
+    "discard_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=correct discard, MOD=questionable, FORCED=erroneous (recover)"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justification citing evidence from the incidents"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "If MOD or FORCED: recover, re-evaluate, or seek more data?"
+          }
+        }
+      }
+    },
+    "fusion_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "source_code_ids",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=solid merger, MOD=needs adjustment, FORCED=no empirical basis"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justification with evidence of interchangeability (or lack thereof)"
+          },
+          "codes_to_remove_from_fusion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "If MOD: UUIDs of codes that should NOT be in this merger"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "If MOD or FORCED: concrete action"
+          }
+        }
+      }
+    },
+    "false_positives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs of discarded codes that should be RECOVERED"
+    },
+    "false_negatives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs of surviving codes that should be DISCARDED"
+    },
+    "overall_assessment": {
+      "type": "string",
+      "description": "Global assessment of the reduced system: is it methodologically sound? What is missing?"
+    }
+  },
+  "required": [
+    "discard_evaluations",
+    "fusion_evaluations"
+  ]
+}

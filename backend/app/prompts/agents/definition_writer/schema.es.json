@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "properties",
+          "dimensions",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Nombre final del código."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definición: qué patrón de conducta captura. 2-4 oraciones."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Propiedades del fenómeno (atributos observables en los indicadores)."
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Dimensiones de variación (cómo cambia el fenómeno según contexto, intensidad, etc.)."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicadores que respaldan este código."
+          },
+          "relationship_to_existing": {
+            "type": "string",
+            "description": "Relación con códigos existentes: 'Nuevo', 'Subcódigo de X', 'Superposición con Y'."
+          }
+        }
+      }
+    }
+  }
+}

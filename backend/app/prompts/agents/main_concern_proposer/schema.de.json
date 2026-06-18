@@ -1,0 +1,112 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "core_concern",
+    "recurring_problems",
+    "resolving_mechanisms"
+  ],
+  "properties": {
+    "core_concern": {
+      "type": "string",
+      "description": "Kern-{object_of_study}, ausgedrückt als Gerundium oder Verbalphrase."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Qualitative Begründung, die die 3 Fragen verbindet. Spezifische Codes zitieren."
+    },
+    "recurring_problems": {
+      "type": "array",
+      "description": "Identifizierte wiederkehrende {object_of_study}s (Frage 1). Leeres Array wenn keine identifiziert.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolving_mechanisms": {
+      "type": "array",
+      "description": "Codes oder Mechanismen, die die Probleme lösen (Frage 2). Leeres Array wenn keine identifiziert.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "most_connected_codes": {
+      "type": "array",
+      "description": "Codes mit höchster Zentralität und Erklärungskraft (Frage 3). Leeres Array wenn keine identifiziert.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Konfidenz im identifizierten {object_of_study}."
+    },
+    "alternative_concerns": {
+      "type": "array",
+      "description": "Plausible alternative Hauptanliegen, wenn Konfidenz nicht HIGH ist.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "concern",
+          "why_less_likely"
+        ],
+        "properties": {
+          "concern": {
+            "type": "string",
+            "description": "Alternatives Hauptanliegen."
+          },
+          "why_less_likely": {
+            "type": "string",
+            "description": "Warum es weniger wahrscheinlich als das Hauptanliegen ist."
+          }
+        }
+      }
+    },
+    "no_clear_concern": {
+      "type": "boolean",
+      "description": "true wenn die Daten keinen klaren {object_of_study} stützen."
+    },
+    "no_concern_rationale": {
+      "type": "string",
+      "description": "Wenn no_clear_concern=true: was in den Daten fehlt, um einen {object_of_study} zu identifizieren."
+    },
+    "relevant_population_dimensions": {
+      "type": "array",
+      "description": "Populationsdimensionen, die relevant sind, um zu verstehen, wie sich dieses {object_of_study} manifestiert. Abgeleitet von A1 und Prime Movern. MOMENT 1 der Variablenemergenz.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_name",
+          "observed_values",
+          "emergence_rationale"
+        ],
+        "properties": {
+          "dimension_name": {
+            "type": "string"
+          },
+          "observed_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "emergence_rationale": {
+            "type": "string"
+          },
+          "missing_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

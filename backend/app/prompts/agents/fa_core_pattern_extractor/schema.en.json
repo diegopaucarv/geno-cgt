@@ -1,0 +1,78 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "core_pattern",
+      "description",
+      "evidence_quotes",
+      "confidence"
+    ],
+    "properties": {
+      "core_pattern": {
+        "type": "string",
+        "description": "Gerund (verb phrase ending in -ing, 2-6 words) that names the single core pattern synthesizing all incidents in this document. Must capture the essence of what the participant is repeatedly {processing_gerund}. Examples: 'Negotiating permanence on the platform', 'Balancing risk and visibility', 'Defending professional status'."
+      },
+      "description": {
+        "type": "string",
+        "description": "Multi-paragraph synthesis explaining: (1) what the pattern is and how it manifests across incidents, (2) which incidents provide the strongest evidence and why, (3) how the incidents interrelate to form the pattern, (4) any tension, variation, or contradiction within the pattern."
+      },
+      "evidence_quotes": {
+        "type": "array",
+        "description": "Exact verbatim quotes from the incidents that best support the pattern. Minimum 2, maximum 5. Each quote MUST come from a DISTINCT incident.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 5
+      },
+      "key_incident_ids": {
+        "type": "array",
+        "description": "UUIDs of the incidents that contain the evidence_quotes. Must correspond 1:1 with evidence_quotes — same order, same count.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "confidence": {
+        "type": "string",
+        "enum": [
+          "HIGH",
+          "MEDIUM",
+          "LOW"
+        ],
+        "description": "Confidence in the extracted pattern. HIGH: pattern is clear, multiple incidents strongly converge. MEDIUM: pattern is discernible but with notable variation or missing dimensions. LOW: pattern is tentative, few supporting incidents, or contradictory signals."
+      },
+      "no_clear_pattern": {
+        "type": "boolean",
+        "description": "true if the incidents do NOT support a clear, coherent pattern. Set to true when data is too sparse, contradictory, or fragmented to synthesize a single pattern."
+      },
+      "no_pattern_rationale": {
+        "type": "string",
+        "description": "If no_clear_pattern=true: explanation of why no pattern emerges — what is missing, contradictory, or insufficient in the data."
+      },
+      "alternative_patterns": {
+        "type": "array",
+        "description": "Plausible alternative pattern interpretations if confidence is MEDIUM or LOW. Each alternative names a different gerund that could plausibly explain the data.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pattern",
+            "why_different"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "Alternative gerund pattern name."
+            },
+            "why_different": {
+              "type": "string",
+              "description": "How this alternative interpretation differs from the main core_pattern and which incidents would support it."
+            }
+          }
+        }
+      }
+    }
+  }
+}

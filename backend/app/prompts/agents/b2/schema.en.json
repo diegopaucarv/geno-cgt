@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "indicators",
+          "variations",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Nombre en gerundio."
+          },
+          "definition": {
+            "type": "string"
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "variations": {
+            "type": "string"
+          },
+          "relationship_to_existing": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

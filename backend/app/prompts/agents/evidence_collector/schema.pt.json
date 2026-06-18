@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "required": [
+    "queries"
+  ],
+  "properties": {
+    "queries": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "description"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "rag",
+              "code_lookup",
+              "compare",
+              "similar_codes"
+            ],
+            "description": "Tipo de consulta"
+          },
+          "description": {
+            "type": "string",
+            "description": "O que esta consulta procura"
+          },
+          "text": {
+            "type": "string",
+            "description": "Apenas para type=rag. Texto de busca."
+          },
+          "code_id": {
+            "type": "string",
+            "description": "Apenas para type=code_lookup. UUID do código."
+          },
+          "text_a": {
+            "type": "string",
+            "description": "Apenas para type=compare. Primeiro texto."
+          },
+          "text_b": {
+            "type": "string",
+            "description": "Apenas para type=compare. Segundo texto."
+          },
+          "code_definition": {
+            "type": "string",
+            "description": "Apenas para type=similar_codes. Definição a comparar."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summarized_constructs"
+  ],
+  "properties": {
+    "summarized_constructs": {
+      "type": "array",
+      "description": "Higher-order constructs resulting from the grouping.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "definition",
+          "summarized_ids"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerund of the grouped construct."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Unified definition capturing what the grouped codes share."
+          },
+          "summarized_ids": {
+            "type": "array",
+            "description": "Indices (1-based) of the original codes merged into this construct.",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "theoretical_sampling_criteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inclusion",
+              "exclusion"
+            ],
+            "properties": {
+              "inclusion": {
+                "type": "array",
+                "description": "Unified inclusion criteria.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusion": {
+                "type": "array",
+                "description": "Unified exclusion criteria.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

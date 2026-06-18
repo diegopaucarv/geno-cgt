@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "required": [
+    "evaluations",
+    "ranked_recommendation"
+  ],
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_statement",
+          "verdict",
+          "rationale",
+          "grounding_assessment"
+        ],
+        "properties": {
+          "candidate_statement": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "grounding_assessment": {
+            "type": "string"
+          },
+          "coverage_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "abstraction_assessment": {
+            "type": "string",
+            "enum": [
+              "adequate",
+              "too_concrete",
+              "too_abstract"
+            ]
+          },
+          "suggestion": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "ranked_recommendation": {
+      "type": "string"
+    }
+  }
+}

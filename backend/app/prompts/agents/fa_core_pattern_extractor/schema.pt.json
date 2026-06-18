@@ -1,0 +1,78 @@
+{
+  "type": "json_schema",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "core_pattern",
+      "description",
+      "evidence_quotes",
+      "confidence"
+    ],
+    "properties": {
+      "core_pattern": {
+        "type": "string",
+        "description": "Gerúndio (frase verbal de 2-6 palavras) que nomeia o padrão central único sintetizando todos os incidentes neste documento. Deve capturar a essência do que o participante está repetidamente {processing_gerund}. Exemplos: 'Negociando permanência na plataforma', 'Equilibrando risco e visibilidade', 'Defendendo status profissional'."
+      },
+      "description": {
+        "type": "string",
+        "description": "Síntese de múltiplos parágrafos explicando: (1) o que é o padrão e como se manifesta nos incidentes, (2) quais incidentes fornecem a evidência mais forte e por quê, (3) como os incidentes se inter-relacionam para formar o padrão, (4) qualquer tensão, variação ou contradição dentro do padrão."
+      },
+      "evidence_quotes": {
+        "type": "array",
+        "description": "Citações textuais exatas dos incidentes que melhor respaldam o padrão. Mínimo 2, máximo 5. Cada citação DEVE vir de um incidente DISTINTO.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 5
+      },
+      "key_incident_ids": {
+        "type": "array",
+        "description": "UUIDs dos incidentes que contêm as evidence_quotes. Deve corresponder 1:1 com evidence_quotes — mesma ordem, mesma quantidade.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "confidence": {
+        "type": "string",
+        "enum": [
+          "HIGH",
+          "MEDIUM",
+          "LOW"
+        ],
+        "description": "Confiança no padrão extraído. HIGH: padrão claro, múltiplos incidentes convergem fortemente. MEDIUM: padrão discernível mas com variação notável ou dimensões faltantes. LOW: padrão tentativo, poucos incidentes de respaldo ou sinais contraditórios."
+      },
+      "no_clear_pattern": {
+        "type": "boolean",
+        "description": "true se os incidentes NÃO respaldam um padrão claro e coerente. Definir como true quando os dados são muito escassos, contraditórios ou fragmentados para sintetizar um padrão único."
+      },
+      "no_pattern_rationale": {
+        "type": "string",
+        "description": "Se no_clear_pattern=true: explicação de por que nenhum padrão emerge — o que falta, é contraditório ou insuficiente nos dados."
+      },
+      "alternative_patterns": {
+        "type": "array",
+        "description": "Interpretações alternativas plausíveis do padrão se a confiança for MEDIUM ou LOW. Cada alternativa nomeia um gerúndio diferente que poderia explicar plausivelmente os dados.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pattern",
+            "why_different"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "Nome alternativo do padrão em gerúndio."
+            },
+            "why_different": {
+              "type": "string",
+              "description": "Como esta interpretação alternativa difere do core_pattern principal e quais incidentes a respaldariam."
+            }
+          }
+        }
+      }
+    }
+  }
+}

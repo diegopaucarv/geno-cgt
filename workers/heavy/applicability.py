@@ -54,13 +54,21 @@ def generate_applicability(proyecto_id: str) -> dict:
         # ── 2. Derive application context from project metadata ──
         app_context = _get_application_context(session, proyecto_id)
 
+        # ── 2.5 Fetch object_of_study ──
+        oos_row = session.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
         # ── 3. Call applicability_engine PRO agent ──
         logger.info("ApplicabilityEngine: generating guidelines")
         result = llm.run_agent(
-            "applicability_engine",
+            "f6d_applicability_engine",
             variables={
                 "theory": theory,
                 "application_context": app_context,
+                "object_of_study": object_of_study,
             },
         )
         logger.info(
@@ -110,7 +118,7 @@ def critique_applicability(directrices: dict) -> dict:
         )
 
         result = llm.run_agent(
-            "applicability_critic",
+            "f6d_applicability_critic",
             variables={
                 "guidelines": guidelines_str,
                 "variables": variables_str,

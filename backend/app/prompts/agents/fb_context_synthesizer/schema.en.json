@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "synthesis": {
+      "type": "string",
+      "description": "Summary of maximum 500 words"
+    },
+    "key_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "emerging_relationships": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "knowledge_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "synthesis"
+  ]
+}

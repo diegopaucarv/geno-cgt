@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "comparisons",
+    "groups",
+    "ungrouped"
+  ],
+  "properties": {
+    "comparisons": {
+      "type": "array",
+      "description": "Paarweise Vergleiche von Incidenten.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incident_a_id",
+          "incident_b_id",
+          "are_interchangeable",
+          "rationale",
+          "similarity_score"
+        ],
+        "properties": {
+          "incident_a_id": {
+            "type": "string",
+            "description": "UUID des ersten Incidents"
+          },
+          "incident_b_id": {
+            "type": "string",
+            "description": "UUID des zweiten Incidents"
+          },
+          "are_interchangeable": {
+            "type": "boolean",
+            "description": "Sind sie austauschbar?"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "1-2 Sätze Begründung"
+          },
+          "similarity_score": {
+            "type": "number",
+            "description": "0.0-1.0 Punktzahl der Musterähnlichkeit"
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Gruppen austauschbarer Incidente. Jede Gruppe enthält Incidente, die dasselbe Phänomen messen.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incident_ids",
+          "common_pattern"
+        ],
+        "properties": {
+          "incident_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UUIDs der Incidente in dieser Gruppe"
+          },
+          "common_pattern": {
+            "type": "string",
+            "description": "Kurze Beschreibung des gemeinsamen Verhaltensmusters dieser Incidente (1-2 Sätze)"
+          }
+        }
+      }
+    },
+    "ungrouped": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs von Incidenten, die mit keinem anderen austauschbar sind"
+    }
+  }
+}

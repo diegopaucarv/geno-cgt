@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extracted_incidents"
+  ],
+  "properties": {
+    "extracted_incidents": {
+      "type": "array",
+      "description": "Incidentes de la categoría encontrados en el documento. Array vacío si la categoría no aparece.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exact_quote",
+          "proposed_property",
+          "paradigm_element"
+        ],
+        "properties": {
+          "exact_quote": {
+            "type": "string",
+            "description": "Cita textual exacta del documento. No parafrasear. Entre 10 y 300 palabras."
+          },
+          "proposed_property": {
+            "type": "string",
+            "description": "Propiedad de la categoría que este incidente revela (ej., 'alta intensidad', 'contexto laboral')."
+          },
+          "paradigm_element": {
+            "type": "string",
+            "enum": [
+              "dimension",
+              "condition",
+              "consequence",
+              "strategy"
+            ],
+            "description": "Elemento del paradigma CGT: dimension (propiedad variable), condition (circunstancia), consequence (resultado), strategy (acción)."
+          },
+          "ambiguity_note": {
+            "type": "string",
+            "description": "Si el incidente podría pertenecer a otra categoría, anotarlo aquí. Cadena vacía si no hay ambigüedad."
+          }
+        }
+      }
+    }
+  }
+}

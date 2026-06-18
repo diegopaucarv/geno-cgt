@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "themes"
+  ],
+  "properties": {
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "indicators",
+          "suggested_gerundio"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Theme name in 2-5 words."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicators that compose this theme."
+          },
+          "suggested_gerundio": {
+            "type": "string",
+            "description": "Possible code name in gerund (-ing form)."
+          }
+        }
+      }
+    }
+  }
+}

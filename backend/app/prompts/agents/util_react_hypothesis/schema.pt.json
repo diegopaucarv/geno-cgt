@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "required": [
+    "hypotheses"
+  ],
+  "properties": {
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "level",
+          "related_codes",
+          "evidence_segments"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Hipótese em 1-2 frases."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific",
+              "emergent"
+            ],
+            "description": "Nível de abstração."
+          },
+          "related_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Nomes dos códigos com os quais se relaciona."
+          },
+          "evidence_segments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs dos segmentos que respaldam a hipótese."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confiança baseada em quantidade e qualidade de evidência."
+          }
+        }
+      }
+    }
+  }
+}

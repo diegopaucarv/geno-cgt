@@ -57,7 +57,7 @@ export default function PlaygroundDataPanel({
 
   function formatProposal(gate: string, p: Record<string, unknown>): string {
     if (gate === "main_concern") {
-      return `"${(p.main_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
+      return `"${(p.core_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
     }
     if (gate === "core_emergence") {
       const candidates = p.core_category_candidates as

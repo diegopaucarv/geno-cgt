@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "process_description",
+    "similarity_to_previous",
+    "difference_from_previous"
+  ],
+  "properties": {
+    "process_description": {
+      "type": "string",
+      "description": "Descripción en gerundio del proceso central de ESTE entrevistado."
+    },
+    "similarity_to_previous": {
+      "type": "string",
+      "description": "En qué se PARECE al proceso del entrevistado anterior."
+    },
+    "difference_from_previous": {
+      "type": "string",
+      "description": "En qué se DIFERENCIA del proceso del entrevistado anterior."
+    }
+  }
+}

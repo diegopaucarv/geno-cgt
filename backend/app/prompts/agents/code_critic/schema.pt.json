@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "required": [
+    "all_valid",
+    "issues"
+  ],
+  "properties": {
+    "all_valid": {
+      "type": "boolean",
+      "description": "true se todos os códigos passarem na revisão."
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "problem",
+          "suggestion"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Nome do código com problemas."
+          },
+          "problem": {
+            "type": "string",
+            "enum": [
+              "vague_definition",
+              "overlap",
+              "not_grounded",
+              "missing_properties"
+            ],
+            "description": "Tipo de problema."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Como corrigir. Uma frase concreta."
+          }
+        }
+      }
+    }
+  }
+}

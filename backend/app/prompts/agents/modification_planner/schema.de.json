@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "required": [
+    "rewritten_request",
+    "verification_plan",
+    "falsification_hypothesis"
+  ],
+  "properties": {
+    "rewritten_request": {
+      "type": "string",
+      "description": "Anfrage umformuliert in Bezug auf die Schlüsselfrage des Agenten"
+    },
+    "verification_plan": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "action",
+          "description",
+          "input"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "Schrittnummer"
+          },
+          "action": {
+            "type": "string",
+            "description": "Name des zu verwendenden Werkzeugs"
+          },
+          "description": {
+            "type": "string",
+            "description": "Wonach dieser Schritt sucht"
+          },
+          "input": {
+            "type": "object",
+            "description": "Parameter für das Werkzeug"
+          },
+          "success_criteria": {
+            "type": "string",
+            "description": "Woran ich erkenne, dass dieser Schritt gefunden hat, wonach er suchte"
+          }
+        }
+      }
+    },
+    "falsification_hypothesis": {
+      "type": "string",
+      "description": "Welche Evidenz würde zeigen, dass die Änderung NICHT ratsam ist"
+    },
+    "expected_impact": {
+      "type": "string",
+      "description": "Welche Tabellen/Ausgaben betroffen wären, wenn die Änderung angewendet wird"
+    }
+  }
+}

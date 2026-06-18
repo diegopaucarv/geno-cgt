@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "required": [
+    "sampling_dimensions"
+  ],
+  "properties": {
+    "sampling_dimensions": {
+      "type": "array",
+      "description": "Durch die Daten gestützte Variationsdimensionen.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "evidence_of_variation",
+          "contrast_criteria",
+          "extreme_criteria",
+          "consistent_criteria"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Kurzname."
+          },
+          "description": {
+            "type": "string",
+            "description": "Was variiert und warum es wichtig ist."
+          },
+          "evidence_of_variation": {
+            "type": "string",
+            "description": "Konkrete Evidenz unter Nennung von Interviewpartnern."
+          },
+          "contrast_criteria": {
+            "type": "string",
+            "description": "Gegenprofil."
+          },
+          "extreme_criteria": {
+            "type": "string",
+            "description": "Intensivster Fall."
+          },
+          "consistent_criteria": {
+            "type": "string",
+            "description": "Ähnliches Profil."
+          }
+        }
+      }
+    }
+  }
+}

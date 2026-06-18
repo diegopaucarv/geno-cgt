@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "all_valid",
+    "issues"
+  ],
+  "properties": {
+    "all_valid": {
+      "type": "boolean",
+      "description": "true se TODOS os rótulos passarem na revisão (todos SAT)"
+    },
+    "issues": {
+      "type": "array",
+      "description": "Problemas encontrados. Array vazio se all_valid for true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "verdict",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Nome do rótulo avaliado"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Veredito para este rótulo"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "not_grounded",
+              "wrong_gerund",
+              "scope_issue",
+              "overlap",
+              "forced_pattern"
+            ],
+            "description": "Tipo de problema (omitir se SAT)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Descrição do problema. Se MOD, incluir uma sugestão concreta."
+          }
+        }
+      }
+    }
+  }
+}

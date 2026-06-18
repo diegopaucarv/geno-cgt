@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "themes"
+  ],
+  "properties": {
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "indicators",
+          "suggested_gerundio"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nome do tema em 2-5 palavras."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indicadores que compõem este tema."
+          },
+          "suggested_gerundio": {
+            "type": "string",
+            "description": "Possível nome de código em gerúndio (forma -ing)."
+          }
+        }
+      }
+    }
+  }
+}

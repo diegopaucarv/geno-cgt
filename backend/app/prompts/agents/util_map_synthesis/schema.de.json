@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "variations_observed",
+    "key_evidence"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Zusammenfassung in 3-8 Sätzen, wie der Code in diesem Dokument erscheint. Wenn der Code nicht vorkommt: 'Der Code erscheint nicht in diesem Dokument.'"
+    },
+    "variations_observed": {
+      "type": "array",
+      "description": "Beobachtete interne Variationen: Grade, Nuancen, kontextuelle Unterschiede. Leeres Array wenn der Code in diesem Dokument einheitlich ist.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "key_evidence": {
+      "type": "array",
+      "description": "Textuelle Evidenz, die die Zusammenfassung stützt. Leeres Array wenn keine Evidenz.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exact_quote",
+          "claim"
+        ],
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "description": "Index des Segments in der bereitgestellten Liste (0-basiert). Optional."
+          },
+          "exact_quote": {
+            "type": "string",
+            "description": "Exaktes wörtliches Zitat aus dem Segment. Nicht paraphrasieren."
+          },
+          "claim": {
+            "type": "string",
+            "description": "Was die Analyse behauptet, dass dieses Zitat belegt."
+          }
+        }
+      }
+    },
+    "is_anomaly": {
+      "type": "boolean",
+      "description": "true wenn dieses Dokument ein atypischer Fall für diesen Code ist (Verhalten, das dem allgemeinen Muster widerspricht oder nicht passt)."
+    },
+    "anomaly_note": {
+      "type": "string",
+      "description": "Wenn is_anomaly=true, erklären warum dieses Dokument atypisch ist. Leerer String wenn keine Anomalie."
+    }
+  }
+}

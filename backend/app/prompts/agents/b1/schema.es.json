@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "required": [
+    "sampling_dimensions"
+  ],
+  "properties": {
+    "sampling_dimensions": {
+      "type": "array",
+      "description": "Dimensiones de variación respaldadas por los datos.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "evidence_of_variation",
+          "contrast_criteria",
+          "extreme_criteria",
+          "consistent_criteria"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre corto."
+          },
+          "description": {
+            "type": "string",
+            "description": "Qué varía y por qué importa."
+          },
+          "evidence_of_variation": {
+            "type": "string",
+            "description": "Evidencia concreta citando entrevistados."
+          },
+          "contrast_criteria": {
+            "type": "string",
+            "description": "Perfil opuesto."
+          },
+          "extreme_criteria": {
+            "type": "string",
+            "description": "Caso más intenso."
+          },
+          "consistent_criteria": {
+            "type": "string",
+            "description": "Perfil similar."
+          }
+        }
+      }
+    }
+  }
+}

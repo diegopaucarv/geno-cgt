@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "all_valid",
+    "issues"
+  ],
+  "properties": {
+    "all_valid": {
+      "type": "boolean",
+      "description": "true si TODAS las etiquetas pasan revisión (todas SAT)"
+    },
+    "issues": {
+      "type": "array",
+      "description": "Problemas encontrados. Array vacío si all_valid es true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "verdict",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Nombre de la etiqueta evaluada"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Veredicto para esta etiqueta"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "not_grounded",
+              "wrong_gerund",
+              "scope_issue",
+              "overlap",
+              "forced_pattern"
+            ],
+            "description": "Tipo de problema (omitir si SAT)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Descripción del problema. Si MOD, incluir una sugerencia concreta."
+          }
+        }
+      }
+    }
+  }
+}

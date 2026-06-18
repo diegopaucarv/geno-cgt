@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string",
+            "description": "UUID des bewerteten Codes"
+          },
+          "code_label": {
+            "type": "string",
+            "description": "Code-Label"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "refine",
+              "split"
+            ],
+            "description": "Austauschbarkeitsurteil"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Rechtfertigung unter Nennung spezifischer Incidente aus verschiedenen Dokumenten"
+          },
+          "interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_interchangeable": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Paare von Incidenten, die klar austauschbar sind"
+          },
+          "non_interchangeable_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incident_a_doc": {
+                  "type": "string"
+                },
+                "incident_b_doc": {
+                  "type": "string"
+                },
+                "why_different": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Paare, die unterschiedliche Muster offenbaren"
+          },
+          "suggested_action_if_not_valid": {
+            "type": "string",
+            "description": "Konkrete Maßnahme: Definition verfeinern, in Subcodes aufteilen oder weitere Daten suchen?"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "verdicts"
+  ]
+}

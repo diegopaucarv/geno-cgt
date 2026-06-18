@@ -1,0 +1,62 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "writing_critic",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "SAT",
+            "MOD",
+            "FORCED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Type of infraction: tense | subject | citation | fidelity | intro | abstraction"
+              },
+              "location": {
+                "type": "string",
+                "description": "Text fragment where the infraction occurs"
+              },
+              "suggestion": {
+                "type": "string",
+                "description": "Suggested correction"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "location",
+              "suggestion",
+              "severity"
+            ]
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary of 2-3 sentences of the global evaluation"
+        }
+      },
+      "required": [
+        "verdict",
+        "issues",
+        "summary"
+      ]
+    }
+  }
+}

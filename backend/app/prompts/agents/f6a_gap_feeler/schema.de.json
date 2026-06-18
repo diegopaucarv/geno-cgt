@@ -1,0 +1,73 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "gap_feeler",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gaps",
+        "total_gaps",
+        "summary"
+      ],
+      "properties": {
+        "gaps": {
+          "type": "array",
+          "description": "Erkannte theoretische Lücken. Kann leer sein, wenn der Entwurf strukturell solide ist.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "description",
+              "severity",
+              "location"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MISSING_EVIDENCE",
+                  "UNDERDEVELOPED_PROPERTY",
+                  "DISCONNECTED_CATEGORY",
+                  "CONCEPTUAL_LEAP",
+                  "ORPHAN_CLAIM"
+                ],
+                "description": "Lückenklassifikation aus den fünf kanonischen Typen."
+              },
+              "description": {
+                "type": "string",
+                "description": "Ein-Satz-Beschreibung der Lücke: was fehlt oder geschwächt ist."
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
+                "description": "Schweregrad nach kontextbewusster Skalierung. HIGH=blockiert Publikation, MEDIUM=benötigt Erweiterung, LOW=kosmetisch."
+              },
+              "location": {
+                "type": "string",
+                "description": "Spezifischer Ort: Abschnittsname, Absatznummer oder zitiertes Satzfragment."
+              },
+              "proximity_to_core": {
+                "type": "boolean",
+                "description": "true wenn die Lücke in oder nahe einem Absatz ist, der das Kernanliegen referenziert."
+              }
+            }
+          }
+        },
+        "total_gaps": {
+          "type": "integer",
+          "description": "Gesamtzahl der erkannten Lücken."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Ein-Satz-Diagnosezusammenfassung, z.B. '3 Lücken: 1 HIGH (fehlende Evidenz zur Kernbehauptung), 1 MEDIUM, 1 LOW'."
+        }
+      }
+    }
+  }
+}

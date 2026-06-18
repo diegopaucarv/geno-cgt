@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "required": [
+    "expansion_verdicts",
+    "did_state_expand"
+  ],
+  "properties": {
+    "expansion_verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "expansion_index",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "expansion_index": {
+            "type": "integer"
+          },
+          "expansion_type": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "covered_by_property": {
+            "type": "string"
+          },
+          "suggested_refinement": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "did_state_expand": {
+      "type": "boolean"
+    },
+    "expansion_count": {
+      "type": "integer"
+    },
+    "confirmation_count": {
+      "type": "integer"
+    },
+    "saturation_note": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action",
+    "rationale",
+    "essence_shared"
+  ],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "ENRICH",
+        "SUBDIVIDE",
+        "DIVIDE",
+        "INSUFFICIENT_DATA"
+      ],
+      "description": "Acción decidida según el protocolo de 3 pasos."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Razonamiento que recorre los pasos del protocolo, citando incidentes específicos."
+    },
+    "essence_shared": {
+      "type": "boolean",
+      "description": "Resultado del Paso 1: true si los grupos comparten una esencia central."
+    },
+    "new_property": {
+      "type": "string",
+      "description": "Solo si ENRICH. Nueva propiedad/dimensión a agregar. Cadena vacía si no aplica."
+    },
+    "subcategories": {
+      "type": "array",
+      "description": "Solo si SUBDIVIDE. Subcategorías o anclas de gradiente propuestas.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Nombre de la subcategoría o ancla."
+          },
+          "description": {
+            "type": "string",
+            "description": "Qué incidentes pertenecen a esta subcategoría."
+          },
+          "is_discrete": {
+            "type": "boolean",
+            "description": "true si tipo discreto, false si ancla de gradiente."
+          }
+        }
+      }
+    },
+    "divided_categories": {
+      "type": "array",
+      "description": "Solo si DIVIDE. Nuevas categorías propuestas.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "definition"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Gerundio de la nueva categoría."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definición de la nueva categoría."
+          },
+          "incident_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs de los incidentes asignados."
+          }
+        }
+      }
+    }
+  }
+}

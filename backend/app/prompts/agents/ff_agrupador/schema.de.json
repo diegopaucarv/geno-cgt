@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summarized_constructs"
+  ],
+  "properties": {
+    "summarized_constructs": {
+      "type": "array",
+      "description": "Übergeordnete Konstrukte, die aus der Gruppierung resultieren.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "definition",
+          "summarized_ids"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerundium des gruppierten Konstrukts."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Vereinheitlichte Definition, die erfasst, was die gruppierten Codes teilen."
+          },
+          "summarized_ids": {
+            "type": "array",
+            "description": "Indizes (1-basiert) der ursprünglichen Codes, die in dieses Konstrukt zusammengeführt wurden.",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "theoretical_sampling_criteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inclusion",
+              "exclusion"
+            ],
+            "properties": {
+              "inclusion": {
+                "type": "array",
+                "description": "Vereinheitlichte Einschlusskriterien.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusion": {
+                "type": "array",
+                "description": "Vereinheitlichte Ausschlusskriterien.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

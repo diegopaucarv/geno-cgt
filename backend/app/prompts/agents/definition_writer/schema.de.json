@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "required": [
+    "codes"
+  ],
+  "properties": {
+    "codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_name",
+          "definition",
+          "properties",
+          "dimensions",
+          "relationship_to_existing"
+        ],
+        "properties": {
+          "code_name": {
+            "type": "string",
+            "description": "Endgültiger Name des Codes."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definition: welches Verhaltensmuster es erfasst. 2-4 Sätze."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Eigenschaften des Phänomens (beobachtbare Attribute in den Indikatoren)."
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Variationsdimensionen (wie sich das Phänomen je nach Kontext, Intensität etc. verändert)."
+          },
+          "indicators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Indikatoren, die diesen Code stützen."
+          },
+          "relationship_to_existing": {
+            "type": "string",
+            "description": "Beziehung zu bestehenden Codes: 'Neu', 'Subcode von X', 'Überlappung mit Y'."
+          }
+        }
+      }
+    }
+  }
+}

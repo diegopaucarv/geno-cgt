@@ -90,6 +90,65 @@ def _validate_custom_label_with_spacy(
     }
 
 
+def _conjugate_verb(verb: str, population: str) -> str:
+    """Conjugate processing_verb to match population (always plural 3rd person).
+
+    Uses spaCy to detect language. For Spanish, applies basic 3rd-person-plural
+    conjugation rules. For English, returns the verb unchanged (no plural conjugation).
+    """
+    if not verb or not population:
+        return verb or "resolve"
+
+    nlp = _get_nlp()
+    pop_doc = nlp(population[:100])
+
+    # Detect language: check spaCy model's language
+    is_spanish = nlp.meta.get("lang") == "es"
+
+    # Fallback: count tokens marked as Spanish vs English
+    if not is_spanish:
+        es_tokens = sum(1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "es")
+        en_tokens = sum(1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "en")
+        if es_tokens > en_tokens:
+            is_spanish = True
+
+    if not is_spanish:
+        return verb  # English: no conjugation needed for plural
+
+    # Simple Spanish conjugation: 3rd person plural present indicative
+    verb_lower = verb.lower().strip()
+
+    if verb_lower.endswith("ar"):
+        return verb_lower[:-2] + "an"
+    elif verb_lower.endswith("er"):
+        return verb_lower[:-2] + "en"
+    elif verb_lower.endswith("ir"):
+        return verb_lower[:-2] + "en"
+    else:
+        return verb_lower  # irregular or unknown, return as-is
+
+
+def _detect_singular_population(population: str) -> str | None:
+    """Check if population description appears singular (warn but don't block).
+
+    Returns a warning message if singular detected, None otherwise.
+    """
+    if not population or not population.strip():
+        return None
+
+    singular_articles = {"un", "una", "el", "la"}
+    tokens = population.strip().lower().split()
+
+    for i, tok in enumerate(tokens):
+        if tok in singular_articles:
+            return (
+                f"Population description appears singular (contains '{tok}'). "
+                "The population_generalizer will pluralize it."
+            )
+
+    return None
+
+
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
 # ── Política de mutación por defecto ──────────────────────────────────
@@ -216,15 +275,60 @@ async def create_project(
         await db.commit()
         await db.refresh(proyecto)
 
-    # ── F1.2: population_generalizer (FLASH, single-shot) ──
+    # ── Store processing_verb in population_assumption ──
+    pv = data.get("processing_verb", "").strip() or "resolve"
+    pg = data.get("processing_gerund", "").strip() or "resolving"
+    pop = proyecto.population_assumption or {}
+    pop["processing_verb"] = pv
+    pop["processing_gerund"] = pg
+    # Default methodological framework
+    pop.setdefault("methodological_framework", "classic_gt")
+    proyecto.population_assumption = pop
+    await db.commit()
+    await db.refresh(proyecto)
+
+    # ── Conjugate processing_verb to match population (always plural 3rd person) ──
+    raw_pop_for_verb = body.supuesto_poblacional
+    if raw_pop_for_verb and raw_pop_for_verb.strip():
+        try:
+            pvc = _conjugate_verb(pv, raw_pop_for_verb)
+            pop = proyecto.population_assumption or {}
+            pop["processing_verb_conjugated"] = pvc
+            proyecto.population_assumption = pop
+            await db.commit()
+            await db.refresh(proyecto)
+            logger.info(
+                "Verb conjugated: verb=%r conjugated=%r for project=%s",
+                pv,
+                pvc,
+                proyecto.id,
+            )
+        except Exception as e:
+            logger.warning("Verb conjugation failed for project=%s: %s", proyecto.id, e)
+
+    # ── Detect singular population (warn only, don't block) ──
     raw_pop = body.supuesto_poblacional
+    singular_warning = _detect_singular_population(raw_pop) if raw_pop else None
+    if singular_warning:
+        logger.info(
+            "Singular population detected for project=%s: %s",
+            proyecto.id,
+            singular_warning,
+        )
+        pop = proyecto.population_assumption or {}
+        pop["population_warning"] = singular_warning
+        proyecto.population_assumption = pop
+        await db.commit()
+        await db.refresh(proyecto)
+
+    # ── F1.2: f0_population_generalizer (FLASH, single-shot) ──
     if raw_pop and raw_pop.strip():
         try:
             from app.core.llm_config import get_model_for_prompt
             from app.core.together_client import TogetherLLM
             from app.prompts import PROMPT_REGISTRY
 
-            template = PROMPT_REGISTRY["population_generalizer"]
+            template = PROMPT_REGISTRY["f0_population_generalizer"]
             messages = template.build_messages(raw_population_description=raw_pop)
             # Forzar JSON: Gemma Flash no respeta response_format, necesita instruccion explicita
             messages.append(
@@ -233,7 +337,7 @@ async def create_project(
                     "content": "Responde EXCLUSIVAMENTE en formato JSON, sin markdown, sin explicacion adicional.",
                 }
             )
-            model = get_model_for_prompt("population_generalizer")
+            model = get_model_for_prompt("f0_population_generalizer")
 
             llm = TogetherLLM()
             response = await asyncio.to_thread(
@@ -290,14 +394,14 @@ async def create_project(
             await db.commit()
             await db.refresh(proyecto)
             logger.info(
-                "population_generalizer: project=%s spatial=%s temporal=%s",
+                "f0_population_generalizer: project=%s spatial=%s temporal=%s",
                 proyecto.id,
                 current.get("spatial_frame"),
                 current.get("temporal_frame"),
             )
         except Exception as e:
             logger.warning(
-                "population_generalizer failed for project=%s: %s",
+                "f0_population_generalizer failed for project=%s: %s",
                 proyecto.id,
                 e,
             )
@@ -431,6 +535,94 @@ async def update_population_assumption(
         "population_assumption": proyecto.population_assumption,
         "supuesto_poblacional": proyecto.supuesto_poblacional,
     }
+
+
+@router.post("/{project_id}/config/population-assumption/generalize")
+async def generalize_population(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Re-run the f0_population_generalizer (FLASH) for an existing project.
+
+    Called when the user wants to re-generate or generate for the first time
+    the generalized population from the raw supuesto_poblacional.
+    """
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    raw_pop = proyecto.supuesto_poblacional
+    if not raw_pop or not raw_pop.strip():
+        raise HTTPException(400, "No hay supuesto_poblacional para generalizar")
+
+    try:
+        from app.core.llm_config import get_model_for_prompt
+        from app.core.together_client import TogetherLLM
+        from app.prompts import PROMPT_REGISTRY
+
+        template = PROMPT_REGISTRY["f0_population_generalizer"]
+        messages = template.build_messages(raw_population_description=raw_pop)
+        messages.append(
+            {
+                "role": "user",
+                "content": "Responde EXCLUSIVAMENTE en formato JSON, sin markdown, sin explicacion adicional.",
+            }
+        )
+        model = get_model_for_prompt("f0_population_generalizer")
+
+        llm = TogetherLLM()
+        response = await asyncio.to_thread(llm.chat, model=model, messages=messages)
+
+        raw_content = response.get("content", "{}")
+        content = {}
+        try:
+            content = json.loads(raw_content)
+        except json.JSONDecodeError:
+            import re
+
+            matches = list(
+                re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", raw_content, re.DOTALL)
+            )
+            for m in matches:
+                try:
+                    content = json.loads(m.group(0))
+                    break
+                except json.JSONDecodeError:
+                    continue
+
+        KEY_MAP = {
+            "population_generalizada": "generalized_population",
+            "poblacion_generalizada": "generalized_population",
+            "marco_espacial": "spatial_frame",
+            "marco_temporal": "temporal_frame",
+            "confianza": "confidence",
+            "justificacion": "rationale",
+        }
+        content = {KEY_MAP.get(k, k): v for k, v in content.items()}
+
+        current = proyecto.population_assumption or {}
+        current["population_description"] = raw_pop
+        current["generalized_population"] = content.get("generalized_population", "")
+        current["spatial_frame"] = content.get("spatial_frame", "sparse")
+        current["temporal_frame"] = content.get("temporal_frame", "present_continuous")
+        current["generalizer_confidence"] = content.get("confidence", 0.5)
+        current["generalizer_rationale"] = content.get("rationale", "")
+        proyecto.population_assumption = current
+
+        await db.commit()
+        await db.refresh(proyecto)
+
+        return {
+            "status": "generalized",
+            "population_assumption": proyecto.population_assumption,
+            "supuesto_poblacional": proyecto.supuesto_poblacional,
+        }
+    except Exception as e:
+        logger.warning(
+            "generalize_population failed for project=%s: %s", proyecto.id, e
+        )
+        raise HTTPException(500, f"Generalizer failed: {str(e)}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -763,6 +955,22 @@ async def update_project(
             pop.pop("custom_label", None)
             pop.pop("custom_label_spacy", None)
             proyecto.population_assumption = pop
+
+    # ── Handle processing_verb ──
+    processing_verb = body.get("processing_verb")
+    if processing_verb is not None:
+        pop = proyecto.population_assumption or {}
+        pop["processing_verb"] = str(processing_verb).strip() or "resolve"
+        proyecto.population_assumption = pop
+    processing_gerund = body.get("processing_gerund")
+    if processing_gerund is not None:
+        pop = proyecto.population_assumption or {}
+        pop["processing_gerund"] = str(processing_gerund).strip() or "resolving"
+        proyecto.population_assumption = pop
+    # Ensure methodological_framework default
+    pop = proyecto.population_assumption or {}
+    pop.setdefault("methodological_framework", "classic_gt")
+    proyecto.population_assumption = pop
 
     # ── F0.3.5: Si cambia el tipo de patron, reiniciar pipeline ──
     if pattern_changed and proyecto.estado not in ("collecting", "coding"):

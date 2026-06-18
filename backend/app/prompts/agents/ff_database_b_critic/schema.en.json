@@ -1,0 +1,393 @@
+{
+  "type": "object",
+  "required": [
+    "edge_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "edge_evaluations": {
+      "type": "array",
+      "description": "Evaluation for each proposed edge.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relationship_type",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source node label of the edge being evaluated."
+          },
+          "target": {
+            "type": "string",
+            "description": "Target node label of the edge being evaluated."
+          },
+          "relationship_type": {
+            "type": "string",
+            "description": "The proposed relationship_type."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=correct, MOD=needs adjustment, FORCED=should be removed."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Narrative justification of the verdict, referencing the most relevant criteria."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Assessment of each criterion.",
+            "properties": {
+              "relationship_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ],
+                    "description": "If pass=false: the correct relationship_type."
+                  }
+                }
+              },
+              "evidence_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "directional_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "suggested_direction": {
+                    "type": "string",
+                    "enum": [
+                      "unidirectional",
+                      "bidirectional",
+                      "conceptual",
+                      "reversed"
+                    ],
+                    "description": "If pass=false: the correct direction."
+                  }
+                }
+              },
+              "theoretical_coherence": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "If MOD: concrete fix (change type to X, reverse direction, strengthen evidence with Y). If FORCED: why this edge should be removed."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "contradictions",
+        "missing_edges",
+        "orphan_nodes",
+        "processes_edge_verification"
+      ],
+      "properties": {
+        "contradictions": {
+          "type": "object",
+          "required": [
+            "has_contradictions",
+            "details"
+          ],
+          "properties": {
+            "has_contradictions": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "description",
+                  "edges_involved"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "circular_causation",
+                      "mutual_typing",
+                      "type_clash"
+                    ],
+                    "description": "Type of contradiction detected."
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "edges_involved": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string"
+                        },
+                        "relationship_type": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "resolution_suggestion": {
+                    "type": "string",
+                    "description": "How to resolve the contradiction."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "missing_edges": {
+          "type": "object",
+          "required": [
+            "has_missing",
+            "suggestions"
+          ],
+          "properties": {
+            "has_missing": {
+              "type": "boolean"
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "target",
+                  "suggested_type",
+                  "rationale",
+                  "urgency"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Source node label."
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Target node label."
+                  },
+                  "suggested_type": {
+                    "type": "string",
+                    "enum": [
+                      "PROCESSES",
+                      "LEADS_TO",
+                      "IS_A_STRATEGY_FOR",
+                      "IS_A_CONSEQUENCE_OF",
+                      "IS_A_CONDITION_FOR",
+                      "VARIES_WITH",
+                      "CO_OCCURS_WITH"
+                    ]
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "description": "Why this edge is logically needed."
+                  },
+                  "urgency": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "important",
+                      "nice_to_have"
+                    ],
+                    "description": "critical=model incomplete without it, important=significantly improves coherence, nice_to_have=adds richness."
+                  },
+                  "evidence_needed": {
+                    "type": "string",
+                    "description": "What evidence would be required to establish this edge."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "orphan_nodes": {
+          "type": "object",
+          "required": [
+            "has_orphans",
+            "details"
+          ],
+          "properties": {
+            "has_orphans": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node_label",
+                  "entity_type",
+                  "is_legitimate",
+                  "rationale"
+                ],
+                "properties": {
+                  "node_label": {
+                    "type": "string"
+                  },
+                  "entity_type": {
+                    "type": "string",
+                    "enum": [
+                      "core_category",
+                      "condition",
+                      "consequence",
+                      "strategy",
+                      "dimension"
+                    ]
+                  },
+                  "is_legitimate": {
+                    "type": "boolean",
+                    "description": "true if this node being edge-less is theoretically acceptable (e.g., a dimension node)."
+                  },
+                  "rationale": {
+                    "type": "string"
+                  },
+                  "suggested_connection": {
+                    "type": "string",
+                    "description": "If not legitimate: which node should this connect to and how?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "processes_edge_verification": {
+          "type": "object",
+          "required": [
+            "exists",
+            "has_correct_source",
+            "has_valid_target",
+            "is_theoretically_sound"
+          ],
+          "properties": {
+            "exists": {
+              "type": "boolean",
+              "description": "Does a PROCESSES edge exist?"
+            },
+            "has_correct_source": {
+              "type": "boolean",
+              "description": "Is the source the core node (is_core=true)?"
+            },
+            "has_valid_target": {
+              "type": "boolean",
+              "description": "Does the target correctly describe the {object_of_study}?"
+            },
+            "is_theoretically_sound": {
+              "type": "boolean",
+              "description": "Does the rationale convincingly explain why this is the central mechanism?"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Any problems with the PROCESSES edge."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true if the full edge system is methodologically sound and ready for researcher review."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Global assessment: what is solid? What needs attention? Is the integrated model coherent?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Issues that MUST be resolved before the model is ready."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-blocking concerns to note for the researcher."
+        }
+      }
+    }
+  }
+}

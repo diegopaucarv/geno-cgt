@@ -1,0 +1,111 @@
+{
+  "type": "object",
+  "properties": {
+    "discard_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=descarte correcto, MOD=cuestionable, FORCED=erróneo (recuperar)"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación citando evidencia de los incidentes"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Si MOD o FORCED: ¿recuperar, reevaluar o buscar más datos?"
+          }
+        }
+      }
+    },
+    "fusion_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "source_code_ids",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=fusión sólida, MOD=necesita ajuste, FORCED=sin base empírica"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificación con evidencia de intercambiabilidad (o falta de ella)"
+          },
+          "codes_to_remove_from_fusion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Si MOD: UUIDs de códigos que NO deberían estar en esta fusión"
+          },
+          "suggested_action": {
+            "type": "string",
+            "description": "Si MOD o FORCED: acción concreta"
+          }
+        }
+      }
+    },
+    "false_positives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs de códigos descartados que deberían RECUPERARSE"
+    },
+    "false_negatives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "UUIDs de códigos sobrevivientes que deberían DESCARTARSE"
+    },
+    "overall_assessment": {
+      "type": "string",
+      "description": "Evaluación global del sistema reducido: ¿es metodológicamente sólido? ¿Qué falta?"
+    }
+  },
+  "required": [
+    "discard_evaluations",
+    "fusion_evaluations"
+  ]
+}

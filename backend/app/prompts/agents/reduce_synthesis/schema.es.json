@@ -1,0 +1,110 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "global_definition",
+    "properties"
+  ],
+  "properties": {
+    "global_definition": {
+      "type": "string",
+      "description": "Definición consolidada del código a través de todos los documentos. Más abstracta que los resúmenes individuales pero anclada en los datos."
+    },
+    "properties": {
+      "type": "array",
+      "description": "Propiedades y dimensiones de la categoría. Array vacío si no se identifican propiedades claras.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre de la propiedad como sustantivo (ej. 'intensidad', 'frecuencia', 'contexto')."
+          },
+          "description": {
+            "type": "string",
+            "description": "Qué varía en esta dimensión y entre qué valores."
+          },
+          "gradient": {
+            "type": "string",
+            "description": "Rango de variación. Ej.: 'bajo → alto', 'explícito → implícito'. Cadena vacía si no aplica."
+          },
+          "evidence_doc_count": {
+            "type": "integer",
+            "description": "En cuántos documentos se observa evidencia de esta propiedad."
+          }
+        }
+      }
+    },
+    "internal_types": {
+      "type": "array",
+      "description": "Sub-patrones o perfiles que emergen dentro de la categoría. Array vacío si no hay tipos internos claros.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Etiqueta del tipo o perfil."
+          },
+          "description": {
+            "type": "string",
+            "description": "Qué distingue este tipo de otros dentro de la categoría."
+          },
+          "distinguishing_property": {
+            "type": "string",
+            "description": "Propiedad que diferencia este tipo. Cadena vacía si no hay propiedad única."
+          }
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "description": "Circunstancias bajo las cuales se manifiesta la categoría. Array vacío si no se identifican condiciones.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "type"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "description": "Descripción de la circunstancia."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "structural",
+              "contingent"
+            ],
+            "description": "structural: condición contextual estable. contingent: condición variable o situacional."
+          }
+        }
+      }
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "enrich",
+        "subdivide",
+        "divide"
+      ],
+      "description": "none: categoría robusta. enrich: agregar propiedades/dimensiones. subdivide: crear subcategorías. divide: separar en categorías distintas."
+    },
+    "suggested_action_rationale": {
+      "type": "string",
+      "description": "Justificación de la acción sugerida, referenciando evidencia de los resúmenes."
+    }
+  }
+}

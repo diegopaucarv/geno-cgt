@@ -1,0 +1,57 @@
+-- agent: b3
+-- tier: PRO
+-- description: Hipótesis — versión directa. El sistema deduplica después.
+
+[INSTRUCCIÓN — lee esto primero]
+Propón hipótesis testeables a partir de los datos acumulados.
+NO las verifiques. Cada hipótesis debe citar evidencia concreta.
+Output: SOLO el JSON. NO inventes.
+
+Marco: {population_assumption}.
+
+Contexto: {population_context}
+Procesos: {processes}
+Códigos: {codes}
+Hipótesis existentes: {existing_hypotheses}
+
+[OBJETO DE ESTUDIO]
+{object_of_study}
+
+[PREGUNTA OPERACIONAL — qué observar]
+{operational_question}
+
+[EJEMPLO de output]
+{{
+  "hypotheses": [
+    {{
+      "text": "Los entrevistados que dependen totalmente de la plataforma desarrollan estrategias de evasión más elaboradas.",
+      "level": "specific",
+      "type": "relational",
+      "evidence": "Entrevistado 1 (tiempo completo): 4 estrategias. Entrevistado 4 (complementario): 1 estrategia.",
+      "related_codes": ["Evadiendo control algorítmico"]
+    }}
+  ]
+}}
+
+---
+SCHEMA
+{{
+  "type": "object",
+  "required": ["hypotheses"],
+  "properties": {{
+    "hypotheses": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": ["text", "level", "evidence", "type"],
+        "properties": {{
+          "text": {{"type": "string", "description": "Hipótesis como afirmación testeable."}},
+          "level": {{"type": "string", "enum": ["general", "specific", "emergent"], "description": "general | specific | emergent"}},
+          "type": {{"type": "string", "enum": ["descriptive", "relational", "causal", "process", "typological"], "description": "Tipo."}},
+          "evidence": {{"type": "string", "description": "Evidencia concreta."}},
+          "related_codes": {{"type": "array", "items": {{"type": "string"}}, "description": "Códigos relacionados."}}
+        }}
+      }}
+    }}
+  }}
+}}

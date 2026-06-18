@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "required": [
+    "core_concern_candidates"
+  ],
+  "properties": {
+    "core_concern_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "statement",
+          "rationale",
+          "supporting_codes",
+          "supporting_memos"
+        ],
+        "properties": {
+          "statement": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "supporting_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supporting_memos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

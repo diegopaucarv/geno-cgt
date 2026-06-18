@@ -1,0 +1,415 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "final_report",
+    "schema": {
+      "type": "object",
+      "required": [
+        "report"
+      ],
+      "properties": {
+        "report": {
+          "type": "object",
+          "required": [
+            "title",
+            "abstract",
+            "core_pattern",
+            "core_category",
+            "theoretical_model",
+            "population_dimensions",
+            "literature_dialogue",
+            "applicability",
+            "research_trajectory"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Full report title: '{Core Pattern} — A Classic Grounded Theory of {Generalized Population}'"
+            },
+            "abstract": {
+              "type": "string",
+              "description": "~200 word self-contained summary. Core pattern, core category, population, contribution, implications."
+            },
+            "core_pattern": {
+              "type": "object",
+              "required": [
+                "heading",
+                "pattern_identification",
+                "emergence_narrative",
+                "evidential_anchoring"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Section heading adapted to object_of_study: 'Core Concern', 'Core Emotion', 'Core Behavior', etc."
+                },
+                "pattern_identification": {
+                  "type": "string",
+                  "description": "The gerund that names the core pattern. Explanation of what the pattern IS and why this gerund captures it."
+                },
+                "emergence_narrative": {
+                  "type": "string",
+                  "description": "How the pattern emerged from the data. Convergence across documents, key discovery moments, evolution of understanding."
+                },
+                "evidential_anchoring": {
+                  "type": "string",
+                  "description": "Strongest data incidents and codes supporting the pattern. Variation in how participants experience it. Trace to specific nodes/incidents."
+                }
+              }
+            },
+            "core_category": {
+              "type": "object",
+              "required": [
+                "heading",
+                "definition",
+                "properties",
+                "relationship_to_core_pattern"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Core Category' — this is a formal CGT construct, not adapted to object_of_study."
+                },
+                "definition": {
+                  "type": "string",
+                  "description": "Precise conceptual definition of the core category. What it IS, not what it does (that goes in the model)."
+                },
+                "properties": {
+                  "type": "array",
+                  "description": "Properties of the core category, each with its dimensional range.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "dimensional_range"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Property name."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "What this property captures about the core category."
+                      },
+                      "dimensional_range": {
+                        "type": "string",
+                        "description": "The range of variation observed for this property (e.g., 'low to high intensity', 'narrow to broad scope')."
+                      }
+                    }
+                  }
+                },
+                "relationship_to_core_pattern": {
+                  "type": "string",
+                  "description": "How this category processes, resolves, or addresses the core pattern. The explanatory link between Sections 2 and 3."
+                }
+              }
+            },
+            "theoretical_model": {
+              "type": "object",
+              "required": [
+                "heading",
+                "model_overview",
+                "conditions",
+                "core_process",
+                "strategies",
+                "consequences",
+                "relational_architecture"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Theoretical Model'."
+                },
+                "model_overview": {
+                  "type": "string",
+                  "description": "Narrative summary of the full theoretical model. How conditions, strategies, and consequences interconnect through the core category."
+                },
+                "conditions": {
+                  "type": "string",
+                  "description": "Antecedent and structural conditions that shape how the core category operates. Causal and contextual conditions from nodes with entity_type 'condition'."
+                },
+                "core_process": {
+                  "type": "string",
+                  "description": "The central PROCESSES edge: how the core category processes/resolves the core pattern. This is the obligatory spine of the model. Must be derived from the PROCESSES edge in the input."
+                },
+                "strategies": {
+                  "type": "string",
+                  "description": "Behavioral and cognitive strategies participants employ. Derived from nodes with entity_type 'strategy' and IS_A_STRATEGY_FOR edges."
+                },
+                "consequences": {
+                  "type": "string",
+                  "description": "Outcomes and results, both intended and unintended. Derived from nodes with entity_type 'consequence' and IS_A_CONSEQUENCE_OF edges."
+                },
+                "relational_architecture": {
+                  "type": "array",
+                  "description": "Structured listing of all theoretical relationships (edges). PROCESSES edge MUST be first. Organized by relationship type.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "relationship_type",
+                      "source",
+                      "target",
+                      "narrative"
+                    ],
+                    "properties": {
+                      "relationship_type": {
+                        "type": "string",
+                        "enum": [
+                          "PROCESSES",
+                          "LEADS_TO",
+                          "IS_A_STRATEGY_FOR",
+                          "IS_A_CONSEQUENCE_OF",
+                          "IS_A_CONDITION_FOR",
+                          "VARIES_WITH",
+                          "CO_OCCURS_WITH"
+                        ],
+                        "description": "Canonical CGT relationship type."
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "Source node label."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Target node label."
+                      },
+                      "narrative": {
+                        "type": "string",
+                        "description": "One-sentence narrative of the relationship in conceptual present tense."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "population_dimensions": {
+              "type": "object",
+              "required": [
+                "heading",
+                "population_profile",
+                "dimensional_variations",
+                "scope_boundaries"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Population Dimensions'."
+                },
+                "population_profile": {
+                  "type": "string",
+                  "description": "The generalized population to which the theory applies. Abstract enough for transferability, specific enough to be meaningful."
+                },
+                "dimensional_variations": {
+                  "type": "string",
+                  "description": "How the core pattern and core category manifest differently across population dimensions. Document the range of variation, not just central tendency."
+                },
+                "scope_boundaries": {
+                  "type": "string",
+                  "description": "Where the theory does NOT apply. Populations, contexts, or conditions excluded. Honest scope assessment."
+                }
+              }
+            },
+            "literature_dialogue": {
+              "type": "object",
+              "required": [
+                "heading",
+                "emergent_fit_assessment",
+                "extends",
+                "modifies",
+                "integrates",
+                "transcends"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Literature Dialogue'."
+                },
+                "emergent_fit_assessment": {
+                  "type": "string",
+                  "description": "Global evaluation: does the theory genuinely dialogue with literature, or is it forced to fit? Candid assessment."
+                },
+                "extends": {
+                  "type": "string",
+                  "description": "Where the literature confirms and the theory extends existing knowledge with new properties, dimensions, or relationships."
+                },
+                "modifies": {
+                  "type": "string",
+                  "description": "Where the literature suggests modifications to received concepts, and how the emergent theory revises them."
+                },
+                "integrates": {
+                  "type": "string",
+                  "description": "Where the theory unifies scattered concepts from the literature into a coherent explanatory framework."
+                },
+                "transcends": {
+                  "type": "string",
+                  "description": "What the theory reveals that the literature had not captured. The novel contribution of this grounded theory."
+                }
+              }
+            },
+            "applicability": {
+              "type": "object",
+              "required": [
+                "heading",
+                "control_variables",
+                "access_variables",
+                "intervention_guidelines",
+                "practical_limitations"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Applicability'."
+                },
+                "control_variables": {
+                  "type": "array",
+                  "description": "Aspects of the phenomenon that can be modified in practice. Each traces to a theoretical property.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "theory_basis"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Control variable name."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "What can be modified and how."
+                      },
+                      "theory_basis": {
+                        "type": "string",
+                        "description": "Which theoretical property or relationship justifies this as modifiable."
+                      }
+                    }
+                  }
+                },
+                "access_variables": {
+                  "type": "array",
+                  "description": "Conditions that enable or constrain intervention.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "description",
+                      "conditions_access"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Access variable name."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "What this variable conditions."
+                      },
+                      "conditions_access": {
+                        "type": "string",
+                        "description": "How this variable enables or constrains access to the control variables."
+                      }
+                    }
+                  }
+                },
+                "intervention_guidelines": {
+                  "type": "array",
+                  "description": "Concrete recommendations for practitioners.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "guideline",
+                      "target",
+                      "mechanism"
+                    ],
+                    "properties": {
+                      "guideline": {
+                        "type": "string",
+                        "description": "The actionable recommendation."
+                      },
+                      "target": {
+                        "type": "string",
+                        "description": "Who acts on this guideline (e.g., practitioner, organization, participant)."
+                      },
+                      "mechanism": {
+                        "type": "string",
+                        "description": "How the guideline produces change, traced to a theoretical mechanism."
+                      }
+                    }
+                  }
+                },
+                "practical_limitations": {
+                  "type": "string",
+                  "description": "What the theory does NOT support in terms of intervention. Guard against over-application."
+                }
+              }
+            },
+            "research_trajectory": {
+              "type": "object",
+              "required": [
+                "heading",
+                "open_questions",
+                "methodological_limitations",
+                "future_directions"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "description": "Always 'Research Trajectory'."
+                },
+                "open_questions": {
+                  "type": "array",
+                  "description": "Theoretical questions the current data cannot answer. Properties needing further dimensionalization.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "question",
+                      "why_unresolved"
+                    ],
+                    "properties": {
+                      "question": {
+                        "type": "string",
+                        "description": "The open theoretical question."
+                      },
+                      "why_unresolved": {
+                        "type": "string",
+                        "description": "Why current data cannot resolve this question (insufficient variation, undersampled dimension, etc.)."
+                      }
+                    }
+                  }
+                },
+                "methodological_limitations": {
+                  "type": "string",
+                  "description": "Limitations inherent to study design, sampling, or analytical choices. Candid self-assessment."
+                },
+                "future_directions": {
+                  "type": "array",
+                  "description": "Concrete next studies, populations to sample, comparisons to pursue.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "direction",
+                      "rationale"
+                    ],
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "description": "Proposed future research direction."
+                      },
+                      "rationale": {
+                        "type": "string",
+                        "description": "Why this direction emerges from the theory's current gaps or open questions."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

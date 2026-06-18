@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "indicators"
+  ],
+  "properties": {
+    "indicators": {
+      "type": "array",
+      "description": "Indicadores comportamentais extraídos dos segmentos.",
+      "items": {
+        "type": "object",
+        "required": [
+          "key_phrases",
+          "suggested_pattern"
+        ],
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "description": "Índice base 0 do segmento no array de entrada."
+          },
+          "key_phrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Frases textuais exatas que revelam o comportamento."
+          },
+          "suggested_pattern": {
+            "type": "string",
+            "description": "Descrição do padrão de ação observado. Sem gerúndio. Sem jargão teórico."
+          }
+        }
+      }
+    }
+  }
+}

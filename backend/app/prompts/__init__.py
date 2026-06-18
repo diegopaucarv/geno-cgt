@@ -64,6 +64,7 @@ class PromptTemplate:
         user_template: str,
         output_schema: dict[str, Any] | None = None,
         source_path: str = "",
+        agents_dir: str = "",
     ):
         self.prompt_id = prompt_id
         self.version = version
@@ -73,6 +74,7 @@ class PromptTemplate:
         self.user_template = user_template
         self.output_schema = output_schema or {}
         self.source_path = source_path
+        self._agents_dir = agents_dir  # path to agents/{id}/ for i18n schemas
         self._hash = self._compute_hash()
 
     def _compute_hash(self) -> str:
@@ -87,8 +89,22 @@ class PromptTemplate:
     def hash(self) -> str:
         return self._hash
 
-    def build_messages(self, **kwargs) -> list[dict[str, str]]:
-        """Build the full messages array for the Together.ai API call."""
+    def build_messages(self, language: str = "en", **kwargs) -> list[dict[str, str]]:
+        """Build the full messages array for the Together.ai API call.
+
+        Args:
+            language: 'en', 'es', 'de', 'pt' — injected as {language_code}
+            **kwargs: template variables
+        """
+        LANG_NAMES = {
+            "en": "English",
+            "es": "español",
+            "de": "Deutsch",
+            "pt": "português",
+        }
+        kwargs["language_code"] = language
+        kwargs["language_name"] = LANG_NAMES.get(language, "English")
+
         system = self.system_template
         user = self.user_template
         if kwargs:
@@ -99,12 +115,22 @@ class PromptTemplate:
             {"role": "user", "content": user},
         ]
 
-    def build_payload(self, **kwargs) -> dict[str, Any]:
-        """Build the complete API payload including output schema."""
+    def build_payload(self, language: str = "en", **kwargs) -> dict[str, Any]:
+        """Build the complete API payload including i18n output schema."""
         payload: dict[str, Any] = {
-            "messages": self.build_messages(**kwargs),
+            "messages": self.build_messages(language=language, **kwargs),
         }
-        if self.output_schema:
+        # Load translated schema from agents/{id}/schema.{lang}.json if available
+        schema = self._load_i18n_schema(language)
+        if schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": self.prompt_id,
+                    "schema": schema,
+                },
+            }
+        elif self.output_schema:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -113,6 +139,23 @@ class PromptTemplate:
                 },
             }
         return payload
+
+    def _load_i18n_schema(self, language: str) -> dict[str, Any] | None:
+        """Load translated schema from agents/{id}/schema.{lang}.json."""
+        if not self._agents_dir:
+            return None
+        import os as _os
+
+        schema_path = _os.path.join(self._agents_dir, f"schema.{language}.json")
+        if _os.path.exists(schema_path):
+            with open(schema_path, "r") as f:
+                return json.load(f)
+        # Fallback to English
+        schema_path = _os.path.join(self._agents_dir, "schema.en.json")
+        if _os.path.exists(schema_path):
+            with open(schema_path, "r") as f:
+                return json.load(f)
+        return None
 
     def __repr__(self) -> str:
         return (
@@ -158,14 +201,15 @@ def _load_prompt_from_md(path: Path) -> PromptTemplate:
 
     # ── Build template ────────────────────────────────────────────────
     return PromptTemplate(
-        prompt_id=metadata.get("prompt_id", path.stem),
+        prompt_id=metadata.get("prompt_id", metadata.get("agent", path.stem)),
         version=metadata.get("version", "0.0.0"),
-        model_profile=metadata.get("model_profile", "pro"),
+        model_profile=metadata.get("model_profile", metadata.get("tier", "pro")),
         description=metadata.get("description", ""),
         system_template=sections.get("system", ""),
         user_template=sections.get("user", ""),
         output_schema=output_schema,
         source_path=str(path),
+        agents_dir=str(path.parent) if "agents" in str(path.parent) else "",
     )
 
 

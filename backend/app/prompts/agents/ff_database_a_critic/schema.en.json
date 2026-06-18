@@ -1,0 +1,292 @@
+{
+  "type": "object",
+  "required": [
+    "node_evaluations",
+    "system_issues",
+    "overall_verdict"
+  ],
+  "properties": {
+    "node_evaluations": {
+      "type": "array",
+      "description": "Evaluation for each proposed node.",
+      "items": {
+        "type": "object",
+        "required": [
+          "node_label",
+          "verdict",
+          "rationale",
+          "criteria_assessment"
+        ],
+        "properties": {
+          "node_label": {
+            "type": "string",
+            "description": "Label of the node being evaluated."
+          },
+          "source_category_id": {
+            "type": "string",
+            "description": "UUID of the source category."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "SAT=passes all criteria, MOD=needs targeted fixes, FORCED=fundamentally problematic."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Narrative justification of the verdict, referencing the most relevant criteria."
+          },
+          "criteria_assessment": {
+            "type": "object",
+            "description": "Assessment of each criterion.",
+            "properties": {
+              "entity_type_correctness": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "definition_grounding": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "abstraction_level": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "incident_sufficiency": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "core_identification": {
+                "type": "object",
+                "required": [
+                  "pass",
+                  "note"
+                ],
+                "properties": {
+                  "pass": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "If MOD or FORCED: concrete, actionable fix. What to change and how."
+          }
+        }
+      }
+    },
+    "system_issues": {
+      "type": "object",
+      "required": [
+        "missing_categories",
+        "duplicate_nodes",
+        "is_core_count",
+        "entity_type_distribution"
+      ],
+      "properties": {
+        "missing_categories": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category_id": {
+                    "type": "string"
+                  },
+                  "category_label": {
+                    "type": "string"
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "duplicate_nodes": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "details"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "node_labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "is_core_count": {
+          "type": "object",
+          "required": [
+            "count",
+            "is_correct",
+            "issue"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "description": "Number of nodes with is_core=true. Must be exactly 1."
+            },
+            "is_correct": {
+              "type": "boolean"
+            },
+            "issue": {
+              "type": "string",
+              "description": "If not correct: description of the problem."
+            }
+          }
+        },
+        "entity_type_distribution": {
+          "type": "object",
+          "required": [
+            "has_issues",
+            "counts",
+            "notes"
+          ],
+          "properties": {
+            "has_issues": {
+              "type": "boolean"
+            },
+            "counts": {
+              "type": "object",
+              "properties": {
+                "core_category": {
+                  "type": "integer"
+                },
+                "condition": {
+                  "type": "integer"
+                },
+                "consequence": {
+                  "type": "integer"
+                },
+                "strategy": {
+                  "type": "integer"
+                },
+                "dimension": {
+                  "type": "integer"
+                }
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Notes on distribution: missing types, excessive types, suspicious patterns."
+            }
+          }
+        }
+      }
+    },
+    "overall_verdict": {
+      "type": "object",
+      "required": [
+        "is_sound",
+        "summary"
+      ],
+      "properties": {
+        "is_sound": {
+          "type": "boolean",
+          "description": "true if the full node system is methodologically sound and ready for Database B."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Global assessment: what is solid? What needs attention? Is the system ready for edge modeling?"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Issues that MUST be resolved before proceeding to Database B."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-blocking concerns to note for the researcher."
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 """T11 — rename_detector.py
 
 Detecta cuándo una categoría es candidata a renombre.
-Combina lógica algorítmica (thresholds) + LLM (generación de sugerencias vía rename_suggester.md).
+Combina lógica algorítmica (thresholds) + LLM (generación de sugerencias vía f6b_rename_suggester.md).
 Usado por SelectiveElaborator en Fase 5b y por el Theoretical Playground en Fase 6b.
 """
 
@@ -54,7 +54,7 @@ def get_rename_candidates(
     category_id: UUID, session: Session, llm_client
 ) -> Optional[dict]:
     """
-    Genera sugerencias de renombre usando rename_suggester.md.
+    Genera sugerencias de renombre usando f6b_rename_suggester.md.
     Retorna None si el LLM considera que el nombre actual es adecuado.
     """
     cat = session.execute(
@@ -94,7 +94,7 @@ def get_rename_candidates(
     ).fetchone()
 
     response = llm_client.run_agent(
-        "rename_suggester",
+        "f6b_rename_suggester",
         variables={
             "category_name": cat[0],
             "category_definition": cat[1] or "",

@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extracted_incidents"
+  ],
+  "properties": {
+    "extracted_incidents": {
+      "type": "array",
+      "description": "Im Dokument gefundene Incidente der Kategorie. Leeres Array wenn die Kategorie nicht vorkommt.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exact_quote",
+          "proposed_property",
+          "paradigm_element"
+        ],
+        "properties": {
+          "exact_quote": {
+            "type": "string",
+            "description": "Exaktes wörtliches Zitat aus dem Dokument. Nicht paraphrasieren. Zwischen 10 und 300 Wörtern."
+          },
+          "proposed_property": {
+            "type": "string",
+            "description": "Kategorieeigenschaft, die dieser Incident offenbart (z.B. 'hohe Intensität', 'Arbeitskontext')."
+          },
+          "paradigm_element": {
+            "type": "string",
+            "enum": [
+              "dimension",
+              "condition",
+              "consequence",
+              "strategy"
+            ],
+            "description": "CGT-Paradigmaelement: dimension (variierende Eigenschaft), condition (Umstand), consequence (Ergebnis), strategy (Handlung)."
+          },
+          "ambiguity_note": {
+            "type": "string",
+            "description": "Wenn der Incident zu einer anderen Kategorie gehören könnte, hier notieren. Leerer String wenn keine Mehrdeutigkeit."
+          }
+        }
+      }
+    }
+  }
+}

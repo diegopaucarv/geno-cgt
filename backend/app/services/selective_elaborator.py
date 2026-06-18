@@ -7,7 +7,7 @@ por un ciclo iterativo donde cada incidente se compara contra el estado actual d
 
 Flujo:
   1. Carga estado actual de la categoría (definición, propiedades, versión)
-  2. Invoca incident_elaborator.md (PRO)
+  2. Invoca f6b_incident_elaborator.md (PRO)
   3. Procesa respuesta: converge → contador++, diverge → expande definición
   4. Actualiza ParadigmState
   5. Retorna resultado para el frontend (blob crece/cambia de color/tiembla)
@@ -42,7 +42,7 @@ class ElaborationResult:
 class SelectiveElaborator:
     """
     Orquestador del ciclo de elaboración selectiva.
-    Usa incident_elaborator.md (PRO) para evaluar cada incidente.
+    Usa f6b_incident_elaborator.md (PRO) para evaluar cada incidente.
     """
 
     def __init__(self, llm_client, db_session):
@@ -103,9 +103,9 @@ class SelectiveElaborator:
                 ensure_ascii=False,
             )
 
-        # 3. Invocar incident_elaborator (PRO)
+        # 3. Invocar f6b_incident_elaborator (PRO)
         response = self.llm.run_agent(
-            "incident_elaborator",
+            "f6b_incident_elaborator",
             variables={
                 "category_label": cat_name,
                 "category_definition": cat_def,
@@ -226,7 +226,6 @@ class SelectiveElaborator:
             ],
         }
 
-    
     def _get_style_instruction(self, category_id) -> str:
         """Lee el coding_style del proyecto y devuelve la instrucción."""
         row = self.db.execute(
@@ -243,6 +242,7 @@ class SelectiveElaborator:
         if config and config[0] and isinstance(config[0], dict):
             style_key = config[0].get("coding_style", "gerundio")
         from app.core.coding_styles import get_rename_instruction
+
         return get_rename_instruction(style_key)
 
     def _get_current_iteration(self, category_id: UUID) -> int:

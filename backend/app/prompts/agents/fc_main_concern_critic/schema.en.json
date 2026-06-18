@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_statement",
+          "verdict",
+          "rationale",
+          "grounding_assessment"
+        ],
+        "properties": {
+          "candidate_statement": {
+            "type": "string",
+            "description": "The evaluated candidate's statement (exact text)."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Methodological verdict."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Detailed justification of the verdict, citing specific codes and memos."
+          },
+          "grounding_assessment": {
+            "type": "string",
+            "description": "Do the supporting_codes actually support this candidate? Evaluate each cited code."
+          },
+          "coverage_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Proportion of total codes that this candidate explains (1 - orphan_count/total_codes)."
+          },
+          "abstraction_assessment": {
+            "type": "string",
+            "enum": [
+              "adequate",
+              "too_concrete",
+              "too_abstract"
+            ],
+            "description": "Evaluation of the abstraction level."
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "Suggested concrete action. Only if MOD. E.g.: 'Reformulate gerund to X', 'Reduce abstraction by anchoring in code Y', 'Review whether code Z actually supports'."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Critic's confidence in this verdict (0.0–1.0)."
+          }
+        }
+      }
+    },
+    "ranked_recommendation": {
+      "type": "string",
+      "description": "Final recommendation: which {object_of_study} candidate do you recommend to the researcher and why? If none is SAT, explain what is missing."
+    }
+  },
+  "required": [
+    "evaluations",
+    "ranked_recommendation"
+  ]
+}

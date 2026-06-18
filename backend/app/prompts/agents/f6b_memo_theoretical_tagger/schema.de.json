@@ -1,0 +1,95 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "memo_theoretical_tagger",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_affinities",
+        "primary_family"
+      ],
+      "properties": {
+        "family_affinities": {
+          "type": "array",
+          "description": "Familien mit Score ≥ 0,3, absteigend nach Score sortiert.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "score",
+              "rationale"
+            ],
+            "properties": {
+              "family": {
+                "type": "string",
+                "enum": [
+                  "Causes",
+                  "Consequences",
+                  "Conditions",
+                  "Process",
+                  "Degree",
+                  "Dimension",
+                  "Type",
+                  "Strategy",
+                  "Structural",
+                  "Functional",
+                  "Interaction",
+                  "Identity"
+                ],
+                "description": "Eine der 12 kanonischen theoretischen Code-Familien."
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0.3,
+                "maximum": 1.0,
+                "description": "Affinitäts-Score. Nur Familien ≥ 0,3 werden einbezogen."
+              },
+              "rationale": {
+                "type": "string",
+                "description": "Ein-Satz-Rechtfertigung unter Nennung spezifischen Memo-Inhalts, der diesen Score rechtfertigt."
+              }
+            }
+          }
+        },
+        "primary_family": {
+          "type": "string",
+          "enum": [
+            "Causes",
+            "Consequences",
+            "Conditions",
+            "Process",
+            "Degree",
+            "Dimension",
+            "Type",
+            "Strategy",
+            "Structural",
+            "Functional",
+            "Interaction",
+            "Identity"
+          ],
+          "description": "Familie mit dem höchsten Affinitäts-Score."
+        },
+        "secondary_family": {
+          "type": "string",
+          "enum": [
+            "Causes",
+            "Consequences",
+            "Conditions",
+            "Process",
+            "Degree",
+            "Dimension",
+            "Type",
+            "Strategy",
+            "Structural",
+            "Functional",
+            "Interaction",
+            "Identity"
+          ],
+          "description": "Familie mit dem zweithöchsten Affinitäts-Score. Nur vorhanden wenn dieser Score ≥ 0,3."
+        }
+      }
+    }
+  }
+}

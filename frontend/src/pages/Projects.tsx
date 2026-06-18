@@ -17,6 +17,31 @@ const VALID_OBJECTS_OF_STUDY = [
   "custom",
 ] as const;
 
+const STUDY_OBJECT_HINTS: Record<string, string> = {
+  concern: "projects.hintConcern",
+  emotion: "projects.hintEmotion",
+  behavior: "projects.hintBehavior",
+  discourse: "projects.hintDiscourse",
+  identity: "projects.hintIdentity",
+  custom: "projects.hintCustom",
+};
+
+const DEFAULT_VERB_BY_OBJECT: Record<string, string> = {
+  concern: "resolve",
+  emotion: "regulate",
+  behavior: "adapt",
+  discourse: "deploy",
+  identity: "negotiate",
+  custom: "process",
+};
+
+function makeGerund(verb: string): string {
+  if (!verb) return "";
+  // Simple English gerund: drop trailing 'e' then add 'ing'
+  if (verb.endsWith("e")) return verb.slice(0, -1) + "ing";
+  return verb + "ing";
+}
+
 export default function Projects() {
   const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -24,6 +49,9 @@ export default function Projects() {
   const [supuesto, setSupuesto] = useState("");
   const [objectOfStudy, setObjectOfStudy] = useState<string>("concern");
   const [customLabel, setCustomLabel] = useState("");
+  const [processingVerb, setProcessingVerb] = useState(
+    DEFAULT_VERB_BY_OBJECT["concern"],
+  );
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -38,6 +66,7 @@ export default function Projects() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre.trim()) return;
+    const verb = processingVerb.trim();
     const p = await createProject({
       nombre: nombre.trim(),
       supuesto_poblacional: supuesto.trim() || undefined,
@@ -45,11 +74,15 @@ export default function Projects() {
       ...(objectOfStudy === "custom" && customLabel.trim()
         ? { custom_label: customLabel.trim() }
         : {}),
+      ...(verb
+        ? { processing_verb: verb, processing_gerund: makeGerund(verb) }
+        : {}),
     });
     setProjects((prev) => [p, ...prev]);
     setNombre("");
     setSupuesto("");
     setCustomLabel("");
+    setProcessingVerb(DEFAULT_VERB_BY_OBJECT["concern"]);
   }
 
   async function handleDelete(projectId: string, projectName: string) {
@@ -145,7 +178,11 @@ export default function Projects() {
           </label>
           <select
             value={objectOfStudy}
-            onChange={(e) => setObjectOfStudy(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setObjectOfStudy(val);
+              setProcessingVerb(DEFAULT_VERB_BY_OBJECT[val] || "");
+            }}
             style={{
               padding: 8,
               width: "100%",
@@ -163,7 +200,7 @@ export default function Projects() {
             ))}
           </select>
           <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>
-            {t("projects.studyObjectHint")}
+            {t(STUDY_OBJECT_HINTS[objectOfStudy])}
           </div>
         </div>
 
@@ -185,6 +222,67 @@ export default function Projects() {
               onChange={(e) => setCustomLabel(e.target.value)}
               style={{ padding: 8, width: "100%", boxSizing: "border-box" }}
             />
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: "#8B949E",
+              marginBottom: 4,
+            }}
+          >
+            {t("projects.processingVerbLabel")}
+          </label>
+          <input
+            placeholder={t("projects.processingVerbPlaceholder")}
+            value={processingVerb}
+            onChange={(e) => setProcessingVerb(e.target.value)}
+            style={{ padding: 8, width: "100%", boxSizing: "border-box" }}
+          />
+          <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>
+            {t("projects.processingVerbHint")}
+          </div>
+        </div>
+
+        {supuesto.trim() && objectOfStudy && processingVerb.trim() && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              background: "#0D1117",
+              border: "1px solid #21262D",
+              borderRadius: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                color: "#8B949E",
+                marginBottom: 6,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              {t("projects.rqPreview")}
+            </div>
+            <div
+              style={{ fontSize: 14, color: "#C9D1D9", fontStyle: "italic" }}
+            >
+              "What is the{" "}
+              {studyObjectOptions
+                .find((o) => o.value === objectOfStudy)
+                ?.label.toLowerCase() || objectOfStudy}{" "}
+              of {supuesto.trim() || "…"} and how do they continuously{" "}
+              {processingVerb.trim() || "…"} it?"
+            </div>
+            {processingVerb.trim() && (
+              <div style={{ fontSize: 11, color: "#484F58", marginTop: 6 }}>
+                Gerund: {makeGerund(processingVerb.trim())}
+              </div>
+            )}
           </div>
         )}
 

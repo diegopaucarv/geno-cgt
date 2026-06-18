@@ -269,6 +269,8 @@ export async function createProject(body: {
   supuesto_poblacional?: string;
   object_of_study?: string;
   custom_label?: string;
+  processing_verb?: string;
+  processing_gerund?: string;
 }) {
   return request<Project>("/projects", {
     method: "POST",
@@ -352,6 +354,17 @@ export async function updatePopulationAssumption(
   }>(`/projects/${projectId}/config/population-assumption`, {
     method: "PUT",
     body: JSON.stringify(body),
+  });
+}
+
+/** Trigger the f0_population_generalizer (FLASH) on an existing project. */
+export async function generatePopulationGeneralization(projectId: string) {
+  return request<{
+    status: string;
+    population_assumption: Record<string, any>;
+    supuesto_poblacional: string | null;
+  }>(`/projects/${projectId}/config/population-assumption/generalize`, {
+    method: "POST",
   });
 }
 

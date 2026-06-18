@@ -10,7 +10,7 @@ Orquesta 5 fases:
 Depende de:
   - agent_families (tabla de referencia en DB, ya seedeada)
   - ReactRunner + ToolRegistry (ya construidos)
-  - prompts P5 (modification_filter/planner/evaluator/evidence_collector)
+  - prompts P5 (hitl_modification_filter/hitl_modification_planner/hitl_modification_evaluator/hitl_evidence_collector)
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ CHANGE_IMPACT_MAP: dict[str, dict[str, Any]] = {
         "restart_from": "prepare_playground",
     },
     # ── Elaborativa ────────────────────────────────────────────────
-    "conceptual_elaborator": {
+    "f6b_conceptual_elaborator": {
         "output_table": "conceptual_relationships",
         "output_field": "elaboration_status",
         "dependent_tables": ["elaboration_memos"],
@@ -155,7 +155,7 @@ CHANGE_IMPACT_MAP: dict[str, dict[str, Any]] = {
         "invalidates": ["metricas de saturacion del codigo"],
         "restart_from": "calculate_saturation",
     },
-    "ghost_blob_mapper": {
+    "f6b_ghost_blob_mapper": {
         "output_table": None,
         "output_field": None,
         "dependent_tables": ["elaboration_memos"],
@@ -319,7 +319,7 @@ class HITLModificationAgent:
             )
 
         response = self.llm.run_agent(
-            "modification_filter",
+            "hitl_modification_filter",
             variables={
                 "agent_id": agent_id,
                 "agent_family": family_data["family"],
@@ -358,7 +358,7 @@ class HITLModificationAgent:
         impact = CHANGE_IMPACT_MAP.get(agent_id, {})
 
         response = self.llm.run_agent(
-            "modification_planner",
+            "hitl_modification_planner",
             variables={
                 "agent_family": family_data.get("family", ""),
                 "family_research_question": family_data.get("research_question", ""),
@@ -427,7 +427,7 @@ class HITLModificationAgent:
         )
 
         runner = ReactRunner(
-            agent_id="modification_executor",
+            agent_id="hitl_modification_executor",
             llm_client=self.llm,
             tool_registry=tools,
             max_iterations=len(verification_plan.get("steps", [])) + 2,
@@ -458,7 +458,7 @@ class HITLModificationAgent:
     ) -> dict[str, Any]:
         """Tool: busqueda de evidencia guiada por FLASH."""
         queries_response = self.llm.run_agent(
-            "evidence_collector",
+            "hitl_evidence_collector",
             variables={
                 "plan_step": plan_step,
                 "agent_family": agent_family,
@@ -518,7 +518,7 @@ class HITLModificationAgent:
         family_data = self._load_family_data(agent_id) or {}
 
         response = self.llm.run_agent(
-            "modification_evaluator",
+            "hitl_modification_evaluator",
             variables={
                 "agent_family": family_data.get("family", ""),
                 "family_verification_method": family_data.get(

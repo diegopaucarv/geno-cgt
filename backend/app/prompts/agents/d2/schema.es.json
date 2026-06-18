@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": [
+    "verdict",
+    "rationale"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "valid",
+        "refine",
+        "split"
+      ]
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "suggested_action_if_not_valid": {
+      "type": "string"
+    }
+  }
+}

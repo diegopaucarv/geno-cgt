@@ -1,0 +1,101 @@
+{
+  "type": "object",
+  "required": [
+    "discard_evaluations",
+    "fusion_evaluations"
+  ],
+  "properties": {
+    "discard_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code_id",
+          "code_label",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "code_id": {
+            "type": "string"
+          },
+          "code_label": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "suggested_action": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fusion_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "new_label",
+          "source_code_ids",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "new_label": {
+            "type": "string"
+          },
+          "source_code_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "codes_to_remove_from_fusion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggested_action": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "false_positives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "false_negatives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "overall_assessment": {
+      "type": "string"
+    }
+  }
+}

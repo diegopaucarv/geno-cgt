@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "all_valid",
+    "issues"
+  ],
+  "properties": {
+    "all_valid": {
+      "type": "boolean",
+      "description": "true if ALL labels pass review (all SAT)"
+    },
+    "issues": {
+      "type": "array",
+      "description": "Issues found. Empty array if all_valid is true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "verdict",
+          "description"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Name of the evaluated label"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "SAT",
+              "MOD",
+              "FORCED"
+            ],
+            "description": "Verdict for this label"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "not_grounded",
+              "wrong_gerund",
+              "scope_issue",
+              "overlap",
+              "forced_pattern"
+            ],
+            "description": "Type of issue (omit if SAT)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the issue. If MOD, include a concrete suggestion."
+          }
+        }
+      }
+    }
+  }
+}

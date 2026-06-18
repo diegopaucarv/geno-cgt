@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prime_mover",
+    "confidence"
+  ],
+  "properties": {
+    "prime_mover": {
+      "type": "string",
+      "description": "Padrão central expresso como gerúndio."
+    },
+    "description": {
+      "type": "string",
+      "description": "Descrição narrativa (2-3 frases) de como este padrão se manifesta no documento."
+    },
+    "evidence_quotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Citações textuais de baseline_data que respaldam o prime mover."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "description": "Confiança na extração."
+    },
+    "insufficient_data": {
+      "type": "boolean",
+      "description": "true se não houver baseline_data suficiente para extrair um prime mover."
+    },
+    "alternative_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Padrões alternativos plausíveis se a confiança não for HIGH."
+    }
+  }
+}

@@ -39,7 +39,7 @@ def b3_critique_labels(groups_json: str, labels_json: str) -> dict:
     """
     try:
         response = llm.run_agent(
-            agent_id="label_critic",
+            agent_id="fb_label_critic",
             variables={
                 "output_to_evaluate": labels_json,
                 "source_incidents": groups_json,
