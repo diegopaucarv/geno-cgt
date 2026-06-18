@@ -227,7 +227,7 @@ def node_reduce_synthesize(state: AnalysisState) -> AnalysisState:
 
 
 def node_find_core_concern(state: AnalysisState) -> AnalysisState:
-    """Node 5.5: A14 Main Concern usando 3 preguntas operacionales."""
+    """Node 5.5: Pattern of interest detection via coordinator pipeline."""
     if state.get("core_concern"):
         return state
     state["current_step"] = "find_core_concern"
@@ -235,9 +235,9 @@ def node_find_core_concern(state: AnalysisState) -> AnalysisState:
         import sys as _s
 
         _s.path.insert(0, "/app")
-        from workers.heavy.tasks import task_a14_main_concern
+        from workers.heavy.tasks import task_main_concern_pipeline
 
-        result = task_a14_main_concern(state["project_id"])
+        result = task_main_concern_pipeline(state["project_id"])
         state["core_concern"] = result.get("core_concern", "")
         logger.info("Node 5.5: core_concern=%s", state["core_concern"][:60])
     except Exception as e:

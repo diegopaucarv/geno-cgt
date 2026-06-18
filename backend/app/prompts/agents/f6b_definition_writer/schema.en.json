@@ -10,7 +10,7 @@
   "properties": {
     "formal_definition": {
       "type": "string",
-      "description": "The complete formal CGT definition. 4-8 sentences. Integrates: what the pattern is (gerund), what it processes/resolves, properties and dimensions, conditions, relationship to core, and conceptual boundaries. Present tense, theoretical language."
+      "description": "The complete formal CGT definition. 4-8 sentences. Integrates: what the pattern is ({label_name}), what it processes/resolves, properties and dimensions, conditions, relationship to core, and conceptual boundaries. Present tense, theoretical language."
     },
     "core_essence": {
       "type": "string",

@@ -144,47 +144,17 @@ Y aquí hay una regla crucial que Glaser insistía en enseñar: **Keep Moving**.
 
 ---
 
-### 4.5 Cada tres documentos: la pausa que estructura todo
+### 4.5 La pausa por lotes — el sistema respira cada pocos documentos
 
-Esta pausa es el corazón del rediseño. Ya no es una simple verificación de población y patrón como en la versión anterior. Ahora es un **ritual metodológico de cuatro actos** donde el sistema sintetiza, propone, evalúa y — sobre todo — te pregunta.
+El sistema no avanza de golpe. Cada vez que un lote de documentos completa su síntesis — normalmente cada 3 documentos, aunque el último lote puede ser más chico — el sistema hace una pausa deliberada. Esta pausa tiene tres momentos:
 
-Cada tres documentos (doc 3, 6, 9...), después de que la Fase B del batch actual produjo nuevas categorías, el sistema ejecuta lo siguiente:
+1. **Unificación de categorías**: las categorías recién descubiertas en este lote se comparan con las que ya venían de lotes anteriores. Si dos categorías describen el mismo patrón con distinto nombre, se unifican. Si una es nueva, se incorpora. El resultado es un conjunto limpio, sin duplicados.
 
-#### Acto 1 — Synthesizer 1: Unificación de categorías
+2. **Hipótesis acumuladas**: el sistema revisa todo lo que sabe hasta ahora y actualiza sus hipótesis sobre cómo las categorías se relacionan entre sí. Cada hipótesis es específica y trazable: "La categoría A aparece siempre antes que la B en los documentos 1, 3 y 5". Estas hipótesis son el insumo principal para encontrar la categoría central más adelante.
 
-El primer sintetizador recibe **todas** las categorías acumuladas hasta ahora: las que venían de batches anteriores Y las que la Fase B acaba de producir para el batch actual. Su trabajo es producir un **conjunto unificado y deduplicado**.
+3. **Revisión de configuración**: un agente crítico revisa el panorama completo y te pregunta: ¿las preocupaciones que están emergiendo son las correctas? ¿La población está bien definida o hay subgrupos que deberían separarse? ¿El estilo de codificación está capturando lo importante? El sistema te muestra sus hallazgos y **no avanza sin tu decisión**.
 
-Las categorías que vienen de batches anteriores llegan con indicadores: cuántos documentos las manifiestan, cuántos incidentes las respaldan, cuándo fueron creadas. Las categorías nuevas del batch actual fueron generadas **sin ver** las anteriores — por diseño. El sintetizador detecta solapamientos ("Negociando visibilidad" del batch 1 y "Gestionando exposición" del batch 2 probablemente son la misma categoría), propone fusiones, y produce una taxonomía limpia para que vos evalúes.
-
-#### Acto 2 — Synthesizer 2: Hipótesis acumuladas
-
-El segundo sintetizador toma la salida del Synthesizer 1 (el conjunto unificado de categorías) y **todas las hipótesis previas** generadas en batches anteriores. Produce una **nota de hipótesis actualizada y creciente** — un documento vivo que registra relaciones entre categorías.
-
-Cada hipótesis es específica: "La categoría 'Escaneando el horizonte' aparece siempre ANTES de 'Calibrando rutinas' en los documentos 1, 3 y 5" — con referencias precisas a incidentes y segmentos. Las hipótesis no son opiniones. Son patrones observados, documentados, trazables.
-
-Estas hipótesis son el insumo clave para la selección de la categoría central más adelante (§7). Cuantas más conexiones documenta una hipótesis entre categorías, más fuerte es la señal de que ahí hay estructura teórica.
-
-#### Acto 3 — Configuration Critic: ¿estamos mirando bien?
-
-El crítico de configuración revisa la salida de ambos sintetizadores más los segmentos baseline del batch actual. Su rol es **meta-analítico**: no evalúa categorías individuales, evalúa si el encuadre general es el correcto. Emite tres evaluaciones:
-
-1. **Posibles preocupaciones subyacentes** (gerundios): *"Los datos sugieren que esta población podría tener estas preocupaciones latentes: 'Manteniendo relevancia profesional', 'Negociando autonomía editorial', 'Preservando identidad gremial'. ¿Cuál o cuáles resuenan?"* La población puede tener múltiples preocupaciones — y por ahora, podés seleccionar varias.
-
-2. **Posibles reconfiguraciones de población**: *"Los documentos 4 y 5 muestran un patrón marcadamente distinto al de los documentos 1-3. ¿Estamos ante dos poblaciones diferentes? Por ejemplo: 'profesores veteranos' vs 'profesores recién egresados'. ¿Querés separarlas?"* El sistema no decide por vos — te muestra la evidencia y te pregunta.
-
-3. **Recomendación de estilo de codificación**: *"El estilo actual ('gerundios de procesamiento') captura bien las conductas, pero las emociones subyacentes ('miedo', 'orgullo') están quedando fuera. ¿Querés añadir un estilo complementario?"* o *"El estilo actual está funcionando bien. Los patrones emergen con claridad."*
-
-#### Acto 4 — HITL Overlay: vos decidís
-
-Acá es donde el sistema te muestra todo junto y **no avanza sin tu decisión**:
-
-- **Categorías unificadas**: las ves en una tabla. Podés aceptar, modificar (editar nombre, definición) o rechazar categorías individualmente. Podés hacer selección múltiple. Las que rechaces no se eliminan — se archivan con el motivo.
-- **Hipótesis actualizadas**: la nota de hipótesis está disponible para que la leas. Es tu mapa de cómo las categorías se relacionan entre sí. No necesitás "aceptar" cada hipótesis — es un documento informativo, no un gate.
-- **Preocupaciones**: ves las opciones que el critic propuso. Podés seleccionar **varias** (durante todo el open coding). Recién en la pausa del último batch tendrás que elegir UNA.
-- **Variantes de población**: si el critic detectó posibles sub-poblaciones, elegís si mantener la población unificada o separar. También podés seleccionar múltiples variantes mientras explorás.
-- **Estilo de codificación**: aceptás o rechazás la recomendación del critic. Es una decisión binaria (una sola).
-
-El sistema bloquea el avance hasta que respondas. Cada decisión tuya queda registrada. Y cuando avances, el pipeline continúa con el siguiente batch de documentos, ahora con tu feedback incorporado.
+En esta pausa ves todo junto: categorías unificadas, hipótesis actualizadas, posibles preocupaciones, variantes de población, y recomendaciones de estilo. Podés aceptar, modificar o rechazar. Y cuando decidís, el sistema continúa con el siguiente lote, ahora con tu feedback incorporado.
 
 ---
 
@@ -361,17 +331,17 @@ Antes de siquiera proponer candidatos a categoría central, el sistema verifica 
 
 Estos dos guardrails son binarios. Si alguno falla, el sistema te lo dice con precisión y no avanza hasta que lo resuelvas.
 
-### 7.3 El maturity gate — ¿estamos listos?
+### 7.3 ¿Hay suficiente masa crítica?
 
-Superados los guardrails, el sistema verifica tres condiciones adicionales:
+Superados los guardrails, el sistema verifica que el proceso haya avanzado lo suficiente para que la categoría central pueda emerger con sentido. No se trata de thresholds numéricos fijos — se trata de condiciones cualitativas:
 
-- ¿Hay al menos 3 categorías completamente saturadas (las 4 señales en verde)?
-- ¿Hay al menos 2 relaciones documentadas entre esas categorías (con evidencia sólida en `conceptual_relationships`)?
-- ¿Hay al menos 3 categorías maduras vinculadas a tu patrón de interés (vía `categorias.es_central` o `categorias.puntaje_relevancia >= 4`)?
+- Completaste al menos un lote de síntesis cross-document (las categorías ya pasaron por el proceso de unificación).
+- Existen hipótesis que conectan categorías entre sí — sin conexiones no hay grafo, y sin grafo la centralidad no significa nada.
+- El patrón de interés está confirmado (elegiste UNA preocupación como ancla).
 
-Si falta algo, el sistema te lo dice con precisión. Si faltan categorías saturadas: seguí codificando. Si faltan relaciones: el sistema puede buscar en los documentos si estas categorías co-ocurren (vía RAG + `codigos_segmento`). Si falta masa crítica alrededor de tu patrón de interés: tal vez necesités cambiar de patrón, o recolectar más datos enfocados.
+Si falta algo, el sistema te lo dice y te sugiere qué hacer: seguir recolectando datos, ejecutar otra ronda de síntesis, o refinar tus hipótesis. No hay números mágicos — hay criterios que vos evaluás.
 
-**Implementación:** `PipelineOrchestrator.maturity_gate(project_id)` — chequeo puramente SQL, sin LLM. Retorna `{passed: bool, missing: [{condition, detail}]}`.
+**Implementación:** chequeo SQL determinístico, sin LLM, que verifica condiciones mínimas de progreso.
 
 ### 7.4 El flujo de emergencia — proposer → critic → HITL
 

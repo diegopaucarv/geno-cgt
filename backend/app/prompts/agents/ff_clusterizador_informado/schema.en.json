@@ -20,7 +20,7 @@
         "properties": {
           "node_label": {
             "type": "string",
-            "description": "Theoretical label expressed as a gerund, 2-6 words. Captures the emergent theoretical construct (e.g., 'Navigating Uncertainty', 'Maintaining Professional Identity')."
+            "description": "Theoretical label expressed as a {label_name}, 2-6 words. Captures the emergent theoretical construct (e.g., 'Navigating Uncertainty', 'Maintaining Professional Identity')."
           },
           "theoretical_family": {
             "type": "string",

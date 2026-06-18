@@ -31,7 +31,7 @@ For each provided memo:
 3. If the memo describes a VARIANT of an existing category:
    → map to that category. Specify WHAT it would add (property, dimension).
 4. If the memo describes a DISTINCT PHENOMENON:
-   → suggest a new category. Propose a name in gerund form.
+   → suggest a new category. Propose a name in {label_name} form.
 5. If the memo is ambiguous or there is no clear fit:
    → mark as "unmapped". The researcher will decide.
 

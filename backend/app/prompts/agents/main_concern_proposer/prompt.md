@@ -31,7 +31,7 @@ Which {processing_gerund} codes connect most with other codes?
 Which {object_of_study} has the most explanatory power across the data?
 
 [RESTRICCIONES]
-- Label with gerunds only (e.g., "Navigating uncertainty", NOT "Uncertainty").
+- Label with {label_name}s only (e.g., "Navigating uncertainty", NOT "Uncertainty").
 - Avoid professional or theoretical jargon.
 - The pattern must be the participants' real {object_of_study},
   not an analytical category imposed by the researcher.

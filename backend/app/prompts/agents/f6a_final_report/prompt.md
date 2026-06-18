@@ -31,7 +31,7 @@ if "emotion" → "Core Emotion"; if "behavior" → "Core Behavior";
 if "discourse" → "Core Discourse"; if "identity" → "Core Identity";
 if a custom pattern type → use "Core {ObjectOfStudy}" with the user-defined term.
 Subsections:
-  a) Pattern Identification — the gerund that captures the recurring pattern
+  a) Pattern Identification — the {label_name} that captures the recurring pattern
   b) Emergence Narrative — how this pattern surfaced across the data, key moments
      of discovery, convergence evidence from multiple documents
   c) Evidential Anchoring — the strongest data incidents and codes supporting
@@ -131,8 +131,8 @@ Apply these rules throughout the entire report:
    Participants are the population in which the concept operates, never the
    grammatical subject of theoretical claims.
 
-3. GERUNDS FOR PROCESSES.
-   Core processes and strategies are expressed as gerunds:
+3. {label_name_upper}S FOR PROCESSES.
+   Core processes and strategies are expressed as {label_name}s:
    "Navigating uncertainty", "Scanning for threats", "Building alliances".
    These are processes, not static states.
 

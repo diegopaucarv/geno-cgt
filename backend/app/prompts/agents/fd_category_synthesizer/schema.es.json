@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Etiqueta final para la categoría unificada (se prefiere gerundio)."
+            "description": "Etiqueta final para la categoría unificada (se prefiere {label_name})."
           },
           "definition": {
             "type": "string",

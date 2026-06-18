@@ -5,33 +5,24 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "code_id",
-          "code_label",
-          "verdict",
-          "rationale"
-        ],
+        "required": ["candidate_label", "verdict", "rationale"],
         "properties": {
+          "candidate_label": {
+            "type": "string",
+            "description": "EXACT category label as it appears in the proposer context (matches proposer's category_label)."
+          },
           "code_id": {
             "type": "string",
-            "description": "UUID of the evaluated code"
-          },
-          "code_label": {
-            "type": "string",
-            "description": "Code label"
+            "description": "UUID of the category (optional — fill if known from context, otherwise omit)."
           },
           "verdict": {
             "type": "string",
-            "enum": [
-              "valid",
-              "refine",
-              "split"
-            ],
+            "enum": ["valid", "refine", "split"],
             "description": "Interchangeability verdict"
           },
           "rationale": {
             "type": "string",
-            "description": "Justification citing specific incidents from different documents"
+            "description": "Justification citing specific incidents from different documents. Must reference which incidents were compared."
           },
           "interchangeable_pairs": {
             "type": "array",
@@ -49,7 +40,7 @@
                 }
               }
             },
-            "description": "Pairs of incidents that are clearly interchangeable"
+            "description": "Pairs of incidents from DIFFERENT documents that are clearly interchangeable"
           },
           "non_interchangeable_pairs": {
             "type": "array",
@@ -67,7 +58,7 @@
                 }
               }
             },
-            "description": "Pairs that reveal distinct patterns"
+            "description": "Pairs from different documents that reveal distinct patterns"
           },
           "suggested_action_if_not_valid": {
             "type": "string",
@@ -77,7 +68,5 @@
       }
     }
   },
-  "required": [
-    "verdicts"
-  ]
+  "required": ["verdicts"]
 }

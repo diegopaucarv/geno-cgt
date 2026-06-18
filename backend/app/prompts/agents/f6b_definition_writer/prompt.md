@@ -27,7 +27,7 @@ evidence.
 [PRINCIPLE]
 A formal CGT definition is not a dictionary entry. It is a THEORETICAL STATEMENT
 that captures:
-- The BEHAVIORAL PATTERN the category names (expressed as a gerund).
+- The BEHAVIORAL PATTERN the category names (expressed as a {label_name}).
 - What the pattern PROCESSES or RESOLVES for the participants.
 - The PROPERTIES that vary and their DIMENSIONS of variation.
 - The CONDITIONS under which the pattern manifests, shifts, or disappears.
@@ -39,8 +39,8 @@ phase (F6a), and as the authoritative reference for theoretical elaboration.
 
 [METHOD]
 Step 1 — NAME THE PATTERN:
-  - Start with the category name as a gerund.
-  - Define what behavioral process this gerund captures.
+  - Start with the category name as a {label_name}.
+  - Define what behavioral process this {label_name} captures.
   - What are participants DOING when this category is active?
 
 Step 2 — STATE THE CORE ESSENCE (1-2 sentences):

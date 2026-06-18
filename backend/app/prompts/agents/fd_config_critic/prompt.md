@@ -3,7 +3,7 @@ agent: fd_config_critic
 tier: PRO
 description: >
   Configuration Critic — after every 3-doc batch (post-synthesizer), reviews emerging
-  patterns and evaluates possible underlying concerns (gerunds), population reconfigurations,
+  patterns and evaluates possible underlying concerns ({label_name}s), population reconfigurations,
   and coding style adequacy. Compares conceptual units, not demographic ones.
 notes:
   - Runs AFTER the category synthesizer and hypothesis synthesizer complete.
@@ -12,7 +12,7 @@ notes:
   - Compares conceptual units, not demographic units strictly.
   - Uses compact formatting to save tokens.
 constraints:
-  - Gerund labels preferred (-ando/-iendo, -ing). NEVER abstract nouns or theoretical jargon.
+  - {label_name} labels preferred ({label_format}). NEVER abstract nouns or theoretical jargon.
   - Concerns must be grounded in the data, not imposed externally.
   - Population variants must be justified by emerging patterns in the data.
   - Output must be a valid JSON object matching the schema exactly.
@@ -37,7 +37,7 @@ The researcher is investigating: **{object_of_study}**
 {operational_question}
 
 [PROTOCOL]
-1. **Concern Analysis**: Review the categories and hypotheses. What gerund concerns
+1. **Concern Analysis**: Review the categories and hypotheses. What {label_name} concerns
    (underlying processes the population seems to be continuously trying to resolve)
    emerge from the data? Ground each concern in specific categories.
 

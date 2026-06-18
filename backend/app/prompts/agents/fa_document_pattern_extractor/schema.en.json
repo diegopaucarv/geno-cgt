@@ -5,7 +5,7 @@
   "properties": {
     "patterns": {
       "type": "array",
-      "description": "Gerund codes naming recurring behavioral processes. Each pattern is evidenced by multiple segments.",
+      "description": "{label_name} codes naming recurring behavioral processes. Each pattern is evidenced by multiple segments.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -13,7 +13,7 @@
         "properties": {
           "pattern_name": {
             "type": "string",
-            "description": "Gerund name of 2-6 words. Captures the recurring behavioral process."
+            "description": "{label_desc}"
           },
           "definition": {
             "type": "string",
@@ -42,7 +42,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "One-liner describing what happened. Plain language, no gerunds."
+            "description": "One-liner describing what happened. {label_anti}."
           },
           "segment_refs": {
             "type": "array",
@@ -77,7 +77,7 @@
         },
         "tentative_concern": {
           "type": "string",
-          "description": "What is this participant continuously trying to resolve? A gerund phrase."
+          "description": "What is this participant continuously trying to resolve? A {label_name} phrase."
         },
         "anomalies": {
           "type": "array",

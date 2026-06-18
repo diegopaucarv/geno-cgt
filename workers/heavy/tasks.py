@@ -2100,12 +2100,12 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
             SELECT c.nombre, c.definicion,
                    COUNT(h.id) as hypothesis_connections
             FROM categorias c
-            LEFT JOIN hypotheses h ON h.proyecto_id = c.proyecto_id
-                 AND (h.linked_category_ids ?? c.id::text
+            LEFT JOIN hypotheses h ON h.project_id = c.proyecto_id
+                 AND h.text ILIKE
                       OR h.text ILIKE '%' || c.nombre || '%')
             WHERE c.proyecto_id = :pid
             GROUP BY c.id, c.nombre, c.definicion
-            HAVING COUNT(h.id) >= 2
+            HAVING COUNT(h.id) >= 1
             ORDER BY hypothesis_connections DESC
             LIMIT 3
         """),
@@ -2163,7 +2163,7 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
 
         # Hypotheses summary
         hyps = s.execute(
-            text("SELECT id, text, tipo FROM hypotheses WHERE proyecto_id = :pid"),
+            text("SELECT id, text, tipo FROM hypotheses WHERE project_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
         hypotheses_summary = (
@@ -2892,15 +2892,42 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         )
 
         # ── Critic (feedback only, no verdicts) ──
+        # Build structured context from proposer output for better LLM evaluation
+        candidates_raw = proposal.get("candidates", [])
+        candidates_context_parts = []
+        for i, c in enumerate(candidates_raw):
+            parts = [
+                f"[CANDIDATE {i}]",
+                f"statement: {c.get('statement', '')}",
+                f"supporting_codes: {', '.join(c.get('supporting_codes', []))}",
+                f"orphan_codes: {', '.join(c.get('orphan_codes', []))}",
+                f"is_latent: {c.get('is_latent', False)}",
+                f"rationale: {c.get('rationale', '')}",
+            ]
+            candidates_context_parts.append("\n".join(parts))
+        candidates_context = "\n\n".join(candidates_context_parts)
+
+        # Extract coding_style_key for label tokens in prompt
+        coding_styles = pa_data.get("coding_styles", [])
+        coding_style_key = (
+            coding_styles[0]
+            if isinstance(coding_styles, list) and coding_styles
+            else "gerundio"
+        )
+
         critic = llm.run_agent(
             "fc_main_concern_critic",
             variables={
-                "candidates": json.dumps(proposal.get("candidates", [])),
+                "candidates_context": candidates_context,
                 "all_codes": all_codes,
                 "all_memos": all_memos,
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
                 "operational_question": operational_question or "",
+                "researcher_feedback": researcher_feedback or "",
+                "prime_movers_per_document": prime_movers_text,
+                "processing_verb": processing_verb,
+                "coding_style_key": coding_style_key,
             },
         )
 
@@ -2958,12 +2985,12 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             SELECT c.id, c.nombre, c.definicion,
                    COUNT(h.id) as hypothesis_connections
             FROM categorias c
-            LEFT JOIN hypotheses h ON h.proyecto_id = c.proyecto_id
-                 AND (h.linked_category_ids ?? c.id::text
+            LEFT JOIN hypotheses h ON h.project_id = c.proyecto_id
+                 AND h.text ILIKE
                       OR h.text ILIKE '%' || c.nombre || '%')
             WHERE c.proyecto_id = :pid
             GROUP BY c.id, c.nombre, c.definicion
-            HAVING COUNT(h.id) >= 2
+            HAVING COUNT(h.id) >= 1
             ORDER BY hypothesis_connections DESC
             LIMIT 3
         """),
@@ -3021,7 +3048,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
         )
 
         hyps = s.execute(
-            text("SELECT id, text, tipo FROM hypotheses WHERE proyecto_id = :pid"),
+            text("SELECT id, text, tipo FROM hypotheses WHERE project_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
         hypotheses_summary = (
@@ -3045,10 +3072,28 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
 
         # ── A4: Critic (FLASH — interchangeability) ──
         candidates = proposal.get("core_category_candidates", [])
-        candidate_incidents = []
-        for cand in candidates:
+
+        # Build structured proposer context + fetch incidents from DIFFERENT docs
+        proposer_context_parts = []
+        incidents_context_parts = []
+        used_docs = set()
+
+        for cand_idx, cand in enumerate(candidates):
             cat_name = cand.get("category_label", "")
-            # Find category by name to get its ID for incident lookup
+
+            # Proposer evaluation context
+            proposer_parts = [
+                f"[CANDIDATE {cand_idx}: {cat_name}]",
+                f"is_central: {cand.get('is_central', False)}",
+                f"has_explanatory_power: {cand.get('has_explanatory_power', False)}",
+                f"has_theoretical_grab: {cand.get('has_theoretical_grab', False)}",
+                f"connected_categories: {cand.get('connected_categories', [])}",
+                f"key_hypothesis_refs: {cand.get('key_hypothesis_refs', [])}",
+                f"proposer_rationale: {cand.get('centrality_rationale', '')}",
+            ]
+            proposer_context_parts.append("\n".join(proposer_parts))
+
+            # Find category by name
             cat_row = s.execute(
                 text(
                     "SELECT id FROM categorias WHERE nombre = :name AND proyecto_id = :pid"
@@ -3057,41 +3102,58 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             ).fetchone()
             if not cat_row:
                 continue
+
+            # Fetch 2-3 incidents from DIFFERENT documents for interchangeability testing
             incidents = s.execute(
                 text(
-                    "SELECT s.texto, d.original_filename "
+                    "SELECT DISTINCT ON (s.documento_id) s.texto, d.original_filename "
                     "FROM codigos_segmento cs "
                     "JOIN segmentos s ON cs.segmento_id = s.id "
                     "JOIN documentos d ON s.documento_id = d.id "
-                    "WHERE cs.categoria_id = :cid ORDER BY RANDOM() LIMIT 3"
+                    "WHERE cs.categoria_id = :cid LIMIT 3"
                 ),
                 {"cid": str(cat_row[0])},
             ).fetchall()
-            cand_with_incidents = dict(cand)
-            cand_with_incidents["incidents"] = [
-                {"text": inc[0][:500], "document": inc[1]} for inc in incidents
-            ]
-            candidate_incidents.append(cand_with_incidents)
 
-        docs = s.execute(
+            if incidents:
+                inc_parts = [f"[INCIDENTS for {cat_name}]"]
+                for inc in incidents:
+                    doc_name = inc[1]
+                    inc_parts.append(f"  DOC {doc_name}: {inc[0][:400]}")
+                inc_parts.append(
+                    "  → Are these incidents INTERCHANGEABLE? (valid | refine | split)"
+                )
+                incidents_context_parts.append("\n".join(inc_parts))
+
+        proposer_context = "\n\n".join(proposer_context_parts)
+        incidents_context = "\n\n".join(incidents_context_parts)
+
+        # Real code statistics from codigos_segmento
+        code_stats_rows = s.execute(
             text(
-                "SELECT id, original_filename FROM documentos WHERE proyecto_id = :pid"
+                "SELECT c.nombre, COUNT(DISTINCT cs.segmento_id) as seg_count, "
+                "COUNT(DISTINCT s.documento_id) as doc_count "
+                "FROM categorias c "
+                "LEFT JOIN codigos_segmento cs ON c.id = cs.categoria_id "
+                "LEFT JOIN segmentos s ON cs.segmento_id = s.id "
+                "WHERE c.proyecto_id = :pid GROUP BY c.id, c.nombre ORDER BY seg_count DESC"
             ),
             {"pid": proyecto_id},
         ).fetchall()
-        document_list = "\n".join(f"- {d[0]}: {d[1]}" for d in docs)
+        code_statistics = "\n".join(
+            f"- {r[0]}: {r[1]} segments in {r[2]} docs" for r in code_stats_rows
+        )
 
         critic = llm.run_agent(
             "fc_core_emergence_critic",
             variables={
-                "core_category_candidates_with_incidents": json.dumps(
-                    candidate_incidents
-                ),
-                "document_list": document_list,
+                "proposer_context": proposer_context,
+                "incidents_context": incidents_context,
                 "core_concern": confirmed_concern,
                 "object_of_study": object_of_study,
                 "all_codes": categories_summary,
-                "code_statistics": f"Top 3 SQL candidates: {top_candidates_str}",
+                "code_statistics": code_statistics,
+                "processing_verb": processing_verb,
             },
         )
 
@@ -3173,7 +3235,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
         cc_row = s.execute(
             text(
                 "SELECT proposal->>'core_category' FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "WHERE project_id = :pid AND gate_name = 'core_category' "
                 "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
@@ -3184,7 +3246,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
         existing_cats = s.execute(
             text(
                 "SELECT id, nombre, entity_type, definicion "
-                "FROM categorias WHERE proyecto_id = :pid AND entity_type IS NOT NULL"
+                "FROM categorias WHERE proyecto_id = :pid "
             ),
             {"pid": proyecto_id},
         ).fetchall()
@@ -3202,18 +3264,58 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
                 "core_category": core_category,
                 "all_open_codes": all_codes,
                 "existing_categories": existing_categories,
+                "processing_verb": processing_verb,
             },
         )
 
-        # Extract reduced_codes and discarded_codes from proposal for the critic
+        # ── Build structured context for critic ──
         reduced_codes = proposal.get("reduced_codes", [])
         discarded_codes = proposal.get("discarded_codes", [])
+
+        # Normalize discarded codes for frontend (add code_name alias)
+        for d in discarded_codes:
+            if "code_name" not in d and "code_label" in d:
+                d["code_name"] = d["code_label"]
+
+        # Build structured text contexts instead of JSON blobs
+        reduced_context = "CODES THAT SURVIVED REDUCTION:\n"
+        for code in reduced_codes:
+            source_ids = code.get("source_code_ids", [])
+            is_fusion = len(source_ids) > 1
+            prefix = "[FUSION]" if is_fusion else "[KEPT]"
+            reduced_context += (
+                f"  {prefix} {code.get('code_label', code.get('code_name', ''))}\n"
+                f"    entity_type: {code.get('entity_type', '')}\n"
+                f"    relation_to_core: {code.get('relation_to_core', '')}\n"
+                f"    definition: {code.get('definition', '')[:200]}\n"
+            )
+            if is_fusion:
+                reduced_context += f"    source_codes: {source_ids}\n"
+
+        discarded_context = "CODES PROPOSED FOR DISCARD:\n"
+        for code in discarded_codes:
+            discarded_context += (
+                f"  - {code.get('code_label', code.get('code_name', ''))}: "
+                f"reason={code.get('discard_reason', '')}, "
+                f"category={code.get('discard_category', '')}\n"
+            )
+
+        # Extract fusions from reduced_codes
+        fusions = [c for c in reduced_codes if len(c.get("source_code_ids", [])) > 1]
+        fusions_context = "PROPOSED FUSIONS:\n"
+        for f in fusions:
+            fusions_context += (
+                f"  - {f.get('code_label', '')}: "
+                f"sources={f.get('source_code_ids', [])}, "
+                f"definition={f.get('definition', '')[:150]}\n"
+            )
 
         critic = llm.run_agent(
             "fd_selective_reduction_critic",
             variables={
-                "reduced_codes": json.dumps(reduced_codes),
-                "discarded_codes": json.dumps(discarded_codes),
+                "reduced_context": reduced_context,
+                "discarded_context": discarded_context,
+                "fusions_context": fusions_context,
                 "all_open_codes": all_codes,
                 "object_of_study": object_of_study,
                 "core_concern": core_concern,
@@ -3428,7 +3530,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
         # ── Obtener categorías con score ≥ 4 ──
         cats = s.execute(
             text(
-                "SELECT id, nombre, definicion, version, puntaje_relevancia, entity_type "
+                "SELECT id, nombre, definicion, version, puntaje_relevancia "
                 "FROM categorias "
                 "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) > 2 "
                 "ORDER BY puntaje_relevancia DESC"
@@ -3487,7 +3589,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
             cat_name = cat_row[1]
             cat_def = cat_row[2] or ""
             cat_version = cat_row[3] or 1
-            cat_entity_type = cat_row[5] or "PROCESS"
+            cat_entity_type = "PROCESS"
 
             # ── F4.2: Compute 4-signal saturation panel ──
             panel = _compute_saturation_panel(s, cat_id, proyecto_id)
@@ -3874,7 +3976,7 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
         cc_row = s.execute(
             text(
                 "SELECT proposal FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "WHERE project_id = :pid AND gate_name = 'core_category' "
                 "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
@@ -4067,10 +4169,36 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             },
         )
 
+        # ── Build structured edges context ──
+        edges_raw = proposal.get("edges", [])
+        edges_context_parts = []
+        for i, edge in enumerate(edges_raw):
+            evidence = edge.get("evidence", {})
+            if isinstance(evidence, dict):
+                ev_str = (
+                    f"source={evidence.get('source_id', '')} "
+                    f"({evidence.get('source_type', '')}): "
+                    f"{evidence.get('summary', '')} "
+                    f"[quality: {evidence.get('quality', '')}]"
+                )
+            else:
+                ev_str = str(evidence)
+            edge_parts = [
+                f"[EDGE {i}]",
+                f"source: {edge.get('source', '')}",
+                f"target: {edge.get('target', '')}",
+                f"description: {edge.get('description', '')}",
+                f"rationale: {edge.get('rationale', '')}",
+                f"evidence: {ev_str}",
+                f"evidence_quality: {edge.get('evidence_quality', '')}",
+            ]
+            edges_context_parts.append("\n".join(edge_parts))
+        edges_context = "\n\n".join(edges_context_parts)
+
         critic = llm.run_agent(
             "ff_database_b_critic",
             variables={
-                "edges": proposal.get("edges", []),
+                "edges_context": edges_context,
                 "nodes": nodes_text,
                 "hypotheses": hyps_text,
                 "object_of_study": object_of_study,
@@ -4082,6 +4210,53 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
         )
 
         from agents.transitions import hitl_gate
+
+        # ── Deterministic quality gate: edge coverage ──
+        edges = proposal.get("edges", [])
+        connected_nodes = set()
+        for edge in edges:
+            src = edge.get("source", "")
+            tgt = edge.get("target", "")
+            if src:
+                connected_nodes.add(src)
+            if tgt:
+                connected_nodes.add(tgt)
+        node_count_row = s.execute(
+            text("SELECT COUNT(*) FROM database_nodes WHERE project_id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        total_nodes = node_count_row[0] if node_count_row else 0
+        coverage_pct = (
+            (len(connected_nodes) / total_nodes * 100) if total_nodes > 0 else 100
+        )
+        proposal["_coverage"] = {
+            "connected_nodes": len(connected_nodes),
+            "total_nodes": total_nodes,
+            "coverage_pct": round(coverage_pct, 1),
+            "sufficient": coverage_pct >= 50,
+        }
+        if coverage_pct < 50:
+            logger.warning(
+                "Database B: low coverage %d/%d (%.1f%%)",
+                len(connected_nodes),
+                total_nodes,
+                coverage_pct,
+            )
+            if isinstance(critic, dict):
+                ov = critic.get("overall_verdict", {})
+                if isinstance(ov, dict) and ov.get("is_sound") is True:
+                    ov["is_sound"] = False
+                    ov["coverage_issue"] = (
+                        f"Only {len(connected_nodes)}/{total_nodes} nodes ({coverage_pct:.0f}%) connected. Min 50% required."
+                    )
+                    critic["overall_verdict"] = ov
+        else:
+            logger.info(
+                "Database B: coverage OK %d/%d (%.1f%%)",
+                len(connected_nodes),
+                total_nodes,
+                coverage_pct,
+            )
 
         hitl_gate(s, proyecto_id, "database_b", proposal, critic)
 
@@ -4098,25 +4273,30 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
 
         persisted = 0
         for edge in edges:
-            src_id = node_map.get(edge.get("source_node_label", ""))
-            tgt_id = node_map.get(edge.get("target_node_label", ""))
+            src_id = node_map.get(edge.get("source", ""))
+            tgt_id = node_map.get(edge.get("target", ""))
             if src_id and tgt_id:
+                evidence_obj = edge.get("evidence", {})
+                evidence_json = (
+                    json.dumps(evidence_obj)
+                    if isinstance(evidence_obj, dict)
+                    else str(evidence_obj)
+                )
                 s.execute(
                     text(
                         "INSERT INTO database_edges "
                         "(id, project_id, source_node_id, target_node_id, "
-                        "relationship_type, evidence, direction, strength) "
-                        "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :ev, :dir, :str) "
+                        "relationship_type, description, evidence) "
+                        "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :desc, :ev) "
                         "ON CONFLICT DO NOTHING"
                     ),
                     {
                         "pid": proyecto_id,
                         "src": src_id,
                         "tgt": tgt_id,
-                        "rtype": edge.get("relationship_type", "CO_OCCURS_WITH"),
-                        "ev": edge.get("evidence", ""),
-                        "dir": edge.get("direction", "unidirectional"),
-                        "str": edge.get("strength", "moderate"),
+                        "rtype": "custom",
+                        "desc": edge.get("description", ""),
+                        "ev": evidence_json,
                     },
                 )
                 persisted += 1
@@ -4126,7 +4306,9 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             persisted,
             len(edges),
             proyecto_id,
-            critic.get("verdict", "?"),
+            str(critic.get("overall_verdict", {}).get("is_sound", "?"))
+            if isinstance(critic, dict)
+            else "?",
         )
 
         return {"status": "paused", "gate": "database_b", "awaiting": "researcher"}

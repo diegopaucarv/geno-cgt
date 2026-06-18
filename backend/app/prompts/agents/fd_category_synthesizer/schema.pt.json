@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Rótulo final para a categoria unificada (gerúndio preferido)."
+            "description": "Rótulo final para a categoria unificada ({label_name} preferido)."
           },
           "definition": {
             "type": "string",

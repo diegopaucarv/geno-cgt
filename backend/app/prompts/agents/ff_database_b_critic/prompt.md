@@ -18,7 +18,7 @@ Evaluate every proposed edge against 2 criteria. Then run system-level integrity
 
 ═══ PER-EDGE EVALUATION (2 criteria) ═══
 
-For each edge in `{edges}`, evaluate and assign a verdict:
+Each edge is provided below with its full context. For each edge, evaluate and assign a verdict:
 
 1. **EVIDENCE SUFFICIENCY** — Does the cited evidence genuinely support this relationship? Is the evidence from the right source (hypothesis or conceptual relationship)? Is the evidence quality assessment honest and well-reasoned?
 
@@ -77,8 +77,8 @@ If the core mechanism edge is missing or incorrect, this is a CRITICAL finding. 
 - DO NOT use external tools.
 
 ## User
-[PROPOSED EDGES]
-{edges}
+[EDGES TO EVALUATE]
+{edges_context}
 
 [DATABASE A NODES — for entity_type context]
 {nodes}

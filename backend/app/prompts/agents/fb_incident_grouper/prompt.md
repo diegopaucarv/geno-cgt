@@ -39,7 +39,7 @@ You are looking at incidents extracted from interviews with {object_of_study}. G
 
 - An incident CAN belong to multiple groups if it evidences multiple patterns (OR logic).
 - Every group must have at least 2 incidents.
-- Name each group with a provisional signal (a short phrase describing the common pattern — NOT a gerund yet, just a descriptive label like "extended work hours" or "disengagement behaviors").
+- Name each group with a provisional signal (a short phrase describing the common pattern — NOT a {label_name} yet, just a descriptive label like "extended work hours" or "disengagement behaviors").
 - The `incident_ids` field must use the EXACT incident IDs from the input.
 - Output language for natural text values: {language_name}.
 

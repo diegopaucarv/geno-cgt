@@ -28,7 +28,7 @@ Among surviving codes, identify which are VARIATIONS OF THE SAME PATTERN:
 
 PHASE C — REFORMULATION
 For each merged group, generate:
-- A higher-order gerund that captures the unified essence.
+- A higher-order {label_name} that captures the unified essence.
 - A definition that integrates variations from the source codes.
 - Inherited properties/dimensions.
 - The entity_type: core_category, related_category, or secondary_code.

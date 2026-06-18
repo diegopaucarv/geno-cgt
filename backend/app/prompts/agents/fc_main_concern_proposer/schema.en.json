@@ -5,7 +5,7 @@
   "properties": {
     "candidates": {
       "type": "array",
-      "description": "2-4 candidate patterns of interest, each expressed as a gerund.",
+      "description": "2-4 candidate patterns of interest, each expressed as a {label_name}.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -18,7 +18,7 @@
         "properties": {
           "statement": {
             "type": "string",
-            "description": "Gerund candidate for the pattern of interest."
+            "description": "{label_name} candidate for the pattern of interest."
           },
           "supporting_codes": {
             "type": "array",

@@ -5,7 +5,7 @@
   "properties": {
     "concerns": {
       "type": "array",
-      "description": "Gerundium-Anliegen — zugrundeliegende Prozesse, die die Population kontinuierlich zu lösen versucht.",
+      "description": "{label_name}-Anliegen — zugrundeliegende Prozesse, die die Population kontinuierlich zu lösen versucht.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerundium-Name des Anliegens (z.B. 'Verbleib aushandeln', 'Bedrohungen scannen')."
+            "description": "{label_name}-Name des Anliegens (z.B. 'Verbleib aushandeln', 'Bedrohungen scannen')."
           },
           "description": {
             "type": "string",

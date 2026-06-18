@@ -4,9 +4,7 @@
     "name": "final_report",
     "schema": {
       "type": "object",
-      "required": [
-        "report"
-      ],
+      "required": ["report"],
       "properties": {
         "report": {
           "type": "object",
@@ -45,7 +43,7 @@
                 },
                 "pattern_identification": {
                   "type": "string",
-                  "description": "O gerúndio que nomeia o padrão central. Explicação do que o padrão É e por que este gerúndio o captura."
+                  "description": "O {label_name} que nomeia o padrão central. Explicação do que o padrão É e por que este {label_name} o captura."
                 },
                 "emergence_narrative": {
                   "type": "string",
@@ -79,11 +77,7 @@
                   "description": "Propriedades da categoria central, cada uma com sua faixa dimensional.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "name",
-                      "description",
-                      "dimensional_range"
-                    ],
+                    "required": ["name", "description", "dimensional_range"],
                     "properties": {
                       "name": {
                         "type": "string",
@@ -267,11 +261,7 @@
                   "description": "Aspectos do fenômeno que podem ser modificados na prática. Cada um remonta a uma propriedade teórica.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "name",
-                      "description",
-                      "theory_basis"
-                    ],
+                    "required": ["name", "description", "theory_basis"],
                     "properties": {
                       "name": {
                         "type": "string",
@@ -293,11 +283,7 @@
                   "description": "Condições que habilitam ou restringem a intervenção.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "name",
-                      "description",
-                      "conditions_access"
-                    ],
+                    "required": ["name", "description", "conditions_access"],
                     "properties": {
                       "name": {
                         "type": "string",
@@ -319,11 +305,7 @@
                   "description": "Recomendações concretas para profissionais.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "guideline",
-                      "target",
-                      "mechanism"
-                    ],
+                    "required": ["guideline", "target", "mechanism"],
                     "properties": {
                       "guideline": {
                         "type": "string",
@@ -364,10 +346,7 @@
                   "description": "Perguntas teóricas que os dados atuais não podem responder. Propriedades que precisam de mais dimensionalização.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "question",
-                      "why_unresolved"
-                    ],
+                    "required": ["question", "why_unresolved"],
                     "properties": {
                       "question": {
                         "type": "string",
@@ -389,10 +368,7 @@
                   "description": "Estudos concretos seguintes, populações a amostrar, comparações a realizar.",
                   "items": {
                     "type": "object",
-                    "required": [
-                      "direction",
-                      "rationale"
-                    ],
+                    "required": ["direction", "rationale"],
                     "properties": {
                       "direction": {
                         "type": "string",

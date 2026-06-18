@@ -1,14 +1,14 @@
 ---
 agent: rename_suggester
 tier: PRO
-description: Sugiere renombres para una categoría cuya definición se ha expandido significativamente. Prioriza gerundios, mayor abstracción, y anclaje en los datos. A 3 niveles de abstracción. T08 del plan Theoretical Playground.
+description: Sugiere renombres para una categoría cuya definición se ha expandido significativamente. Prioriza {label_name}s, mayor abstracción, y anclaje en los datos. A 3 niveles de abstracción. T08 del plan Theoretical Playground.
 notes:
   - Solo se activa cuando rename_detector.py determina que es necesario.
   - Si el nombre actual es adecuado, no sugieras cambios.
   - Los niveles son: conservador (mantiene esencia), moderado (mayor alcance), transformador (nuevo concepto).
 constraints:
   - No sugieras nombres si el nombre actual es adecuado.
-  - Usa gerundios cuando sea posible.
+  - Usa {label_name}s cuando sea posible.
   - El nuevo nombre debe ser más abstracto pero anclado en los datos.
   - Si hay metáforas in-vivo en los incidentes, considéralas.
 ---
@@ -25,7 +25,7 @@ In CGT, categories change names when their definition expands.
 This is not cosmetic — it is THEORETICAL ELEVATION:
 - The new name must capture MORE conceptual richness than the previous one.
 - It must be more abstract, yet still anchored in the data.
-- It should use gerunds (capturing process).
+- It should use {label_name}s (capturing process).
 - If the category now encompasses opposite poles (e.g., gratitude + contempt),
   the new name must capture BOTH.
 

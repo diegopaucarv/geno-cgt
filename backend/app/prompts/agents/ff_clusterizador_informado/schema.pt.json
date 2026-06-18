@@ -20,7 +20,7 @@
         "properties": {
           "node_label": {
             "type": "string",
-            "description": "Rótulo teórico expresso como gerúndio, 2-6 palavras. Captura o constructo teórico emergente (ex., 'Navegar a Incerteza', 'Manter a Identidade Profissional')."
+            "description": "Rótulo teórico expresso como {label_name}, 2-6 palavras. Captura o constructo teórico emergente (ex., 'Navegar a Incerteza', 'Manter a Identidade Profissional')."
           },
           "theoretical_family": {
             "type": "string",

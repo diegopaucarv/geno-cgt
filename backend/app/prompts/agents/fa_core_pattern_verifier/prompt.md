@@ -14,7 +14,7 @@ Evaluate the last 3 patterns produced by `core_pattern_extractor` using 4 sequen
 [EVALUATION FRAMEWORK — 4 QUESTIONS]
 
 **Q1 — SURFACE SIMILARITY**
-Do the 3 patterns use similar words, gerunds, or naming conventions? If the gerunds are lexically different (e.g., "Managing visibility" vs "Controlling exposure"), can they be plausibly describing the SAME underlying phenomenon?
+Do the 3 patterns use similar words, {label_name}s, or naming conventions? If the {label_name}s are lexically different (e.g., "Managing visibility" vs "Controlling exposure"), can they be plausibly describing the SAME underlying phenomenon?
 
 **Q2 — STRUCTURAL CONVERGENCE**
 Do the 3 patterns share a common STRUCTURE? Consider:
@@ -43,7 +43,7 @@ The researcher is studying: **{object_of_study}**
 - **custom**: Are the 3 participants sharing the same core pattern? Look for convergence around the common organizing principle that structures their experience.
 
 [DIVERGENCE CLASSIFICATION]
-- **SURFACE DIVERGENCE**: Same underlying phenomenon, expressed with different words/gerunds. Resolvable by renaming. Example: "Managing visibility" vs "Controlling exposure" in a concern study — both describe information regulation.
+- **SURFACE DIVERGENCE**: Same underlying phenomenon, expressed with different words/{label_name}s. Resolvable by renaming. Example: "Managing visibility" vs "Controlling exposure" in a concern study — both describe information regulation.
 - **CONTEXTUAL DIVERGENCE**: Same phenomenon appearing differently across sub-populations or contexts. Resolvable by expanding population sampling or adding population dimensions. Example: pattern manifests as "Negotiating access" in one subgroup vs "Demanding access" in another — same core, different context.
 - **FUNDAMENTAL DIVERGENCE**: Patterns describe genuinely different phenomena. NOT resolvable by renaming or resampling. Suggests the object_of_study needs reconsideration or the population is too heterogeneous. Example: one pattern is about career advancement, another is about emotional regulation — different core concerns.
 
@@ -55,7 +55,7 @@ The researcher is studying: **{object_of_study}**
 [RESTRICTIONS]
 - Evaluate ONLY the 3 patterns provided. Do not assume knowledge of other documents.
 - The divergence type (surface/contextual/fundamental) must be determined by analyzing Q1–Q4, not by guessing.
-- suggested_shared_pattern must be a gerund, not a noun.
+- suggested_shared_pattern must be a {label_name}, not a noun.
 - population_concerns must be specific and actionable, not vague.
 - If confidence in convergence is low across all 3 patterns, do not force convergence — be honest about the divergence.
 - Do NOT use scoring, counting, or quantitative heuristics. Pure qualitative reasoning.

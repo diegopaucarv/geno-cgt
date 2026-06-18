@@ -13,7 +13,7 @@
         "properties": {
           "signal": {
             "type": "string",
-            "description": "Ein kurzer Satz, der erfasst, was all diese Vorfälle auf Verhaltensebene gemeinsam haben — das ZUGRUNDELIEGENDE MUSTER, auf das diese verschiedenen Ausdrücke hinweisen. KEIN Gerundium, nur eine beschreibende Bezeichnung. Z.B.: 'verlängerte Arbeitszeiten', 'Vorführung für Bewerter'"
+            "description": "Ein kurzer Satz, der erfasst, was all diese Vorfälle auf Verhaltensebene gemeinsam haben — das ZUGRUNDELIEGENDE MUSTER, auf das diese verschiedenen Ausdrücke hinweisen. KEIN {label_name}, nur eine beschreibende Bezeichnung. Z.B.: 'verlängerte Arbeitszeiten', 'Vorführung für Bewerter'"
           },
           "incident_ids": {
             "type": "array",

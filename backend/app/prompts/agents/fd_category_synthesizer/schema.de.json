@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Endgültige Bezeichnung für die vereinheitlichte Kategorie (Gerundium bevorzugt)."
+            "description": "Endgültige Bezeichnung für die vereinheitlichte Kategorie ({label_name} bevorzugt)."
           },
           "definition": {
             "type": "string",

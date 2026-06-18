@@ -5,33 +5,24 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "code_id",
-          "code_label",
-          "verdict",
-          "rationale"
-        ],
+        "required": ["candidate_label", "verdict", "rationale"],
         "properties": {
+          "candidate_label": {
+            "type": "string",
+            "description": "Rótulo EXATO da categoria como aparece no contexto do proposer (corresponde a category_label do proposer)."
+          },
           "code_id": {
             "type": "string",
-            "description": "UUID do código avaliado"
-          },
-          "code_label": {
-            "type": "string",
-            "description": "Rótulo do código"
+            "description": "UUID da categoria (opcional — preencher se conhecido do contexto, caso contrário omitir)."
           },
           "verdict": {
             "type": "string",
-            "enum": [
-              "valid",
-              "refine",
-              "split"
-            ],
+            "enum": ["valid", "refine", "split"],
             "description": "Veredito de intercambialidade"
           },
           "rationale": {
             "type": "string",
-            "description": "Justificativa citando incidentes específicos de diferentes documentos"
+            "description": "Justificativa citando incidentes específicos de documentos diferentes. Deve indicar quais incidentes foram comparados."
           },
           "interchangeable_pairs": {
             "type": "array",
@@ -49,7 +40,7 @@
                 }
               }
             },
-            "description": "Pares de incidentes que são claramente intercambiáveis"
+            "description": "Pares de incidentes de DOCUMENTOS DIFERENTES que são claramente intercambiáveis"
           },
           "non_interchangeable_pairs": {
             "type": "array",
@@ -67,7 +58,7 @@
                 }
               }
             },
-            "description": "Pares que revelam padrões distintos"
+            "description": "Pares de documentos diferentes que revelam padrões distintos"
           },
           "suggested_action_if_not_valid": {
             "type": "string",
@@ -77,7 +68,5 @@
       }
     }
   },
-  "required": [
-    "verdicts"
-  ]
+  "required": ["verdicts"]
 }

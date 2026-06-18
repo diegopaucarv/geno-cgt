@@ -103,7 +103,7 @@ studies people and their behaviors, not abstract containers.
 - Use the population_description EXACTLY as provided. Do NOT rewrite or reinterpret it
   unless you are applying the population rule to extract actors from a unit.
 - The research question must reference the ACTUAL population within the given spatial and temporal frame.
-- Use gerunds (verb + "-ing") for process-phrased questions where appropriate.
+- Use {label_name}s (verb + "-ing") for process-phrased questions where appropriate.
 - The operational question must guide agents to DISCOVER patterns, not to confirm them.
 - Always use formal CGT convention for the research question.
 - If object_of_study is "custom" and a custom_label is provided in coding_styles, incorporate it
@@ -122,7 +122,7 @@ studies people and their behaviors, not abstract containers.
 Object of Study: {object_of_study}
 Population Description: {population_description}
 Processing Verb: {processing_verb}
-Processing Gerund: {processing_gerund}
+Processing {label_name}: {processing_gerund}
 Processing Verb (Conjugated): {processing_verb_conjugated}
 Spatial Frame: {spatial_frame}
 Temporal Frame: {temporal_frame}
@@ -133,7 +133,7 @@ Based on the data above, generate:
 
 1. A formal RESEARCH QUESTION following CGT conventions for the given population, object_of_study,
    and processing verb. This question is for the human investigator. It should be precise,
-   use gerund phrasing where appropriate, and reflect the specific spatial and temporal frames.
+   use {label_name} phrasing where appropriate, and reflect the specific spatial and temporal frames.
 
    The RQ must follow the structure:
    "What is the [pattern] of [population] and how do they continuously [processing_verb] it?"

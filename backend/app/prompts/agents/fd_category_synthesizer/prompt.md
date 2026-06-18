@@ -9,7 +9,7 @@ notes:
   - Renames when needed (preserving the most descriptive label).
   - Preserves traceability (which source categories contributed to each unified one).
 constraints:
-  - Gerund labels preferred (-ando/-iendo, -ing). NEVER abstract nouns or theoretical jargon.
+  - {label_name} labels preferred ({label_format}). NEVER abstract nouns or theoretical jargon.
   - Definitions must remain concrete and grounded in the incidents.
   - When merging, combine definitions to cover both sources. Do not discard valid detail.
   - When keeping a single category, preserve its original definition.
@@ -37,7 +37,7 @@ Your job is to produce a UNIFIED, DEDUPLICATED set.
    Previous categories that have NO relationship to any new category should be KEPT unchanged.
 
 [MERGING RULES]
-- When merging 2+ categories, choose the MOST DESCRIPTIVE label (gerund preferred).
+- When merging 2+ categories, choose the MOST DESCRIPTIVE label ({label_name} preferred).
 - When merging, combine definitions — preserve detail from all sources.
 - If a new label captures the same pattern better than an old one, rename the unified category.
 - If neither label is clearly better, prefer the one with more incidents.

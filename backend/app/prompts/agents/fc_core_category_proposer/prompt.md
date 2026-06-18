@@ -77,6 +77,13 @@ When two categories have similar scores:
 [OPERATIONAL QUESTION]
 {operational_question}
 
+[SQL TOP-3 — pre-selected by hypothesis connection count]
+{top_candidates}
+
+These are the top 3 categories by hypothesis connections (system pre-selection).
+Evaluate them qualitatively against the CGT criteria below. You may evaluate
+other categories from categories_summary if you find stronger candidates.
+
 [ALL CATEGORIES WITH INDICATORS]
 {categories_summary}
 

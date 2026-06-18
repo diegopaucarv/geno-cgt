@@ -96,7 +96,7 @@
       },
       "suggested_shared_pattern": {
         "type": "string",
-        "description": "Se existir convergência: um nome tentativo em GERÚNDIO para o padrão compartilhado que unifica os 3 padrões individuais. Deve ser um gerúndio (frase verbal). Se a divergência for fundamental, deixar como string vazia."
+        "description": "Se existir convergência: um nome tentativo em {label_name_upper} para o padrão compartilhado que unifica os 3 padrões individuais. Deve ser um {label_name} (frase verbal). Se a divergência for fundamental, deixar como string vazia."
       },
       "suggested_shared_pattern_rationale": {
         "type": "string",

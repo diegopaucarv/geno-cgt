@@ -5,7 +5,7 @@
   "properties": {
     "candidates": {
       "type": "array",
-      "description": "2-4 patrones de interés candidatos, cada uno expresado como gerundio.",
+      "description": "2-4 patrones de interés candidatos, cada uno expresado como {label_name}.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -18,7 +18,7 @@
         "properties": {
           "statement": {
             "type": "string",
-            "description": "Candidato en gerundio para el patrón de interés."
+            "description": "Candidato en {label_name} para el patrón de interés."
           },
           "supporting_codes": {
             "type": "array",

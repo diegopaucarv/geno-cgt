@@ -5,7 +5,7 @@
   "properties": {
     "candidates": {
       "type": "array",
-      "description": "2-4 Kandidaten für Interessensmuster, jeweils als Gerundium ausgedrückt.",
+      "description": "2-4 Kandidaten für Interessensmuster, jeweils als {label_name} ausgedrückt.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -18,7 +18,7 @@
         "properties": {
           "statement": {
             "type": "string",
-            "description": "Gerundium-Kandidat für das Interessensmuster."
+            "description": "{label_name}-Kandidat für das Interessensmuster."
           },
           "supporting_codes": {
             "type": "array",

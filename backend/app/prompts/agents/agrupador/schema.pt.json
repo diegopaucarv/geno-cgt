@@ -19,7 +19,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Gerúndio do construto agrupado."
+            "description": "{label_name} do construto agrupado."
           },
           "definition": {
             "type": "string",

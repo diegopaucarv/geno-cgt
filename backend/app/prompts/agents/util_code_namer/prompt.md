@@ -1,10 +1,10 @@
 ---
 agent: util_code_namer
 tier: FLASH
-description: Sugiere nombre en gerundio (o in-vivo) para un tema de indicadores. FLASH — tarea simple de naming.
+description: Sugiere nombre en {label_name} (o in-vivo) para un tema de indicadores. FLASH — tarea simple de naming.
 notes:
   - Tarea atómica: un tema → un nombre. Sin creatividad compleja.
-  - Respeta el estilo de codificación configurado (gerundio, in-vivo, nominalización).
+  - Respeta el estilo de codificación configurado ({label_name}, in-vivo, nominalización).
 constraints:
   - El nombre debe capturar el patrón de comportamiento, no el tema abstracto.
   - Si el estilo es in-vivo, el nombre DEBE ser una cita textual de los indicadores.

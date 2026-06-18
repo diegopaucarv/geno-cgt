@@ -20,7 +20,7 @@
         "properties": {
           "node_label": {
             "type": "string",
-            "description": "Theoretisches Label als Gerundium ausgedrückt, 2-6 Wörter. Erfasst das emergente theoretische Konstrukt (z.B. 'Unsicherheit navigieren', 'Professionelle Identität aufrechterhalten')."
+            "description": "Theoretisches Label als {label_name} ausgedrückt, 2-6 Wörter. Erfasst das emergente theoretische Konstrukt (z.B. 'Unsicherheit navigieren', 'Professionelle Identität aufrechterhalten')."
           },
           "theoretical_family": {
             "type": "string",

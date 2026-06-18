@@ -22,7 +22,7 @@ For each {object_of_study} candidate, issue a verdict:
   concrete (code-plus) nor too abstract (floating). The candidate ALIGNS with the
   research question and operational framing.
 - MOD — Modified: The candidate is promising but needs adjustment. Possible issues:
-  the gerund does not capture the latent {object_of_study} well, the rationale confuses
+  the {label_name} does not capture the latent {object_of_study} well, the rationale confuses
   theme with {object_of_study}, supporting_codes do not convincingly support it,
   orphan_patterns are too numerous (>30% of codes), or the candidate does not
   adequately answer the research question.
@@ -55,7 +55,7 @@ For each {object_of_study} candidate, issue a verdict:
 [RESTRICCIONES]
 - Evaluate each candidate against the provided codes, memos, and research framing.
   Do not use external knowledge.
-- If MOD, the suggestion must be actionable: reformulate gerund, cite additional
+- If MOD, the suggestion must be actionable: reformulate {label_name}, cite additional
   codes, reduce abstraction, or realign with the research question.
 - If FORCED, explain why the data does not support this candidate.
 - DO NOT use external tools.
@@ -73,8 +73,16 @@ For each {object_of_study} candidate, issue a verdict:
 [RESEARCHER FEEDBACK — modifications requested]
 {researcher_feedback}
 
-[CORE PATTERN CANDIDATES]
-{core_concern}
+[PROPOSER OUTPUT — CANDIDATES TO EVALUATE]
+{candidates_context}
+
+For each candidate, evaluate:
+- Grounding: do the supporting_codes actually support this statement?
+- Coverage: would choosing this candidate orphan too many codes? (>30% is a concern)
+- Latency: is this a real concern or just a descriptive theme? (check is_latent flag)
+- Strength: is the empirical grounding solid? Cite specific codes and memos as evidence.
+
+Your observations should reference specific candidate indices (0-based) and proposer fields by name.
 
 [ALL CODES WITH DEFINITIONS — to verify grounding]
 {all_codes}

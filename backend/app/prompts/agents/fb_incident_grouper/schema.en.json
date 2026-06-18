@@ -13,7 +13,7 @@
         "properties": {
           "signal": {
             "type": "string",
-            "description": "A short phrase that CAPTURES what all these incidents have in common at the behavioral level — the UNDERLYING PATTERN that these different expressions all point to. NOT a gerund, just a descriptive label. E.g.: 'extended work hours', 'performing for evaluators'"
+            "description": "A short phrase that CAPTURES what all these incidents have in common at the behavioral level — the UNDERLYING PATTERN that these different expressions all point to. NOT a {label_name}, just a descriptive label. E.g.: 'extended work hours', 'performing for evaluators'"
           },
           "incident_ids": {
             "type": "array",

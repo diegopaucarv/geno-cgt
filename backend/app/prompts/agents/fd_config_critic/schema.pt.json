@@ -5,7 +5,7 @@
   "properties": {
     "concerns": {
       "type": "array",
-      "description": "Preocupações em gerúndio — processos subjacentes que a população parece estar tentando resolver continuamente.",
+      "description": "Preocupações em {label_name} — processos subjacentes que a população parece estar tentando resolver continuamente.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Nome da preocupação em gerúndio (ex. 'Negociando permanência', 'Escaneando ameaças')."
+            "description": "Nome da preocupação em {label_name} (ex. 'Negociando permanência', 'Escaneando ameaças')."
           },
           "description": {
             "type": "string",

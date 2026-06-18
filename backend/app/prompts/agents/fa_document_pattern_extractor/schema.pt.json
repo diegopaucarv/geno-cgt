@@ -5,7 +5,7 @@
   "properties": {
     "patterns": {
       "type": "array",
-      "description": "Códigos em gerúndio que nomeiam processos comportamentais recorrentes. Cada padrão é evidenciado por múltiplos segmentos.",
+      "description": "Códigos em {label_name} que nomeiam processos comportamentais recorrentes. Cada padrão é evidenciado por múltiplos segmentos.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -13,7 +13,7 @@
         "properties": {
           "pattern_name": {
             "type": "string",
-            "description": "Nome em gerúndio de 2-6 palavras. Captura o processo comportamental recorrente."
+            "description": "{label_desc}"
           },
           "definition": {
             "type": "string",
@@ -42,7 +42,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Frase curta descrevendo o que aconteceu. Linguagem simples, sem gerúndios."
+            "description": "Frase curta descrevendo o que aconteceu. Linguagem simples, {label_anti}."
           },
           "segment_refs": {
             "type": "array",
@@ -77,7 +77,7 @@
         },
         "tentative_concern": {
           "type": "string",
-          "description": "O que este participante está continuamente tentando resolver? Uma frase em gerúndio."
+          "description": "O que este participante está continuamente tentando resolver? Uma frase em {label_name}."
         },
         "anomalies": {
           "type": "array",

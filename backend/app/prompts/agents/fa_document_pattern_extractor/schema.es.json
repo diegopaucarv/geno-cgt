@@ -5,7 +5,7 @@
   "properties": {
     "patterns": {
       "type": "array",
-      "description": "Códigos en gerundio que nombran procesos conductuales recurrentes. Cada patrón está evidenciado por múltiples segmentos.",
+      "description": "Códigos en {label_name} que nombran procesos conductuales recurrentes. Cada patrón está evidenciado por múltiples segmentos.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -13,7 +13,7 @@
         "properties": {
           "pattern_name": {
             "type": "string",
-            "description": "Nombre en gerundio de 2-6 palabras. Captura el proceso conductual recurrente."
+            "description": "{label_desc}"
           },
           "definition": {
             "type": "string",
@@ -42,7 +42,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Frase breve que describe lo sucedido. Lenguaje llano, sin gerundios."
+            "description": "Frase breve que describe lo sucedido. Lenguaje llano, {label_anti}."
           },
           "segment_refs": {
             "type": "array",
@@ -77,7 +77,7 @@
         },
         "tentative_concern": {
           "type": "string",
-          "description": "¿Qué está intentando resolver continuamente este participante? Una frase en gerundio."
+          "description": "¿Qué está intentando resolver continuamente este participante? Una frase en {label_name}."
         },
         "anomalies": {
           "type": "array",

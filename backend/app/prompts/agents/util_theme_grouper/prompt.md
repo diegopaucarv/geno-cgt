@@ -27,4 +27,4 @@ You are a qualitative indicator classifier. You receive a list of behavioral ind
 [INDICATORS]
 {indicators}
 
-Group these indicators into themes. For each theme, indicate which indicators compose it and suggest a possible gerund.
+Group these indicators into themes. For each theme, indicate which indicators compose it and suggest a possible {label_name}.

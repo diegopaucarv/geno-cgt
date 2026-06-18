@@ -13,7 +13,7 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Final label for the unified category (gerund preferred)."
+            "description": "Final label for the unified category ({label_name} preferred)."
           },
           "definition": {
             "type": "string",

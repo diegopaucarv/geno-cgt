@@ -30,7 +30,7 @@ MERGERS:
 [EVALUATION CRITERIA]
 1. INTERCHANGEABILITY: For mergers — are the incidents from source codes interchangeable? Cite examples.
 2. RELEVANCE TO CORE: For discards — does the discarded code really not {processing_verb}, condition, nor be a consequence of the core {object_of_study} **{core_concern}**? Test each discard against `{core_category}`: if it relates to the core category's conditions, strategies, or consequences, it should be kept.
-3. REFORMULATION PRECISION: Does the new gerund capture the unified essence without losing important variations?
+3. REFORMULATION PRECISION: Does the new {label_name} capture the unified essence without losing important variations?
 4. FALSE POSITIVES: Are there discarded codes that should be recovered?
 5. FALSE NEGATIVES: Are there surviving codes that should be discarded?
 6. ENTITY_TYPE CONSISTENCY: Consult `{existing_categories}` — the codes that already have entity_type assignments. A discard that contradicts an established entity_type is suspicious (e.g., discarding a code typed as "strategy" when strategies are central to the core pattern).
@@ -59,16 +59,18 @@ When evaluating relevance to the core, frame it in terms of the pattern type:
 [CONFIRMED CORE CATEGORY]
 {core_category}
 
-[EXISTING ENTITY_TYPES — for consistency check]
+[EXISTING CATEGORIES — for consistency check]
 {existing_categories}
 
-[PROPOSED REDUCED CODES]
-{reduced_codes}
+[PROPOSER OUTPUT]
 
-[PROPOSED DISCARDED CODES]
-{discarded_codes}
+{reduced_context}
 
-[ALL ORIGINAL CODES WITH INCIDENTS — for verification]
+{discarded_context}
+
+{fusions_context}
+
+[FULL OPEN CODE LIST — for detecting false negatives]
 {all_open_codes}
 
 [PATTERN TYPE]

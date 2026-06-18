@@ -181,6 +181,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
                     "operational_question": operational_question
                     or "(not yet generated)",
                     "coding_style_instruction": coding_style_instruction,
+                    "previous_labels": previous_labels_json,
                 }
 
                 # G15: Pass own previous output so labeler can do targeted refinement

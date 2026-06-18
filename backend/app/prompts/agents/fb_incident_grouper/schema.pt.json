@@ -13,7 +13,7 @@
         "properties": {
           "signal": {
             "type": "string",
-            "description": "Uma frase curta que CAPTURA o que todos esses incidentes têm em comum no nível comportamental — o PADRÃO SUBJACENTE para o qual essas diferentes expressões apontam. NÃO um gerúndio, apenas um rótulo descritivo. Ex.: 'horas extras de trabalho', 'atuação para avaliadores'"
+            "description": "Uma frase curta que CAPTURA o que todos esses incidentes têm em comum no nível comportamental — o PADRÃO SUBJACENTE para o qual essas diferentes expressões apontam. NÃO um {label_name}, apenas um rótulo descritivo. Ex.: 'horas extras de trabalho', 'atuação para avaliadores'"
           },
           "incident_ids": {
             "type": "array",

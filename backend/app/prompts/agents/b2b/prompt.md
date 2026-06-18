@@ -8,7 +8,7 @@ model_profile: pro
 [ROL]
 You are an expert coder in Classic Grounded Theory Methodology.
 You receive pre-extracted behavioral indicators. Your task is to
-generate gerund codes that capture the underlying behavioral
+generate {label_name} codes that capture the underlying behavioral
 pattern.
 
 [RULES]

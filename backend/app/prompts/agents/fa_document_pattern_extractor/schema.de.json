@@ -5,15 +5,20 @@
   "properties": {
     "patterns": {
       "type": "array",
-      "description": "Gerundium-Codes, die wiederkehrende Verhaltensprozesse benennen. Jedes Muster wird durch mehrere Segmente belegt.",
+      "description": "{label_name}-Codes, die wiederkehrende Verhaltensprozesse benennen. Jedes Muster wird durch mehrere Segmente belegt.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "required": [
+          "pattern_name",
+          "definition",
+          "segment_refs",
+          "confidence"
+        ],
         "properties": {
           "pattern_name": {
             "type": "string",
-            "description": "Gerundium-Name mit 2-6 Wörtern. Erfasst den wiederkehrenden Verhaltensprozess."
+            "description": "{label_desc}"
           },
           "definition": {
             "type": "string",
@@ -21,7 +26,7 @@
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-basierte Indizes der Segmente, die dieses Muster belegen."
           },
           "confidence": {
@@ -42,16 +47,16 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Einzeiler, der beschreibt, was geschah. Einfache Sprache, keine Gerundien."
+            "description": "Einzeiler, der beschreibt, was geschah. {label_anti}."
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-basierte Indizes der Segmente, aus denen dieser Vorfall stammt."
           },
           "patterns": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "0-basierte Indizes der Muster, die dieser Vorfall unterstützt. Optional."
           },
           "exact_quote": {
@@ -77,11 +82,11 @@
         },
         "tentative_concern": {
           "type": "string",
-          "description": "Was versucht dieser Teilnehmer kontinuierlich zu lösen? Eine Gerundium-Phrase."
+          "description": "Was versucht dieser Teilnehmer kontinuierlich zu lösen? Eine {label_name}-Phrase."
         },
         "anomalies": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": { "type": "string" },
           "description": "Segmente oder Muster, die nicht passen oder überprüft werden müssen. Optional."
         },
         "needs_verification": {

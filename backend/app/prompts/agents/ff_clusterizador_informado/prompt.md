@@ -9,7 +9,7 @@ notes:
   - The output is provisional: the researcher will elaborate, split, or merge these nodes during the Theoretical Playground.
 constraints:
   - Do not use semantic similarity to group. Use documented hypothesis relationships.
-  - Each theoretical node must have a gerund label that captures its emergent theoretical construct.
+  - Each theoretical node must have a {label_name} label that captures its emergent theoretical construct.
   - If a category has no documented relationships, place it in isolated_categories — do not force it into a node.
   - The output is provisional. Nodes may be split, merged, or renamed during the Theoretical Playground.
 ---
@@ -35,7 +35,7 @@ that these relationships collectively reveal.
 A theoretical node is a construct at a higher level of abstraction than individual
 categories. It captures a pattern that spans multiple categories — a pattern that is
 THEORETICALLY significant, not just semantically similar. The node label MUST be a
-gerund (e.g., "Navigating Uncertainty", "Maintaining Professional Identity") that
+{label_name} (e.g., "Navigating Uncertainty", "Maintaining Professional Identity") that
 expresses the underlying process or pattern.
 
 [OBJECTIVE]
@@ -60,7 +60,7 @@ Step 1 — Analyze the hypothesis graph:
 Step 2 — Construct theoretical nodes:
   - A theoretical node forms when 2+ categories are connected by documented hypotheses
     AND collectively reveal a higher-order pattern.
-  - Each node gets a gerund label (2-6 words) that captures the emergent construct.
+  - Each node gets a {label_name} label (2-6 words) that captures the emergent construct.
   - Each node is assigned a theoretical family (Strategy, Causal, Process, Condition, etc.).
   - Write an emergence_rationale: what hypotheses connect these categories? What
     pattern do they collectively reveal? Reference specific evidence.
@@ -96,7 +96,7 @@ point, not a final answer.
 
 [RESTRICTIONS]
 - Use only the provided hypotheses and categories. Do not fabricate relationships.
-- Node labels must be theoretical gerunds, not descriptive labels.
+- Node labels must be theoretical {label_name}s, not descriptive labels.
 - If hypotheses are sparse, produce fewer, more tentative nodes.
 - Do not force every category into a theoretical node.
 - The output is provisional — flag uncertainties explicitly.

@@ -14,7 +14,7 @@ Execute this flow in 3 strict phases. Do not skip or reorder phases.
 ═══ PHASE A — IDENTIFY THE CORE NODE ═══
 1. Locate the confirmed core category (`{core_category}`) in the saturated categories.
 2. Construct the core node:
-   - `label`: a gerund or conceptual noun that captures the core process of {processing_gerund} the `{object_of_study}`.
+   - `label`: a {label_name} or conceptual noun that captures the core process of {processing_gerund} the `{object_of_study}`.
    - `entity_type`: MUST be `core_category`.
    - `definition`: synthesize from the category's definition, all its properties, and all incidents. The definition must explain HOW this category {processing_verb} the `{object_of_study}`.
    - `is_core`: MUST be `true`.
@@ -37,7 +37,7 @@ A category that does not clearly fit any of these should be classified as `dimen
 ═══ PHASE C — COMPILE INTEGRATED DEFINITIONS ═══
 For EACH node (core + all classified), construct a formal definition that:
 1. Integrates the source category's accumulated definition, properties, and key incidents.
-2. Is stated at a HIGHER LEVEL OF ABSTRACTION than the source category — conceptual present tense, concepts as subjects, gerunds for processes.
+2. Is stated at a HIGHER LEVEL OF ABSTRACTION than the source category — conceptual present tense, concepts as subjects, {label_name}s for processes.
 3. Explicitly references the `{object_of_study}` when relevant (e.g., "X is the strategy by which participants {object_of_study}…").
 4. `properties_inherited`: list all properties from the source category with their name, gradient (polar extremes), and dimension description.
 5. `grounding_incidents`: 2–4 representative incidents with document name and short verbatim quote.

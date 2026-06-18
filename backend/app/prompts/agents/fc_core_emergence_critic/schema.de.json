@@ -5,33 +5,24 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "code_id",
-          "code_label",
-          "verdict",
-          "rationale"
-        ],
+        "required": ["candidate_label", "verdict", "rationale"],
         "properties": {
+          "candidate_label": {
+            "type": "string",
+            "description": "EXAKTE Kategoriebezeichnung wie im Proposer-Kontext (entspricht category_label des Proposers)."
+          },
           "code_id": {
             "type": "string",
-            "description": "UUID des bewerteten Codes"
-          },
-          "code_label": {
-            "type": "string",
-            "description": "Code-Label"
+            "description": "UUID der Kategorie (optional — ausfüllen wenn aus dem Kontext bekannt, sonst weglassen)."
           },
           "verdict": {
             "type": "string",
-            "enum": [
-              "valid",
-              "refine",
-              "split"
-            ],
+            "enum": ["valid", "refine", "split"],
             "description": "Austauschbarkeitsurteil"
           },
           "rationale": {
             "type": "string",
-            "description": "Rechtfertigung unter Nennung spezifischer Incidente aus verschiedenen Dokumenten"
+            "description": "Rechtfertigung unter Nennung spezifischer Incidente aus verschiedenen Dokumenten. Muss angeben, welche Incidente verglichen wurden."
           },
           "interchangeable_pairs": {
             "type": "array",
@@ -49,7 +40,7 @@
                 }
               }
             },
-            "description": "Paare von Incidenten, die klar austauschbar sind"
+            "description": "Paare von Incidenten aus VERSCHIEDENEN Dokumenten, die klar austauschbar sind"
           },
           "non_interchangeable_pairs": {
             "type": "array",
@@ -67,7 +58,7 @@
                 }
               }
             },
-            "description": "Paare, die unterschiedliche Muster offenbaren"
+            "description": "Paare aus verschiedenen Dokumenten, die unterschiedliche Muster offenbaren"
           },
           "suggested_action_if_not_valid": {
             "type": "string",
@@ -77,7 +68,5 @@
       }
     }
   },
-  "required": [
-    "verdicts"
-  ]
+  "required": ["verdicts"]
 }
