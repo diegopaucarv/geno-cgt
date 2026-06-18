@@ -9,7 +9,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "required": [
+          "pattern_name",
+          "definition",
+          "segment_refs",
+          "confidence"
+        ],
         "properties": {
           "pattern_name": {
             "type": "string",
@@ -21,7 +26,7 @@
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "Índices en base 1 de los segmentos que evidencian este patrón."
           },
           "confidence": {
@@ -46,12 +51,12 @@
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "Índices en base 1 de los segmentos de donde proviene este incidente."
           },
           "patterns": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "Índices en base 0 de los patrones que este incidente respalda. Opcional."
           },
           "exact_quote": {
@@ -64,16 +69,16 @@
     "document_signals": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prime_mover", "tentative_concern"],
+      "required": ["core_pattern", "tentative_concern"],
       "properties": {
-        "prime_mover": {
+        "core_pattern": {
           "type": "string",
-          "description": "¿Qué parece impulsar la conducta de este participante? 2-3 oraciones."
+          "description": "¿Qué patrón central de {object_of_study} impulsa la conducta de este participante? 2-3 oraciones."
         },
-        "prime_mover_confidence": {
+        "core_pattern_confidence": {
           "type": "string",
           "enum": ["HIGH", "MEDIUM", "LOW"],
-          "description": "Confianza en la evaluación del motor principal."
+          "description": "Confianza en la evaluación del patrón central de {object_of_study}."
         },
         "tentative_concern": {
           "type": "string",
@@ -81,7 +86,7 @@
         },
         "anomalies": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": { "type": "string" },
           "description": "Segmentos o patrones que no encajan o requieren verificación. Opcional."
         },
         "needs_verification": {

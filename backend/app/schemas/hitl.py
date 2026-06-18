@@ -37,7 +37,7 @@ class HitlPendingItem(BaseModel):
     id: UUID
     gate_name: str
     proposal_summary: str  # extracto de la propuesta para el frontend
-    critic_verdict: str  # "SAT" | "MOD" | "FORCED"
+    critic_verdict: str  # e.g., "2/4 strong", "NO_FEEDBACK" — derived from observations
     created_at: datetime
 
     model_config = {"from_attributes": True}

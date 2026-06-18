@@ -69,16 +69,16 @@
     "document_signals": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prime_mover", "tentative_concern"],
+      "required": ["core_pattern", "tentative_concern"],
       "properties": {
-        "prime_mover": {
+        "core_pattern": {
           "type": "string",
-          "description": "Was scheint das Verhalten dieses Teilnehmers anzutreiben? 2-3 Sätze."
+          "description": "Welches zentrale {object_of_study}-Muster treibt das Verhalten dieses Teilnehmers an? 2-3 Sätze."
         },
-        "prime_mover_confidence": {
+        "core_pattern_confidence": {
           "type": "string",
           "enum": ["HIGH", "MEDIUM", "LOW"],
-          "description": "Konfidenz in der Prime-Mover-Bewertung."
+          "description": "Konfidenz in der Bewertung des zentralen {object_of_study}-Musters."
         },
         "tentative_concern": {
           "type": "string",

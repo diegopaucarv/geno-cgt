@@ -6,7 +6,7 @@ notes:
   - PRO tier: needs reasoning across all segments of one document.
   - Patterns are {label_name}s ({label_format}). Incidents are evidence, NOT codes.
   - Incidents link to patterns and segments via segment_refs (integer array).
-  - Document signals include prime mover and tentative main concern.
+  - Document signals include the core {object_of_study} pattern and tentative main concern.
 constraints:
   - ISOLATED: only use segments from THIS document.
   - {label_name_upper} only for pattern names. No nouns, abstractions, or theoretical labels.
@@ -28,7 +28,7 @@ Extract THREE things from this document's segments:
 
 2. **INCIDENTS** — evidence one-liners describing specific things the participant did, said, felt, or experienced. Incidents are NOT codes — they are raw evidentiary units. Each incident links to the pattern(s) it supports and the segment(s) it comes from. NO {label_name}s in incident descriptions.
 
-3. **DOCUMENT SIGNALS** — document-level observations: the tentative prime mover (what seems to drive this participant's behavior?), tentative main concern (what are they continuously trying to resolve?), and any notable anomalies or patterns requiring verification.
+3. **DOCUMENT SIGNALS** — document-level observations: the tentative core {object_of_study} pattern (what {object_of_study} seems to drive this participant's behavior?), tentative main concern (what are they continuously trying to resolve?), and any notable anomalies or patterns requiring verification.
 
 [OBJECT OF STUDY]
 The researcher is investigating: **{object_of_study}**
@@ -42,7 +42,7 @@ The researcher is investigating: **{object_of_study}**
 3. For each pattern, identify which segments evidence it and write a definition.
 4. Extract incidents: specific things that happened within the segments. One-liners, descriptive, no {label_name}s.
 5. Link each incident to its pattern(s) via pattern indices and to its segment(s) via segment_refs (1-based integers).
-6. Assess document-level signals: prime mover, tentative concern, anomalies.
+6. Assess document-level signals: core {object_of_study} pattern, tentative concern, anomalies.
 
 [RESTRICTIONS]
 - ISOLATED: only use segments from THIS document.
@@ -136,16 +136,16 @@ Name: {document_name}
     "document_signals": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prime_mover", "tentative_concern"],
+      "required": ["core_pattern", "tentative_concern"],
       "properties": {
-        "prime_mover": {
+        "core_pattern": {
           "type": "string",
-          "description": "What seems to drive this participant's behavior? The underlying motivation or engine powering their actions. 2-3 sentences."
+          "description": "What {object_of_study} seems to drive this participant's behavior? The underlying core {object_of_study} pattern powering their actions. 2-3 sentences."
         },
-        "prime_mover_confidence": {
+        "core_pattern_confidence": {
           "type": "string",
           "enum": ["HIGH", "MEDIUM", "LOW"],
-          "description": "Confidence in the prime mover assessment."
+          "description": "Confidence in the core {object_of_study} pattern assessment."
         },
         "tentative_concern": {
           "type": "string",

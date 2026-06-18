@@ -65,7 +65,7 @@ PROJECT_STATES: dict[str, str] = {
 # Gate Names — constantes canonicas (F1.1)
 # ═══════════════════════════════════════════════════════
 GATE_PATTERN_OF_INTEREST = "pattern_of_interest"
-GATE_CORE_EMERGENCE = "core_emergence"
+GATE_CORE_CATEGORY = "core_category"
 GATE_SELECTIVE_REDUCTION = "selective_reduction"
 GATE_CORE_SATURATION = "core_saturation"
 GATE_DATABASE_A = "database_a"
@@ -370,7 +370,7 @@ def hitl_gate(
 
     Gates conocidos (ver constantes GATE_* arriba):
       - GATE_PATTERN_OF_INTEREST ("pattern_of_interest") → Patron de Interes / Core Pattern
-      - GATE_CORE_EMERGENCE → Core Category Emergence
+      - GATE_CORE_CATEGORY → Core Category
       - GATE_SELECTIVE_REDUCTION → Selective Reduction
       - GATE_CORE_SATURATION → Core Saturation
       - GATE_DATABASE_A / GATE_DATABASE_B → Database A/B

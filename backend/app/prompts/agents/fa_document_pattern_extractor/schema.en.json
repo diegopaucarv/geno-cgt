@@ -9,7 +9,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "required": [
+          "pattern_name",
+          "definition",
+          "segment_refs",
+          "confidence"
+        ],
         "properties": {
           "pattern_name": {
             "type": "string",
@@ -21,7 +26,7 @@
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-based indices of segments that evidence this pattern."
           },
           "confidence": {
@@ -46,12 +51,12 @@
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-based indices of segments this incident comes from."
           },
           "patterns": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "0-based indices of patterns that this incident supports. Optional."
           },
           "exact_quote": {
@@ -64,16 +69,16 @@
     "document_signals": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["prime_mover", "tentative_concern"],
+      "required": ["core_pattern", "tentative_concern"],
       "properties": {
-        "prime_mover": {
+        "core_pattern": {
           "type": "string",
-          "description": "What seems to drive this participant's behavior? 2-3 sentences."
+          "description": "What core {object_of_study} pattern drives this participant's behavior? 2-3 sentences."
         },
-        "prime_mover_confidence": {
+        "core_pattern_confidence": {
           "type": "string",
           "enum": ["HIGH", "MEDIUM", "LOW"],
-          "description": "Confidence in the prime mover assessment."
+          "description": "Confidence in the core {object_of_study} pattern assessment."
         },
         "tentative_concern": {
           "type": "string",
@@ -81,7 +86,7 @@
         },
         "anomalies": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": { "type": "string" },
           "description": "Segments or patterns that don't fit or require verification. Optional."
         },
         "needs_verification": {

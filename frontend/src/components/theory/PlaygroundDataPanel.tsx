@@ -21,7 +21,7 @@ interface PipelineDecisions {
 
 const GATE_ICONS: Record<string, string> = {
   pattern_of_interest: "🎯",
-  core_emergence: "⭐",
+  core_category: "⭐",
   selective_reduction: "✂️",
   core_saturation: "🔄",
   database_a: "🗄️",
@@ -31,7 +31,7 @@ const GATE_ICONS: Record<string, string> = {
 
 const GATE_LABELS: Record<string, string> = {
   pattern_of_interest: "theory.gateMainConcern",
-  core_emergence: "theory.gateCoreCategory",
+  core_category: "theory.gateCoreCategory",
   selective_reduction: "theory.gateSelectiveReduction",
   core_saturation: "theory.gateSaturation",
   database_a: "theory.gateDatabaseA",
@@ -59,12 +59,12 @@ export default function PlaygroundDataPanel({
     if (gate === "pattern_of_interest") {
       return `"${(p.core_concern as string) || "?"}" (${(p.confidence as string) || "?"})`;
     }
-    if (gate === "core_emergence") {
+    if (gate === "core_category") {
       const candidates = p.core_category_candidates as
         | Array<Record<string, unknown>>
         | undefined;
       if (candidates && candidates.length > 0) {
-        return candidates.map((c) => c.code_name as string).join(", ");
+        return candidates.map((c) => c.category_label as string).join(", ");
       }
       return "?";
     }

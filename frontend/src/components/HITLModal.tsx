@@ -12,7 +12,7 @@ interface HITLModalProps {
 
 const GATE_LABELS: Record<string, string> = {
   pattern_of_interest: "hitl.gatePatternOfInterest",
-  core_emergence: "hitl.gateCoreEmergence",
+  core_category: "hitl.gateCoreEmergence",
   selective_reduction: "hitl.gateSelectiveReduction",
   core_saturation: "hitl.gateCoreSaturation",
   database_a: "hitl.gateDatabaseA",
@@ -89,7 +89,7 @@ function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
     );
   }
 
-  if (gate === "core_emergence") {
+  if (gate === "core_category") {
     const candidates =
       (p.core_category_candidates as Array<Record<string, unknown>>) || [];
     return (
@@ -110,20 +110,27 @@ function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
                 {i + 1}:{" "}
               </span>
               <span style={{ ...valStyle, fontWeight: 600 }}>
-                {c.code_name as string}
+                {c.category_label as string}
               </span>
             </div>
-            <div style={{ marginTop: 2, fontSize: 11 }}>
-              <span style={{ color: "#8B949E" }}>
-                {t("hitl.centrality")}{" "}
-                {((c.centrality_score as number) || 0).toFixed(1)}
-                {" · "}
-                {t("hitl.explanatory")}{" "}
-                {((c.explanatory_power as number) || 0).toFixed(1)}
-              </span>
+            <div style={{ marginTop: 2, fontSize: 11, color: "#C9D1D9" }}>
+              <div>
+                <span style={{ color: "#8B949E" }}>{t("hitl.centrality")}</span>
+                <span style={valStyle}>
+                  {(c.is_central as boolean) ? "✓" : "✗"}
+                </span>
+                {t("hitl.explanatory")}
+                <span style={valStyle}>
+                  {(c.has_explanatory_power as boolean) ? "✓" : "✗"}
+                </span>
+                {" · Theoretical Grab: "}
+                <span style={valStyle}>
+                  {(c.has_theoretical_grab as boolean) ? "✓" : "✗"}
+                </span>
+              </div>
             </div>
             <div style={{ marginTop: 2, color: "#8B949E", fontSize: 11 }}>
-              {c.theoretical_grab as string}
+              {c.centrality_rationale as string}
             </div>
           </div>
         ))}

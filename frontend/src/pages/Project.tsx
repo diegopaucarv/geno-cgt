@@ -300,7 +300,7 @@ export default function ProjectDetail() {
     // Mark running if HITL pending for a gate
     if (hitlPending.length > 0) {
       const gate = hitlPending[0].gate_name;
-      if (gate === "pattern_of_interest" || gate === "core_emergence")
+      if (gate === "pattern_of_interest" || gate === "core_category")
         s.find_cc = "running";
       if (gate === "selective_reduction") s.reduce = "running";
       if (gate === "core_saturation") s.saturate = "running";
@@ -1132,7 +1132,7 @@ export default function ProjectDetail() {
               <strong>
                 {hitlPending[0].gate_name === "pattern_of_interest"
                   ? t("project.mainConcern")
-                  : hitlPending[0].gate_name === "core_emergence"
+                  : hitlPending[0].gate_name === "core_category"
                     ? t("project.coreCategory")
                     : hitlPending[0].gate_name === "selective_reduction"
                       ? t("project.selectiveReduction")

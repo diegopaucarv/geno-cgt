@@ -1,7 +1,12 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "required": [
+    "concerns",
+    "analysis_units",
+    "coding_style_recommendation",
+    "rationale"
+  ],
   "properties": {
     "concerns": {
       "type": "array",
@@ -9,7 +14,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["label", "description", "grounding_categories", "confidence"],
+        "required": [
+          "label",
+          "description",
+          "grounding_categories",
+          "confidence"
+        ],
         "properties": {
           "label": {
             "type": "string",
@@ -32,9 +42,9 @@
         }
       }
     },
-    "population_variants": {
+    "analysis_units": {
       "type": "array",
-      "description": "Mögliche Populationsneukonfigurationen basierend auf aufkommenden konzeptuellen Mustern.",
+      "description": "Alternative Analyseeinheiten (Rollen, Gruppen, institutionelle Positionen), die durch aufkommende Muster in den Daten nahegelegt werden.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -42,15 +52,15 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Beschreibende Bezeichnung für dieses Populationssegment."
+            "description": "Beschreibende Bezeichnung für diese Analyseeinheit (z.B. 'Teamleiter', 'Neueinstellungen', 'Funktionsübergreifende Gruppe')."
           },
           "description": {
             "type": "string",
-            "description": "Was diese Gruppe konzeptuell unterscheidet."
+            "description": "Was diese Einheit konzeptuell unterscheidet — welche Rolle, Position oder Gruppierung zählt."
           },
           "rationale": {
             "type": "string",
-            "description": "Warum diese Segmentierung für die entstehende Theorie wichtig ist."
+            "description": "Warum diese Analyseeinheit für die entstehende Theorie wichtig ist, in den Daten begründet."
           }
         }
       }
@@ -58,7 +68,12 @@
     "coding_style_recommendation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "required": [
+        "current_style",
+        "recommendation",
+        "rationale",
+        "missed_patterns"
+      ],
       "properties": {
         "current_style": {
           "type": "string",

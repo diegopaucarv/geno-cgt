@@ -234,7 +234,9 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
         session.commit()
 
         # ── 8. Persist document-level signals ────────────────────
-        prime_mover = doc_signals.get("prime_mover", "")
+        prime_mover = doc_signals.get("core_pattern") or doc_signals.get(
+            "prime_mover", ""
+        )
         main_concern = doc_signals.get("main_concern_signal", "")
         confidence = doc_signals.get("confidence", "MEDIUM")
 
@@ -278,7 +280,7 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
 
         logger.info(
             "Pattern extraction complete: doc=%s, %d patterns, %d incidents, "
-            "prime_mover='%s'",
+            "core_pattern='%s'",
             documento_id[:8],
             len(patterns),
             persisted_incidents,

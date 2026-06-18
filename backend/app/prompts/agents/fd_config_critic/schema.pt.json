@@ -1,7 +1,12 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "required": [
+    "concerns",
+    "analysis_units",
+    "coding_style_recommendation",
+    "rationale"
+  ],
   "properties": {
     "concerns": {
       "type": "array",
@@ -9,7 +14,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["label", "description", "grounding_categories", "confidence"],
+        "required": [
+          "label",
+          "description",
+          "grounding_categories",
+          "confidence"
+        ],
         "properties": {
           "label": {
             "type": "string",
@@ -32,9 +42,9 @@
         }
       }
     },
-    "population_variants": {
+    "analysis_units": {
       "type": "array",
-      "description": "Possíveis reconfigurações populacionais baseadas em padrões conceituais emergentes.",
+      "description": "Unidades de análise alternativas (papéis, grupos, posições institucionais) sugeridas pelos padrões emergentes nos dados.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -42,15 +52,15 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Rótulo descritivo para este segmento populacional."
+            "description": "Rótulo descritivo para esta unidade de análise (ex. 'Líderes de equipe', 'Novos contratados', 'Grupo multifuncional')."
           },
           "description": {
             "type": "string",
-            "description": "O que distingue este grupo conceitualmente."
+            "description": "O que distingue esta unidade conceitualmente — qual papel, posição ou agrupamento importa."
           },
           "rationale": {
             "type": "string",
-            "description": "Por que esta segmentação é importante para a teoria emergente."
+            "description": "Por que esta unidade de análise é importante para a teoria emergente, fundamentada nos dados."
           }
         }
       }
@@ -58,7 +68,12 @@
     "coding_style_recommendation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "required": [
+        "current_style",
+        "recommendation",
+        "rationale",
+        "missed_patterns"
+      ],
       "properties": {
         "current_style": {
           "type": "string",

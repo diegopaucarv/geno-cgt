@@ -39,8 +39,11 @@ class DatabaseEdge(Base, TimestampMixin):
     source_node_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("database_nodes.id"))
     target_node_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("database_nodes.id"))
 
-    relationship_type: Mapped[str] = mapped_column(String(50))
-    # CAUSES | ENABLES | CONSTRAINS | MODULATES | IS_A | PART_OF | CO_OCCURS_WITH | RESOLVES
+    relationship_type: Mapped[str] = mapped_column(Text)
+    # Free-text theoretical description (previously enum-based, now description-driven)
+
+    description: Mapped[str] = mapped_column(Text, default="")
+    # The complete free-text relationship description from the proposer
 
     evidence: Mapped[str] = mapped_column(Text)
     direction: Mapped[str] = mapped_column(String(20), default="unidirectional")

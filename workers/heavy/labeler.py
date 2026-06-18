@@ -182,17 +182,8 @@ def b2_label_groups(proyecto_id: str) -> dict:
                     or "(not yet generated)",
                     "coding_style_instruction": coding_style_instruction,
                     "previous_labels": previous_labels_json,
+                    "accumulated_feedback": "\n\n---\n".join(accumulated_feedback) if accumulated_feedback else "",
                 }
-
-                # G15: Pass own previous output so labeler can do targeted refinement
-                if previous_labels_json:
-                    gen_vars["previous_labels"] = previous_labels_json
-
-                # G16: Accumulate ALL feedback across iterations, not just last
-                if accumulated_feedback:
-                    gen_vars["accumulated_feedback"] = "\n\n---\n".join(
-                        accumulated_feedback
-                    )
 
                 gen_response = llm.run_agent(
                     agent_id="fb_pattern_labeler",

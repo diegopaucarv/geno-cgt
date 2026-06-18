@@ -1,20 +1,13 @@
 {
   "type": "object",
-  "required": [
-    "hypotheses"
-  ],
+  "required": ["hypotheses"],
   "properties": {
     "hypotheses": {
       "type": "array",
       "description": "Proposed hypotheses.",
       "items": {
         "type": "object",
-        "required": [
-          "text",
-          "level",
-          "evidence",
-          "type"
-        ],
+        "required": ["text", "level", "evidence", "type"],
         "properties": {
           "text": {
             "type": "string",
@@ -22,11 +15,7 @@
           },
           "level": {
             "type": "string",
-            "enum": [
-              "general",
-              "specific",
-              "emergent"
-            ],
+            "enum": ["general", "specific", "emergent"],
             "description": "general | specific | emergent"
           },
           "type": {
@@ -50,6 +39,13 @@
               "type": "string"
             },
             "description": "Related codes."
+          },
+          "linked_categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "EXACT category names from the IDENTIFIED CODES list that this hypothesis connects"
           }
         }
       }

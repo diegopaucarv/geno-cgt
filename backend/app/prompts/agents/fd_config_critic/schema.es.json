@@ -1,7 +1,12 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "required": [
+    "concerns",
+    "analysis_units",
+    "coding_style_recommendation",
+    "rationale"
+  ],
   "properties": {
     "concerns": {
       "type": "array",
@@ -9,7 +14,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["label", "description", "grounding_categories", "confidence"],
+        "required": [
+          "label",
+          "description",
+          "grounding_categories",
+          "confidence"
+        ],
         "properties": {
           "label": {
             "type": "string",
@@ -32,9 +42,9 @@
         }
       }
     },
-    "population_variants": {
+    "analysis_units": {
       "type": "array",
-      "description": "Posibles reconfiguraciones de la población basadas en patrones conceptuales emergentes.",
+      "description": "Unidades de análisis alternativas (roles, grupos, posiciones institucionales) sugeridas por los patrones emergentes en los datos.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -42,15 +52,15 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Etiqueta descriptiva para este segmento poblacional."
+            "description": "Etiqueta descriptiva para esta unidad de análisis (ej. 'Líderes de equipo', 'Nuevos ingresos', 'Grupo interfuncional')."
           },
           "description": {
             "type": "string",
-            "description": "Qué distingue a este grupo conceptualmente."
+            "description": "Qué distingue a esta unidad conceptualmente — qué rol, posición o agrupación importa."
           },
           "rationale": {
             "type": "string",
-            "description": "Por qué esta segmentación es importante para la teoría emergente."
+            "description": "Por qué esta unidad de análisis es importante para la teoría emergente, basada en los datos."
           }
         }
       }
@@ -58,7 +68,12 @@
     "coding_style_recommendation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "required": [
+        "current_style",
+        "recommendation",
+        "rationale",
+        "missed_patterns"
+      ],
       "properties": {
         "current_style": {
           "type": "string",

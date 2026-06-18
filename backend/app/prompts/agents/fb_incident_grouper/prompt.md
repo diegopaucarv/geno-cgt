@@ -48,5 +48,5 @@ You are looking at incidents extracted from interviews with {object_of_study}. G
 Operational question: {operational_question}
 Object of study: {object_of_study}
 
-All incidents:
+All incidents (grouped by source document, with IDs):
 {incidents_json}

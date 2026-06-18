@@ -3,7 +3,7 @@
   "additionalProperties": false,
   "required": [
     "concerns",
-    "population_variants",
+    "analysis_units",
     "coding_style_recommendation",
     "rationale"
   ],
@@ -42,9 +42,9 @@
         }
       }
     },
-    "population_variants": {
+    "analysis_units": {
       "type": "array",
-      "description": "Possible population reconfigurations based on emerging conceptual patterns.",
+      "description": "Alternative units of analysis (roles, groups, institutional positions) suggested by emerging patterns in the data.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -52,15 +52,15 @@
         "properties": {
           "label": {
             "type": "string",
-            "description": "Descriptive label for this population segment."
+            "description": "Descriptive label for this unit of analysis (e.g. 'Team leads', 'New hires', 'Cross-functional group')."
           },
           "description": {
             "type": "string",
-            "description": "What distinguishes this group conceptually."
+            "description": "What distinguishes this unit conceptually — what role, position, or grouping matters."
           },
           "rationale": {
             "type": "string",
-            "description": "Why this segmentation matters for the emerging theory."
+            "description": "Why this unit of analysis matters for the emerging theory, grounded in the data."
           }
         }
       }

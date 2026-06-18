@@ -78,13 +78,31 @@ async def get_pending_decisions(
     for row in rows:
         proposal = row[2] if isinstance(row[2], dict) else {}
         critic = row[3] if isinstance(row[3], dict) else {}
+        # Extract summary from first candidate's statement or overall rationale
+        candidates = proposal.get("candidates", [])
+        if candidates and isinstance(candidates, list):
+            proposal_summary = (
+                candidates[0].get("statement", "")
+                if isinstance(candidates[0], dict)
+                else str(candidates[0])
+            )
+        else:
+            proposal_summary = proposal.get("rationale", "")[:200]
+        # Derive verdict from observations: count strong/weak observations
+        observations = critic.get("observations", [])
+        if not observations:
+            critic_verdict = "NO_FEEDBACK"
+        else:
+            strong = sum(1 for o in observations if o.get("is_strong"))
+            critic_verdict = f"{strong}/{len(observations)} strong"
         results.append(
             HitlPendingItem(
                 id=row[0],
                 gate_name=row[1],
-                proposal_summary=proposal.get("core_concern", "")
-                or proposal.get("rationale", "")[:200],
-                critic_verdict=critic.get("verdict", "SAT"),
+                proposal_summary=proposal_summary[:200]
+                if proposal_summary
+                else "(no candidates)",
+                critic_verdict=critic_verdict,
                 created_at=row[4],
             )
         )

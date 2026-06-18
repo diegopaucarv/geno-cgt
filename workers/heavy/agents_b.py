@@ -643,6 +643,23 @@ def b3_generate_hypotheses(
                 temperature=0.4,
             )
             raw_hypotheses = response.get("hypotheses", [])
+
+        # ── Resolve category links from each hypothesis ──
+        for hyp in raw_hypotheses:
+            linked = hyp.get("linked_categories", [])
+            if linked:
+                cat_ids = []
+                for name in linked:
+                    cat_row = session.execute(
+                        text(
+                            "SELECT id FROM categorias WHERE proyecto_id = :pid AND nombre = :name"
+                        ),
+                        {"pid": proyecto_id, "name": name},
+                    ).fetchone()
+                    if cat_row:
+                        cat_ids.append(str(cat_row[0]))
+                hyp["_linked_category_ids"] = cat_ids
+
         filtered = deduplicate_hypotheses(raw_hypotheses, session, proyecto_id)
         created = 0
         reinforced = 0
@@ -653,14 +670,17 @@ def b3_generate_hypotheses(
             if hyp.get("dedup_status") == "reinforced":
                 reinforced += 1
                 continue
+            linked_ids = hyp.get("_linked_category_ids", [])
             session.execute(
                 text(
-                    "INSERT INTO hypotheses (id, project_id, text, level, confidence, status) VALUES (gen_random_uuid(), :pid, :txt, :lvl, 0.5, 'candidate')"
+                    "INSERT INTO hypotheses (id, project_id, text, level, confidence, status, concern_labels) "
+                    "VALUES (gen_random_uuid(), :pid, :txt, :lvl, 0.5, 'candidate', CAST(:labels AS jsonb))"
                 ),
                 {
                     "pid": proyecto_id,
                     "txt": hyp_text,
                     "lvl": hyp.get("level", "emergent"),
+                    "labels": json.dumps(linked_ids) if linked_ids else None,
                 },
             )
             created += 1
@@ -729,8 +749,8 @@ def update_hypotheses_incremental(proyecto_id: str) -> dict:
         # ── 3. Read which documents each category appears in ──
         doc_links = session.execute(
             text(
-                "SELECT dc.categoria_id, d.nombre_archivo, d.indice "
-                "FROM doc_codes dc "
+                "SELECT dc.categoria_id, d.original_filename "
+                "FROM doc_codes dc"
                 "JOIN documentos d ON dc.documento_id = d.id "
                 "WHERE d.proyecto_id = :pid"
             ),
@@ -741,7 +761,7 @@ def update_hypotheses_incremental(proyecto_id: str) -> dict:
         cat_docs: dict[str, list[str]] = {}
         for dl in doc_links:
             cid = str(dl[0])
-            doc_name = dl[1] or f"Doc {dl[2]}"
+            doc_name = dl[1] or "(unknown)"
             if cid not in cat_docs:
                 cat_docs[cid] = []
             cat_docs[cid].append(doc_name)

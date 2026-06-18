@@ -42,22 +42,42 @@ def _get_object_of_study(session, proyecto_id: str) -> str:
 
 
 def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
-    """Send ALL incidents to the AI. AI proposes groups based on patterns.
+    """Group incidents by behavioral patterns. One PRO call per batch of documents.
 
-    One PRO call. No pre-filter. No pairwise comparison.
-
-    Returns:
-        dict with groups_created, incidents_grouped.
+    Groups incidents WITH document provenance so the AI can identify
+    cross-document variations. Each incident includes its source document.
+    Previous categories (with variation summaries) are included as context.
     """
     session = SessionLocal()
     try:
-        # ── Load all incidents with their segment_refs ──
+        # ── Load previous categories with variation summaries ──
+        prev_cats = session.execute(
+            text(
+                "SELECT c.nombre, c.definicion, "
+                "COALESCE(jsonb_array_length(ig.incident_ids_json), 0) as inc_count "
+                "FROM categorias c "
+                "LEFT JOIN incident_groups ig ON ig.label = c.nombre "
+                "AND ig.proyecto_id = c.proyecto_id "
+                "WHERE c.proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        previous_categories_text = ""
+        if prev_cats:
+            previous_categories_text = (
+                "PREVIOUS CATEGORIES (from earlier batches):\n"
+                + "\n".join(f"- {c[0]}: {c[1]} ({c[2]} incidents)" for c in prev_cats)
+            )
+
+        # ── Load incidents grouped by document ──
         rows = session.execute(
             text(
-                "SELECT ei.id, ei.jot_text, ei.preguntas_glaser_json "
+                "SELECT ei.id, ei.jot_text, ei.preguntas_glaser_json, "
+                "d.original_filename "
                 "FROM extracted_incidents ei "
+                "JOIN documentos d ON ei.documento_id = d.id "
                 "WHERE ei.proyecto_id = :pid "
-                "ORDER BY ei.creado_en"
+                "ORDER BY d.original_filename, ei.creado_en"
             ),
             {"pid": proyecto_id},
         ).fetchall()
@@ -66,30 +86,52 @@ def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
             logger.info("B1: <2 incidents — nothing to group")
             return {"groups_created": 0, "incidents_grouped": 0}
 
-        # ── Build incidents JSON for the AI ──
-        # Use short stable IDs (inc_1, inc_2...) — LLMs can't copy UUIDs accurately
-        inc_map = {}  # short_id → full UUID
-        incidents_list = []
-        for i, r in enumerate(rows):
+        # ── Build incidents grouped by document ──
+        inc_map = {}
+        doc_blocks = []
+        global_idx = 0
+        current_doc = None
+        current_block = []
+        for r in rows:
             inc_id = str(r[0])
-            short_id = f"inc_{i + 1}"
-            inc_map[short_id] = inc_id
             desc = r[1] or ""
             meta = r[2] if isinstance(r[2], dict) else {}
-            incidents_list.append(
+            doc_name = r[3] or "unknown"
+            global_idx += 1
+            short_id = f"inc_{global_idx}"
+            inc_map[short_id] = inc_id
+            if doc_name != current_doc:
+                if current_block:
+                    doc_blocks.append((current_doc, current_block))
+                current_doc = doc_name
+                current_block = []
+            current_block.append(
                 {
                     "id": short_id,
                     "description": desc,
-                    "segment_refs": meta.get("segment_refs", []),
-                    "patterns": meta.get("patterns", []),
                 }
             )
+        if current_block:
+            doc_blocks.append((current_doc, current_block))
 
-        incidents_json = json.dumps(incidents_list, ensure_ascii=False)
+        # ── Build the prompt text ──
+        incidents_text = (
+            previous_categories_text + "\n" if previous_categories_text else ""
+        )
+        for doc_name, incidents in doc_blocks:
+            incidents_text += (
+                f"\n=== Document: {doc_name} ({len(incidents)} incidents) ===\n"
+            )
+            for inc in incidents:
+                incidents_text += f"[{inc['id']}] {inc['description']}\n"
+
+        total_incidents = global_idx
+        total_chars = len(incidents_text)
         logger.info(
-            "B1: %d incidents → sending to AI grouper (%d chars)",
-            len(rows),
-            len(incidents_json),
+            "B1: %d incidents across %d docs → %d chars",
+            total_incidents,
+            len(doc_blocks),
+            total_chars,
         )
 
         # ── Get project config ──
@@ -100,7 +142,7 @@ def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
         response = llm.run_agent(
             "fb_incident_grouper",
             variables={
-                "incidents_json": incidents_json,
+                "incidents_json": incidents_text,
                 "operational_question": operational_question or "(not yet generated)",
                 "object_of_study": object_of_study,
             },

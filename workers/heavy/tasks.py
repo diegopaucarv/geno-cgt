@@ -2042,7 +2042,7 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
         all_codes = "\n".join(f"- {c[0]}: {c[1]}" for c in codes)
         all_memos = "\n---\n".join(m[0] for m in memos) if memos else "(sin memos)"
 
-        # C06: Cargar prime_movers por documento
+        # C06: Cargar core_patterns por documento
         prime_rows = s.execute(
             text(
                 "SELECT dp.prime_mover, dp.prime_mover_confidence, "
@@ -2053,10 +2053,10 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
             ),
             {"pid": proyecto_id},
         ).fetchall()
-        prime_movers_text = (
+        core_patterns_text = (
             "\n".join(f"- {r[2]}: {r[0]} (confidence: {r[1]})" for r in prime_rows)
             if prime_rows
-            else "(sin prime movers extraídos)"
+            else "(sin core patterns extraídos)"
         )
 
         response = llm.run_agent(
@@ -2064,7 +2064,7 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
             variables={
                 "all_codes": all_codes,
                 "all_memos": all_memos,
-                "prime_movers_per_document": prime_movers_text,
+                "prime_movers_per_document": core_patterns_text,
                 "researcher_feedback": "",
                 "object_of_study": object_of_study,
                 "research_question": research_question or "",
@@ -2101,7 +2101,7 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
                    COUNT(h.id) as hypothesis_connections
             FROM categorias c
             LEFT JOIN hypotheses h ON h.project_id = c.proyecto_id
-                 AND h.text ILIKE
+                 AND (h.concern_labels @> to_jsonb(ARRAY[c.id::text])
                       OR h.text ILIKE '%' || c.nombre || '%')
             WHERE c.proyecto_id = :pid
             GROUP BY c.id, c.nombre, c.definicion
@@ -2163,11 +2163,11 @@ def task_a15_core_emergence(proyecto_id: str) -> dict:
 
         # Hypotheses summary
         hyps = s.execute(
-            text("SELECT id, text, tipo FROM hypotheses WHERE project_id = :pid"),
+            text("SELECT id, text, level FROM hypotheses WHERE project_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
         hypotheses_summary = (
-            "\n".join(f"[H{i + 1}] {h[1]} (type: {h[2]})" for i, h in enumerate(hyps))
+            "\n".join(f"[H{i + 1}] {h[1]} (level: {h[2]})" for i, h in enumerate(hyps))
             if hyps
             else "(no hypotheses yet)"
         )
@@ -2682,8 +2682,9 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
                 return {"status": "paused", "phase": "A", "gate": "pattern_of_interest"}
 
             result_cc = task_core_emergence_pipeline(proyecto_id)
-            if result_cc.get("status") != "completed":
+            if result_cc.get("status") == "paused":
                 return {"status": "paused", "phase": "A", "gate": "core_category"}
+            # insufficient / completed → continue
 
             transition_project(s, proyecto_id, "finding_cc", "reducing")
             current_state = "reducing"
@@ -2986,7 +2987,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                    COUNT(h.id) as hypothesis_connections
             FROM categorias c
             LEFT JOIN hypotheses h ON h.project_id = c.proyecto_id
-                 AND h.text ILIKE
+                 AND (h.concern_labels @> to_jsonb(ARRAY[c.id::text])
                       OR h.text ILIKE '%' || c.nombre || '%')
             WHERE c.proyecto_id = :pid
             GROUP BY c.id, c.nombre, c.definicion
@@ -3026,6 +3027,11 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
         )
         operational_question = rq_data.get("operational_question", "")
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
 
         mc_row = s.execute(
             text(
@@ -3048,11 +3054,11 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
         )
 
         hyps = s.execute(
-            text("SELECT id, text, tipo FROM hypotheses WHERE project_id = :pid"),
+            text("SELECT id, text, level FROM hypotheses WHERE project_id = :pid"),
             {"pid": proyecto_id},
         ).fetchall()
         hypotheses_summary = (
-            "\n".join(f"[H{i + 1}] {h[1]} (type: {h[2]})" for i, h in enumerate(hyps))
+            "\n".join(f"[H{i + 1}] {h[1]} (level: {h[2]})" for i, h in enumerate(hyps))
             if hyps
             else "(no hypotheses yet)"
         )
@@ -3242,18 +3248,17 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
         ).fetchone()
         core_category = cc_row[0] if cc_row and cc_row[0] else "(not yet confirmed)"
 
-        # Fetch existing categories with entity_type
+        # Fetch existing categories
         existing_cats = s.execute(
             text(
-                "SELECT id, nombre, entity_type, definicion "
-                "FROM categorias WHERE proyecto_id = :pid "
+                "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id = :pid"
             ),
             {"pid": proyecto_id},
         ).fetchall()
         existing_categories = (
-            "\n".join(f"- [{cat[2]}] {cat[1]}: {cat[3]}" for cat in existing_cats)
+            "\n".join(f"- {cat[1]}: {cat[2]}" for cat in existing_cats)
             if existing_cats
-            else "(no existing categories with entity_type yet)"
+            else "(no existing categories yet)"
         )
 
         proposal = llm.run_agent(
@@ -3462,7 +3467,7 @@ def _compute_saturation_panel(session, code_id: str, proyecto_id: str) -> dict:
         text(
             "SELECT COUNT(*) FROM conceptual_relationships "
             "WHERE project_id = :pid "
-            "AND category_ids @> to_jsonb(ARRAY[:cid::text])"
+            "AND category_ids @> to_jsonb(ARRAY[:cid])"
         ),
         {"pid": proyecto_id, "cid": code_id},
     ).fetchone()
@@ -4112,7 +4117,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
         hyps = s.execute(
             text(
                 "SELECT text, level FROM hypotheses "
-                "WHERE proyecto_id = :pid AND status = 'accepted'"
+                "WHERE project_id = :pid AND status = 'accepted'"
             ),
             {"pid": proyecto_id},
         ).fetchall()
@@ -4278,7 +4283,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             if src_id and tgt_id:
                 evidence_obj = edge.get("evidence", {})
                 evidence_json = (
-                    json.dumps(evidence_obj)
+                    json.dumps(evidence_obj, ensure_ascii=False)
                     if isinstance(evidence_obj, dict)
                     else str(evidence_obj)
                 )
@@ -4286,16 +4291,15 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
                     text(
                         "INSERT INTO database_edges "
                         "(id, project_id, source_node_id, target_node_id, "
-                        "relationship_type, description, evidence) "
-                        "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :desc, :ev) "
+                        "relationship_type, evidence) "
+                        "VALUES (gen_random_uuid(), :pid, :src, :tgt, :rtype, :ev) "
                         "ON CONFLICT DO NOTHING"
                     ),
                     {
                         "pid": proyecto_id,
                         "src": src_id,
                         "tgt": tgt_id,
-                        "rtype": "custom",
-                        "desc": edge.get("description", ""),
+                        "rtype": edge.get("relationship_type", "CO_OCCURS_WITH"),
                         "ev": evidence_json,
                     },
                 )
@@ -4358,9 +4362,10 @@ def task_global_saturation_check(proyecto_id: str) -> dict:
         for cat in cats:
             no_expand = s.execute(
                 text(
-                    "SELECT COUNT(*) FROM paradigm_states "
-                    "WHERE code_id = :cid AND did_state_expand = false "
-                    "ORDER BY iteration DESC LIMIT 3"
+                    "SELECT COUNT(*) FROM ("
+                    "SELECT did_state_expand FROM paradigm_states "
+                    "WHERE code_id = :cid ORDER BY iteration DESC LIMIT 3"
+                    ") sub WHERE did_state_expand = false"
                 ),
                 {"cid": str(cat[0])},
             ).fetchone()[0]

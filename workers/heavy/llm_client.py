@@ -45,6 +45,16 @@ _TIER_TEMPERATURE: dict[ModelTier, float] = {
 
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
 
+# ── Coding style i18n tokens ─────────────────────────────────────
+try:
+    import sys as _csys
+
+    _csys.path.insert(0, "/app/backend")
+    _csys.path.insert(0, "/app/backend/app")
+    from app.core.coding_styles import get_style_tokens as _get_style_tokens
+except ImportError:
+    _get_style_tokens = None
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Parseo unificado de prompts (.md YAML + .txt legacy)
@@ -502,6 +512,16 @@ class LLMClient:
         }
         variables["language_code"] = lang
         variables["language_name"] = LANG_NAMES.get(lang, "English")
+        # ── Inject coding style i18n tokens ──────────────────────
+        if _get_style_tokens is not None:
+            style_key = variables.get("coding_style_key", "gerundio")
+            try:
+                tokens = _get_style_tokens(style_key, lang)
+                for k, v in tokens.items():
+                    if k not in variables:  # don't override caller-provided values
+                        variables[k] = v
+            except Exception:
+                pass  # graceful fallback — tokens simply won't be injected
         if self.is_mock:
             return dict(
                 MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
@@ -564,6 +584,17 @@ class LLMClient:
                 logger.debug("Agent %s: loaded i18n schema %s", agent_id, agents_schema)
         except Exception:
             pass  # fallback to inline schema
+        # ── Inject coding style tokens into schema descriptions ──
+        if _get_style_tokens is not None:
+            try:
+                style_key = variables.get("coding_style_key", "gerundio")
+                tokens = _get_style_tokens(style_key, lang)
+                schema_str = json.dumps(schema, ensure_ascii=False)
+                for k, v in tokens.items():
+                    schema_str = schema_str.replace("{" + k + "}", v)
+                schema = json.loads(schema_str)
+            except Exception:
+                pass  # graceful fallback
         model = _TIER_MODELS[model_tier]
         return self._call_llm(
             model_tier, model, system_prompt, schema, max_tokens, temperature

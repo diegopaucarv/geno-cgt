@@ -37,4 +37,10 @@ The researcher is investigating: {object_of_study}
 
 [TASK]
 Propose hypotheses that capture relationships between codes, progressions between
-processes, or cross-cutting patterns.
+processes, or cross-cutting patterns. For EACH hypothesis, specify which categories
+(from the IDENTIFIED CODES list above) it connects, using their EXACT names.
+
+For each hypothesis, you MUST also specify which categories from the [IDENTIFIED CODES] list
+the hypothesis connects. Use the EXACT category names from that list. If a hypothesis
+connects categories A and B (e.g., "Category A leads to Category B under condition X"),
+include both names in the `linked_categories` field.

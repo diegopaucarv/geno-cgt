@@ -398,6 +398,30 @@ def critique_configuration(
 
         session.commit()
 
+        # ── 7. HITL gate ──
+        from agents.transitions import hitl_gate
+        from database import SessionLocal as _SL
+
+        _s = _SL()
+        try:
+            proposal = {
+                "concerns": concerns,
+                "population_variants": population_variants,
+                "coding_style": coding_style_rec,
+                "rationale": rationale,
+            }
+            critic_verdict = {
+                "verdict": "SAT",
+                "note": "Review the proposed configuration before continuing.",
+            }
+            hitl_gate(_s, proyecto_id, "config_review", proposal, critic_verdict)
+            logger.info(
+                "ConfigCritic HITL gate created for project %s",
+                proyecto_id[:8],
+            )
+        finally:
+            _s.close()
+
         return {
             "concerns": concerns,
             "population_variants": population_variants,
