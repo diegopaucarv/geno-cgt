@@ -9,39 +9,29 @@
   "properties": {
     "edges": {
       "type": "array",
-      "description": "Todas as arestas propostas. A aresta PROCESSES DEVE vir primeiro no array.",
+      "description": "Todas as arestas propostas. A primeira aresta DEVE descrever o mecanismo de processamento central (como a categoria central processa o objeto de estudo).",
       "items": {
         "type": "object",
         "required": [
           "source",
           "target",
-          "relationship_type",
+          "description",
           "rationale",
           "evidence",
-          "direction",
-          "strength"
+          "evidence_quality"
         ],
         "properties": {
           "source": {
             "type": "string",
-            "description": "Rótulo do nó origem. Para aresta PROCESSES: o rótulo do nó central."
+            "description": "Rótulo do nó origem. Para a primeira aresta (mecanismo central): o rótulo do nó central."
           },
           "target": {
             "type": "string",
-            "description": "Rótulo do nó destino. Para aresta PROCESSES: uma descrição do que está sendo processado (o {object_of_study})."
+            "description": "Rótulo do nó destino. Para a primeira aresta (mecanismo central): uma descrição do que está sendo processado (o {object_of_study})."
           },
-          "relationship_type": {
+          "description": {
             "type": "string",
-            "enum": [
-              "PROCESSES",
-              "LEADS_TO",
-              "IS_A_STRATEGY_FOR",
-              "IS_A_CONSEQUENCE_OF",
-              "IS_A_CONDITION_FOR",
-              "VARIES_WITH",
-              "CO_OCCURS_WITH"
-            ],
-            "description": "Tipo de relação canônico das 7 famílias glaserianas."
+            "description": "Descreva como estes dois nós se relacionam entre si. Qual é a natureza da sua conexão? Use linguagem teórica fundamentada na evidência."
           },
           "rationale": {
             "type": "string",
@@ -49,12 +39,7 @@
           },
           "evidence": {
             "type": "object",
-            "required": [
-              "source_id",
-              "source_type",
-              "summary",
-              "strength"
-            ],
+            "required": ["source_id", "source_type", "summary", "quality"],
             "properties": {
               "source_id": {
                 "type": "string",
@@ -62,44 +47,22 @@
               },
               "source_type": {
                 "type": "string",
-                "enum": [
-                  "hypothesis",
-                  "conceptual_relationship"
-                ],
+                "enum": ["hypothesis", "conceptual_relationship"],
                 "description": "Tipo de evidência."
               },
               "summary": {
                 "type": "string",
                 "description": "Resumo em uma frase do que a evidência mostra."
               },
-              "strength": {
+              "quality": {
                 "type": "string",
-                "enum": [
-                  "strong",
-                  "moderate",
-                  "weak"
-                ],
-                "description": "Qualidade da evidência: strong (múltiplas fontes convergentes), moderate (uma fonte sólida), weak (sugestiva)."
+                "description": "Descreva a qualidade desta fonte de evidência (ex., múltiplas fontes convergentes, uma fonte sólida, sugestiva mas limitada)."
               }
             }
           },
-          "direction": {
+          "evidence_quality": {
             "type": "string",
-            "enum": [
-              "unidirectional",
-              "bidirectional",
-              "conceptual"
-            ],
-            "description": "Direção da relação. 'conceptual' apenas para aresta PROCESSES."
-          },
-          "strength": {
-            "type": "string",
-            "enum": [
-              "strong",
-              "moderate",
-              "tentative"
-            ],
-            "description": "Confiança geral nesta aresta, considerando qualidade da evidência e coerência teórica."
+            "description": "Avaliação geral da qualidade da evidência para esta aresta, considerando todas as fontes disponíveis e a coerência teórica."
           }
         }
       }
@@ -110,69 +73,18 @@
     },
     "processes_edge_missing_rationale": {
       "type": "string",
-      "description": "Se processes_edge_present=false: por que não se pode construir uma aresta PROCESSES credível? Que evidência falta?"
+      "description": "Se processes_edge_present=false: por que não se pode construir um mecanismo de processamento central credível? Que evidência falta?"
     },
     "edge_summary": {
       "type": "object",
-      "required": [
-        "total_edges",
-        "by_type",
-        "coverage",
-        "narrative"
-      ],
+      "required": ["total_edges", "narrative"],
       "properties": {
         "total_edges": {
           "type": "integer"
         },
-        "by_type": {
-          "type": "object",
-          "description": "Contagem por relationship_type.",
-          "properties": {
-            "PROCESSES": {
-              "type": "integer"
-            },
-            "LEADS_TO": {
-              "type": "integer"
-            },
-            "IS_A_STRATEGY_FOR": {
-              "type": "integer"
-            },
-            "IS_A_CONSEQUENCE_OF": {
-              "type": "integer"
-            },
-            "IS_A_CONDITION_FOR": {
-              "type": "integer"
-            },
-            "VARIES_WITH": {
-              "type": "integer"
-            },
-            "CO_OCCURS_WITH": {
-              "type": "integer"
-            }
-          }
-        },
-        "coverage": {
-          "type": "object",
-          "description": "Quantos nós têm pelo menos uma aresta.",
-          "properties": {
-            "nodes_with_edges": {
-              "type": "integer"
-            },
-            "total_nodes": {
-              "type": "integer"
-            },
-            "isolated_nodes": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Rótulos de nós com zero arestas."
-            }
-          }
-        },
         "narrative": {
           "type": "string",
-          "description": "Uma narrativa de 3–5 frases do modelo integrado: o que processa o quê, sob quais condições, via quais estratégias, produzindo quais consequências."
+          "description": "Uma narrativa de 3 a 5 frases do modelo integrado: o que processa o quê, sob quais condições, via quais estratégias, produzindo quais consequências."
         }
       }
     },
@@ -184,7 +96,7 @@
         "required": [
           "source",
           "target",
-          "proposed_type",
+          "suggested_description",
           "why_plausible",
           "what_evidence_needed"
         ],
@@ -197,17 +109,9 @@
             "type": "string",
             "description": "Rótulo do nó destino."
           },
-          "proposed_type": {
+          "suggested_description": {
             "type": "string",
-            "enum": [
-              "PROCESSES",
-              "LEADS_TO",
-              "IS_A_STRATEGY_FOR",
-              "IS_A_CONSEQUENCE_OF",
-              "IS_A_CONDITION_FOR",
-              "VARIES_WITH",
-              "CO_OCCURS_WITH"
-            ]
+            "description": "Como você descreveria a relação se houvesse evidência disponível? Qual é a natureza hipotética da conexão?"
           },
           "why_plausible": {
             "type": "string",

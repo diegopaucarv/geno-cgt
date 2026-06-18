@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groups"],
+  "properties": {
+    "groups": {
+      "type": "array",
+      "description": "Grupos propostos de incidentes que evidenciam o mesmo padrão comportamental",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "rationale"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Uma frase curta que CAPTURA o que todos esses incidentes têm em comum no nível comportamental — o PADRÃO SUBJACENTE para o qual essas diferentes expressões apontam. NÃO um gerúndio, apenas um rótulo descritivo. Ex.: 'horas extras de trabalho', 'atuação para avaliadores'"
+          },
+          "incident_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs EXATOS dos incidentes da entrada que evidenciam este padrão. Mínimo 2."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Uma frase explicando o PROCESSO COMPORTAMENTAL SUBJACENTE que conecta esses incidentes, apesar de suas diferenças superficiais"
+          }
+        }
+      }
+    }
+  }
+}

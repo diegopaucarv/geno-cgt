@@ -2072,15 +2072,14 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
                 "coding_style_instruction": _get_coding_style_instruction(
                     s, proyecto_id
                 ),
+                "processing_verb": processing_verb,
+                "processing_gerund": processing_gerund,
             },
         )
         return {
-            "core_concern": response.get("core_concern", ""),
-            "confidence": response.get("confidence", "LOW"),
-            "recurring_problems": response.get("recurring_problems", []),
-            "relevant_population_dimensions": response.get(
-                "relevant_population_dimensions", []
-            ),
+            "candidates": response.get("candidates", []),
+            "rationale": response.get("rationale", ""),
+            "no_clear_concern": response.get("no_clear_concern", False),
         }
     finally:
         s.close()
@@ -2088,47 +2087,107 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
 
 @app.task(name="a15_core_emergence")
 def task_a15_core_emergence(proyecto_id: str) -> dict:
-    """A15: Identifica core category candidates desde el main concern."""
+    """A15: Identifica core category candidates desde el grafo de hipótesis.
+
+    El sistema (SQL) selecciona el top 3 de categorías con más conexiones
+    en el grafo de hipótesis. El PRO evalúa esos 3 candidatos cualitativamente.
+    """
     s = SessionLocal()
     try:
-        codes = s.execute(
-            text(
-                "SELECT id, nombre, definicion, puntaje_relevancia FROM categorias WHERE proyecto_id=:pid"
-            ),
-            {"pid": proyecto_id},
-        ).fetchall()
-        all_codes = "\n".join(f"- [{c[3]}] {c[1]}: {c[2]}" for c in codes)
-
-        # Estadísticas de co-ocurrencia básicas
-        stats_rows = s.execute(
+        # ── SQL: Top 3 candidates by hypothesis connection count ──
+        top_candidates = s.execute(
             text("""
-            SELECT c.nombre, COUNT(DISTINCT cs.segmento_id) as seg_count,
-                   COUNT(DISTINCT s.documento_id) as doc_count
+            SELECT c.nombre, c.definicion,
+                   COUNT(h.id) as hypothesis_connections
             FROM categorias c
-            LEFT JOIN codigos_segmento cs ON c.id = cs.categoria_id
-            LEFT JOIN segmentos s ON cs.segmento_id = s.id
+            LEFT JOIN hypotheses h ON h.proyecto_id = c.proyecto_id
+                 AND (h.linked_category_ids ?? c.id::text
+                      OR h.text ILIKE '%' || c.nombre || '%')
             WHERE c.proyecto_id = :pid
-            GROUP BY c.id, c.nombre
-            ORDER BY seg_count DESC
+            GROUP BY c.id, c.nombre, c.definicion
+            HAVING COUNT(h.id) >= 2
+            ORDER BY hypothesis_connections DESC
+            LIMIT 3
         """),
             {"pid": proyecto_id},
         ).fetchall()
-        stats_text = "\n".join(
-            f"- {r[0]}: {r[1]} segmentos en {r[2]} documentos" for r in stats_rows
+
+        if not top_candidates:
+            return {
+                "status": "insufficient",
+                "reason": "No categories with ≥2 hypothesis connections",
+            }
+
+        top_candidates_str = "\n".join(
+            f"- {r[0]}: {r[1]} ({r[2]} hypothesis connections)" for r in top_candidates
+        )
+
+        # ── Fetch context for the PRO ──
+        oos_row = s.execute(
+            text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        object_of_study = oos_row[0] if oos_row and oos_row[0] else "concern"
+
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+
+        # Fetch confirmed concern from HITL decisions
+        mc_row = s.execute(
+            text(
+                "SELECT proposal->>'core_concern' FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        confirmed_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
+
+        # All categories summary
+        all_cats = s.execute(
+            text(
+                "SELECT nombre, definicion, concern_label FROM categorias WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        categories_summary = "\n".join(
+            f"- {c[0]}: {c[1]} [concern: {c[2] or 'none'}]" for c in all_cats
+        )
+
+        # Hypotheses summary
+        hyps = s.execute(
+            text("SELECT id, text, tipo FROM hypotheses WHERE proyecto_id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchall()
+        hypotheses_summary = (
+            "\n".join(f"[H{i + 1}] {h[1]} (type: {h[2]})" for i, h in enumerate(hyps))
+            if hyps
+            else "(no hypotheses yet)"
         )
 
         response = llm.run_agent(
             "fc_core_category_proposer",
             variables={
-                "core_concern": "(see task_a14 for confirmed core concern)",
-                "object_of_study": "concern",
-                "all_codes": all_codes,
-                "code_statistics": stats_text,
+                "confirmed_concern": confirmed_concern,
+                "top_candidates": top_candidates_str,
+                "categories_summary": categories_summary,
+                "hypotheses_summary": hypotheses_summary,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "",
             },
         )
         return {
             "core_candidates": response.get("core_category_candidates", []),
-            "no_core_detected": response.get("no_core_detected", False),
+            "recommendation": response.get("recommendation", ""),
+            "no_suitable_core": response.get("no_suitable_core", False),
+            "top_candidates_sql": [r[0] for r in top_candidates],
         }
     finally:
         s.close()
@@ -2624,7 +2683,7 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
 
             result_cc = task_core_emergence_pipeline(proyecto_id)
             if result_cc.get("status") != "completed":
-                return {"status": "paused", "phase": "A", "gate": "core_emergence"}
+                return {"status": "paused", "phase": "A", "gate": "core_category"}
 
             transition_project(s, proyecto_id, "finding_cc", "reducing")
             current_state = "reducing"
@@ -2832,50 +2891,18 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             },
         )
 
-        # ── Critic ──
+        # ── Critic (feedback only, no verdicts) ──
         critic = llm.run_agent(
             "fc_main_concern_critic",
             variables={
-                "core_concern": proposal.get("core_concern", ""),
+                "candidates": json.dumps(proposal.get("candidates", [])),
                 "all_codes": all_codes,
-                "prime_movers_per_document": prime_movers_text,
-                "object_of_study": object_of_study,
                 "all_memos": all_memos,
+                "object_of_study": object_of_study,
                 "research_question": research_question or "",
                 "operational_question": operational_question or "",
-                "researcher_feedback": researcher_feedback or "",
-                "processing_verb": processing_verb,
             },
         )
-
-        # ── Synthesizer (Pattern 2): refine MOD proposals before HITL ──
-        critic_verdict = critic.get("verdict", "SAT")
-        if critic_verdict in ("MOD", "FORCED"):
-            logger.info(
-                "Synthesizer: refining proposal (verdict=%s, %d issues)",
-                critic_verdict,
-                len(critic.get("issues", [])),
-            )
-            try:
-                synthesized = llm.run_agent(
-                    "fc_synthesizer",
-                    variables={
-                        "original_proposal": json.dumps(proposal, ensure_ascii=False),
-                        "critic_verdict": critic_verdict,
-                        "critic_issues": json.dumps(
-                            critic.get("issues", []), ensure_ascii=False
-                        ),
-                        "object_of_study": object_of_study,
-                        "research_question": research_question or "",
-                        "processing_verb": processing_verb,
-                    },
-                )
-                # Merge: keep original fields, override with synthesized
-                if isinstance(synthesized, dict):
-                    proposal = {**proposal, **synthesized}
-                    logger.info("Synthesizer: merged refined proposal")
-            except Exception:
-                logger.exception("Synthesizer failed — using original proposal")
 
         # ── HITL gate ──
         from agents.transitions import hitl_gate
@@ -2902,67 +2929,77 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
 def task_core_emergence_pipeline(proyecto_id: str) -> dict:
     """
     Fase A, Pasos A3+A4: Core Category Emergence.
-    Proposer (PRO) → Critic (FLASH) → HITL gate.
-    Llamado desde selective_coding_coordinator (directo) o via Celery.
+
+    SQL top-3 → Proposer (PRO) → Critic (FLASH) → HITL gate.
     """
     s = SessionLocal()
     try:
         existing = s.execute(
             text(
                 "SELECT status FROM hitl_decisions "
-                "WHERE project_id = :pid AND gate_name = 'core_emergence' "
+                "WHERE project_id = :pid AND gate_name = 'core_category' "
                 "ORDER BY creado_en DESC LIMIT 1"
             ),
             {"pid": proyecto_id},
         ).fetchone()
 
         if existing and existing[0] == "accepted":
-            return {"status": "completed", "gate": "core_emergence"}
+            return {"status": "completed", "gate": "core_category"}
         if existing and existing[0] == "pending":
             return {
                 "status": "paused",
-                "gate": "core_emergence",
+                "gate": "core_category",
                 "awaiting": "researcher",
             }
 
-        codes = s.execute(
-            text(
-                "SELECT id, nombre, definicion, puntaje_relevancia "
-                "FROM categorias WHERE proyecto_id=:pid"
-            ),
+        # ── SQL: Top 3 candidates by hypothesis connection count ──
+        top_cats = s.execute(
+            text("""
+            SELECT c.id, c.nombre, c.definicion,
+                   COUNT(h.id) as hypothesis_connections
+            FROM categorias c
+            LEFT JOIN hypotheses h ON h.proyecto_id = c.proyecto_id
+                 AND (h.linked_category_ids ?? c.id::text
+                      OR h.text ILIKE '%' || c.nombre || '%')
+            WHERE c.proyecto_id = :pid
+            GROUP BY c.id, c.nombre, c.definicion
+            HAVING COUNT(h.id) >= 2
+            ORDER BY hypothesis_connections DESC
+            LIMIT 3
+        """),
             {"pid": proyecto_id},
         ).fetchall()
-        all_codes = "\n".join(f"- [{c[3]}] {c[1]}: {c[2]}" for c in codes)
 
-        stats_rows = s.execute(
-            text(
-                "SELECT c.nombre, COUNT(DISTINCT cs.segmento_id), "
-                "COUNT(DISTINCT s.documento_id) "
-                "FROM categorias c "
-                "LEFT JOIN codigos_segmento cs ON c.id = cs.categoria_id "
-                "LEFT JOIN segmentos s ON cs.segmento_id = s.id "
-                "WHERE c.proyecto_id = :pid GROUP BY c.id, c.nombre "
-                "ORDER BY 2 DESC"
-            ),
-            {"pid": proyecto_id},
-        ).fetchall()
-        stats_text = "\n".join(
-            f"- {r[0]}: {r[1]} segmentos en {r[2]} documentos" for r in stats_rows
+        if not top_cats:
+            return {
+                "status": "insufficient",
+                "reason": "No categories with ≥2 hypothesis connections",
+            }
+
+        top_candidates_str = "\n".join(
+            f"- {r[1]}: {r[2]} ({r[3]} hypothesis connections)" for r in top_cats
         )
 
-        # Fetch object_of_study from project config
+        # ── Fetch context ──
         oos_row = s.execute(
             text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
             {"pid": proyecto_id},
         ).fetchone()
         object_of_study = "concern"
-        processing_verb = "resolve"
         if oos_row and oos_row[0]:
             config = oos_row[0] if isinstance(oos_row[0], dict) else {}
             object_of_study = config.get("object_of_study", "concern")
-            processing_verb = config.get("processing_verb", "resolve")
 
-        # Fetch confirmed core_concern from HITL decisions
+        pa_row = s.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        pa_data = pa_row[0] if pa_row and pa_row[0] else {}
+        rq_data = (
+            pa_data.get("research_question", {}) if isinstance(pa_data, dict) else {}
+        )
+        operational_question = rq_data.get("operational_question", "")
+
         mc_row = s.execute(
             text(
                 "SELECT proposal->>'core_concern' FROM hitl_decisions "
@@ -2971,41 +3008,71 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
             ),
             {"pid": proyecto_id},
         ).fetchone()
-        core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
+        confirmed_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
 
+        all_cats = s.execute(
+            text(
+                "SELECT nombre, definicion, concern_label FROM categorias WHERE proyecto_id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchall()
+        categories_summary = "\n".join(
+            f"- {c[0]}: {c[1]} [concern: {c[2] or 'none'}]" for c in all_cats
+        )
+
+        hyps = s.execute(
+            text("SELECT id, text, tipo FROM hypotheses WHERE proyecto_id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchall()
+        hypotheses_summary = (
+            "\n".join(f"[H{i + 1}] {h[1]} (type: {h[2]})" for i, h in enumerate(hyps))
+            if hyps
+            else "(no hypotheses yet)"
+        )
+
+        # ── A3: Proposer (PRO) ──
         proposal = llm.run_agent(
             "fc_core_category_proposer",
             variables={
-                "core_concern": core_concern,
+                "confirmed_concern": confirmed_concern,
+                "top_candidates": top_candidates_str,
+                "categories_summary": categories_summary,
+                "hypotheses_summary": hypotheses_summary,
                 "object_of_study": object_of_study,
-                "all_codes": all_codes,
-                "code_statistics": stats_text,
-                "processing_verb": processing_verb,
+                "operational_question": operational_question or "",
             },
         )
 
-        # Build incidents for each core category candidate
+        # ── A4: Critic (FLASH — interchangeability) ──
         candidates = proposal.get("core_category_candidates", [])
         candidate_incidents = []
         for cand in candidates:
-            code_id = cand.get("code_id", "")
+            cat_name = cand.get("category_label", "")
+            # Find category by name to get its ID for incident lookup
+            cat_row = s.execute(
+                text(
+                    "SELECT id FROM categorias WHERE nombre = :name AND proyecto_id = :pid"
+                ),
+                {"name": cat_name, "pid": proyecto_id},
+            ).fetchone()
+            if not cat_row:
+                continue
             incidents = s.execute(
                 text(
                     "SELECT s.texto, d.original_filename "
                     "FROM codigos_segmento cs "
                     "JOIN segmentos s ON cs.segmento_id = s.id "
                     "JOIN documentos d ON s.documento_id = d.id "
-                    "WHERE cs.categoria_id = :cid LIMIT 3"
+                    "WHERE cs.categoria_id = :cid ORDER BY RANDOM() LIMIT 3"
                 ),
-                {"cid": code_id},
+                {"cid": str(cat_row[0])},
             ).fetchall()
             cand_with_incidents = dict(cand)
             cand_with_incidents["incidents"] = [
-                {"text": inc[0], "document": inc[1]} for inc in incidents
+                {"text": inc[0][:500], "document": inc[1]} for inc in incidents
             ]
             candidate_incidents.append(cand_with_incidents)
 
-        # Build document list
         docs = s.execute(
             text(
                 "SELECT id, original_filename FROM documentos WHERE proyecto_id = :pid"
@@ -3021,19 +3088,18 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                     candidate_incidents
                 ),
                 "document_list": document_list,
-                "all_codes": all_codes,
-                "core_concern": core_concern,
+                "core_concern": confirmed_concern,
                 "object_of_study": object_of_study,
-                "code_statistics": stats_text,
-                "processing_verb": processing_verb,
+                "all_codes": categories_summary,
+                "code_statistics": f"Top 3 SQL candidates: {top_candidates_str}",
             },
         )
 
         from agents.transitions import hitl_gate
 
-        hitl_gate(s, proyecto_id, "core_emergence", proposal, critic)
+        hitl_gate(s, proyecto_id, "core_category", proposal, critic)
 
-        return {"status": "paused", "gate": "core_emergence", "awaiting": "researcher"}
+        return {"status": "paused", "gate": "core_category", "awaiting": "researcher"}
 
     except Exception:
         logger.exception("core_emergence_pipeline failed for %s", proyecto_id)

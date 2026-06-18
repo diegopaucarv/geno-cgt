@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_categories"],
+  "properties": {
+    "unified_categories": {
+      "type": "array",
+      "description": "Unified, deduplicated categories after merging previous and new.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "definition", "source_categories", "merged_from", "action"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Final label for the unified category (gerund preferred)."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Combined definition that covers all source categories."
+          },
+          "source_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "IDs of all categories that contributed to this unified category."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Labels of the source categories (for human traceability)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["keep", "merge", "rename"],
+            "description": "keep: unchanged | merge: combining 2+ categories | rename: label changed, definition preserved or refined."
+          }
+        }
+      }
+    }
+  }
+}

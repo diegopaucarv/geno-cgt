@@ -1,5 +1,5 @@
 ---
-agent: core_category_proposer
+agent: fc_core_category_proposer
 tier: PRO
 description: Evalúa todas las categorías existentes contra los criterios CGT de categoría central y propone candidatas rankeadas. Recibe la concern confirmada, el resumen de categorías y las hipótesis acumuladas. §7.3 del knowledge base.
 notes:

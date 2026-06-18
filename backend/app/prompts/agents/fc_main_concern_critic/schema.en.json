@@ -1,81 +1,37 @@
 {
   "type": "object",
-  "required": ["verdict", "issues", "evaluations", "ranked_recommendation"],
+  "required": ["observations", "suggestions"],
   "properties": {
-    "verdict": {
-      "type": "string",
-      "enum": ["SAT", "MOD", "FORCED"],
-      "description": "Global methodological verdict across all candidates."
-    },
-    "issues": {
+    "observations": {
       "type": "array",
-      "description": "Top-level issues that apply across candidates. Empty if verdict is SAT.",
+      "description": "Qualitative observations about the candidates. No verdicts — only feedback.",
       "items": {
         "type": "object",
-        "required": ["type", "detail", "suggestion"],
+        "required": ["candidate_index", "observation_type", "detail"],
         "properties": {
-          "type": { "type": "string", "description": "Issue category." },
+          "candidate_index": {
+            "type": "integer",
+            "description": "0-based index of the candidate from the proposer's candidates array."
+          },
+          "observation_type": {
+            "type": "string",
+            "description": "Type of observation: grounding, coverage, abstraction, tension_vs_theme, supporting_evidence."
+          },
           "detail": {
             "type": "string",
-            "description": "Specific description."
+            "description": "Specific observation. What did you notice? Cite evidence."
           },
-          "suggestion": {
-            "type": "string",
-            "description": "Concrete, actionable suggestion."
-          },
-          "severity": {
-            "type": "string",
-            "enum": ["critical", "major", "minor"],
-            "description": "Severity."
+          "is_strong": {
+            "type": "boolean",
+            "description": "true if this candidate has strong empirical grounding in the data."
           }
         }
       }
     },
-    "evaluations": {
+    "suggestions": {
       "type": "array",
-      "description": "Per-candidate evaluations.",
-      "items": {
-        "type": "object",
-        "required": [
-          "candidate_statement",
-          "verdict",
-          "rationale",
-          "grounding_assessment"
-        ],
-        "properties": {
-          "candidate_statement": { "type": "string" },
-          "verdict": { "type": "string", "enum": ["SAT", "MOD", "FORCED"] },
-          "rationale": {
-            "type": "string",
-            "description": "Detailed justification citing specific codes and memos."
-          },
-          "grounding_assessment": {
-            "type": "string",
-            "description": "Do the supporting_codes actually support this candidate?"
-          },
-          "has_acceptable_coverage": {
-            "type": "boolean",
-            "description": "true if this candidate explains an acceptable proportion of the system's categories (not leaving too many orphans)."
-          },
-          "is_confident": {
-            "type": "boolean",
-            "description": "true if the critic is confident in this verdict based on available evidence."
-          },
-          "abstraction_assessment": {
-            "type": "string",
-            "enum": ["adequate", "too_concrete", "too_abstract"],
-            "description": "Abstraction level evaluation."
-          },
-          "suggestion": {
-            "type": "string",
-            "description": "Suggested action if MOD. Concrete and actionable."
-          }
-        }
-      }
-    },
-    "ranked_recommendation": {
-      "type": "string",
-      "description": "Final recommendation: which candidate do you recommend and why? If none is SAT, explain what is missing."
+      "items": { "type": "string" },
+      "description": "Actionable suggestions for the researcher. What to consider when choosing."
     }
   }
 }

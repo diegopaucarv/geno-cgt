@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_categories"],
+  "properties": {
+    "unified_categories": {
+      "type": "array",
+      "description": "Vereinheitlichte, deduplizierte Kategorien nach Zusammenführung vorheriger und neuer.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "definition", "source_categories", "merged_from", "action"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Endgültige Bezeichnung für die vereinheitlichte Kategorie (Gerundium bevorzugt)."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Kombinierte Definition, die alle Quellkategorien abdeckt."
+          },
+          "source_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "IDs aller Kategorien, die zu dieser vereinheitlichten Kategorie beigetragen haben."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Bezeichnungen der Quellkategorien (zur menschlichen Nachverfolgbarkeit)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["keep", "merge", "rename"],
+            "description": "keep: unverändert | merge: 2+ Kategorien kombinieren | rename: Bezeichnung geändert, Definition beibehalten oder verfeinert."
+          }
+        }
+      }
+    }
+  }
+}

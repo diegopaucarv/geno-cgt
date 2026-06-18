@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groups"],
+  "properties": {
+    "groups": {
+      "type": "array",
+      "description": "Vorgeschlagene Gruppen von Vorfällen, die dasselbe Verhaltensmuster belegen",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "rationale"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Ein kurzer Satz, der erfasst, was all diese Vorfälle auf Verhaltensebene gemeinsam haben — das ZUGRUNDELIEGENDE MUSTER, auf das diese verschiedenen Ausdrücke hinweisen. KEIN Gerundium, nur eine beschreibende Bezeichnung. Z.B.: 'verlängerte Arbeitszeiten', 'Vorführung für Bewerter'"
+          },
+          "incident_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "EXAKTE Vorfall-IDs aus der Eingabe, die dieses Muster belegen. Mindestens 2."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Ein Satz, der den ZUGRUNDELIEGENDEN VERHALTENSPROZESS erklärt, der diese Vorfälle trotz ihrer oberflächlichen Unterschiede verbindet"
+          }
+        }
+      }
+    }
+  }
+}

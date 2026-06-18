@@ -1,112 +1,57 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "main_concern",
-    "recurring_problems",
-    "resolving_mechanisms"
-  ],
+  "required": ["candidates", "rationale"],
   "properties": {
-    "main_concern": {
-      "type": "string",
-      "description": "Core {object_of_study} expressed per coding style or verb phrase."
+    "candidates": {
+      "type": "array",
+      "description": "2-4 candidate patterns of interest, each expressed as a gerund.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "statement",
+          "supporting_codes",
+          "orphan_codes",
+          "rationale"
+        ],
+        "properties": {
+          "statement": {
+            "type": "string",
+            "description": "Gerund candidate for the pattern of interest."
+          },
+          "supporting_codes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categories that support this candidate as the core concern."
+          },
+          "orphan_codes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categories that would be orphaned if this candidate is chosen."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this candidate emerges from the data. Cite specific hypothesis IDs."
+          },
+          "is_latent": {
+            "type": "boolean",
+            "description": "true if this is a latent concern (revealed by behavior, not stated explicitly)."
+          }
+        }
+      }
     },
     "rationale": {
       "type": "string",
-      "description": "Qualitative reasoning connecting the 3 questions. Cite specific codes."
-    },
-    "recurring_problems": {
-      "type": "array",
-      "description": "Recurring {object_of_study}s identified (Question 1). Empty array if none identified.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "resolving_mechanisms": {
-      "type": "array",
-      "description": "Codes or mechanisms that {processing_verb} the pattern (Question 2). Empty array if none identified.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "most_connected_codes": {
-      "type": "array",
-      "description": "Codes with highest centrality and explanatory power (Question 3). Empty array if none identified.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Confidence in the identified {object_of_study}."
-    },
-    "alternative_concerns": {
-      "type": "array",
-      "description": "Plausible alternative patterns if confidence is not HIGH.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "concern",
-          "why_less_likely"
-        ],
-        "properties": {
-          "concern": {
-            "type": "string",
-            "description": "Alternative pattern."
-          },
-          "why_less_likely": {
-            "type": "string",
-            "description": "Why it is less likely than the main one."
-          }
-        }
-      }
+      "description": "Overall reasoning connecting the candidates to the accumulated data."
     },
     "no_clear_concern": {
       "type": "boolean",
-      "description": "true if the data does not support a clear {object_of_study}."
+      "description": "true if the data does not support any clear pattern of interest."
     },
     "no_concern_rationale": {
       "type": "string",
-      "description": "If no_clear_concern=true: what is missing in the data to identify a {object_of_study}."
-    },
-    "relevant_population_dimensions": {
-      "type": "array",
-      "description": "Population dimensions relevant for understanding how this {object_of_study} manifests. Derived from A1 and prime movers. MOMENT 1 of variable emergence.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "dimension_name",
-          "observed_values",
-          "emergence_rationale"
-        ],
-        "properties": {
-          "dimension_name": {
-            "type": "string"
-          },
-          "observed_values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "emergence_rationale": {
-            "type": "string"
-          },
-          "missing_values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      }
+      "description": "If no_clear_concern=true: what is missing."
     }
   }
 }

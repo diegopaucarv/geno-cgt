@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groups"],
+  "properties": {
+    "groups": {
+      "type": "array",
+      "description": "Grupos propuestos de incidentes que evidencian el mismo patrón conductual",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "rationale"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Una frase corta que CAPTURA lo que todos estos incidentes tienen en común a nivel conductual — el PATRÓN SUBYACENTE al que apuntan estas diferentes expresiones. NO un gerundio, solo una etiqueta descriptiva. Ej.: 'horas extra de trabajo', 'actuando para evaluadores'"
+          },
+          "incident_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs EXACTOS de los incidentes del input que evidencian este patrón. Mínimo 2."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Una oración explicando el PROCESO CONDUCTUAL SUBYACENTE que conecta estos incidentes, a pesar de sus diferencias superficiales"
+          }
+        }
+      }
+    }
+  }
+}

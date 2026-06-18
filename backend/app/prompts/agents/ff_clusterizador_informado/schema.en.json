@@ -1,125 +1,99 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["clusters", "unclustered_categories", "bridging_categories"],
+  "required": ["theoretical_nodes", "isolated_categories", "bridging_nodes"],
   "properties": {
-    "clusters": {
+    "theoretical_nodes": {
       "type": "array",
-      "description": "Clusters of related categories organized around the core category.",
+      "description": "Theoretical nodes constructed from the hypothesis graph. These are new constructs that emerge from patterns among reduced categories — not pre-existing clusters to be verified.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "cluster_label",
+          "node_label",
           "theoretical_family",
-          "member_categories",
-          "is_cohesive"
+          "constituent_categories",
+          "emergence_rationale",
+          "description",
+          "relationship_to_core"
         ],
         "properties": {
-          "cluster_label": {
+          "node_label": {
             "type": "string",
-            "description": "Theoretical label for the cluster. Expresses the cluster's role relative to the core category."
+            "description": "Theoretical label expressed as a gerund, 2-6 words. Captures the emergent theoretical construct (e.g., 'Navigating Uncertainty', 'Maintaining Professional Identity')."
           },
           "theoretical_family": {
             "type": "string",
-            "description": "The theoretical code family that best describes this cluster's organizing logic (e.g., Strategy, Causal, Process, Condition)."
+            "description": "The theoretical code family that best describes this node's organizing logic (e.g., Strategy, Causal, Process, Condition, Consequence)."
+          },
+          "constituent_categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The reduced categories that form this theoretical node."
+          },
+          "emergence_rationale": {
+            "type": "string",
+            "description": "WHY this node emerges: what hypotheses connect these categories? What pattern do they collectively reveal? Reference specific hypothesis evidence."
           },
           "description": {
             "type": "string",
-            "description": "Narrative description of what unifies these categories theoretically. 2-4 sentences."
+            "description": "2-4 sentence narrative describing what this theoretical node captures and its significance to the emerging theory."
           },
-          "member_categories": {
-            "type": "array",
-            "description": "Categories belonging to this cluster.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "category_name",
-                "is_core_member",
-                "relationship_to_core"
-              ],
-              "properties": {
-                "category_name": { "type": "string" },
-                "is_core_member": {
-                  "type": "boolean",
-                  "description": "true if this category is a core member of the cluster (strong hypothesis connections)."
-                },
-                "relationship_to_core": {
-                  "type": "string",
-                  "description": "How this category relates to the core category per documented hypotheses: is_a_strategy_for, is_a_condition_of, co-occurs_with."
-                },
-                "supporting_hypothesis_ids": {
-                  "type": "array",
-                  "items": { "type": "string" },
-                  "description": "IDs of hypotheses supporting membership."
-                }
-              }
-            }
-          },
-          "is_cohesive": {
-            "type": "boolean",
-            "description": "true if the categories in this cluster are tightly connected via documented hypotheses."
-          },
-          "cohesion_rationale": {
+          "relationship_to_core": {
             "type": "string",
-            "description": "Why this cluster is or is not cohesive. Reference specific hypothesis connections."
-          },
-          "is_priority": {
-            "type": "boolean",
-            "description": "true if this cluster should be prioritized in the saturation loop (directly relates to core concern)."
-          },
-          "priority_rationale": {
-            "type": "string",
-            "description": "Why this cluster was assigned this priority."
+            "description": "How this theoretical node relates to the core category. Describe the nature of the connection using theoretical language grounded in the evidence."
           }
         }
       }
     },
-    "unclustered_categories": {
+    "isolated_categories": {
       "type": "array",
-      "description": "Categories with no documented hypothesis relationship to any other category.",
+      "description": "Categories that did not form part of any theoretical node.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["category_name"],
+        "required": ["category_name", "reason"],
         "properties": {
-          "category_name": { "type": "string" },
+          "category_name": {
+            "type": "string"
+          },
           "reason": {
             "type": "string",
-            "description": "Why unclustered (no hypotheses, insufficient evidence)."
-          },
-          "suggested_action": {
-            "type": "string",
-            "description": "Recommendation: search for relationships, mark as secondary, or discard."
+            "description": "Why this category did not form part of any theoretical node (no hypotheses, insufficient evidence, conceptually disconnected)."
           }
         }
       }
     },
-    "bridging_categories": {
+    "bridging_nodes": {
       "type": "array",
-      "description": "Categories that connect two or more clusters.",
+      "description": "Theoretical nodes that connect two or more other theoretical nodes.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["category_name", "connects_clusters"],
+        "required": ["node_label", "connects_nodes", "bridging_rationale"],
         "properties": {
-          "category_name": { "type": "string" },
-          "connects_clusters": {
+          "node_label": {
+            "type": "string"
+          },
+          "connects_nodes": {
             "type": "array",
-            "items": { "type": "string" },
-            "description": "Cluster labels this category connects."
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels of theoretical nodes this bridging node connects."
           },
           "bridging_rationale": {
             "type": "string",
-            "description": "How this category bridges the clusters."
+            "description": "How this node bridges the connected theoretical nodes. What theoretical relationship does it establish between them?"
           }
         }
       }
     },
-    "sorting_recommendation": {
+    "theoretical_playground_guidance": {
       "type": "string",
-      "description": "Overall recommendation: which clusters to elaborate first, which gaps to address, whether the hypothesis graph is mature enough for theoretical coding."
+      "description": "Guidance for the Theoretical Playground: which theoretical nodes to elaborate first? What gaps suggest new data collection? How should the researcher prioritize theoretical development?"
     }
   }
 }

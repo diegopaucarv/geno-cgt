@@ -1,105 +1,99 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "new_categories"
-  ],
+  "required": ["theoretical_nodes", "isolated_categories", "bridging_nodes"],
   "properties": {
-    "new_categories": {
+    "theoretical_nodes": {
       "type": "array",
-      "description": "Categorias consolidadas após agrupamento. Array vazio se não forem necessárias alterações.",
+      "description": "Nós teóricos construídos a partir do grafo de hipóteses. Estes são constructos novos que emergem de padrões entre as categorias reduzidas — não são clusters preexistentes para verificar.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "category",
-          "human_purpose",
-          "definition"
+          "node_label",
+          "theoretical_family",
+          "constituent_categories",
+          "emergence_rationale",
+          "description",
+          "relationship_to_core"
         ],
         "properties": {
-          "category": {
+          "node_label": {
             "type": "string",
-            "description": "Rótulo do grupo consolidado."
+            "description": "Rótulo teórico expresso como gerúndio, 2-6 palavras. Captura o constructo teórico emergente (ex., 'Navegar a Incerteza', 'Manter a Identidade Profissional')."
           },
-          "human_purpose": {
+          "theoretical_family": {
             "type": "string",
-            "description": "Intenção comportamental subjacente compartilhada pelos códigos agrupados (Passo 1)."
+            "description": "A família de códigos teóricos que melhor descreve a lógica organizadora deste nó (ex., Estratégia, Causal, Processo, Condição, Consequência)."
           },
-          "definition": {
-            "type": "string",
-            "description": "Definição consolidada da categoria (Passo 3)."
-          },
-          "source_codes": {
+          "constituent_categories": {
             "type": "array",
-            "description": "Nomes dos códigos originais fundidos nesta categoria.",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "As categorias reduzidas que formam este nó teórico."
           },
-          "variations": {
-            "type": "array",
-            "description": "Variações internas documentadas. Array vazio se a categoria for uniforme.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "description"
-              ],
-              "properties": {
-                "description": {
-                  "type": "string",
-                  "description": "Descrição da variação."
-                },
-                "documents": {
-                  "type": "array",
-                  "description": "Nomes dos documentos onde esta variação é observada.",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
+          "emergence_rationale": {
+            "type": "string",
+            "description": "POR QUE este nó emerge: quais hipóteses conectam estas categorias? Que padrão elas revelam coletivamente? Referencie evidência específica de hipóteses."
           },
-          "theoretical_hypotheses": {
-            "type": "array",
-            "description": "Hipóteses que emergem deste grupo (Passo 4). Array vazio se não emergirem hipóteses claras.",
-            "items": {
-              "type": "string"
-            }
+          "description": {
+            "type": "string",
+            "description": "Narrativa de 2-4 frases descrevendo o que este nó teórico captura e seu significado para a teoria emergente."
           },
-          "sampling_criteria": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "inclusion",
-              "exclusion"
-            ],
-            "properties": {
-              "inclusion": {
-                "type": "array",
-                "description": "Critérios de inclusão para amostragem futura.",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "exclusion": {
-                "type": "array",
-                "description": "Critérios de exclusão.",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "orphan_segments": {
-            "type": "array",
-            "description": "Segmentos sem código após consolidação (Passo 6). Array vazio se todos estiverem atribuídos.",
-            "items": {
-              "type": "string"
-            }
+          "relationship_to_core": {
+            "type": "string",
+            "description": "Como este nó teórico se relaciona com a categoria central. Descreva a natureza da conexão usando linguagem teórica fundamentada na evidência."
           }
         }
       }
+    },
+    "isolated_categories": {
+      "type": "array",
+      "description": "Categorias que não formaram parte de nenhum nó teórico.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name", "reason"],
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Por que esta categoria não formou parte de nenhum nó teórico (sem hipóteses, evidência insuficiente, conceitualmente desconectada)."
+          }
+        }
+      }
+    },
+    "bridging_nodes": {
+      "type": "array",
+      "description": "Nós teóricos que conectam dois ou mais nós teóricos entre si.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["node_label", "connects_nodes", "bridging_rationale"],
+        "properties": {
+          "node_label": {
+            "type": "string"
+          },
+          "connects_nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Rótulos dos nós teóricos que este nó ponte conecta."
+          },
+          "bridging_rationale": {
+            "type": "string",
+            "description": "Como este nó serve de ponte entre os nós teóricos conectados. Que relação teórica ele estabelece entre eles?"
+          }
+        }
+      }
+    },
+    "theoretical_playground_guidance": {
+      "type": "string",
+      "description": "Orientação para o Theoretical Playground: quais nós teóricos elaborar primeiro? Que lacunas sugerem nova coleta de dados? Como o pesquisador deve priorizar o desenvolvimento teórico?"
     }
   }
 }

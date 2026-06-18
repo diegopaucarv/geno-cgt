@@ -17,43 +17,28 @@ sequenceDiagram
     Note over U,DB: ═══ FASE 0: Configuración del Proyecto ═══
 
     U->>FE: Crear proyecto
-    Note over U,FE: Params:<br/>• nombre (text)<br/>• supuesto_poblacional (text, validated)<br/>• object_of_study (select: concern|emotion|behavior|discourse|identity|custom)<br/>• processing_verb (text, auto-default per type, editable)<br/>• processing_gerund (auto: verb + "ing")<br/>• custom_label (text, solo si object_of_study="custom")<br/>• coding_styles (select, multi: gerundio|in_vivo|nominalizacion|...)
+    Note over U,FE: Params:<br/>• nombre, supuesto_poblacional, object_of_study<br/>• processing_verb, processing_gerund<br/>• coding_styles (gerundio|in_vivo|nominalizacion)
 
     FE->>API: POST /projects
-    Note over API: Validación:<br/>• object_of_study ∈ VALID_OOS<br/>• Si custom → spaCy similarity check<br/>• population → detectar singular (warning)<br/>• processing_verb → conjugar con spaCy<br/>  (plural 3ª persona)
-
     API->>DB: INSERT proyecto
     DB-->>API: proyecto creado
 
-    API->>FST: f0_population_generalizer (FLASH)
-    FST->>LLM: 🟡 FLASH · generalizar población<br/>(pluralizar actores, prohibir unidades)
-    LLM-->>FST: {generalized_population, spatial_frame, temporal_frame}
-    FST-->>API: OK
-    API->>DB: UPDATE population_assumption
-
-    Note over U,FE: 🧬 Population Configuration panel<br/>• Muestra generalized vs original<br/>• Edit inline<br/>• Re-generate button
-
+    Note over U,FE: 🧬 Population Configuration
     U->>FE: Opcional: editar población generalizada
     FE->>API: PUT /projects/{id}/config/population-assumption
-    API->>DB: UPDATE population_assumption
 
     Note over U,FE: 🧪 Nemotrón: generar research question
-
     U->>FE: Generar research question
     FE->>API: POST /projects/{id}/research-question/generate
     API->>CEL: dispatch research_question_builder → heavy
     CEL->>HVY: fc_research_question_builder (PRO)
-    HVY->>DB: SELECT population_assumption, object_of_study
-    HVY->>LLM: 🟣 PRO · fc_research_question_builder<br/>Inputs: object_of_study, population_description,<br/>processing_verb, processing_gerund, processing_verb_conjugated
-    LLM-->>HVY: {research_question, operational_question,<br/>key_dimensions, rationale}
-    Note over LLM: RQ: "What is the CORE [concern] of [population]<br/>      and how do they continuously [resolve] it?"<br/>OQ: "How do [population] [resolve] their CORE [concern]?"
+    HVY->>LLM: 🟣 PRO · fc_research_question_builder
+    LLM-->>HVY: {research_question, operational_question, key_dimensions}
     HVY->>LLM: 🟣 PRO · fc_research_question_critic
     LLM-->>HVY: {verdict: SAT|MOD|FORCED, suggestions}
     HVY->>DB: UPDATE population_assessment.research_question
     HVY-->>CEL: ✅
     API-->>FE: {research_question, operational_question, critic_verdict}
-
-    Note over U,FE: RQ preview editable antes de continuar
 
     %% ═══════════════════════════════════════════════════════════════════
     %% FASE A+B: OPEN CODING + CROSS-DOC (lotes de 3 documentos)
@@ -70,274 +55,348 @@ sequenceDiagram
     API->>CEL: dispatch batch_coordinator → heavy
 
     loop Por lotes de 3 documentos (incluye lote final incompleto)
-        Note over HVY: ─── LOTE N: documentos {i} a {i+2} ───
+        Note over HVY: ─── LOTE N ───
 
         loop Por cada documento del lote
             CEL->>HVY: process_document_agents_a(doc_id, proyecto_id)
 
-            Note over HVY: Step 0 — Segmentación (spaCy/NLP)
+            Note over HVY: Segmentación
             HVY->>NLP: segmentar_documento
             NLP-->>HVY: segmentos[]
-
             HVY->>DB: INSERT segmentos
 
-            Note over HVY: Step 0.1 — Glaser Classification (batched PRO)
-            HVY->>DB: SELECT segmentos del documento
-            HVY->>LLM: 🟣 PRO · fa_glaser_data_classifier<br/>(batch: clasifica baseline|properline|interpreted|vague)
-            LLM-->>HVY: {data_type per segmento}
+            Note over HVY: Glaser Classification
+            HVY->>LLM: 🟡 FLASH · fa_glaser_data_classifier (batch)
+            LLM-->>HVY: {classifications[] per segmento}
             HVY->>DB: UPDATE segmentos.tipo_dato_glaser
 
-            Note over HVY: Step 0.2 — Pattern & Incident Extraction (unified PRO)
-            HVY->>LLM: 🟣 PRO · fa_pattern_incident_extractor<br/>Inputs: {segmentos}, {object_of_study},<br/>{operational_question}, {processing_verb},<br/>{coding_style_instruction}
-            Note over LLM: Unified call replacing per-segment extract_incident,<br/>core_pattern_extractor, and prime_mover
-            LLM-->>HVY: {incidents[{jot, what_is_this_about, what_category,<br/>what_is_happening, participants_core_concern}],<br/>core_pattern (gerund), pattern_description,<br/>evidence_quotes[2-5], confidence}
+            Note over HVY: Pattern & Incident Extraction (unified PRO)
+            HVY->>LLM: 🟣 PRO · fa_document_pattern_extractor
+            LLM-->>HVY: {patterns[], incidents[], document_signals}
             HVY->>DB: INSERT extracted_incidents
-            HVY->>DB: UPDATE document_processes.prime_mover
 
-            Note over HVY: A1/A2 — Auxiliary (non-blocking, fire-and-forget)
-            HVY->>LLM: 🟣 PRO · fa_population_context (background)
-            Note over LLM: Non-blocking auxiliary call
+            Note over HVY: A1/A2 — Auxiliary (non-blocking)
+            HVY->>LLM: 🟣 PRO · fa_population_context
             LLM-->>HVY: {surprising_details, language_patterns}
-
-            HVY->>LLM: 🟣 PRO · fa_process_identifier (background)
-            Note over LLM: Non-blocking auxiliary call
+            HVY->>LLM: 🟣 PRO · fa_process_identifier
             LLM-->>HVY: {process_description}
 
             HVY-->>CEL: ✅ documento procesado
         end
 
-        Note over HVY: ─── SÍNTESIS CROSS-DOC (lote N) ───
+        Note over HVY: ─── SÍNTESIS CROSS-DOC ───
 
-        Note over HVY: B1 — Incident Grouper (AI-only, sin pre-filtro)
-        HVY->>DB: SELECT extracted_incidents (lote actual)
-        HVY->>LLM: 🟣 PRO · fb_incident_grouper<br/>Inputs: {todos los incidents[]}, {research_question}
-        Note over LLM: AI-only grouping:<br/>• NO pairwise comparison<br/>• NO pre-filter por baseline<br/>• El LLM recibe TODOS los incidentes
+        Note over HVY: B1 — Incident Grouper
+        HVY->>LLM: 🟣 PRO · fb_incident_grouper
         LLM-->>HVY: {incident_groups[], ungrouped[]}
 
-        Note over HVY: B2 — Pattern Labeler (per-concept iteration)
+        Note over HVY: B2 — Pattern Labeler (per-concept)
         loop Por cada grupo de incidentes
-            HVY->>LLM: 🟣 PRO · fb_pattern_labeler<br/>Inputs: {incident_group}, {object_of_study},<br/>{coding_style_instruction}
-            Note over LLM: Iteración por concepto, no batch:<br/>• Un grupo → una etiqueta gerundio<br/>• Grounding en incidentes del grupo
-            LLM-->>HVY: {proposed_label (gerund), description, anomalies[]}
+            HVY->>LLM: 🟣 PRO · fb_pattern_labeler
+            LLM-->>HVY: {proposed_label, description, anomalies[]}
         end
 
-        Note over HVY: B3 — Label Critic (solo feedback)
-        HVY->>LLM: 🟣 PRO · fb_label_critic<br/>(verifica grounding, gerund, scope, overlap)
-        Note over LLM: Solo feedback — NO SAT/MOD/FORCED verdicts.<br/>Devuelve observaciones que el investigador revisa.
+        Note over HVY: B3 — Label Critic
+        HVY->>LLM: 🟣 PRO · fb_label_critic
         LLM-->>HVY: {observations[], coverage_gaps[]}
 
-        Note over HVY: B2.5 — Grounding (incident-based)
-        HVY->>DB: SELECT labels con sus incident_groups
-        HVY->>LLM: 🟣 PRO · fb_label_grounding<br/>Inputs: {label}, {incident_group[]},<br/>{object_of_study}, {operational_question}
-        Note over LLM: Incident-based grounding, no embedding similarity.<br/>Verifica que cada label emerge de los incidentes.
-        LLM-->>HVY: {grounding_score, evidence_mapping[], orphan_labels[]}
-
-        HVY->>DB: INSERT categorias (labels aprobadas del lote)
+        HVY->>DB: INSERT categorias
 
         Note over HVY: ═══ EVERY-3-DOC PAUSE ═══
 
         Note over HVY: Synthesizer 1 — Category Unification
-        HVY->>DB: SELECT all categories (prev + new)
         HVY->>LLM: 🟣 PRO · fd_category_synthesizer
         LLM-->>HVY: {unified_categories[], merges[], renames[]}
-        HVY->>DB: UPSERT categories (merge, deduplicate)
 
         Note over HVY: Synthesizer 2 — Hypothesis Update
-        HVY->>DB: SELECT previous hypotheses
         HVY->>LLM: 🟣 PRO · fd_hypothesis_synthesizer
-        LLM-->>HVY: {updated_hypotheses[]} (growing note)
-        HVY->>DB: UPSERT hypotheses
+        LLM-->>HVY: {updated_hypotheses[]}
 
         Note over HVY: Configuration Critic
         HVY->>LLM: 🟣 PRO · fd_config_critic
-        Note over LLM: Reviews: population, concerns, coding style
         LLM-->>HVY: {concerns[], population_variants[], coding_style_rec}
 
         HVY->>DB: INSERT hitl_decisions (gate: batch_review)
         HVY-->>CEL: 🛑 HITL required
-        CEL-->>FE: Redis pub/sub → overlay
-        FE-->>U: Modal: review categories, concerns, population, coding style
-
-        U->>FE: Select categories (multi), concerns (multi), population (multi), coding style (single)
-        FE->>API: POST /projects/{id}/hitl/batch_review/decide
-        API->>DB: Persist decisions (cascada updates)
+        CEL-->>FE: overlay → modal
+        FE-->>U: Review categories, concerns, population, coding style
+        U->>FE: Select concerns (multi), population, coding style
+        FE->>API: POST /hitl/batch_review/decide
+        API->>DB: Persist decisions
 
         HVY-->>CEL: ✅ lote N completo
     end
 
     %% ═══════════════════════════════════════════════════════════════════
-    %% CORE CATEGORY SELECTION (tras todos los lotes)
-    %% ═══════════════════════════════════════════════════════════════════
-
-    Note over U,DB: ═══ CORE CATEGORY SELECTION ═══
-
-    Note over HVY: 🛡️ Guardrail 1 — Exactly ONE concern confirmed
-    HVY->>DB: SELECT concerns confirmados
-    Note over HVY: Si ≠ 1 concern → 🛑 HITL: el usuario debe<br/>confirmar exactamente UNA preocupación central
-
-    HVY-->>CEL: 🛑 HITL required (si concerns != 1)
-    CEL-->>FE: Redis pub/sub → overlay
-    FE-->>U: Modal: confirmar preocupación central<br/>(debe ser exactamente 1)
-
-    U->>FE: Confirm ONE core concern
-    FE->>API: POST /projects/{id}/hitl/core_concern/decide
-    API->>DB: UPDATE core_concern
-
-    Note over HVY: 🛡️ Guardrail 2 — All categories linked to a concern
-    HVY->>DB: SELECT categorias sin link a concern
-    Note over HVY: Si hay categorías huérfanas → 🛑 HITL
-
-    HVY-->>CEL: 🛑 HITL required (si categorías huérfanas)
-    CEL-->>FE: Redis pub/sub → overlay
-    FE-->>U: Modal: vincular categorías huérfanas a concern
-
-    U->>FE: Link orphan categories → concern
-    FE->>API: POST /projects/{id}/categories/link-concern
-    API->>DB: UPDATE categorias.concern_id
-
-    Note over HVY: Core Category Proposer (hypothesis-inferred)
-    HVY->>DB: SELECT categorias, hypotheses, concerns
-    HVY->>LLM: 🟣 PRO · fc_core_category_proposer<br/>Inputs: {categorias[]}, {hypotheses[]},<br/>{core_concern}, {object_of_study},<br/>{operational_question}
-    Note over LLM: Recomienda core categories basado en<br/>relaciones inferidas desde hipótesis
-    LLM-->>HVY: {core_category_candidates[{label, rationale,<br/>hypothesis_links[], confidence}]}
-
-    HVY->>DB: INSERT hitl_decisions (gate: core_category)
-    HVY-->>CEL: 🛑 HITL required
-    CEL-->>FE: Redis pub/sub → overlay
-    FE-->>U: Modal: seleccionar UNA core category
-
-    U->>FE: Select ONE core category
-    FE->>API: POST /projects/{id}/hitl/core_category/decide
-    API->>DB: UPDATE proyectos.core_category_id
-
-    Note over U,DB: 🔓 Core category seleccionada →<br/>desbloquea selective coding
-
-    %% ═══════════════════════════════════════════════════════════════════
-    %% FASE FC: SELECTIVE CODING
+    %% FASE FC: SELECTIVE CODING — Confirmación + Reducción + Saturación
     %% ═══════════════════════════════════════════════════════════════════
 
     Note over U,DB: ═══ FASE FC: Selective Coding ═══
 
-    Note over HVY: 🛡️ Guardrail 1: exactly ONE concern confirmed ✓<br/>🛡️ Guardrail 2: all categories linked to concern ✓<br/>🔓 Core category selected → FC unlocked
-
     U->>FE: Ejecutar pipeline → selective_coding
     FE->>API: POST /projects/{id}/pipeline/run-stage/selective_coding
     API->>CEL: dispatch selective_coding_coordinator → heavy
-
     CEL->>HVY: selective_coding_coordinator(proyecto_id)
 
-    Note over HVY: FC1 — Main Concern Proposer
-    HVY->>DB: SELECT categorias, memos, hypotheses, core_category
-    HVY->>LLM: 🟣 PRO · fc_main_concern_proposer<br/>Inputs: {core_category}, {object_of_study},<br/>{research_question}, {operational_question},<br/>{processing_verb}, {coding_style_instruction}
-    Note over LLM: Q1: What CORE {object_of_study}s recur?<br/>Q2: How do participants {processing_verb} them?<br/>Q3: Which has most explanatory power?
-    LLM-->>HVY: {core_concern (gerund), confidence,<br/>recurring_problems, relevant_population_dimensions}
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 1: CONFIRMACIÓN DEL PATRÓN DE INTERÉS (§6.1)
+    %% ───────────────────────────────────────────────────────────────────
 
-    Note over HVY: FC2 — Main Concern Critic (feedback only)
-    HVY->>LLM: 🟣 PRO · fc_main_concern_critic<br/>(TYPE MATCH + grounding + coverage + abstraction)
-    Note over LLM: Feedback only — NO SAT/MOD/FORCED verdicts
+    Note over HVY,LLM: ═══ Acto 1: Main Concern — Proposer → Critic → HITL ═══
+
+    Note over HVY: El main concern ya fue seleccionado durante las pausas<br/>every-3-doc. Ahora se formaliza con contexto completo.
+
+    Note over HVY: A1 — Main Concern Proposer (PRO)
+    HVY->>DB: SELECT unified_categories, accumulated_hypotheses,<br/>confirmed_concerns (from every-3-doc pauses),<br/>object_of_study, operational_question
+    HVY->>LLM: 🟣 PRO · fc_main_concern_proposer<br/>Context: {confirmed_concerns}, {categories_summary},<br/>{hypotheses_summary}, {object_of_study},<br/>{operational_question}, {coding_style_instruction}
+    Note over LLM: Sensa el patrón de interés formal.<br/>Busca tensiones latentes — no lo que dicen,<br/>sino lo que sus comportamientos revelan.<br/>Propone 2-4 candidatos como gerundios,<br/>con categorías que los respaldan y<br/>categorías que quedarían huérfanas.
+    LLM-->>HVY: {candidates[{statement, supporting_codes,<br/>orphan_codes, rationale}]}
+
+    Note over HVY: A2 — Main Concern Critic (PRO, solo feedback)
+    HVY->>LLM: 🟣 PRO · fc_main_concern_critic<br/>Context: {candidates[]}, {categories_summary},<br/>{hypotheses_summary}, {object_of_study}
+    Note over LLM: SOLO FEEDBACK — no emite veredictos.<br/>El main concern ya existe, no necesita<br/>SAT/MOD/FORCED. El critic observa:<br/>• ¿Grounding empírico sólido?<br/>• ¿Cobertura aceptable?<br/>• ¿Es preocupación latente o tema descriptivo?<br/>Devuelve observaciones cualitativas.
     LLM-->>HVY: {observations[], suggestions[]}
 
-    HVY->>DB: INSERT hitl_decisions (gate: selective_coding)
-    HVY-->>CEL: 🛑 HITL required
-    CEL-->>FE: Redis pub/sub → notificar frontend
-    FE-->>U: Modal: revisar selective coding results
+    HVY->>DB: INSERT hitl_decisions (gate: pattern_of_interest)
+    HVY-->>CEL: 🛑 HITL: seleccionar UNA preocupación
+    CEL-->>FE: overlay → modal: candidatos + observaciones
+    FE-->>U: Ver candidatos con observaciones del critic.<br/>Elegir UNA preocupación formal.
 
-    U->>FE: ACCEPT / MODIFY / REJECT
-    FE->>API: POST /projects/{id}/hitl/selective_coding/decide
+    U->>FE: Select ONE pattern of interest
+    FE->>API: POST /hitl/pattern_of_interest/decide
+    API->>DB: UPDATE proyectos.confirmed_concern
 
-    %% ═══════════════════════════════════════════════════════════════════
-    %% FASE FD: SELECTIVE REDUCTION
-    %% ═══════════════════════════════════════════════════════════════════
+    Note over U,DB: 🔓 Patrón de interés confirmado →<br/>ancla para todo lo que sigue
 
-    Note over U,DB: ═══ FASE FD: Selective Reduction ═══
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 2: CATEGORÍA CENTRAL (§7)
+    %% ───────────────────────────────────────────────────────────────────
 
-    Note over HVY: B1 — Selective Reduction Proposer
-    HVY->>LLM: 🟣 PRO · fd_selective_reduction_proposer<br/>Inputs: {core_concern}, {object_of_study},<br/>{core_category}, {all_open_codes}
-    Note over LLM: Fase A: filtrar por relevancia al core<br/>"¿Procesa/condiciona/es consecuencia del core?"<br/>Fase B: buscar uniformidades subyacentes<br/>Fase C: reformular conceptos de orden superior
-    LLM-->>HVY: {kept[], merged[], discarded[] (con rationale)}
+    Note over HVY,LLM: ═══ Acto 2: Core Category — Emerge del grafo de hipótesis ═══
 
-    Note over HVY: B2 — Selective Reduction Critic
-    HVY->>LLM: 🟣 PRO · fd_selective_reduction_critic
-    LLM-->>HVY: {evaluations[] (false_positives, false_negatives)}
-
-    HVY->>DB: INSERT hitl_decisions (gate: selective_reduction)
-    HVY-->>CEL: 🛑 HITL required
-    CEL-->>FE: Redis pub/sub → notificar frontend
-    FE-->>U: Modal: revisar reducción
-
-    U->>FE: ACCEPT / MODIFY / REJECT
-    FE->>API: POST /projects/{id}/hitl/selective_reduction/decide
-
-    %% ═══════════════════════════════════════════════════════════════════
-    %% FASE FE: CORE SATURATION LOOP
-    %% ═══════════════════════════════════════════════════════════════════
-
-    Note over U,DB: ═══ FASE FE: Core Saturation Loop ═══
-
-    loop Por cada categoría × nuevo documento
-        HVY->>DB: SELECT paradigm_state, incidentes_nuevos
-
-        Note over HVY: C1 — Core Saturation Proposer
-        HVY->>LLM: 🟣 PRO · fe_core_saturation_proposer<br/>Inputs: {category_label}, {category_definition},<br/>{current_paradigm_state}, {new_incidents},<br/>{object_of_study}
-        Note over LLM: ¿El incidente revela:<br/>• Nueva propiedad?<br/>• Expansión de gradiente?<br/>• Nueva condición/consecuencia/estrategia?
-        LLM-->>HVY: {proposed_expansions[], did_state_expand}
-
-        Note over HVY: C2 — Core Saturation Critic
-        HVY->>LLM: 🟡 FLASH · fe_core_saturation_critic<br/>(verifica que la expansión sea genuina, no ruido)
-        LLM-->>HVY: {verdict: SAT|MOD|FORCED}
-
-        HVY->>DB: UPDATE paradigm_states
-
-        Note over HVY: Paradigm Integrator
-        HVY->>LLM: 🟣 PRO · fe_paradigm_integrator<br/>Inputs: {current_paradigm}, {new_incidents},<br/>{object_of_study}
-        LLM-->>HVY: {did_state_expand, expansion_type}
-        HVY->>DB: INSERT paradigm_states (versioned)
+    Note over HVY: 🛡️ Guardrail: exactly ONE concern confirmed
+    HVY->>DB: SELECT COUNT(*) FROM hitl_decisions<br/>WHERE gate='pattern_of_interest' AND status='accepted'
+    alt ≠ 1 concern confirmada
+        HVY-->>CEL: 🛑 HITL: debe haber exactamente 1 concern
+        CEL-->>FE: overlay → modal
+        FE-->>U: Confirmar exactamente UNA preocupación
     end
 
-    Note over HVY: Panel de 4 señales (sin LLM)
-    HVY->>DB: SELECT saturation_metrics<br/>(rolling_std, consecutive_no_expand,<br/>property_coverage, incident_density)
+    Note over HVY: Candidatos emergen del grafo de hipótesis (SQL)
+    HVY->>DB: SELECT categorias ORDER BY<br/>COUNT(hypotheses linking to other categories) DESC<br/>LIMIT 3
+    Note over HVY: El top 3 de categorías con más conexiones<br/>en el grafo de hipótesis emerge como candidatos.<br/>El sistema cuenta conexiones estructuradas<br/>(cada hypothesis registra qué categorías vincula).
+
+    Note over HVY: 🛡️ Maturity Gate — SQL-only, sin LLM
+    HVY->>DB: CHECK: ¿el candidato top tiene ≥2 hypotheses<br/>que lo vinculan a otras categorías?
+    alt Maturity gate FAILS (top candidate < 2 connections)
+        HVY-->>CEL: 🛑 HITL: grafo de hipótesis insuficiente
+        Note over HVY: El sistema necesita más hipótesis<br/>acumuladas. Seguir codificando.
+        CEL-->>FE: overlay → modal: faltan conexiones
+        FE-->>U: Ver estado del grafo.<br/>Continuar open coding para generar más hipótesis.
+    end
+
+    Note over HVY: A3 — Core Category Proposer (PRO)
+    HVY->>DB: SELECT top 3 candidates (by hypothesis count),<br/>confirmed_concern, unified_categories,<br/>accumulated_hypotheses (graph), object_of_study
+    HVY->>LLM: 🟣 PRO · fc_core_category_proposer<br/>Context: {confirmed_concern}, {top_candidates[]},<br/>{categories_summary}, {hypotheses_summary},<br/>{object_of_study}, {operational_question}
+    Note over LLM: Evalúa los 3 candidatos pre-seleccionados<br/>por el sistema contra criterios glaserianos<br/>(cualitativos, binarios):<br/>• is_central: ¿hub de relaciones en el grafo?<br/>• has_explanatory_power: ¿explica POR QUÉ?<br/>• has_theoretical_grab: ¿genera insight?<br/>• centrality_rationale: razonamiento completo.<br/>Cita hipótesis específicas [H1], [H2].
+    LLM-->>HVY: {core_category_candidates[{category_label,<br/>is_central, has_explanatory_power,<br/>has_theoretical_grab, centrality_rationale,<br/>connected_categories, key_hypothesis_refs}],<br/>recommendation, no_suitable_core}
+
+    Note over HVY: A4 — Core Emergence Critic (FLASH — intercambiabilidad)
+    HVY->>DB: SELECT incidents per candidate (2-3 docs distintos)
+    HVY->>LLM: 🟡 FLASH · fc_core_emergence_critic<br/>Context: {candidate_category}, {incidents[{doc_name,<br/>incident_text}]}, {object_of_study}
+    Note over LLM: NO evalúa grounding abstracto.<br/>Evalúa INTERCAMBIABILIDAD de incidentes:<br/>¿El incidente en doc A y el incidente en doc B<br/>cuentan la misma historia de comportamiento?<br/>• valid: intercambiables → categoría sólida<br/>• refine: variación importante no capturada<br/>• split: revelan patrones distintos → dividir
+    LLM-->>HVY: {interchangeability_verdicts[{candidate,<br/>verdict: valid|refine|split, rationale}]}
+
+    HVY->>DB: INSERT hitl_decisions (gate: core_category)
+    HVY-->>CEL: 🛑 HITL: seleccionar UNA core category
+    CEL-->>FE: overlay → modal: candidatos + intercambiabilidad
+    FE-->>U: Ver los 3 candidatos (top por conexiones),<br/>evaluación cualitativa del PRO,<br/>veredictos de intercambiabilidad (FLASH).<br/>Seleccionar UNA.
+
+    U->>FE: Select ONE core category
+    FE->>API: POST /hitl/core_category/decide
+    API->>DB: UPDATE proyectos.core_category_id
+
+    Note over U,DB: 🔓 Core category seleccionada →<br/>desbloquea selective reduction
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 3: REDUCCIÓN SELECTIVA (§6.2)
+    %% ───────────────────────────────────────────────────────────────────
+
+    Note over HVY,LLM: ═══ Acto 3: Selective Reduction → Informed Clustering ═══
+
+    Note over HVY: B1 — Selective Reduction Proposer (PRO)
+    HVY->>DB: SELECT core_concern, core_category,<br/>all_open_codes, existing_categories
+    HVY->>LLM: 🟣 PRO · fd_selective_reduction_proposer<br/>Context: {core_concern}, {object_of_study},<br/>{core_category}, {all_open_codes},<br/>{existing_categories}
+    Note over LLM: Para cada código abierto:<br/>¿Procesa el patrón de interés?<br/>¿Es condición, consecuencia o estrategia?<br/>Si no → descartar (con rationale).<br/>Busca uniformidades subyacentes:<br/>¿Dos códigos capturan el mismo patrón?<br/>→ fusionar (intercambiabilidad de indicadores).
+    LLM-->>HVY: {reduced_codes[], discarded_codes[{reason,<br/>discard_category}], fusions[{new_label,<br/>source_codes, integrated_definition}]}
+
+    Note over HVY: B2 — Selective Reduction Critic (PRO)
+    HVY->>LLM: 🟣 PRO · fd_selective_reduction_critic<br/>Context: {reduced_codes[]}, {discarded_codes[]},<br/>{all_open_codes}, {core_concern},<br/>{core_category}, {object_of_study}
+    Note over LLM: Evalúa cada descarte y cada fusión:<br/>• ¿Falsos positivos? (descartado injustamente)<br/>• ¿Falsos negativos? (debía descartarse)<br/>• ¿Las fusiones son genuinamente<br/>  intercambiables?
+    LLM-->>HVY: {discard_evaluations[], fusion_evaluations[],<br/>false_positives[], false_negatives[], overall_assessment}
+
+    HVY->>DB: INSERT hitl_decisions (gate: selective_reduction)
+    HVY-->>CEL: 🛑 HITL: revisar sistema reducido
+    CEL-->>FE: overlay → modal: qué sobrevivió, qué se descartó
+    FE-->>U: Ver sistema reducido.<br/>Recuperar descartes erróneos.<br/>Rechazar fusiones no convincentes.
+
+    U->>FE: ACCEPT / MODIFY selective reduction
+    FE->>API: POST /hitl/selective_reduction/decide
+    API->>DB: UPDATE categorias (archivar descartadas,<br/>aplicar fusiones, actualizar entity_type)
+
+    Note over U,DB: Sistema reducido: menos conceptos,<br/>mayor abstracción, anclado al patrón de interés.
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 3.5: CLUSTERING INFORMADO (nuevo — entre reducción y saturación)
+    %% ───────────────────────────────────────────────────────────────────
+
+    Note over HVY,LLM: ═══ Acto 3.5: Theoretical Node Construction (pre-saturation) ═══
+
+    Note over HVY: Construye nodos teóricos que emergen del grafo<br/>de hipótesis. NO verifica clusters — CONSTRUYE conceptos.
+    HVY->>DB: SELECT reduced_categories, hypotheses (graph),<br/>core_category, theoretical_codes
+    HVY->>LLM: 🟣 PRO · ff_clusterizador_informado<br/>Context: {core_category}, {categories[]},<br/>{hypotheses[]}, {theoretical_codes[]}
+    Note over LLM: CONSTRUYE nodos teóricos a partir del<br/>grafo de hipótesis. Cada nodo es un concepto<br/>nuevo que agrupa categorías relacionadas:<br/>• node_label: gerundio del concepto emergente<br/>• constituent_categories: categorías que lo forman<br/>• emergence_rationale: por qué emerge del grafo<br/>• bridging_nodes: conectan 2+ nodos teóricos<br/>• isolated_categories: sin relaciones documentadas
+    LLM-->>HVY: {theoretical_nodes[{node_label, theoretical_family,<br/>constituent_categories[], emergence_rationale,<br/>description}], bridging_nodes[],<br/>isolated_categories[], theoretical_playground_guidance}
+
+    HVY->>DB: INSERT theoretical_nodes (provisional)
+    HVY-->>CEL: ℹ️ preview → frontend
+    CEL-->>FE: Mostrar nodos teóricos al investigador
+    FE-->>U: Vista previa: nodos teóricos construidos,<br/>categorías puente, aisladas.<br/>(informativo, no bloqueante — se elaboran<br/>en el Theoretical Playground)
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 4: SATURATION LOOP (§6.3 + §6.4)
+    %% ───────────────────────────────────────────────────────────────────
+
+    Note over HVY,LLM: ═══ Acto 4: Core Saturation Loop ═══
+
+    Note over HVY: Solo categorías que sobrevivieron la reducción<br/>entran al loop. Itera por categoría × documento.
+
+    loop Por cada categoría del sistema reducido
+        HVY->>DB: SELECT paradigm_state, saturation_panel
+
+        Note over HVY: Panel de 4 señales (§6.4) — SQL-only
+        HVY->>DB: CHECK 4 signals:<br/>❶ matemática: rolling_std embeddings<br/>❷ cualitativa: consecutive_no_expand<br/>❸ cobertura: property extremes coverage<br/>❹ integración: conceptual_relationships
+
+        alt Alguna señal no estable → skip LLM
+            Note over HVY: Señal barata dice "no saturada".<br/>No gastar en LLM.
+        else Las 4 señales sugieren estabilidad
+            loop Por cada documento con incidentes de esta categoría
+                HVY->>DB: SELECT new_incidents (este doc)
+
+                Note over HVY: C1 — Proposer (PRO)
+                HVY->>LLM: 🟣 PRO · fe_core_saturation_proposer<br/>Context: {category_label}, {category_definition},<br/>{current_paradigm_state}, {new_incidents},<br/>{document_name}, {object_of_study},<br/>{operational_question}
+                Note over LLM: Compara cada incidente contra<br/>paradigm_state. ¿Revela propiedad nueva?<br/>¿Expande gradiente? ¿Nueva condición?
+                LLM-->>HVY: {did_state_expand, elaboration_type,<br/>expanded_definition, elaboration_note}
+
+                Note over HVY: C2 — Critic (FLASH)
+                HVY->>LLM: 🟡 FLASH · fe_core_saturation_critic<br/>Context: {proposed_expansions},<br/>{current_paradigm_state}, {new_incidents}
+                Note over LLM: Diff estructurado: ¿la expansión es<br/>genuinamente nueva o ya está cubierta?<br/>SAT = genuina, MOD = imprecisa,<br/>FORCED = sin novedad real.
+                LLM-->>HVY: {verdict: SAT|MOD|FORCED,<br/>expansion_verdicts[], issues[]}
+
+                HVY->>DB: UPDATE paradigm_states (versioned)
+                HVY->>DB: UPDATE categorias.definicion (if expanded)
+            end
+        end
+
+        Note over HVY: ⚠️ ¿La categoría dejó de expandirse?<br/>¿El paradigm_state sugiere gaps visibles?<br/>→ Activar Property Sampler (bajo demanda)
+
+        opt Gaps detectados en paradigm_state
+            HVY->>LLM: 🟣 PRO · fe_property_sampler<br/>Context: {category}, {paradigm_state},<br/>{saturation_panel}, {hypotheses},<br/>{related_categories}
+            Note over LLM: Detecta gaps cualitativos:<br/>¿qué propiedades tienen extremos sin<br/>documentar? ¿Qué variaciones no están<br/>capturadas? ¿Qué condiciones o<br/>consecuencias faltan?<br/>Propone sampling dirigido por la teoría.
+            LLM-->>HVY: {sampling_recommendations[{property,<br/>missing_extreme, participant_profile,<br/>interview_question}], saturated_properties[],<br/>overall_saturation_assessment}
+
+            Note over HVY: TheoSampler usa las recomendaciones<br/>para buscar en el corpus o sugerir<br/>recolección de nuevos datos.
+            HVY->>DB: TheoSampler: buscar en corpus
+        end
+    end
+
+    Note over HVY: Paradigm Integrator (post-loop, por categoría)
+    HVY->>LLM: 🟣 PRO · fe_paradigm_integrator<br/>Context: {current_paradigm}, {all_expansions},<br/>{object_of_study}
+    LLM-->>HVY: {did_state_expand, expansion_type,<br/>new_paradigm, integration_memo}
+    HVY->>DB: INSERT paradigm_states (versioned)
+
+    Note over HVY: 🛑 HITL gate opcional: revisar categorías saturadas
+    alt Hay categorías candidatas a saturadas
+        HVY->>DB: INSERT hitl_decisions (gate: core_saturation)
+        HVY-->>CEL: 🛑 HITL: revisar saturation candidates
+        CEL-->>FE: overlay → modal
+        FE-->>U: Ver panel de 4 señales por categoría.<br/>Decidir: ¿saturada? ¿necesita más datos?
+        U->>FE: CONFIRM saturation / REQUEST more
+        FE->>API: POST /hitl/core_saturation/decide
+    end
+
     HVY-->>CEL: ✅ saturation loop complete
 
-    %% ═══════════════════════════════════════════════════════════════════
-    %% FASE FF: DATABASE A/B
-    %% ═══════════════════════════════════════════════════════════════════
+    %% ───────────────────────────────────────────────────────────────────
+    %% ACTO 5: DATABASE A/B (§6.5)
+    %% ───────────────────────────────────────────────────────────────────
 
-    Note over U,DB: ═══ FASE FF: Database A/B ═══
+    Note over HVY,LLM: ═══ Acto 5: Database A/B ═══
 
     Note over HVY: D1 — Database A Proposer (NODES)
-    HVY->>DB: SELECT categorias saturadas, core_category
-    HVY->>LLM: 🟣 PRO · ff_database_a_proposer<br/>Inputs: {saturated_categories}, {core_category},<br/>{object_of_study}, {research_question}
-    Note over LLM: Fase A: identificar core node<br/>Fase B: clasificar (condition|consequence|strategy|dimension)<br/>Fase C: compilar definiciones desde propiedades
-    LLM-->>HVY: {nodes[{label, entity_type, definition,<br/>is_core, grounding_incidents}]}
+    HVY->>DB: SELECT saturated_categories, core_category,<br/>paradigm_states, object_of_study
+    HVY->>LLM: 🟣 PRO · ff_database_a_proposer<br/>Context: {saturated_categories[]}, {core_category},<br/>{object_of_study}, {research_question}
+    Note over LLM: Aplana cada constructo en un nodo:<br/>• entity_type: core_category|related_category|secondary<br/>• definición integrada desde paradigm_state<br/>• propiedades documentadas<br/>• nota de muestreo teórico
+    LLM-->>HVY: {nodes[{label, entity_type, definition,<br/>properties[], is_core, grounding_incidents[]}]}
 
-    Note over HVY: D2 — Database A Critic
-    HVY->>LLM: 🟣 PRO · ff_database_a_critic<br/>(5 criterios: entity_type, grounding, abstraction,<br/>incidents, core identification)
-    LLM-->>HVY: {node_evaluations[], system_issues}
+    Note over HVY: D2 — Database A Critic (PRO)
+    HVY->>LLM: 🟣 PRO · ff_database_a_critic
+    LLM-->>HVY: {node_evaluations[], system_issues[], overall_verdict}
 
     HVY->>DB: INSERT hitl_decisions (gate: database_a)
-    HVY-->>CEL: 🛑 HITL required
-
-    U->>FE: ACCEPT database_a
-    FE->>API: POST /projects/{id}/hitl/database_a/decide
-
+    HVY-->>CEL: 🛑 HITL: revisar Database A
+    CEL-->>FE: overlay → modal
+    FE-->>U: Revisar nodos: ¿entity_type correcto?<br/>¿definiciones integradas? ¿faltan propiedades?
+    U->>FE: ACCEPT / MODIFY database_a
+    FE->>API: POST /hitl/database_a/decide
     HVY->>DB: INSERT database_nodes
 
     Note over HVY: D3 — Database B Proposer (EDGES)
-    HVY->>LLM: 🟣 PRO · ff_database_b_proposer<br/>Inputs: {nodes}, {conceptual_relationships},<br/>{hypotheses}, {object_of_study}, {core_concern}
-    Note over LLM: 7 tipos canónicos:<br/>PROCESSES (obligatorio), LEADS_TO,<br/>IS_A_STRATEGY_FOR, IS_A_CONSEQUENCE_OF,<br/>IS_A_CONDITION_FOR, VARIES_WITH, CO_OCCURS_WITH
-    LLM-->>HVY: {edges[{source, target, relationship_type,<br/>evidence, direction, strength}]}
+    HVY->>LLM: 🟣 PRO · ff_database_b_proposer<br/>Context: {nodes[]}, {conceptual_relationships},<br/>{hypotheses}, {core_concern}, {object_of_study}
+    Note over LLM: Propone edges entre nodos. Las relaciones<br/>NO usan tipos predefinidos — cada edge tiene<br/>una description en lenguaje teórico libre.<br/>El core processing mechanism es obligatorio.<br/>Cada edge cita evidencia de hypotheses o<br/>conceptual_relationships.
+    LLM-->>HVY: {edges[{source, target, description,<br/>evidence_quality, evidence[{source_id,<br/>source_type, summary, quality}]}],<br/>edge_summary, missing_evidence_notes}
 
-    Note over HVY: D4 — Database B Critic
-    HVY->>LLM: 🟣 PRO · ff_database_b_critic<br/>(contradictions, missing edges, orphan nodes)
-    LLM-->>HVY: {edge_evaluations[], system_issues}
+    Note over HVY: D4 — Database B Critic (PRO)
+    HVY->>LLM: 🟣 PRO · ff_database_b_critic<br/>Evalúa: ¿evidence suficiente? ¿coherencia teórica?
+    LLM-->>HVY: {edge_evaluations[], system_issues[], overall_verdict}
 
     HVY->>DB: INSERT hitl_decisions (gate: database_b)
-    HVY-->>CEL: 🛑 HITL required
-
-    U->>FE: ACCEPT database_b
-    FE->>API: POST /projects/{id}/hitl/database_b/decide
-
+    HVY-->>CEL: 🛑 HITL: revisar Database B
+    CEL-->>FE: overlay → modal
+    FE-->>U: Revisar edges: ¿descripciones sólidas?<br/>¿evidencia suficiente? ¿faltan conexiones?
+    U->>FE: ACCEPT / MODIFY database_b
+    FE->>API: POST /hitl/database_b/decide
     HVY->>DB: INSERT database_edges
+
+    %% ───────────────────────────────────────────────────────────────────
+    %% CIERRE: CONFIRMACIÓN DEL SISTEMA REDUCIDO
+    %% ───────────────────────────────────────────────────────────────────
+
+    Note over HVY,LLM: ═══ Cierre: Confirmación del Sistema Reducido ═══
+
+    Note over HVY: El selective coding termina cuando varias categorías<br/>están saturadas y otras fueron descartadas.<br/>El sistema presenta el estado final al investigador.
+
+    HVY->>DB: SELECT categorias saturadas, descartadas,<br/>promovidas, degradadas
+    HVY-->>CEL: 🛑 HITL: confirmar cierre de selective coding
+    CEL-->>FE: overlay → confirmación final
+    FE-->>U: Ver estado final del sistema:<br/>🟢 Saturadas (con panel de 4 señales)<br/>🔴 Descartadas (con rationale)<br/>🟡 Degradadas (perdieron evidencia)<br/>🟣 Promovidas (ganaron evidencia)<br/><br/>Acciones disponibles:<br/>• Re-saturar una categoría no saturada<br/>• Promover una categoría degradada<br/>• Degradar una categoría promovida<br/>(cada acción requiere revisar la evidencia<br/>de las hipótesis que la sustentan)
+
+    U->>FE: CONFIRMAR cierre / RE-SATURAR / PROMOVER / DEGRADAR
+    FE->>API: POST /hitl/selective_coding_close/decide
+    API->>DB: UPDATE categoria statuses + memo ordering
+    Note over DB: Categorías descartadas cambian de color<br/>y orden en el sistema de memos.<br/>Categorías promovidas/degradadas actualizan<br/>su estado de evidencia en hypotheses.
+
+    alt Usuario pide re-saturar, promover o degradar
+        HVY->>CEL: re-dispatch saturation loop para categorías afectadas
+        CEL->>HVY: selective_coding_coordinator (partial re-run)
+    end
+
+    HVY->>DB: UPDATE proyectos.estado = 'playground_ready'
+    HVY-->>CEL: ✅ selective coding completo
+    CEL-->>FE: → Theoretical Playground desbloqueado
+    FE-->>U: 🎉 Selective coding completado.<br/>Playground disponible.
+
+    Note over U,DB: 🔓 Database A/B construida →<br/>desbloquea Theoretical Playground
 
     %% ═══════════════════════════════════════════════════════════════════
     %% FASE 6b: THEORETICAL PLAYGROUND
@@ -345,29 +404,18 @@ sequenceDiagram
 
     Note over U,DB: ═══ FASE 6b: Theoretical Playground ═══
 
-    HVY->>DB: UPDATE proyectos.estado = 'playground_ready'
-    HVY->>CEL: dispatch prepare_playground → heavy
+    HVY->>DB: Seed 12 theoretical coding families
+    HVY->>LLM: 🟣 PRO · f6b_ghost_blob_mapper (uncategorized memos)
+    LLM-->>HVY: {suggested_category, affinity}
 
-    Note over HVY: Seed: 12 theoretical coding families
-    HVY->>DB: INSERT theoretical_codes (si no existen)
-
-    Note over HVY: Ghost Blob Mapper
-    HVY->>LLM: 🟣 PRO · f6b_ghost_blob_mapper<br/>(memas huérfanos → sugerir categoría)
-    LLM-->>HVY: {suggested_category, confidence}
-    HVY->>DB: INSERT ghost_blobs
-
-    Note over HVY: Memo Theoretical Tagger
-    loop Por cada memo del proyecto
-        HVY->>LLM: 🟡 FLASH · f6b_memo_theoretical_tagger<br/>Inputs: {memo_content}, {object_of_study}
-        Note over LLM: 12 familias canónicas:<br/>Causes, Consequences, Conditions, Process,<br/>Degree, Dimension, Type, Strategy,<br/>Structural, Functional, Interaction, Identity
-        LLM-->>HVY: {family_affinities[{family, score}],<br/>primary_family, secondary_family}
+    loop Por cada memo
+        HVY->>LLM: 🟡 FLASH · f6b_memo_theoretical_tagger
+        LLM-->>HVY: {family_affinities[{family, has_affinity}], primary_family}
         HVY->>DB: UPDATE memos.metadata
     end
 
-    Note over HVY: Ecosystem Gap Detection
-    HVY->>DB: SELECT COUNT ghost_blobs sin link
     opt >= 3 unlinked ghosts
-        HVY->>LLM: 🟣 PRO · f6b_gap_alerter<br/>Inputs: {core_concern}, {object_of_study},<br/>{gaps_summary}
+        HVY->>LLM: 🟣 PRO · f6b_gap_alerter
         LLM-->>HVY: {gaps[], alerts[]}
     end
 
@@ -383,23 +431,12 @@ sequenceDiagram
     FE->>API: POST /writing/write-section
     API->>CEL: dispatch write_section → heavy
 
-    HVY->>DB: SELECT memos ordenados (sorting group)
-    HVY->>DB: SELECT object_of_study, research_question, core_concern
-
-    Note over HVY: Writer
-    HVY->>LLM: 🟣 PRO · f6a_natural_writer<br/>Inputs: {memos_ordered}, {object_of_study},<br/>{research_question}, {core_concern}
-    Note over LLM: Reglas:<br/>• Presente conceptual<br/>• Conceptos como sujetos<br/>• Gerundios para procesos<br/>• Abstracción progresiva
-    LLM-->>HVY: {draft, citations[], concepts[], orphan_memos[]}
-
-    Note over HVY: Writing Critic
+    HVY->>LLM: 🟣 PRO · f6a_natural_writer
+    LLM-->>HVY: {draft, citations[], concepts[]}
     HVY->>LLM: 🟣 PRO · f6a_writing_critic
     LLM-->>HVY: {verdict: SAT|MOD|FORCED, issues[]}
-
-    Note over HVY: Gap Feeler (background, non-blocking)
-    HVY->>LLM: 🟡 FLASH · f6a_gap_feeler<br/>Inputs: {draft}, {object_of_study}, {core_concern}
-    Note over LLM: Detecta:<br/>• MISSING_EVIDENCE<br/>• UNDERDEVELOPED_PROPERTY<br/>• DISCONNECTED_CATEGORY<br/>• CONCEPTUAL_LEAP<br/>• ORPHAN_CLAIM
-    LLM-->>HVY: {gaps[{type, description, severity}]}
-
+    HVY->>LLM: 🟡 FLASH · f6a_gap_feeler (background)
+    LLM-->>HVY: {gaps[{type, description}]}
     HVY-->>FE: {draft, critique, gaps}
 
     %% ═══════════════════════════════════════════════════════════════════
@@ -412,14 +449,10 @@ sequenceDiagram
     FE->>API: POST /literature/compare
     API->>CEL: dispatch compare_literature → heavy
 
-    HVY->>DB: SELECT teoría completa (cats + hyps + props)
-    HVY->>LLM: 🟣 PRO · f6c_literature_comparer<br/>Inputs: {theory}, {literature_fragments},<br/>{object_of_study}, {research_question}
-    Note over LLM: Literatura como datos, no autoridad.<br/>EXTENDS | MODIFIES | INTEGRATES | TRANSCENDS
-    LLM-->>HVY: {comparison_table[]}
-
-    HVY->>LLM: 🟣 PRO · f6c_literature_critic<br/>(detecta forcing, authority bias, name-dropping)
+    HVY->>LLM: 🟣 PRO · f6c_literature_comparer
+    LLM-->>HVY: {comparison_table[] (EXTENDS|MODIFIES|INTEGRATES|TRANSCENDS)}
+    HVY->>LLM: 🟣 PRO · f6c_literature_critic
     LLM-->>HVY: {verdict, issues[]}
-
     HVY-->>FE: {comparison_table, critique}
 
     %% ═══════════════════════════════════════════════════════════════════
@@ -432,14 +465,10 @@ sequenceDiagram
     FE->>API: POST /applicability/generate
     API->>CEL: dispatch generate_applicability → heavy
 
-    HVY->>DB: SELECT teoría completa
-    HVY->>LLM: 🟣 PRO · f6d_applicability_engine<br/>Inputs: {theory}, {application_context},<br/>{object_of_study}
-    Note over LLM: Identifica:<br/>• Variables de control (modificables)<br/>• Variables de acceso (condicionantes)<br/>• Guías de intervención<br/>• Implicaciones
-    LLM-->>HVY: {control_variables[], access_variables[],<br/>guidelines[], implications[], future_agenda[]}
-
-    HVY->>LLM: 🟣 PRO · f6d_applicability_critic<br/>(genuineness, limits, accessibility, modifiability)
+    HVY->>LLM: 🟣 PRO · f6d_applicability_engine
+    LLM-->>HVY: {control_variables[], access_variables[], guidelines[]}
+    HVY->>LLM: 🟣 PRO · f6d_applicability_critic
     LLM-->>HVY: {verdict, issues[]}
-
     HVY-->>FE: {guidelines, critique}
 
     %% ═══════════════════════════════════════════════════════════════════
@@ -452,16 +481,11 @@ sequenceDiagram
     FE->>API: POST /projects/{id}/pipeline/run-stage/final_report
     API->>CEL: dispatch final_report → heavy
 
-    HVY->>DB: SELECT todos los datos acumulados:<br/>object_of_study, research_question, core_concern,<br/>core_category, database_nodes, database_edges,<br/>hypotheses, population_description,<br/>literature_dialogue, applicability_guidelines
-
-    HVY->>LLM: 🟣 PRO · f6a_final_report<br/>Inputs: {object_of_study}, {research_question},<br/>{core_concern}, {core_category}, {nodes}, {edges},<br/>{hypotheses}, {population_description},<br/>{literature_dialogue}, {applicability_guidelines},<br/>{processing_verb}, {processing_gerund},<br/>{Pattern} (→ {object_of_study})
-    Note over LLM: 8 secciones:<br/>1. Abstract (200w)<br/>2. Core {object_of_study}<br/>3. Core Category<br/>4. Theoretical Model<br/>5. Population Dimensions<br/>6. Literature Dialogue<br/>7. Applicability<br/>8. Research Trajectory
-    LLM-->>HVY: {report: {title, abstract, core_pattern,<br/>core_category, theoretical_model,<br/>population_dimensions, literature_dialogue,<br/>applicability, research_trajectory}}
-
-    HVY->>DB: INSERT final_reports (graceful if table missing)
-
+    HVY->>DB: SELECT all accumulated data
+    HVY->>LLM: 🟣 PRO · f6a_final_report
+    LLM-->>HVY: {report: {title, abstract, core_pattern, core_category, theoretical_model, population_dimensions, literature_dialogue, applicability, research_trajectory}}
+    HVY->>DB: INSERT final_reports
     HVY-->>CEL: ✅ terminal node
-    CEL-->>FE: report complete
     FE-->>U: 📄 Reporte final generado
 
     Note over U,DB: ═══ FIN DEL PIPELINE ═══
@@ -471,11 +495,8 @@ sequenceDiagram
     %% ═══════════════════════════════════════════════════════════════════
 
     Note over U,DB: ═══ Transversal: HITL Gates ═══
-    Note over U,FE: Gates en orden:<br/>1. batch_review 🔄 (cada 3 docs)<br/>2. core_concern 🎯<br/>3. core_category ⭐<br/>4. selective_coding 🔍<br/>5. selective_reduction ✂️<br/>6. database_a 🗄️<br/>7. database_b 🔗
+    Note over U,FE: Gates en orden:<br/>1. batch_review 🔄 (cada 3 docs)<br/>2. pattern_of_interest 🎯<br/>3. core_category ⭐<br/>4. selective_reduction ✂️<br/>5. core_saturation 📊 (opcional)<br/>6. database_a 🗄️<br/>7. database_b 🔗
     Note over U,FE: Cada gate: Accept → avanza / Modify → re-ejecuta / Reject → pausa
 
-    Note over U,DB: ═══ Transversal: Experimental Mode ═══
-    Note over U,FE: 🧪 Cambiar object_of_study mid-project<br/>→ estado vuelve a "coding"<br/>→ pipeline se reinicia desde open coding
-
     Note over U,DB: ═══ Transversal: AbortableTask ═══
-    Note over CEL,HVY: Todas las tareas Celery usan AbortableTask<br/>→ tracking en pipeline_tasks<br/>→ cancelación segura
+    Note over CEL,HVY: Todas las tareas Celery usan AbortableTask → cancelación segura

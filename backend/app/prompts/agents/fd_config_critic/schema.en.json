@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "properties": {
+    "concerns": {
+      "type": "array",
+      "description": "Gerund concerns — underlying processes the population seems to be continuously trying to resolve.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "grounding_categories", "confidence"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerund concern name (e.g. 'Negotiating permanence', 'Scanning threats')."
+          },
+          "description": {
+            "type": "string",
+            "description": "Why this concern emerges from the data. What process is being resolved."
+          },
+          "grounding_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Category labels that support this concern (from the unified categories list)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "How well-supported this concern is by the current data."
+          }
+        }
+      }
+    },
+    "population_variants": {
+      "type": "array",
+      "description": "Possible population reconfigurations based on emerging conceptual patterns.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "rationale"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Descriptive label for this population segment."
+          },
+          "description": {
+            "type": "string",
+            "description": "What distinguishes this group conceptually."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this segmentation matters for the emerging theory."
+          }
+        }
+      }
+    },
+    "coding_style_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "properties": {
+        "current_style": {
+          "type": "string",
+          "description": "Current coding style name."
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "Either 'keep' or 'change_to:X' where X is the recommended style."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why keep or change the coding style."
+        },
+        "missed_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Patterns the current coding style might miss. Empty if style is adequate."
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Overall assessment narrative explaining the critic's evaluation."
+    }
+  }
+}

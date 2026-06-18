@@ -9,39 +9,29 @@
   "properties": {
     "edges": {
       "type": "array",
-      "description": "All proposed edges. PROCESSES edge MUST be first in the array.",
+      "description": "All proposed edges. The first edge MUST describe the core processing mechanism (how the core category processes the object of study).",
       "items": {
         "type": "object",
         "required": [
           "source",
           "target",
-          "relationship_type",
+          "description",
           "rationale",
           "evidence",
-          "direction",
-          "strength"
+          "evidence_quality"
         ],
         "properties": {
           "source": {
             "type": "string",
-            "description": "Label of the source node. For PROCESSES edge: the core node label."
+            "description": "Label of the source node. For the first edge (core mechanism): the core node label."
           },
           "target": {
             "type": "string",
-            "description": "Label of the target node. For PROCESSES edge: a description of what is being processed (the {object_of_study})."
+            "description": "Label of the target node. For the first edge (core mechanism): a description of what is being processed (the {object_of_study})."
           },
-          "relationship_type": {
+          "description": {
             "type": "string",
-            "enum": [
-              "PROCESSES",
-              "LEADS_TO",
-              "IS_A_STRATEGY_FOR",
-              "IS_A_CONSEQUENCE_OF",
-              "IS_A_CONDITION_FOR",
-              "VARIES_WITH",
-              "CO_OCCURS_WITH"
-            ],
-            "description": "Canonical relationship type from the 7 Glaserian families."
+            "description": "Describe how these two nodes relate to each other. What is the nature of their connection? Use theoretical language grounded in the evidence."
           },
           "rationale": {
             "type": "string",
@@ -49,12 +39,7 @@
           },
           "evidence": {
             "type": "object",
-            "required": [
-              "source_id",
-              "source_type",
-              "summary",
-              "strength"
-            ],
+            "required": ["source_id", "source_type", "summary", "quality"],
             "properties": {
               "source_id": {
                 "type": "string",
@@ -62,44 +47,22 @@
               },
               "source_type": {
                 "type": "string",
-                "enum": [
-                  "hypothesis",
-                  "conceptual_relationship"
-                ],
+                "enum": ["hypothesis", "conceptual_relationship"],
                 "description": "Type of evidence."
               },
               "summary": {
                 "type": "string",
                 "description": "One-sentence summary of what the evidence shows."
               },
-              "strength": {
+              "quality": {
                 "type": "string",
-                "enum": [
-                  "strong",
-                  "moderate",
-                  "weak"
-                ],
-                "description": "Evidence quality: strong (multiple converging sources), moderate (one solid source), weak (suggestive)."
+                "description": "Describe the quality of this evidence source (e.g., multiple converging sources, single solid source, suggestive but limited)."
               }
             }
           },
-          "direction": {
+          "evidence_quality": {
             "type": "string",
-            "enum": [
-              "unidirectional",
-              "bidirectional",
-              "conceptual"
-            ],
-            "description": "Direction of the relationship. 'conceptual' only for PROCESSES edge."
-          },
-          "strength": {
-            "type": "string",
-            "enum": [
-              "strong",
-              "moderate",
-              "tentative"
-            ],
-            "description": "Overall confidence in this edge, considering evidence quality and theoretical coherence."
+            "description": "Overall assessment of evidence quality for this edge, considering all available sources and theoretical coherence."
           }
         }
       }
@@ -110,69 +73,18 @@
     },
     "processes_edge_missing_rationale": {
       "type": "string",
-      "description": "If processes_edge_present=false: why can't a credible PROCESSES edge be constructed? What evidence is missing?"
+      "description": "If processes_edge_present=false: why can't a credible core processing mechanism be constructed? What evidence is missing?"
     },
     "edge_summary": {
       "type": "object",
-      "required": [
-        "total_edges",
-        "by_type",
-        "coverage",
-        "narrative"
-      ],
+      "required": ["total_edges", "narrative"],
       "properties": {
         "total_edges": {
           "type": "integer"
         },
-        "by_type": {
-          "type": "object",
-          "description": "Count per relationship_type.",
-          "properties": {
-            "PROCESSES": {
-              "type": "integer"
-            },
-            "LEADS_TO": {
-              "type": "integer"
-            },
-            "IS_A_STRATEGY_FOR": {
-              "type": "integer"
-            },
-            "IS_A_CONSEQUENCE_OF": {
-              "type": "integer"
-            },
-            "IS_A_CONDITION_FOR": {
-              "type": "integer"
-            },
-            "VARIES_WITH": {
-              "type": "integer"
-            },
-            "CO_OCCURS_WITH": {
-              "type": "integer"
-            }
-          }
-        },
-        "coverage": {
-          "type": "object",
-          "description": "How many nodes have at least one edge.",
-          "properties": {
-            "nodes_with_edges": {
-              "type": "integer"
-            },
-            "total_nodes": {
-              "type": "integer"
-            },
-            "isolated_nodes": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Labels of nodes with zero edges."
-            }
-          }
-        },
         "narrative": {
           "type": "string",
-          "description": "A 3–5 sentence narrative of the integrated model: what processes what, under what conditions, via what strategies, producing what consequences."
+          "description": "A 3-5 sentence narrative of the integrated model: what processes what, under what conditions, via what strategies, producing what consequences."
         }
       }
     },
@@ -184,7 +96,7 @@
         "required": [
           "source",
           "target",
-          "proposed_type",
+          "suggested_description",
           "why_plausible",
           "what_evidence_needed"
         ],
@@ -197,17 +109,9 @@
             "type": "string",
             "description": "Target node label."
           },
-          "proposed_type": {
+          "suggested_description": {
             "type": "string",
-            "enum": [
-              "PROCESSES",
-              "LEADS_TO",
-              "IS_A_STRATEGY_FOR",
-              "IS_A_CONSEQUENCE_OF",
-              "IS_A_CONDITION_FOR",
-              "VARIES_WITH",
-              "CO_OCCURS_WITH"
-            ]
+            "description": "How would you describe the relationship if evidence were available? What is the hypothesized nature of the connection?"
           },
           "why_plausible": {
             "type": "string",

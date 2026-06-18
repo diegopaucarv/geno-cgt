@@ -13,7 +13,7 @@ import json
 import logging
 
 from database import SessionLocal
-from llm_client import LLMClient as llm
+from llm_client import LLMClient
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)

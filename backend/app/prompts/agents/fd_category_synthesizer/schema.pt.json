@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_categories"],
+  "properties": {
+    "unified_categories": {
+      "type": "array",
+      "description": "Categorias unificadas e deduplicadas após mesclar as anteriores e as novas.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "definition", "source_categories", "merged_from", "action"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Rótulo final para a categoria unificada (gerúndio preferido)."
+          },
+          "definition": {
+            "type": "string",
+            "description": "Definição combinada que cobre todas as categorias fonte."
+          },
+          "source_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "IDs de todas as categorias que contribuíram para esta categoria unificada."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Rótulos das categorias fonte (para rastreabilidade humana)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["keep", "merge", "rename"],
+            "description": "keep: inalterado | merge: combinando 2+ categorias | rename: rótulo alterado, definição preservada ou refinada."
+          }
+        }
+      }
+    }
+  }
+}

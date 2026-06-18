@@ -1,10 +1,6 @@
 {
   "type": "object",
-  "required": [
-    "edge_evaluations",
-    "system_issues",
-    "overall_verdict"
-  ],
+  "required": ["edge_evaluations", "system_issues", "overall_verdict"],
   "properties": {
     "edge_evaluations": {
       "type": "array",
@@ -14,7 +10,7 @@
         "required": [
           "source",
           "target",
-          "relationship_type",
+          "description",
           "verdict",
           "rationale",
           "criteria_assessment"
@@ -28,17 +24,13 @@
             "type": "string",
             "description": "Etiqueta del nodo destino de la arista que se evalúa."
           },
-          "relationship_type": {
+          "description": {
             "type": "string",
-            "description": "El relationship_type propuesto."
+            "description": "La descripción de la relación propuesta."
           },
           "verdict": {
             "type": "string",
-            "enum": [
-              "SAT",
-              "MOD",
-              "FORCED"
-            ],
+            "enum": ["SAT", "MOD", "FORCED"],
             "description": "SAT=correcto, MOD=necesita ajuste, FORCED=debe eliminarse."
           },
           "rationale": {
@@ -49,80 +41,21 @@
             "type": "object",
             "description": "Evaluación de cada criterio.",
             "properties": {
-              "relationship_type_correctness": {
-                "type": "object",
-                "required": [
-                  "pass",
-                  "note"
-                ],
-                "properties": {
-                  "pass": {
-                    "type": "boolean"
-                  },
-                  "note": {
-                    "type": "string"
-                  },
-                  "suggested_type": {
-                    "type": "string",
-                    "enum": [
-                      "PROCESSES",
-                      "LEADS_TO",
-                      "IS_A_STRATEGY_FOR",
-                      "IS_A_CONSEQUENCE_OF",
-                      "IS_A_CONDITION_FOR",
-                      "VARIES_WITH",
-                      "CO_OCCURS_WITH"
-                    ],
-                    "description": "Si pass=false: el relationship_type correcto."
-                  }
-                }
-              },
               "evidence_sufficiency": {
                 "type": "object",
-                "required": [
-                  "pass",
-                  "note"
-                ],
+                "required": ["pass", "note"],
                 "properties": {
                   "pass": {
                     "type": "boolean"
                   },
                   "note": {
                     "type": "string"
-                  }
-                }
-              },
-              "directional_correctness": {
-                "type": "object",
-                "required": [
-                  "pass",
-                  "note"
-                ],
-                "properties": {
-                  "pass": {
-                    "type": "boolean"
-                  },
-                  "note": {
-                    "type": "string"
-                  },
-                  "suggested_direction": {
-                    "type": "string",
-                    "enum": [
-                      "unidirectional",
-                      "bidirectional",
-                      "conceptual",
-                      "reversed"
-                    ],
-                    "description": "Si pass=false: la dirección correcta."
                   }
                 }
               },
               "theoretical_coherence": {
                 "type": "object",
-                "required": [
-                  "pass",
-                  "note"
-                ],
+                "required": ["pass", "note"],
                 "properties": {
                   "pass": {
                     "type": "boolean"
@@ -136,7 +69,7 @@
           },
           "suggested_fix": {
             "type": "string",
-            "description": "Si MOD: corrección concreta (cambiar tipo a X, invertir dirección, fortalecer evidencia con Y). Si FORCED: por qué esta arista debe eliminarse."
+            "description": "Si MOD: corrección concreta (revisar descripción, fortalecer evidencia con Y). Si FORCED: por qué esta arista debe eliminarse."
           }
         }
       }
@@ -147,15 +80,12 @@
         "contradictions",
         "missing_edges",
         "orphan_nodes",
-        "processes_edge_verification"
+        "core_mechanism_verification"
       ],
       "properties": {
         "contradictions": {
           "type": "object",
-          "required": [
-            "has_contradictions",
-            "details"
-          ],
+          "required": ["has_contradictions", "details"],
           "properties": {
             "has_contradictions": {
               "type": "boolean"
@@ -164,18 +94,14 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "type",
-                  "description",
-                  "edges_involved"
-                ],
+                "required": ["type", "description", "edges_involved"],
                 "properties": {
                   "type": {
                     "type": "string",
                     "enum": [
                       "circular_causation",
-                      "mutual_typing",
-                      "type_clash"
+                      "conflicting_descriptions",
+                      "entity_mismatch"
                     ],
                     "description": "Tipo de contradicción detectada."
                   },
@@ -193,7 +119,7 @@
                         "target": {
                           "type": "string"
                         },
-                        "relationship_type": {
+                        "description": {
                           "type": "string"
                         }
                       }
@@ -210,10 +136,7 @@
         },
         "missing_edges": {
           "type": "object",
-          "required": [
-            "has_missing",
-            "suggestions"
-          ],
+          "required": ["has_missing", "suggestions"],
           "properties": {
             "has_missing": {
               "type": "boolean"
@@ -225,7 +148,7 @@
                 "required": [
                   "source",
                   "target",
-                  "suggested_type",
+                  "suggested_description",
                   "rationale",
                   "urgency"
                 ],
@@ -238,17 +161,9 @@
                     "type": "string",
                     "description": "Etiqueta del nodo destino."
                   },
-                  "suggested_type": {
+                  "suggested_description": {
                     "type": "string",
-                    "enum": [
-                      "PROCESSES",
-                      "LEADS_TO",
-                      "IS_A_STRATEGY_FOR",
-                      "IS_A_CONSEQUENCE_OF",
-                      "IS_A_CONDITION_FOR",
-                      "VARIES_WITH",
-                      "CO_OCCURS_WITH"
-                    ]
+                    "description": "Cómo debería describirse la relación entre estos nodos."
                   },
                   "rationale": {
                     "type": "string",
@@ -256,11 +171,7 @@
                   },
                   "urgency": {
                     "type": "string",
-                    "enum": [
-                      "critical",
-                      "important",
-                      "nice_to_have"
-                    ],
+                    "enum": ["critical", "important", "nice_to_have"],
                     "description": "critical=modelo incompleto sin ella, important=mejora significativamente la coherencia, nice_to_have=agrega riqueza."
                   },
                   "evidence_needed": {
@@ -274,10 +185,7 @@
         },
         "orphan_nodes": {
           "type": "object",
-          "required": [
-            "has_orphans",
-            "details"
-          ],
+          "required": ["has_orphans", "details"],
           "properties": {
             "has_orphans": {
               "type": "boolean"
@@ -322,7 +230,7 @@
             }
           }
         },
-        "processes_edge_verification": {
+        "core_mechanism_verification": {
           "type": "object",
           "required": [
             "exists",
@@ -333,7 +241,7 @@
           "properties": {
             "exists": {
               "type": "boolean",
-              "description": "¿Existe una arista PROCESSES?"
+              "description": "¿Existe la arista del mecanismo de procesamiento central?"
             },
             "has_correct_source": {
               "type": "boolean",
@@ -352,7 +260,7 @@
               "items": {
                 "type": "string"
               },
-              "description": "Cualquier problema con la arista PROCESSES."
+              "description": "Cualquier problema con la arista del mecanismo de procesamiento central."
             }
           }
         }
@@ -360,10 +268,7 @@
     },
     "overall_verdict": {
       "type": "object",
-      "required": [
-        "is_sound",
-        "summary"
-      ],
+      "required": ["is_sound", "summary"],
       "properties": {
         "is_sound": {
           "type": "boolean",

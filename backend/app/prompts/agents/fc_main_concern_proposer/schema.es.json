@@ -1,112 +1,57 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "main_concern",
-    "recurring_problems",
-    "resolving_mechanisms"
-  ],
+  "required": ["candidates", "rationale"],
   "properties": {
-    "main_concern": {
-      "type": "string",
-      "description": "{object_of_study} central expresado según estilo de codificación o frase verbal."
+    "candidates": {
+      "type": "array",
+      "description": "2-4 patrones de interés candidatos, cada uno expresado como gerundio.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "statement",
+          "supporting_codes",
+          "orphan_codes",
+          "rationale"
+        ],
+        "properties": {
+          "statement": {
+            "type": "string",
+            "description": "Candidato en gerundio para el patrón de interés."
+          },
+          "supporting_codes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categorías que respaldan a este candidato como la preocupación central."
+          },
+          "orphan_codes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categorías que quedarían huérfanas si se elige este candidato."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Por qué este candidato emerge de los datos. Citar IDs de hipótesis específicos."
+          },
+          "is_latent": {
+            "type": "boolean",
+            "description": "true si es una preocupación latente (revelada por el comportamiento, no declarada explícitamente)."
+          }
+        }
+      }
     },
     "rationale": {
       "type": "string",
-      "description": "Razonamiento cualitativo conectando las 3 preguntas. Citar códigos específicos."
-    },
-    "recurring_problems": {
-      "type": "array",
-      "description": "{object_of_study}s recurrentes identificados (Pregunta 1). Array vacío si no se identificó ninguno.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "resolving_mechanisms": {
-      "type": "array",
-      "description": "Códigos o mecanismos que resuelven los problemas (Pregunta 2). Array vacío si no se identificó ninguno.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "most_connected_codes": {
-      "type": "array",
-      "description": "Códigos con mayor centralidad y poder explicativo (Pregunta 3). Array vacío si no se identificó ninguno.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "confidence": {
-      "type": "string",
-      "enum": [
-        "HIGH",
-        "MEDIUM",
-        "LOW"
-      ],
-      "description": "Confianza en el {object_of_study} identificado."
-    },
-    "alternative_concerns": {
-      "type": "array",
-      "description": "Preocupaciones alternativas plausibles si la confianza no es HIGH.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "concern",
-          "why_less_likely"
-        ],
-        "properties": {
-          "concern": {
-            "type": "string",
-            "description": "Preocupación alternativa."
-          },
-          "why_less_likely": {
-            "type": "string",
-            "description": "Por qué es menos probable que la principal."
-          }
-        }
-      }
+      "description": "Razonamiento general conectando los candidatos con los datos acumulados."
     },
     "no_clear_concern": {
       "type": "boolean",
-      "description": "true si los datos no respaldan un {object_of_study} claro."
+      "description": "true si los datos no respaldan ningún patrón de interés claro."
     },
     "no_concern_rationale": {
       "type": "string",
-      "description": "Si no_clear_concern=true: qué falta en los datos para identificar un {object_of_study}."
-    },
-    "relevant_population_dimensions": {
-      "type": "array",
-      "description": "Dimensiones poblacionales relevantes para entender cómo se manifiesta este {object_of_study}. Derivadas de A1 y prime movers. MOMENTO 1 de emergencia de variables.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "dimension_name",
-          "observed_values",
-          "emergence_rationale"
-        ],
-        "properties": {
-          "dimension_name": {
-            "type": "string"
-          },
-          "observed_values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "emergence_rationale": {
-            "type": "string"
-          },
-          "missing_values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      }
+      "description": "Si no_clear_concern=true: qué falta."
     }
   }
 }

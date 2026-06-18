@@ -1,5 +1,5 @@
 ---
-agent: main_concern_proposer
+agent: fc_main_concern_proposer
 tier: PRO
 description: Detecta el patron de interes central desde codigos, memos y prime movers usando 3 preguntas operacionales parametrizadas por {object_of_study}. A14 del roster.
 notes:
@@ -16,6 +16,12 @@ constraints:
 input_state: all_codes, all_memos, prime_movers_per_document, object_of_study, researcher_feedback
 executeOnce: true
 ---
+
+## Output Schema
+
+You must output valid JSON conforming to the schema defined in `schema.{lang}.json`.
+The output must include 2-4 candidates, each with statement, supporting_codes,
+orphan_codes, rationale, and an optional is_latent flag.
 
 ## System
 

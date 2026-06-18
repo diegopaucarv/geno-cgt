@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "properties": {
+    "concerns": {
+      "type": "array",
+      "description": "Gerundium-Anliegen — zugrundeliegende Prozesse, die die Population kontinuierlich zu lösen versucht.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "grounding_categories", "confidence"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Gerundium-Name des Anliegens (z.B. 'Verbleib aushandeln', 'Bedrohungen scannen')."
+          },
+          "description": {
+            "type": "string",
+            "description": "Warum dieses Anliegen aus den Daten hervorgeht. Welcher Prozess gelöst wird."
+          },
+          "grounding_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Kategoriebezeichnungen, die dieses Anliegen stützen (aus der vereinheitlichten Kategorienliste)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Wie gut dieses Anliegen durch die aktuellen Daten gestützt wird."
+          }
+        }
+      }
+    },
+    "population_variants": {
+      "type": "array",
+      "description": "Mögliche Populationsneukonfigurationen basierend auf aufkommenden konzeptuellen Mustern.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "rationale"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Beschreibende Bezeichnung für dieses Populationssegment."
+          },
+          "description": {
+            "type": "string",
+            "description": "Was diese Gruppe konzeptuell unterscheidet."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Warum diese Segmentierung für die entstehende Theorie wichtig ist."
+          }
+        }
+      }
+    },
+    "coding_style_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "properties": {
+        "current_style": {
+          "type": "string",
+          "description": "Name des aktuellen Codierungsstils."
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "Entweder 'keep' oder 'change_to:X' wobei X der empfohlene Stil ist."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Warum der Codierungsstil beibehalten oder geändert werden soll."
+        },
+        "missed_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Muster, die der aktuelle Stil möglicherweise übersieht. Leer, wenn der Stil angemessen ist."
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Gesamtbewertungserzählung, die die Einschätzung des Kritikers erklärt."
+    }
+  }
+}

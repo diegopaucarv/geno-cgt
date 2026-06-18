@@ -1,8 +1,12 @@
 ---
-prompt_id: fc_core_emergence_critic
-version: 0.2.0
-model_profile: flash
+agent: fc_core_emergence_critic
+tier: FLASH
 ---
+
+## Output Schema
+
+You must output valid JSON conforming to the schema defined in `schema.{lang}.json`.
+Verdicts use binary values: `valid`, `refine`, or `split`.
 
 ## System
 [ROL]

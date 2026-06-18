@@ -1,7 +1,6 @@
 ---
-prompt_id: fc_main_concern_critic
-version: 0.2.0
-model_profile: pro
+agent: fc_main_concern_critic
+tier: PRO
 ---
 
 ## System

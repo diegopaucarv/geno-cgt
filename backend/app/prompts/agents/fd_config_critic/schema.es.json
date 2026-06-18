@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["concerns", "population_variants", "coding_style_recommendation", "rationale"],
+  "properties": {
+    "concerns": {
+      "type": "array",
+      "description": "Preocupaciones en gerundio — procesos subyacentes que la población parece estar tratando de resolver continuamente.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "grounding_categories", "confidence"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Nombre de la preocupación en gerundio (ej. 'Negociando permanencia', 'Escaneando amenazas')."
+          },
+          "description": {
+            "type": "string",
+            "description": "Por qué esta preocupación emerge de los datos. Qué proceso se está resolviendo."
+          },
+          "grounding_categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Etiquetas de categorías que respaldan esta preocupación (de la lista de categorías unificadas)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Qué tan bien respaldada está esta preocupación por los datos actuales."
+          }
+        }
+      }
+    },
+    "population_variants": {
+      "type": "array",
+      "description": "Posibles reconfiguraciones de la población basadas en patrones conceptuales emergentes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "description", "rationale"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Etiqueta descriptiva para este segmento poblacional."
+          },
+          "description": {
+            "type": "string",
+            "description": "Qué distingue a este grupo conceptualmente."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Por qué esta segmentación es importante para la teoría emergente."
+          }
+        }
+      }
+    },
+    "coding_style_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_style", "recommendation", "rationale", "missed_patterns"],
+      "properties": {
+        "current_style": {
+          "type": "string",
+          "description": "Nombre del estilo de codificación actual."
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "'keep' o 'change_to:X' donde X es el estilo recomendado."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Por qué mantener o cambiar el estilo de codificación."
+        },
+        "missed_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Patrones que el estilo actual podría pasar por alto. Vacío si el estilo es adecuado."
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Narrativa general de evaluación explicando la valoración del crítico."
+    }
+  }
+}

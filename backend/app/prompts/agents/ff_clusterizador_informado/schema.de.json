@@ -1,105 +1,99 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "new_categories"
-  ],
+  "required": ["theoretical_nodes", "isolated_categories", "bridging_nodes"],
   "properties": {
-    "new_categories": {
+    "theoretical_nodes": {
       "type": "array",
-      "description": "Konsolidierte Kategorien nach dem Clustering. Leeres Array, wenn keine Änderungen erforderlich sind.",
+      "description": "Theoretische Knoten, die aus dem Hypothesengraphen konstruiert wurden. Dies sind neue Konstrukte, die aus Mustern zwischen reduzierten Kategorien emergieren — keine zu verifizierenden vorbestehenden Cluster.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "category",
-          "human_purpose",
-          "definition"
+          "node_label",
+          "theoretical_family",
+          "constituent_categories",
+          "emergence_rationale",
+          "description",
+          "relationship_to_core"
         ],
         "properties": {
-          "category": {
+          "node_label": {
             "type": "string",
-            "description": "Label der konsolidierten Gruppe."
+            "description": "Theoretisches Label als Gerundium ausgedrückt, 2-6 Wörter. Erfasst das emergente theoretische Konstrukt (z.B. 'Unsicherheit navigieren', 'Professionelle Identität aufrechterhalten')."
           },
-          "human_purpose": {
+          "theoretical_family": {
             "type": "string",
-            "description": "Zugrundeliegende Verhaltensabsicht, die von den gruppierten Codes geteilt wird (Schritt 1)."
+            "description": "Die theoretische Code-Familie, die die organisierende Logik dieses Knotens am besten beschreibt (z.B. Strategie, Kausal, Prozess, Bedingung, Konsequenz)."
           },
-          "definition": {
-            "type": "string",
-            "description": "Konsolidierte Definition der Kategorie (Schritt 3)."
-          },
-          "source_codes": {
+          "constituent_categories": {
             "type": "array",
-            "description": "Namen der ursprünglichen Codes, die in diese Kategorie zusammengeführt wurden.",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Die reduzierten Kategorien, die diesen theoretischen Knoten bilden."
           },
-          "variations": {
-            "type": "array",
-            "description": "Dokumentierte interne Variationen. Leeres Array, wenn die Kategorie einheitlich ist.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "description"
-              ],
-              "properties": {
-                "description": {
-                  "type": "string",
-                  "description": "Beschreibung der Variation."
-                },
-                "documents": {
-                  "type": "array",
-                  "description": "Namen der Dokumente, in denen diese Variation beobachtet wird.",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
+          "emergence_rationale": {
+            "type": "string",
+            "description": "WARUM dieser Knoten emergiert: Welche Hypothesen verbinden diese Kategorien? Welches Muster offenbaren sie gemeinsam? Verweise auf spezifische Hypothesenevidenz."
           },
-          "theoretical_hypotheses": {
-            "type": "array",
-            "description": "Hypothesen, die aus dieser Gruppe emergieren (Schritt 4). Leeres Array, wenn keine klaren Hypothesen emergieren.",
-            "items": {
-              "type": "string"
-            }
+          "description": {
+            "type": "string",
+            "description": "2-4-Satz-Narrativ, das beschreibt, was dieser theoretische Knoten erfasst und welche Bedeutung er für die emergierende Theorie hat."
           },
-          "sampling_criteria": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "inclusion",
-              "exclusion"
-            ],
-            "properties": {
-              "inclusion": {
-                "type": "array",
-                "description": "Einschlusskriterien für zukünftige Stichproben.",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "exclusion": {
-                "type": "array",
-                "description": "Ausschlusskriterien.",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "orphan_segments": {
-            "type": "array",
-            "description": "Nach Konsolidierung ohne Code verbliebene Segmente (Schritt 6). Leeres Array, wenn alle zugewiesen sind.",
-            "items": {
-              "type": "string"
-            }
+          "relationship_to_core": {
+            "type": "string",
+            "description": "Wie dieser theoretische Knoten mit der Kernkategorie zusammenhängt. Beschreibe die Natur der Verbindung in theoretischer Sprache, die in der Evidenz verankert ist."
           }
         }
       }
+    },
+    "isolated_categories": {
+      "type": "array",
+      "description": "Kategorien, die keinen Teil eines theoretischen Knotens bildeten.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category_name", "reason"],
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Warum diese Kategorie keinen Teil eines theoretischen Knotens bildete (keine Hypothesen, unzureichende Evidenz, konzeptuell unverbunden)."
+          }
+        }
+      }
+    },
+    "bridging_nodes": {
+      "type": "array",
+      "description": "Theoretische Knoten, die zwei oder mehr andere theoretische Knoten miteinander verbinden.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["node_label", "connects_nodes", "bridging_rationale"],
+        "properties": {
+          "node_label": {
+            "type": "string"
+          },
+          "connects_nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels der theoretischen Knoten, die dieser Brückenknoten verbindet."
+          },
+          "bridging_rationale": {
+            "type": "string",
+            "description": "Wie dieser Knoten eine Brücke zwischen den verbundenen theoretischen Knoten schlägt. Welche theoretische Beziehung stellt er zwischen ihnen her?"
+          }
+        }
+      }
+    },
+    "theoretical_playground_guidance": {
+      "type": "string",
+      "description": "Anleitung für den Theoretical Playground: Welche theoretischen Knoten zuerst ausarbeiten? Welche Lücken deuten auf neue Datenerhebung hin? Wie sollte der Forscher die theoretische Entwicklung priorisieren?"
     }
   }
 }

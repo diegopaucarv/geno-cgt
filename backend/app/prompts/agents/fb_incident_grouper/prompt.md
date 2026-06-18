@@ -1,5 +1,5 @@
 ---
-agent: incident_grouper
+agent: fb_incident_grouper
 tier: PRO
 description: Receives ALL incidents from a project and proposes groups based on the operational question's patterns. Replaces the old pairwise comparison + Union-Find approach. One PRO call.
 notes:
@@ -11,6 +11,7 @@ constraints:
   - Group by PATTERN, not by similarity of wording.
   - Two incidents with different wording can evidence the same pattern.
   - An incident CAN belong to multiple groups (OR logic).
+input_state: incidents_json, operational_question, object_of_study
 ---
 
 ## System
@@ -49,39 +50,3 @@ Object of study: {object_of_study}
 
 All incidents:
 {incidents_json}
-
-## Output Schema
-
-```json
-{
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["groups"],
-  "properties": {
-    "groups": {
-      "type": "array",
-      "description": "Proposed groups of incidents evidencing the same behavioral pattern",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["signal", "incident_ids", "rationale"],
-        "properties": {
-          "signal": {
-            "type": "string",
-            "description": "A short phrase that CAPTURES what all these incidents have in common at the behavioral level — the UNDERLYING PATTERN that these different expressions all point to. NOT a gerund, just a descriptive label. E.g.: 'extended work hours', 'performing for evaluators'"
-          },
-          "incident_ids": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "EXACT incident IDs from the input that evidence this pattern. At least 2."
-          },
-          "rationale": {
-            "type": "string",
-            "description": "One sentence explaining the UNDERLYING BEHAVIORAL PROCESS that connects these incidents, despite their surface differences"
-          }
-        }
-      }
-    }
-  }
-}
-```
