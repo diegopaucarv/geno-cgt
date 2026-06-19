@@ -15,7 +15,7 @@ constraints:
   - La pregunta operacional debe guiar a los agentes a OBSERVAR, no a confirmar hipótesis.
   - La pregunta operacional usa SUSTANTIVOS EN PLURAL durante la fase de descubrimiento porque el patrón específico aún no se ha identificado (e.g., "sus preocupaciones", nunca "su preocupación").
   - La población SIEMPRE debe ser actores en plural. Si el usuario nombra una unidad (e.g., "un aula"), identifica los actores humanos dentro de ella.
-input_state: object_of_study, population_description, processing_verb, processing_gerund, processing_verb_conjugated, spatial_frame, temporal_frame, coding_styles
+input_state: object_of_study, population_description, processing_verb, processing_gerund, processing_verb_conjugated, spatial_frame, temporal_frame, coding_styles, pattern_of_interest
 executeOnce: true
 ---
 
@@ -93,6 +93,12 @@ and {processing_gerund} consistently across all types:
   - OQ: "How do [population] {processing_verb} their custom patterns?"
   - Frame check: "What custom pattern defines how they {processing_verb} their experience?"
 
+- **meaning**: The population continuously constructs and interprets shared meaning.
+  - Pattern noun in RQ: "meaning construction"
+  - Process half: "...how do they continuously {processing_verb} it?"
+  - OQ: "How do [population] {processing_verb} their meaning constructions?"
+  - Frame check: "What meaning construction drives how they {processing_verb} their world?"
+
 [POPULATION RULE]
 The population MUST be plural actors, not a unit of analysis. If the population description
 names a unit (e.g., "a classroom", "a hospital ward", "an organization"), identify the human
@@ -127,6 +133,7 @@ Processing Verb (Conjugated): {processing_verb_conjugated}
 Spatial Frame: {spatial_frame}
 Temporal Frame: {temporal_frame}
 Coding Styles: {coding_styles}
+Accepted Pattern of Interest: {pattern_of_interest}
 
 [INSTRUCTION]
 Based on the data above, generate:

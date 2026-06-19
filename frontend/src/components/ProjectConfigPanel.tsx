@@ -7,6 +7,7 @@ import {
   updatePopulationAssumption,
   getResearchQuestion,
   generateResearchQuestion,
+  updateResearchQuestion,
   type ProjectConfig,
   type ConfigHistoryEntry,
   type ConfigSuggestion,
@@ -275,6 +276,10 @@ export default function ProjectConfigPanel({
   const [rqLoading, setRqLoading] = useState(false);
   const [rqMsg, setRqMsg] = useState("");
   const [rqGenerating, setRqGenerating] = useState(false);
+  const [editingRQ, setEditingRQ] = useState(false);
+  const [editRQValue, setEditRQValue] = useState("");
+  const [editOQValue, setEditOQValue] = useState("");
+  const [rqSaving, setRqSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -338,7 +343,6 @@ export default function ProjectConfigPanel({
     try {
       await generateResearchQuestion(projectId);
       setRqMsg(t("projectConfig.generateSuccess"));
-      // Poll for result after a short delay
       setTimeout(async () => {
         try {
           const rq = await getResearchQuestion(projectId);
@@ -349,6 +353,30 @@ export default function ProjectConfigPanel({
       setRqMsg("❌ " + (e.message || t("projectConfig.generateError")));
     } finally {
       setRqGenerating(false);
+    }
+  }
+
+  function startEditRQ() {
+    setEditRQValue(rqData?.research_question || "");
+    setEditOQValue(rqData?.operational_question || "");
+    setEditingRQ(true);
+  }
+
+  async function handleSaveRQ() {
+    setRqSaving(true);
+    setRqMsg("");
+    try {
+      const updated = await updateResearchQuestion(projectId, {
+        research_question: editRQValue,
+        operational_question: editOQValue,
+      });
+      setRqData(updated);
+      setEditingRQ(false);
+      setRqMsg("✅ " + (t("projectConfig.rqSaved") || "Saved"));
+    } catch (e: any) {
+      setRqMsg("❌ " + (e.message || "Error saving"));
+    } finally {
+      setRqSaving(false);
     }
   }
 
@@ -430,14 +458,92 @@ export default function ProjectConfigPanel({
           </p>
         ) : rqData?.research_question ? (
           <>
-            <FieldRow
-              label={t("projectConfig.fieldResearchQuestion")}
-              value={rqData.research_question || "—"}
-            />
-            <FieldRow
-              label={t("projectConfig.fieldOperationalQuestion")}
-              value={rqData.operational_question || "—"}
-            />
+            {editingRQ ? (
+              <>
+                <div style={{ marginBottom: 10 }}>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#8B949E",
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {t("projectConfig.fieldResearchQuestion")}
+                  </label>
+                  <textarea
+                    value={editRQValue}
+                    onChange={(e) => setEditRQValue(e.target.value)}
+                    style={{
+                      width: "100%",
+                      minHeight: 50,
+                      padding: "8px 10px",
+                      background: "#0D1117",
+                      border: "1px solid #30363D",
+                      borderRadius: 6,
+                      color: "#E6EDF3",
+                      fontSize: 12,
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#8B949E",
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {t("projectConfig.fieldOperationalQuestion")}
+                  </label>
+                  <textarea
+                    value={editOQValue}
+                    onChange={(e) => setEditOQValue(e.target.value)}
+                    style={{
+                      width: "100%",
+                      minHeight: 50,
+                      padding: "8px 10px",
+                      background: "#0D1117",
+                      border: "1px solid #30363D",
+                      borderRadius: 6,
+                      color: "#E6EDF3",
+                      fontSize: 12,
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <button
+                    onClick={handleSaveRQ}
+                    disabled={rqSaving}
+                    style={{ ...BTN_ACCEPT, fontSize: 11 }}
+                  >
+                    {rqSaving ? t("common.saving") : t("common.save")}
+                  </button>
+                  <button
+                    onClick={() => setEditingRQ(false)}
+                    style={{ ...BTN_SECONDARY, fontSize: 11 }}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <FieldRow
+                  label={t("projectConfig.fieldResearchQuestion")}
+                  value={rqData.research_question || "—"}
+                />
+                <FieldRow
+                  label={t("projectConfig.fieldOperationalQuestion")}
+                  value={rqData.operational_question || "—"}
+                />
+              </>
+            )}
             {rqData.rationale && (
               <FieldRow
                 label={t("projectConfig.fieldRQRationale")}
@@ -458,15 +564,23 @@ export default function ProjectConfigPanel({
                 value={new Date(rqData.generated_at).toLocaleString()}
               />
             )}
-            {/* Regenerate button */}
+            {/* Regenerate & Edit buttons */}
             {!rqGenerating && (
-              <div style={{ padding: "8px 0" }}>
+              <div style={{ padding: "8px 0", display: "flex", gap: 8 }}>
                 <button
                   onClick={handleGenerateResearchQuestion}
                   style={{ ...BTN_SECONDARY, fontSize: 11 }}
                 >
                   {t("projectConfig.generateButton")}
                 </button>
+                {!editingRQ && (
+                  <button
+                    onClick={startEditRQ}
+                    style={{ ...BTN_SECONDARY, fontSize: 11 }}
+                  >
+                    ✏️ {t("common.edit") || "Edit"}
+                  </button>
+                )}
                 {rqMsg && (
                   <p
                     style={{

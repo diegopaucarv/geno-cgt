@@ -385,6 +385,17 @@ export interface ResearchQuestionResponse {
   message?: string;
 }
 
+export interface RQPreviewResponse {
+  research_question: string;
+  operational_question: string;
+  oq_discovery?: string;
+  oq_selective?: string;
+  oq_theoretical?: string;
+  population_number: string;
+  conjugated_verb: string;
+  language: string;
+}
+
 export interface GenerateResearchQuestionResponse {
   status: string;
   project_id: string;
@@ -395,6 +406,43 @@ export interface GenerateResearchQuestionResponse {
 export async function getResearchQuestion(projectId: string) {
   return request<ResearchQuestionResponse>(
     `/projects/${projectId}/research-question`,
+  );
+}
+
+export async function previewResearchQuestionStandalone(body: {
+  population: string;
+  object_of_study: string;
+  processing_verb: string;
+  custom_label?: string;
+}) {
+  return request<RQPreviewResponse>(`/projects/research-question/preview`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function previewResearchQuestion(
+  projectId: string,
+  body: {
+    population: string;
+    object_of_study: string;
+    processing_verb: string;
+    custom_label?: string;
+  },
+) {
+  return request<RQPreviewResponse>(
+    `/projects/${projectId}/research-question/preview`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function updateResearchQuestion(
+  projectId: string,
+  body: { research_question?: string; operational_question?: string },
+) {
+  return request<ResearchQuestionResponse>(
+    `/projects/${projectId}/research-question`,
+    { method: "PUT", body: JSON.stringify(body) },
   );
 }
 
@@ -1017,4 +1065,27 @@ export async function getPipelineDecisions(projectId: string): Promise<{
   >;
 }> {
   return request(`/projects/${projectId}/pipeline/decisions`);
+}
+
+// ── Agent Log Types ──
+
+export interface AgentLogEntry {
+  ts: number;
+  type: "prompt_sent" | "prompt_response";
+  agent_id: string;
+  prompt?: string;
+  schema?: string;
+  response?: string;
+  tokens?: number;
+}
+
+export async function getAgentLogs(
+  projectId: string,
+): Promise<AgentLogEntry[]> {
+  const token = localStorage.getItem("access_token") || "";
+  const res = await fetch(`/api/v1/projects/${projectId}/agent-logs`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
 }

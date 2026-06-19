@@ -2271,6 +2271,9 @@ def task_research_question_builder(proyecto_id: str) -> dict:
     PRO model with the research_question_builder prompt. Stores the result in
     proyectos.population_assumption under key 'research_question'.
 
+    If a pattern_of_interest has been accepted via HITL, it is included
+    so the research question can reference the actual discovered pattern.
+
     Runs ONCE or on-demand (not automatic).
     """
     s = SessionLocal()
@@ -2303,11 +2306,36 @@ def task_research_question_builder(proyecto_id: str) -> dict:
             else str(coding_styles_list)
         )
 
+        # ── Look up accepted pattern_of_interest from HITL decisions ──
+        accepted_pattern = ""
+        pattern_hitl = s.execute(
+            text(
+                "SELECT proposal FROM hitl_decisions "
+                "WHERE project_id = :pid AND gate_name = 'pattern_of_interest' "
+                "AND status = 'accepted' "
+                "ORDER BY creado_en DESC LIMIT 1"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+        if pattern_hitl and pattern_hitl[0]:
+            proposal_data = pattern_hitl[0] if isinstance(pattern_hitl[0], dict) else {}
+            # The accepted pattern is the first candidate that matches the
+            # researcher's selection (stored in researcher_decision details).
+            # For now, extract the first candidate statement as the pattern.
+            candidates = proposal_data.get("candidates", [])
+            if candidates:
+                accepted_pattern = candidates[0].get("statement", "")
+            logger.info(
+                "RQ builder: found accepted pattern_of_interest=%s",
+                accepted_pattern[:80] if accepted_pattern else "(none)",
+            )
+
         logger.info(
-            "research_question_builder: proyecto=%s oos=%s pop=%s",
+            "research_question_builder: proyecto=%s oos=%s pop=%s pattern=%s",
             proyecto_id[:8],
             object_of_study,
             population_description[:60] if population_description else "(sin desc)",
+            accepted_pattern[:40] if accepted_pattern else "(sin patrón)",
         )
 
         response = llm.run_agent(
@@ -2324,6 +2352,7 @@ def task_research_question_builder(proyecto_id: str) -> dict:
                 "processing_verb_conjugated": pa.get(
                     "processing_verb_conjugated", "resolve"
                 ),
+                "pattern_of_interest": accepted_pattern or "(not yet identified)",
             },
         )
 

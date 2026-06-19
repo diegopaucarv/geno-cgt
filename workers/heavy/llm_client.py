@@ -596,9 +596,37 @@ class LLMClient:
             except Exception:
                 pass  # graceful fallback
         model = _TIER_MODELS[model_tier]
-        return self._call_llm(
+
+        # ── Log populated prompt before sending to LLM ───────────────
+        try:
+            from prompt_logger import log_prompt_call
+
+            project_id = variables.get("project_id", "") or variables.get(
+                "proyecto_id", ""
+            )
+            if project_id:
+                log_prompt_call(agent_id, project_id, system_prompt, schema)
+        except Exception:
+            pass
+
+        result = self._call_llm(
             model_tier, model, system_prompt, schema, max_tokens, temperature
         )
+
+        # ── Log LLM response after receiving it ──────────────────────
+        try:
+            from prompt_logger import log_prompt_response
+
+            project_id = variables.get("project_id", "") or variables.get(
+                "proyecto_id", ""
+            )
+            if project_id:
+                tokens = result.get("usage", {}).get("total_tokens", 0)
+                log_prompt_response(agent_id, project_id, result, tokens)
+        except Exception:
+            pass
+
+        return result
 
     def _call_llm(
         self,

@@ -41,7 +41,7 @@ class Proyecto(Base, TimestampMixin):
     population_assumption: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     """
     Configuracion epistemologica del proyecto:
-    - object_of_study: "concern" | "emotion" | "behavior" | "discourse" | "identity" | "custom"
+    - object_of_study: "concern" | "emotion" | "behavior" | "discourse" | "identity" | "custom" | "meaning"
     - temporal_frame: "present_continuous" | "retrospective" | "prospective" | "longitudinal"
     - spatial_frame: "cohabiting_group" | "sparse" | "high_diversity"
     - population_description: str
@@ -60,7 +60,7 @@ class Proyecto(Base, TimestampMixin):
     object_of_study: Mapped[str] = mapped_column(String(50), default="concern")
     """Tipo de patrón humano que se busca. Extraído de population_assumption
     a columna dedicada para acceso rápido en agentes.
-    concern | emotion | behavior | discourse | identity | custom"""
+    concern | emotion | behavior | discourse | identity | custom | meaning"""
 
     # ── F0.3.6: Idioma del usuario para outputs del LLM ──
     language: Mapped[str] = mapped_column(String(5), default="es")

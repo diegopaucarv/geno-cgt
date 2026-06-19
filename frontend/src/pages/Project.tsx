@@ -38,6 +38,9 @@ import { Toast } from "../components/Toast";
 import HITLModal from "../components/HITLModal";
 import AddMemoModal from "../components/AddMemoModal";
 import ProjectConfigPanel from "../components/ProjectConfigPanel";
+import PipelineAgents from "../components/PipelineAgents";
+import AgentModal from "../components/AgentModal";
+import { getAgentLogs, type AgentLogEntry } from "../api/client";
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -123,6 +126,7 @@ export default function ProjectDetail() {
   >([]);
   const logPanelRef = useRef<HTMLDivElement>(null);
   const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const agentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-scroll log panel
   useEffect(() => {
@@ -136,6 +140,18 @@ export default function ProjectDetail() {
   const [showHITLModal, setShowHITLModal] = useState(false);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
+
+  // ── Agent monitoring ──
+  const [sidebarViewMode, setSidebarViewMode] = useState<"stages" | "agents">(
+    "stages",
+  );
+  const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
+  const [agentStatuses, setAgentStatuses] = useState<
+    Record<string, "pending" | "running" | "done" | "error">
+  >({});
+  const [agentModalOpen, setAgentModalOpen] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [selectedAgentLabel, setSelectedAgentLabel] = useState("");
 
   // ── Population Configuration ──
   const [popConfigOpen, setPopConfigOpen] = useState(false);
@@ -168,6 +184,12 @@ export default function ProjectDetail() {
         setAgentMemos(r.memos || []);
       })
       .catch((e) => console.error("agent-memos failed:", e));
+    getAgentLogs(id)
+      .then((logs) => {
+        setAgentLogs(logs);
+        setAgentStatuses(deriveAgentStatuses(logs));
+      })
+      .catch(() => {});
   }, [id]);
 
   // ── Sync experimental mode state from project ──
@@ -559,6 +581,21 @@ export default function ProjectDetail() {
     showToast(t("project.memoModificationApplied"));
   }
 
+  // ── Agent monitoring ───────────────────────────────
+
+  function deriveAgentStatuses(
+    logs: AgentLogEntry[],
+  ): Record<string, "pending" | "running" | "done" | "error"> {
+    const status: Record<string, "pending" | "running" | "done" | "error"> = {};
+    for (const e of logs) {
+      if (!status[e.agent_id]) status[e.agent_id] = "pending";
+      if (e.type === "prompt_sent" && status[e.agent_id] === "pending")
+        status[e.agent_id] = "running";
+      if (e.type === "prompt_response") status[e.agent_id] = "done";
+    }
+    return status;
+  }
+
   // ── Pipeline IA ──────────────────────────────────
 
   function resetStages(presets?: Record<string, StageStatus>) {
@@ -593,6 +630,16 @@ export default function ProjectDetail() {
         }
       } catch {}
     }, 2000);
+
+    // Start agent log polling
+    if (agentPollRef.current) clearInterval(agentPollRef.current);
+    agentPollRef.current = setInterval(async () => {
+      try {
+        const logs = await getAgentLogs(id!);
+        setAgentLogs(logs);
+        setAgentStatuses(deriveAgentStatuses(logs));
+      } catch {}
+    }, 5000);
 
     // Determine mode from pipeline log
     const isContinue = !forceAll && docsNeedSegment === 0 && docsNeedAgents > 0;
@@ -648,6 +695,10 @@ export default function ProjectDetail() {
       if (logPollRef.current) {
         clearInterval(logPollRef.current);
         logPollRef.current = null;
+      }
+      if (agentPollRef.current) {
+        clearInterval(agentPollRef.current);
+        agentPollRef.current = null;
       }
       return;
     }
@@ -758,6 +809,10 @@ export default function ProjectDetail() {
       if (logPollRef.current) {
         clearInterval(logPollRef.current);
         logPollRef.current = null;
+      }
+      if (agentPollRef.current) {
+        clearInterval(agentPollRef.current);
+        agentPollRef.current = null;
       }
       await stopProjectPipeline(id!).catch(() => {});
       if (pipelineFailed) {
@@ -1930,22 +1985,20 @@ export default function ProjectDetail() {
                     {(() => {
                       const oos = project?.object_of_study || "concern";
                       const label = t(`config.${oos}`);
-                      const suffixes: Record<string, string> = {
-                        concern: " (preocupación principal)",
-                        emotion: " (emoción recurrente)",
-                        behavior: " (conducta recurrente)",
-                        discourse: " (discurso recurrente)",
-                        identity: " (trabajo identitario)",
-                        custom: ` (${(() => {
-                          const pa = project?.population_assumption;
-                          return pa &&
-                            typeof pa === "object" &&
-                            "custom_label" in pa
+                      let suffix = "";
+                      if (oos === "custom") {
+                        const pa = project?.population_assumption;
+                        const cl =
+                          pa && typeof pa === "object" && "custom_label" in pa
                             ? (pa as any).custom_label || "custom"
                             : "custom";
-                        })()})`,
-                      };
-                      return label + (suffixes[oos] || "");
+                        suffix = t("projects.patternSuffix.custom", {
+                          label: cl,
+                        });
+                      } else {
+                        suffix = t(`projects.patternSuffix.${oos}`);
+                      }
+                      return label + suffix;
                     })()}
                   </span>
                 </div>
@@ -2582,6 +2635,50 @@ export default function ProjectDetail() {
             justifyContent: "center",
           }}
         >
+          {/* Stage / Agent view toggle */}
+          <div
+            style={{
+              display: "flex",
+              marginBottom: 12,
+              borderRadius: 6,
+              overflow: "hidden",
+              border: "1px solid #30363D",
+            }}
+          >
+            <button
+              onClick={() => setSidebarViewMode("stages")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "stages" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "stages" ? "#fff" : "#8B949E",
+              }}
+            >
+              ☰ Stages
+            </button>
+            <button
+              onClick={() => setSidebarViewMode("agents")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "agents" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "agents" ? "#fff" : "#8B949E",
+              }}
+            >
+              🧠 Agents
+            </button>
+          </div>
+
           <div
             style={{
               display: "flex",
@@ -2635,6 +2732,10 @@ export default function ProjectDetail() {
                   if (logPollRef.current) {
                     clearInterval(logPollRef.current);
                     logPollRef.current = null;
+                  }
+                  if (agentPollRef.current) {
+                    clearInterval(agentPollRef.current);
+                    agentPollRef.current = null;
                   }
                 }}
                 style={{
@@ -2716,6 +2817,16 @@ export default function ProjectDetail() {
                 );
               })}
             </div>
+          ) : sidebarViewMode === "agents" ? (
+            <PipelineAgents
+              agentStatuses={agentStatuses}
+              onAgentClick={(agentId, agentLabel) => {
+                setSelectedAgentId(agentId);
+                setSelectedAgentLabel(agentLabel);
+                setAgentModalOpen(true);
+              }}
+              pipelineRunning={pipelineRunning}
+            />
           ) : (
             <>
               {PIPELINE_STAGES.map((stage, idx) => {
@@ -2882,6 +2993,13 @@ export default function ProjectDetail() {
         message={toastMsg}
         visible={toastVisible}
         onDone={() => setToastVisible(false)}
+      />
+      <AgentModal
+        open={agentModalOpen}
+        agentId={selectedAgentId}
+        agentLabel={selectedAgentLabel}
+        agentLogs={agentLogs}
+        onClose={() => setAgentModalOpen(false)}
       />
     </div>
   );

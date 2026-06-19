@@ -608,6 +608,26 @@ async def tail_pipeline_logs(
         return {"logs": [], "count": 0, "error": "redis_unavailable"}
 
 
+@router.get("/projects/{project_id}/agent-logs")
+async def get_agent_logs(project_id: UUID):
+    """Returns all agent prompt/response logs for a project."""
+    import json as _json
+    import os as _os
+
+    import redis.asyncio as _aredis
+
+    redis_url = _os.getenv("REDIS_URL", "redis://redis:6379/0").replace(
+        "redis://", "redis://default@"
+    )
+    try:
+        r = _aredis.from_url(redis_url)
+        items = await r.lrange(f"agent_logs:{project_id}", 0, -1)
+        await r.close()
+        return [_json.loads(item) for item in items]
+    except Exception:
+        return []
+
+
 @router.get("/projects/{project_id}/agent-memos")
 async def get_agent_memos(
     project_id: UUID,

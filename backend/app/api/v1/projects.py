@@ -90,42 +90,574 @@ def _validate_custom_label_with_spacy(
     }
 
 
+# ── Population article helper (avoids double articles like "los los docentes") ──
+_POP_ARTICLES = {
+    "el",
+    "la",
+    "los",
+    "las",
+    "o",
+    "a",
+    "os",
+    "as",
+    "the",
+    "der",
+    "die",
+    "das",
+}
+
+
+def _format_population_phrase(article: str, population: str) -> str:
+    """Return 'article population' but skip article if population already starts with one."""
+    pop_lower = population.strip().lower()
+    first_word = pop_lower.split()[0] if pop_lower else ""
+    if first_word in _POP_ARTICLES:
+        return population
+    return f"{article} {population}"
+
+
+# ── Stem-changing verb lookup (infinitive → 3sg, 3pl) ──
+_STEM_CHANGING = {
+    "resolver": ("resuelve", "resuelven"),
+    "poder": ("puede", "pueden"),
+    "volver": ("vuelve", "vuelven"),
+    "pensar": ("piensa", "piensan"),
+    "querer": ("quiere", "quieren"),
+    "pedir": ("pide", "piden"),
+    "sentir": ("siente", "sienten"),
+    "encontrar": ("encuentra", "encuentran"),
+    "recordar": ("recuerda", "recuerdan"),
+    "dormir": ("duerme", "duermen"),
+    "jugar": ("juega", "juegan"),
+    "construir": ("construye", "construyen"),
+    "interpretar": ("interpreta", "interpretan"),
+}
+
+
 def _conjugate_verb(verb: str, population: str) -> str:
     """Conjugate processing_verb to match population (always plural 3rd person).
 
     Uses spaCy to detect language. For Spanish, applies basic 3rd-person-plural
     conjugation rules. For English, returns the verb unchanged (no plural conjugation).
     """
+    result = _conjugate_verb_full(verb, population)
+    return result["verb"]
+
+
+def _conjugate_verb_full(verb: str, population: str) -> dict:
+    """Conjugate verb and detect population number/gender via spaCy.
+
+    Returns dict with:
+      - verb: conjugated verb (3rd person, matching population number)
+      - number: "singular" | "plural"
+      - gender: "masculine" | "feminine" | None
+      - article: "el"/"la"/"los"/"las" (Spanish) or "the" (English)
+      - language: detected language code
+    """
     if not verb or not population:
-        return verb or "resolve"
+        return {
+            "verb": verb or "resolve",
+            "number": "plural",
+            "gender": None,
+            "article": "the",
+            "language": "en",
+        }
 
-    nlp = _get_nlp()
-    pop_doc = nlp(population[:100])
-
-    # Detect language: check spaCy model's language
-    is_spanish = nlp.meta.get("lang") == "es"
-
-    # Fallback: count tokens marked as Spanish vs English
-    if not is_spanish:
-        es_tokens = sum(1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "es")
-        en_tokens = sum(1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "en")
-        if es_tokens > en_tokens:
-            is_spanish = True
-
-    if not is_spanish:
-        return verb  # English: no conjugation needed for plural
-
-    # Simple Spanish conjugation: 3rd person plural present indicative
+    try:
+        nlp = _get_nlp()
+        pop_doc = nlp(population[:100])
+        lang = nlp.meta.get("lang", "en")
+        is_spanish = lang == "es"
+        if not is_spanish:
+            es_tokens = sum(
+                1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "es"
+            )
+            en_tokens = sum(
+                1 for t in pop_doc if hasattr(t, "lang_") and t.lang_ == "en"
+            )
+            if es_tokens > en_tokens:
+                is_spanish = True
+                lang = "es"
+    except Exception:
+        # spaCy not available — fall back to simple heuristics
+        lang = "es" if any(c in population.lower() for c in "áéíóúñü") else "en"
+        is_spanish = lang == "es"
     verb_lower = verb.lower().strip()
+    is_portuguese = lang == "pt"
+    is_german = lang == "de"
 
-    if verb_lower.endswith("ar"):
-        return verb_lower[:-2] + "an"
-    elif verb_lower.endswith("er"):
-        return verb_lower[:-2] + "en"
-    elif verb_lower.endswith("ir"):
-        return verb_lower[:-2] + "en"
+    # ── Detect population number & gender ──
+    pop_lower = population.strip().lower()
+    tokens = pop_lower.split()
+
+    number = "singular"  # default singular; only set plural on explicit markers
+    gender = None
+    article = "el"
+
+    if is_spanish or is_portuguese:
+        plural_articles = {"los", "las", "os", "as", "uns", "umas"}
+        singular_articles = {"el", "la", "o", "a", "um", "uma"}
+        masc_articles = {"el", "los", "un", "unos", "o", "os", "um", "uns"}
+        fem_articles = {"la", "las", "una", "unas", "a", "as", "uma", "umas"}
+
+        for tok in tokens:
+            if tok in plural_articles:
+                number = "plural"
+                gender = "masculine" if tok in masc_articles else "feminine"
+                article = tok
+                break
+            if tok in singular_articles:
+                number = "singular"
+                gender = "masculine" if tok in masc_articles else "feminine"
+                article = tok
+                break
+
+        if not gender and tokens:
+            last = tokens[-1]
+            if last.endswith("as"):
+                gender, number = "feminine", "plural"
+            elif last.endswith("os"):
+                gender, number = "masculine", "plural"
+            elif last.endswith("a"):
+                gender, number = "feminine", "singular"
+            elif last.endswith("es") or last.endswith("s"):
+                number = "plural"
+
+        if is_spanish:
+            if number == "plural":
+                article = "los" if gender != "feminine" else "las"
+            else:
+                article = "el" if gender != "feminine" else "la"
+        else:
+            if number == "plural":
+                article = "os" if gender != "feminine" else "as"
+            else:
+                article = "o" if gender != "feminine" else "a"
+
+        # Conjugation using proper Spanish conjugator
+        if is_spanish:
+            forms = _conjugate_spanish_verb(verb_lower)
+            conjugated = forms["pl"] if number == "plural" else forms["sg"]
+        elif is_portuguese:
+            if number == "plural":
+                if verb_lower.endswith("ar"):
+                    conjugated = verb_lower[:-2] + "am"
+                elif verb_lower.endswith("er") or verb_lower.endswith("ir"):
+                    conjugated = verb_lower[:-2] + "em"
+                else:
+                    conjugated = verb_lower
+            else:
+                if verb_lower.endswith("ar"):
+                    conjugated = verb_lower[:-2] + "a"
+                elif verb_lower.endswith("er") or verb_lower.endswith("ir"):
+                    conjugated = verb_lower[:-2] + "e"
+                else:
+                    conjugated = verb_lower
+
+    elif is_german:
+        article = "die"
+        if tokens:
+            for tok in tokens:
+                if tok in {"der", "die", "das", "den", "dem", "des"}:
+                    article = tok
+                    number = "singular" if tok in {"der", "die", "das"} else "plural"
+                    break
+            last = tokens[-1]
+            if last.endswith("en") or last.endswith("n"):
+                number = "plural"
+
+        if number == "plural":
+            if verb_lower.endswith("en"):
+                conjugated = verb_lower
+            elif verb_lower.endswith("ern"):
+                conjugated = verb_lower[:-1] + "n"
+            else:
+                conjugated = (
+                    verb_lower + "en" if not verb_lower.endswith("n") else verb_lower
+                )
+        else:
+            if verb_lower.endswith("en"):
+                conjugated = verb_lower[:-2] + "t"
+            elif verb_lower.endswith("ern"):
+                conjugated = verb_lower[:-1] + "t"
+            else:
+                conjugated = verb_lower + "t"
+
     else:
-        return verb_lower  # irregular or unknown, return as-is
+        article = "the"
+        if tokens:
+            last = tokens[-1]
+            if last.endswith("s") and not last.endswith("ss"):
+                number = "plural"
+            else:
+                number = "singular"
+        conjugated = verb_lower
+
+    return {
+        "verb": conjugated,
+        "number": number,
+        "gender": gender,
+        "article": article,
+        "language": lang,
+    }
+
+
+# ── Pattern noun metadata (for article/pronoun agreement across languages) ──
+_PATTERN_META = {
+    "concern": {
+        "es": {
+            "noun": "preocupación",
+            "gender": "f",
+            "plural": "preocupaciones",
+        },
+        "en": {"noun": "concern", "plural": "concerns"},
+        "de": {"noun": "Sorge", "gender": "f", "plural": "Sorgen"},
+        "pt": {"noun": "preocupação", "gender": "f", "plural": "preocupações"},
+    },
+    "emotion": {
+        "es": {
+            "noun": "emoción",
+            "gender": "f",
+            "plural": "emociones",
+        },
+        "en": {"noun": "emotion", "plural": "emotions"},
+        "de": {
+            "noun": "Emotion",
+            "gender": "f",
+            "plural": "Emotionen",
+        },
+        "pt": {
+            "noun": "emoção",
+            "gender": "f",
+            "plural": "emoções",
+        },
+    },
+    "behavior": {
+        "es": {
+            "noun": "conducta",
+            "gender": "f",
+            "plural": "conductas",
+        },
+        "en": {"noun": "behavior", "plural": "behaviors"},
+        "de": {
+            "noun": "Verhalten",
+            "gender": "n",
+            "plural": "Verhalten",
+        },
+        "pt": {
+            "noun": "comportamento",
+            "gender": "m",
+            "plural": "comportamentos",
+        },
+    },
+    "discourse": {
+        "es": {
+            "noun": "narrativa compartida",
+            "gender": "f",
+            "plural": "narrativas compartidas",
+        },
+        "en": {"noun": "shared narrative", "plural": "shared narratives"},
+        "de": {
+            "noun": "geteiltes Narrativ",
+            "gender": "n",
+            "plural": "geteilte Narrative",
+        },
+        "pt": {
+            "noun": "narrativa compartilhada",
+            "gender": "f",
+            "plural": "narrativas compartilhadas",
+        },
+    },
+    "identity": {
+        "es": {
+            "noun": "negociación de identidad",
+            "gender": "f",
+            "plural": "negociaciones de identidad",
+        },
+        "en": {"noun": "identity negotiation", "plural": "identity negotiations"},
+        "de": {
+            "noun": "Identitätsverhandlung",
+            "gender": "f",
+            "plural": "Identitätsverhandlungen",
+        },
+        "pt": {
+            "noun": "negociação de identidade",
+            "gender": "f",
+            "plural": "negociações de identidade",
+        },
+    },
+    "meaning": {
+        "es": {
+            "noun": "significado",
+            "gender": "m",
+            "plural": "significados",
+        },
+        "en": {"noun": "meaning", "plural": "meanings"},
+        "de": {
+            "noun": "Bedeutung",
+            "gender": "f",
+            "plural": "Bedeutungen",
+        },
+        "pt": {
+            "noun": "significado",
+            "gender": "m",
+            "plural": "significados",
+        },
+    },
+    "custom": {
+        "es": {"noun": "patrón", "gender": "m", "plural": "patrones"},
+        "en": {"noun": "pattern", "plural": "patterns"},
+        "de": {"noun": "Muster", "gender": "n", "plural": "Muster"},
+        "pt": {"noun": "padrão", "gender": "m", "plural": "padrões"},
+    },
+}
+# ── Core qualifier word per language (inserted by templates at correct position) ──
+_CORE_WORD = {
+    "es": "principal",
+    "en": "core",
+    "de": "zentrale",
+    "pt": "principal",
+}
+
+# ── Spanish verb conjugator (3rd person present indicative) ──
+
+# Stem-changing patterns: infinitive ending determines the stem change
+_STEM_CHANGE = {
+    # o → ue
+    "acordar": "acuerd",
+    "acostar": "acuest",
+    "almorzar": "almuerz",
+    "aprobar": "aprueb",
+    "colgar": "cuelg",
+    "contar": "cuent",
+    "costar": "cuest",
+    "demostrar": "demuestr",
+    "devolver": "devuelv",
+    "dormir": "duerm",
+    "encontrar": "encuentr",
+    "envolver": "envuelv",
+    "morder": "muerd",
+    "morir": "muer",
+    "mostrar": "muestr",
+    "mover": "muev",
+    "poder": "pued",
+    "probar": "prueb",
+    "recordar": "recuerd",
+    "resolver": "resuelv",
+    "rogar": "rueg",
+    "soler": "suel",
+    "sonar": "suen",
+    "soñar": "sueñ",
+    "tostar": "tuest",
+    "volar": "vuel",
+    "volver": "vuelv",
+    # e → ie
+    "acertar": "aciert",
+    "advertir": "advirt",
+    "calentar": "calient",
+    "cerrar": "cierr",
+    "comenzar": "comienz",
+    "confesar": "confies",
+    "convertir": "convirt",
+    "defender": "defiend",
+    "despertar": "despiert",
+    "divertir": "divirt",
+    "empezar": "empiez",
+    "encender": "enciend",
+    "entender": "entiend",
+    "fregar": "frieg",
+    "gobernar": "gobiern",
+    "hervir": "hirv",
+    "mentir": "mient",
+    "negar": "nieg",
+    "nevar": "niev",
+    "pensar": "piens",
+    "perder": "pierd",
+    "preferir": "prefir",
+    "querer": "quier",
+    "regar": "rieg",
+    "sentar": "sient",
+    "sentir": "sient",
+    "sugerir": "sugir",
+    "temblar": "tiembl",
+    "tender": "tiend",
+    "venir": "vien",
+    "verter": "viert",
+    # e → i
+    "competir": "compit",
+    "conseguir": "consig",
+    "corregir": "corrig",
+    "decir": "dic",
+    "despedir": "despid",
+    "elegir": "elig",
+    "freír": "frí",
+    "medir": "mid",
+    "pedir": "pid",
+    "perseguir": "persig",
+    "reír": "rí",
+    "repetir": "repit",
+    "seguir": "sig",
+    "servir": "sirv",
+    "sonreír": "sonrí",
+    "vestir": "vist",
+    # Fully irregular (3rd person forms)
+    "ir": "va",
+    "ser": "es",
+    "estar": "está",
+    "haber": "ha",
+    "saber": "sabe",
+    "dar": "da",
+    "ver": "ve",
+    "caber": "cabe",
+    "caer": "cae",
+    "traer": "trae",
+    "oír": "oye",
+    "construir": "construye",
+    "huir": "huye",
+    "incluir": "incluye",
+    "concluir": "concluye",
+    "destruir": "destruye",
+    "sustituir": "sustituye",
+    "tener": "tiene",
+    "poner": "pone",
+    "salir": "sale",
+    "hacer": "hace",
+    "valer": "vale",
+    "conocer": "conoce",
+    "parecer": "parece",
+    "crecer": "crece",
+    "nacer": "nace",
+    "conducir": "conduce",
+    "producir": "produce",
+    "traducir": "traduce",
+    "lucir": "luce",
+}
+
+
+def _conjugate_spanish_verb(verb: str) -> dict:
+    """Return {sg: 3rd-singular, pl: 3rd-plural} present indicative for a Spanish verb."""
+    v = verb.lower().strip()
+    if not v:
+        return {"sg": v, "pl": v}
+
+    # Check fully irregular (returned form is the singular stem)
+    if v in _STEM_CHANGE:
+        stem = _STEM_CHANGE[v]
+        # Fully irregular: stem IS the 3sg form, plural adds -n
+        if v in {
+            "ir",
+            "ser",
+            "estar",
+            "haber",
+            "saber",
+            "dar",
+            "ver",
+            "caber",
+            "caer",
+            "traer",
+            "oír",
+            "tener",
+            "poner",
+            "salir",
+            "hacer",
+            "valer",
+            "conocer",
+            "parecer",
+            "crecer",
+            "nacer",
+            "conducir",
+            "producir",
+            "traducir",
+            "lucir",
+        }:
+            return {"sg": stem, "pl": stem + "n"}
+        if v in {"decir"}:
+            return {"sg": stem + "e", "pl": stem + "en"}
+        # construir-type: -uir → -uye/-uyen
+        if v.endswith("uir") and stem.endswith("ye"):
+            return {"sg": stem, "pl": stem + "n"}
+        # venir: vien → viene/vienen
+        if v == "venir":
+            return {"sg": stem + "e", "pl": stem + "en"}
+        # sentir-type: stem-change + regular endings
+        return {"sg": stem + "e", "pl": stem + "en"}
+
+    # Regular verbs
+    if v.endswith("ar"):
+        return {"sg": v[:-2] + "a", "pl": v[:-2] + "an"}
+    elif v.endswith("er"):
+        return {"sg": v[:-2] + "e", "pl": v[:-2] + "en"}
+    elif v.endswith("ir"):
+        return {"sg": v[:-2] + "e", "pl": v[:-2] + "en"}
+    else:
+        return {"sg": v, "pl": v}
+
+
+# ── Declarative question templates per language ──
+# Variables available: {pop}, {pat_art}, {noun}, {core}, {plural},
+#                       {pron_sg}, {pron_pl}, {verb}, {pop_raw}
+
+_QUESTION_TEMPLATES = {
+    "es": {
+        "rq": "¿Cuál es {pat_art} {noun} {core} de {pop} y cómo {pron_sg} {verb} continuamente?",
+        "oq_discovery": "¿Qué {plural} comunes hay en {pop} y cómo {pron_pl} {verb}?",
+        "oq_selective": "¿En qué maneras {pop} {verb} su {noun} {core}?",
+        "oq_theoretical": "¿Qué proceso explica cómo {pop} {verb} {pat_art} {noun} {core}?",
+    },
+    "en": {
+        "rq": "What is the {core} {noun} of {pop_raw} and how do they continuously {verb} {pron_sg}?",
+        "oq_discovery": "What common {plural} exist in {pop_raw} and how do they {verb} {pron_pl}?",
+        "oq_selective": "In what ways does {pop_raw} {verb} its {core} {noun}?",
+        "oq_theoretical": "What process explains how {pop_raw} {verb} the {core} {noun}?",
+    },
+    "pt": {
+        "rq": "Qual é {pat_art} {noun} {core} de {pop} e como {pron_sg} {verb} continuamente?",
+        "oq_discovery": "Quais {plural} comuns existem em {pop} e como {pron_pl} {verb}?",
+        "oq_selective": "Em que maneiras {pop} {verb} seu {noun} {core}?",
+        "oq_theoretical": "Que processo explica como {pop} {verb} {pat_art} {noun} {core}?",
+    },
+    "de": {
+        "rq": "Was ist {pat_art} {core} {noun} von {pop} und wie {verb} {pron_sg} kontinuierlich?",
+        "oq_discovery": "Welche häufigen {plural} gibt es bei {pop} und wie {verb} sie diese?",
+        "oq_selective": "Auf welche Weise {verb} {pop} sein {noun} {core}?",
+        "oq_theoretical": "Welcher Prozess erklärt, wie {pop} {pat_art} {noun} {core} {verb}?",
+    },
+}
+
+
+def _build_questions(
+    lang: str,
+    pop_phrase: str,
+    population: str,
+    pat_art: str,
+    pattern_noun: str,
+    pattern_plural: str,
+    pronoun_sg: str,
+    pronoun_pl: str,
+    conjugated: str,
+) -> dict:
+    """Build all question variants from a declarative template."""
+    core_word = _CORE_WORD.get(lang, "core")
+    templates = _QUESTION_TEMPLATES.get(lang, _QUESTION_TEMPLATES["en"])
+
+    vars_dict = {
+        "pop": pop_phrase,
+        "pop_raw": population,
+        "pat_art": pat_art,
+        "noun": pattern_noun,
+        "core": core_word,
+        "plural": pattern_plural,
+        "pron_sg": pronoun_sg,
+        "pron_pl": pronoun_pl,
+        "verb": conjugated,
+    }
+
+    return {
+        "research_question": templates["rq"].format(**vars_dict),
+        "oq_discovery": templates["oq_discovery"].format(**vars_dict),
+        "oq_selective": templates["oq_selective"].format(**vars_dict),
+        "oq_theoretical": templates["oq_theoretical"].format(**vars_dict),
+    }
 
 
 def _detect_singular_population(population: str) -> str | None:
@@ -173,6 +705,7 @@ VALID_OBJECTS_OF_STUDY = {
     "discourse",
     "identity",
     "custom",
+    "meaning",
 }
 
 
@@ -292,7 +825,7 @@ async def create_project(
     raw_pop_for_verb = body.supuesto_poblacional
     if raw_pop_for_verb and raw_pop_for_verb.strip():
         try:
-            pvc = _conjugate_verb(pv, raw_pop_for_verb)
+            pvc = _conjugate_verb(processing_verb, raw_pop_for_verb)
             pop = proyecto.population_assumption or {}
             pop["processing_verb_conjugated"] = pvc
             proyecto.population_assumption = pop
@@ -306,6 +839,69 @@ async def create_project(
             )
         except Exception as e:
             logger.warning("Verb conjugation failed for project=%s: %s", proyecto.id, e)
+
+    # ── Generate RQ preview immediately and store it ──
+    raw_pop = body.supuesto_poblacional
+    if raw_pop and raw_pop.strip() and processing_verb:
+        try:
+            conj = _conjugate_verb_full(processing_verb, raw_pop)
+            pop_phrase = _format_population_phrase(conj["article"], raw_pop)
+            meta = _PATTERN_META.get(oos, _PATTERN_META["custom"])
+            lang_meta = meta.get(conj["language"], meta.get("en", {}))
+            pnoun = lang_meta.get("noun", "pattern")
+            pplural = lang_meta.get("plural", "patterns")
+            pgender = lang_meta.get("gender", "n")
+            if oos == "custom" and custom_label and custom_label.strip():
+                pnoun = custom_label.strip()
+                pplural = pnoun + "s" if not pnoun.endswith("s") else pnoun
+            # Resolve articles/pronouns
+            lang = conj["language"]
+            if lang == "es":
+                if pgender == "f":
+                    pat_art, pron_sg, pron_pl = "la", "la", "las"
+                else:
+                    pat_art, pron_sg, pron_pl = "el", "lo", "los"
+            elif lang == "pt":
+                if pgender == "f":
+                    pat_art, pron_sg, pron_pl = "a", "a", "as"
+                else:
+                    pat_art, pron_sg, pron_pl = "o", "o", "os"
+            elif lang == "de":
+                if pgender == "f":
+                    pat_art, pron_sg, pron_pl = "die", "sie", "sie"
+                elif pgender == "n":
+                    pat_art, pron_sg, pron_pl = "das", "es", "sie"
+                else:
+                    pat_art, pron_sg, pron_pl = "der", "ihn", "sie"
+            else:
+                pat_art, pron_sg, pron_pl = "the", "it", "them"
+            questions = _build_questions(
+                lang=lang,
+                pop_phrase=pop_phrase,
+                population=raw_pop,
+                pat_art=pat_art,
+                pattern_noun=pnoun,
+                pattern_plural=pplural,
+                pronoun_sg=pron_sg,
+                pronoun_pl=pron_pl,
+                conjugated=conj["verb"],
+            )
+            pop = proyecto.population_assumption or {}
+            pop["research_question"] = {
+                "research_question": questions["research_question"],
+                "operational_question": questions["oq_discovery"],
+                "oq_discovery": questions["oq_discovery"],
+                "oq_selective": questions["oq_selective"],
+                "oq_theoretical": questions["oq_theoretical"],
+                "generated_at": datetime.utcnow().isoformat(),
+                "auto_generated": True,
+            }
+            proyecto.population_assumption = pop
+            await db.commit()
+            await db.refresh(proyecto)
+            logger.info("RQ stored at creation for project=%s", proyecto.id)
+        except Exception as e:
+            logger.warning("RQ generation at creation failed: %s", e)
 
     # ── Detect singular population (warn only, don't block) ──
     raw_pop = body.supuesto_poblacional
@@ -624,6 +1220,214 @@ async def generalize_population(
             "generalize_population failed for project=%s: %s", proyecto.id, e
         )
         raise HTTPException(500, f"Generalizer failed: {str(e)}")
+
+
+@router.post("/research-question/preview")
+async def preview_research_question_standalone(
+    body: dict,
+):
+    """Standalone RQ preview — no project/auth required. Used by creation form."""
+    population = (body.get("population") or "").strip()
+    oos = (body.get("object_of_study") or "concern").strip()
+    verb = (body.get("processing_verb") or "resolve").strip()
+    custom_label = (body.get("custom_label") or "").strip()
+
+    if not population:
+        raise HTTPException(400, "population is required")
+    if oos not in VALID_OBJECTS_OF_STUDY:
+        raise HTTPException(400, f"Invalid object_of_study: {oos}")
+
+    conj = _conjugate_verb_full(verb, population)
+    conjugated = conj["verb"]
+    pop_number = conj["number"]
+    pop_article = conj["article"]
+    lang = conj["language"]
+    pop_phrase = _format_population_phrase(pop_article, population)
+
+    meta = _PATTERN_META.get(oos, _PATTERN_META["custom"])
+    lang_meta = meta.get(lang, meta.get("en", {}))
+    pattern_noun = lang_meta.get("noun", "pattern")
+    pattern_plural = lang_meta.get("plural", "patterns")
+    pattern_gender = lang_meta.get("gender", "n")
+
+    if oos == "custom" and custom_label:
+        pattern_noun = custom_label
+        pattern_plural = (
+            custom_label + "s" if not custom_label.endswith("s") else custom_label
+        )
+
+    # Pattern article/pronoun — resolve singular AND plural forms
+    if lang == "es":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "la", "la", "las"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "el", "lo", "los"
+    elif lang == "pt":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "a", "a", "as"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "o", "o", "os"
+    elif lang == "de":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "die", "sie", "sie"
+        elif pattern_gender == "n":
+            pat_art, pronoun_sg, pronoun_pl = "das", "es", "sie"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "der", "ihn", "sie"
+    else:
+        pat_art, pronoun_sg, pronoun_pl = "the", "it", "them"
+
+    # ── Build all questions from declarative templates ──
+    questions = _build_questions(
+        lang=lang,
+        pop_phrase=pop_phrase,
+        population=population,
+        pat_art=pat_art,
+        pattern_noun=pattern_noun,
+        pattern_plural=pattern_plural,
+        pronoun_sg=pronoun_sg,
+        pronoun_pl=pronoun_pl,
+        conjugated=conjugated,
+    )
+
+    return {
+        "research_question": questions["research_question"],
+        "operational_question": questions["oq_discovery"],
+        "oq_discovery": questions["oq_discovery"],
+        "oq_selective": questions["oq_selective"],
+        "oq_theoretical": questions["oq_theoretical"],
+        "population_number": pop_number,
+        "conjugated_verb": conjugated,
+        "language": lang,
+    }
+
+
+@router.post("/{project_id}/research-question/preview")
+async def preview_research_question(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Returns a live preview of both the research question and operational question.
+
+    Uses spaCy for proper verb conjugation, article agreement, and pronoun selection.
+    Body: {population, object_of_study, processing_verb, custom_label?}
+    """
+    population = (body.get("population") or "").strip()
+    oos = (body.get("object_of_study") or "concern").strip()
+    verb = (body.get("processing_verb") or "resolve").strip()
+    custom_label = (body.get("custom_label") or "").strip()
+
+    if not population:
+        raise HTTPException(400, "population is required")
+    if oos not in VALID_OBJECTS_OF_STUDY:
+        raise HTTPException(400, f"Invalid object_of_study: {oos}")
+
+    # ── Conjugate verb and detect population metadata ──
+    conj = _conjugate_verb_full(verb, population)
+    conjugated = conj["verb"]
+    pop_number = conj["number"]
+    pop_article = conj["article"]
+    lang = conj["language"]
+    pop_phrase = _format_population_phrase(pop_article, population)
+
+    # ── Get pattern noun metadata ──
+    meta = _PATTERN_META.get(oos, _PATTERN_META["custom"])
+    lang_meta = meta.get(lang, meta.get("en", {}))
+    pattern_noun = lang_meta.get("noun", "pattern")
+    pattern_plural = lang_meta.get("plural", "patterns")
+    pattern_gender = lang_meta.get("gender", "n")
+
+    # Use custom_label if provided for custom type
+    if oos == "custom" and custom_label:
+        pattern_noun = custom_label
+        pattern_plural = (
+            custom_label + "s" if not custom_label.endswith("s") else custom_label
+        )
+
+    # ── Build article and pronoun for pattern ──
+    # Pattern article/pronoun
+    if lang == "es":
+        if pattern_gender == "f":
+            pattern_article, pronoun_sg, pronoun_pl = "la", "la", "las"
+        else:
+            pattern_article, pronoun_sg, pronoun_pl = "el", "lo", "los"
+    elif lang == "pt":
+        if pattern_gender == "f":
+            pattern_article, pronoun_sg, pronoun_pl = "a", "a", "as"
+        else:
+            pattern_article, pronoun_sg, pronoun_pl = "o", "o", "os"
+    elif lang == "de":
+        if pattern_gender == "f":
+            pattern_article, pronoun_sg, pronoun_pl = "die", "sie", "sie"
+        elif pattern_gender == "n":
+            pattern_article, pronoun_sg, pronoun_pl = "das", "es", "sie"
+        else:
+            pattern_article, pronoun_sg, pronoun_pl = "der", "ihn", "sie"
+    else:
+        pattern_article, pronoun_sg, pronoun_pl = "the", "it", "them"
+
+    # ── Build all questions from declarative templates ──
+    questions = _build_questions(
+        lang=lang,
+        pop_phrase=pop_phrase,
+        population=population,
+        pat_art=pattern_article,
+        pattern_noun=pattern_noun,
+        pattern_plural=pattern_plural,
+        pronoun_sg=pronoun_sg,
+        pronoun_pl=pronoun_pl,
+        conjugated=conjugated,
+    )
+
+    return {
+        "project_id": str(project_id),
+        "research_question": questions["research_question"],
+        "operational_question": questions["oq_discovery"],
+        "oq_discovery": questions["oq_discovery"],
+        "oq_selective": questions["oq_selective"],
+        "oq_theoretical": questions["oq_theoretical"],
+        "population_number": pop_number,
+        "population_gender": conj.get("gender"),
+        "population_article": pop_article,
+        "pattern_gender": pattern_gender,
+        "pattern_article": pattern_article,
+        "pronoun": pronoun,
+        "conjugated_verb": conjugated,
+        "language": lang,
+    }
+
+
+@router.put("/{project_id}/research-question")
+async def update_research_question(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Allows the researcher to manually edit the stored research question."""
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    pa = dict(proyecto.population_assumption or {})
+    rq_data = dict(pa.get("research_question", {}))
+
+    if "research_question" in body:
+        rq_data["research_question"] = body["research_question"]
+    if "operational_question" in body:
+        rq_data["operational_question"] = body["operational_question"]
+
+    pa["research_question"] = rq_data
+    proyecto.population_assumption = pa
+    await db.commit()
+    await db.refresh(proyecto)
+
+    return {
+        "project_id": str(project_id),
+        **rq_data,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
