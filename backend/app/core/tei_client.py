@@ -9,6 +9,8 @@ from app.core.embedding_cache import SharedEmbeddingCache
 
 logger = logging.getLogger(__name__)
 
+MODEL_ID = os.getenv("MODEL_ID", "thomasht86/voyage-4-nano-ONNX")
+
 
 class TEIClient:
     """
@@ -33,7 +35,7 @@ class TEIClient:
                     f"{self.base_url}/v1/embeddings",
                     json={
                         "input": texts,
-                        "model": "voyageai/voyage-4-nano",
+                        "model": MODEL_ID,
                         "prompt_name": prompt_name,
                     },
                     timeout=120.0,

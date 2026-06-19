@@ -1404,7 +1404,7 @@ export default function ProjectDetail() {
                     color: globalViewMode === "original" ? "#FFF" : "#8B949E",
                   }}
                 >
-                  📄 {t("project.showOriginal")}
+                  {t("project.showOriginal")}
                 </button>
                 <button
                   onClick={() => {
@@ -1423,7 +1423,7 @@ export default function ProjectDetail() {
                     color: globalViewMode === "segmented" ? "#FFF" : "#8B949E",
                   }}
                 >
-                  ✂️ {t("project.showSegments")}
+                  {t("project.showSegments")}
                 </button>
               </div>
 

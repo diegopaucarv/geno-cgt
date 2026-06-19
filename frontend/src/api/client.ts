@@ -1079,6 +1079,29 @@ export interface AgentLogEntry {
   tokens?: number;
 }
 
+// ── Setup ───────────────────────────────────────────────────────────
+
+export async function getSetupStatus() {
+  return request<{
+    language: string;
+    spacy_ready: boolean;
+    stanza_ready: boolean;
+  }>("/setup/status");
+}
+
+export async function initializeSetup(language: string) {
+  return request<{ status: string }>("/setup/initialize", {
+    method: "POST",
+    body: JSON.stringify({ language }),
+  });
+}
+
+export async function getSetupProgress() {
+  return request<{ status: string; progress: number; message: string }>(
+    "/setup/progress",
+  );
+}
+
 export async function getAgentLogs(
   projectId: string,
 ): Promise<AgentLogEntry[]> {

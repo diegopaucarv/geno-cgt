@@ -11,6 +11,7 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/Project";
 import PlaygroundPage from "./pages/Playground";
 import Register from "./pages/Register";
+import Setup from "./pages/Setup";
 import ConfigModal, { ConfigButton } from "./components/ConfigModal";
 
 /** Layout que envuelve las vistas principales con el botón de configuración */
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           {/* Vistas principales con config persistente */}
           <Route element={<MainLayout />}>
+            <Route path="/setup" element={<Setup />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/projects/:id/theory" element={<PlaygroundPage />} />

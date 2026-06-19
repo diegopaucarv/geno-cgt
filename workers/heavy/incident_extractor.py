@@ -26,6 +26,7 @@ from typing import Any
 
 sys.path.insert(0, "/app")
 
+from app.core.runtime_config import get_config_value
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -265,7 +266,9 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
 
         response = llm._call_llm(
             tier="FLASH",
-            model=os.getenv("MODEL_FLASH", "google/gemma-4-31B-it"),
+            model=get_config_value(
+                "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
+            ),
             system_prompt=system_prompt,
             schema=_INCIDENT_SCHEMA,
             max_tokens=2048,

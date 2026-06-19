@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-import spacy
+from app.core.nlp_models import get_current_spacy
 from app.db.database import get_db
 from app.models.domain.category import Categoria
 from app.models.domain.document import Documento
@@ -19,17 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-# ── spaCy model (lazy-loaded) ──────────────────────────────────────────
-
-_nlp: "spacy.Language | None" = None
+# ── spaCy model (lazy-loaded via model manager) ───────────────────────
 
 
-def _get_nlp() -> "spacy.Language":
-    """Lazy-load the Spanish spaCy model."""
-    global _nlp
-    if _nlp is None:
-        _nlp = spacy.load("es_core_news_lg")
-    return _nlp
+def _get_nlp():
+    """Lazy-load the spaCy model via the model manager."""
+    return get_current_spacy()
 
 
 # ── Spanish equivalents for canonical object_of_study types ──
@@ -186,59 +181,77 @@ def _conjugate_verb_full(verb: str, population: str) -> dict:
     is_portuguese = lang == "pt"
     is_german = lang == "de"
 
-    # ── Detect population number & gender ──
+    # ── Detect population number & gender via spaCy morphology ──
     pop_lower = population.strip().lower()
     tokens = pop_lower.split()
 
-    number = "singular"  # default singular; only set plural on explicit markers
+    number = "singular"
     gender = None
-    article = "el"
+    article = "the"
 
+    # spaCy-first: use morphological analysis for ALL languages
+    try:
+        for token in pop_doc:
+            morph_num = token.morph.get("Number")
+            if morph_num:
+                number = "plural" if "Plur" in morph_num else "singular"
+                morph_gen = token.morph.get("Gender")
+                if morph_gen:
+                    gender = "masculine" if "Masc" in morph_gen else "feminine"
+                break
+    except Exception:
+        pass  # spaCy unavailable, fall through to heuristics
+
+    # Build article from detected number/gender
     if is_spanish or is_portuguese:
-        plural_articles = {"los", "las", "os", "as", "uns", "umas"}
-        singular_articles = {"el", "la", "o", "a", "um", "uma"}
-        masc_articles = {"el", "los", "un", "unos", "o", "os", "um", "uns"}
-        fem_articles = {"la", "las", "una", "unas", "a", "as", "uma", "umas"}
-
-        for tok in tokens:
-            if tok in plural_articles:
-                number = "plural"
-                gender = "masculine" if tok in masc_articles else "feminine"
-                article = tok
-                break
-            if tok in singular_articles:
-                number = "singular"
-                gender = "masculine" if tok in masc_articles else "feminine"
-                article = tok
-                break
-
-        if not gender and tokens:
-            last = tokens[-1]
-            if last.endswith("as"):
-                gender, number = "feminine", "plural"
-            elif last.endswith("os"):
-                gender, number = "masculine", "plural"
-            elif last.endswith("a"):
-                gender, number = "feminine", "singular"
-            elif last.endswith("es") or last.endswith("s"):
-                number = "plural"
-
+        if not gender:
+            # Fallback: check articles
+            plural_arts = {"los", "las", "os", "as", "uns", "umas"}
+            singular_arts = {"el", "la", "o", "a", "um", "uma"}
+            masc_arts = {"el", "los", "un", "unos", "o", "os", "um", "uns"}
+            for tok in tokens:
+                if tok in plural_arts:
+                    number, gender = (
+                        "plural",
+                        ("masculine" if tok in masc_arts else "feminine"),
+                    )
+                    article = tok
+                    break
+                if tok in singular_arts:
+                    number, gender = (
+                        "singular",
+                        ("masculine" if tok in masc_arts else "feminine"),
+                    )
+                    article = tok
+                    break
+        if not gender:
+            gender = "masculine"  # default for Spanish/Portuguese
         if is_spanish:
-            if number == "plural":
-                article = "los" if gender != "feminine" else "las"
-            else:
-                article = "el" if gender != "feminine" else "la"
+            article = (
+                "los"
+                if gender == "masculine" and number == "plural"
+                else "las"
+                if gender == "feminine" and number == "plural"
+                else "el"
+                if gender == "masculine"
+                else "la"
+            )
         else:
-            if number == "plural":
-                article = "os" if gender != "feminine" else "as"
-            else:
-                article = "o" if gender != "feminine" else "a"
+            article = (
+                "os"
+                if gender == "masculine" and number == "plural"
+                else "as"
+                if gender == "feminine" and number == "plural"
+                else "o"
+                if gender == "masculine"
+                else "a"
+            )
 
-        # Conjugation using proper Spanish conjugator
+        # Conjugation
         if is_spanish:
             forms = _conjugate_spanish_verb(verb_lower)
             conjugated = forms["pl"] if number == "plural" else forms["sg"]
-        elif is_portuguese:
+        else:
             if number == "plural":
                 if verb_lower.endswith("ar"):
                     conjugated = verb_lower[:-2] + "am"
@@ -256,41 +269,22 @@ def _conjugate_verb_full(verb: str, population: str) -> dict:
 
     elif is_german:
         article = "die"
-        if tokens:
-            for tok in tokens:
-                if tok in {"der", "die", "das", "den", "dem", "des"}:
-                    article = tok
-                    number = "singular" if tok in {"der", "die", "das"} else "plural"
-                    break
-            last = tokens[-1]
-            if last.endswith("en") or last.endswith("n"):
-                number = "plural"
-
+        for tok in tokens:
+            if tok in {"der", "die", "das", "den", "dem", "des"}:
+                article = tok
+                number = "singular" if tok in {"der", "die", "das"} else "plural"
+                break
         if number == "plural":
-            if verb_lower.endswith("en"):
-                conjugated = verb_lower
-            elif verb_lower.endswith("ern"):
-                conjugated = verb_lower[:-1] + "n"
-            else:
-                conjugated = (
-                    verb_lower + "en" if not verb_lower.endswith("n") else verb_lower
-                )
+            conjugated = (
+                verb_lower + "en" if not verb_lower.endswith("en") else verb_lower
+            )
         else:
-            if verb_lower.endswith("en"):
-                conjugated = verb_lower[:-2] + "t"
-            elif verb_lower.endswith("ern"):
-                conjugated = verb_lower[:-1] + "t"
-            else:
-                conjugated = verb_lower + "t"
+            conjugated = (
+                verb_lower[:-2] + "t" if verb_lower.endswith("en") else verb_lower + "t"
+            )
 
     else:
-        article = "the"
-        if tokens:
-            last = tokens[-1]
-            if last.endswith("s") and not last.endswith("ss"):
-                number = "plural"
-            else:
-                number = "singular"
+        # English / other: spaCy already set number; just conjugate (no conjugation in English)
         conjugated = verb_lower
 
     return {
@@ -1552,49 +1546,6 @@ async def get_research_question(
     return {
         "project_id": str(project_id),
         **rq_data,
-    }
-
-
-@router.post("/{project_id}/research-question/generate")
-async def generate_research_question(
-    project_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
-    """Triggers the Nemotrón agent to generate a formal CGT research question.
-
-    Dispatches the research_question_builder Celery task to the heavy queue.
-    Returns the task_id for polling.
-    """
-    from app.core.celery_app import celery_app
-
-    proyecto = await db.get(Proyecto, project_id)
-    if not proyecto:
-        raise HTTPException(404, "Proyecto no encontrado")
-
-    # Verify project has population assumption data
-    pa = proyecto.population_assumption or {}
-    pop_desc = pa.get("population_description", "")
-    if not pop_desc or not pop_desc.strip():
-        # Fallback: use supuesto_poblacional
-        if not proyecto.supuesto_poblacional:
-            raise HTTPException(
-                400,
-                "El proyecto no tiene population_description ni supuesto_poblacional. "
-                "Configure la población antes de generar la pregunta de investigación.",
-            )
-
-    task = celery_app.send_task(
-        "research_question_builder",
-        args=[str(project_id)],
-        queue="heavy",
-    )
-
-    return {
-        "status": "dispatched",
-        "project_id": str(project_id),
-        "task_id": task.id,
-        "message": "Research question generation dispatched. Use GET .../research-question to check results.",
     }
 
 

@@ -8,9 +8,10 @@ Defines which Together.ai model endpoints to use for each tier:
 Also defines the prompt profile -> model mapping.
 """
 
-import os
 from dataclasses import dataclass, field
 from typing import Optional
+
+from app.core.runtime_config import get_config_value
 
 
 @dataclass(frozen=True)
@@ -31,11 +32,15 @@ class ModelEndpoint:
 MODEL_REGISTRY: dict[str, ModelEndpoint] = {
     # ── PRO tier: DeepSeek V4 Pro via Together.ai ──────────────────
     "deepseek-pro": ModelEndpoint(
-        model_id=os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro"),
+        model_id=get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4"),
         display_name="DeepSeek Pro (V4)",
         tier="pro",
-        max_tokens_default=int(os.getenv("MODEL_PRO_MAX_TOKENS", "8192")),
-        temperature_default=float(os.getenv("MODEL_PRO_TEMPERATURE", "0.3")),
+        max_tokens_default=int(
+            get_config_value("MODEL_PRO_MAX_TOKENS", default="8192")
+        ),
+        temperature_default=float(
+            get_config_value("MODEL_PRO_TEMPERATURE", default="0.3")
+        ),
         supports_json_schema=True,
         notes=(
             "Reasoning model. Do NOT use 'think step by step' in prompts — "
@@ -46,11 +51,17 @@ MODEL_REGISTRY: dict[str, ModelEndpoint] = {
     ),
     # ── FLASH tier: Gemma 4 via Together.ai ───────────────────────
     "deepseek-flash": ModelEndpoint(
-        model_id=os.getenv("MODEL_FLASH", "google/gemma-3n-E4B-it"),
+        model_id=get_config_value(
+            "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
+        ),
         display_name="Gemma 3 Flash (E4B)",
         tier="flash",
-        max_tokens_default=int(os.getenv("MODEL_FLASH_MAX_TOKENS", "4096")),
-        temperature_default=float(os.getenv("MODEL_FLASH_TEMPERATURE", "0.1")),
+        max_tokens_default=int(
+            get_config_value("MODEL_FLASH_MAX_TOKENS", default="4096")
+        ),
+        temperature_default=float(
+            get_config_value("MODEL_FLASH_TEMPERATURE", default="0.1")
+        ),
         supports_json_schema=True,
         notes=(
             "Fast model for volume tasks. Add explicit guardrails: "

@@ -16,8 +16,10 @@ Overrides individuales:
 
 import os
 
+from app.core.runtime_config import get_config_value
+
 # ── Profiles ──────────────────────────────────────────────────────────
-NLP_PROFILE = os.getenv("NLP_PROFILE", "low")
+NLP_PROFILE = get_config_value("NLP_PROFILE", default="low")
 
 _PROFILES: dict[str, dict[str, str]] = {
     "low": {
@@ -49,21 +51,23 @@ TEI_URL = os.getenv("TEI_URL", "http://tei:8080")
 CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")
 
 # ── Segmentation ─────────────────────────────────────────────────────
-SEGMENTATION_REINERT = os.getenv("SEGMENTATION_REINERT", "false").lower() in (
+SEGMENTATION_REINERT = str(
+    get_config_value("SEGMENTATION_REINERT", default="false")
+).lower() in (
     "1",
     "true",
     "yes",
 )
-SPACY_MODEL = os.getenv("SPACY_MODEL", "es_core_news_lg")
+# SPACY_MODEL is now derived from language at runtime (not a config key)
 # SPACY_EXCLUDE: "auto" = detect at runtime, "" = load all, "vectors,lemmatizer" = manual
-SPACY_EXCLUDE = os.getenv("SPACY_EXCLUDE", "auto")
+SPACY_EXCLUDE = get_config_value("SPACY_EXCLUDE", default="auto")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 
 # ── Runtime settings (used by docker-compose via env vars) ───────────
 # These are exported so docker-compose can read them as ${VAR}
-NLP_CONCURRENCY = os.getenv("NLP_CONCURRENCY", _profile["CONCURRENCY"])
+NLP_CONCURRENCY = get_config_value("NLP_CONCURRENCY", default=_profile["CONCURRENCY"])
 NLP_MEM_LIMIT = os.getenv("NLP_MEM_LIMIT", _profile["MEM_LIMIT"])
 
 # ── Environment ──────────────────────────────────────────────────────
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
-USE_GPU = os.getenv("USE_GPU", "false").lower() == "true"
+USE_GPU = str(get_config_value("USE_GPU", default="false")).lower() == "true"

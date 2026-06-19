@@ -8,6 +8,8 @@ para settings del worker.
 
 import os
 
+from app.core.runtime_config import get_config_value
+
 # ── Database ──────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -24,8 +26,10 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
 CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")
 
 # ── LLM Model Tiers ──────────────────────────────────────────────────
-MODEL_FLASH = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
-MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
+MODEL_FLASH = get_config_value(
+    "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
+)
+MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4")
 
 # ── TEI ──────────────────────────────────────────────────────────────
 TEI_URL = os.getenv("TEI_URL", "http://tei:8080")

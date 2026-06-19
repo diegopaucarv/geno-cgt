@@ -50,52 +50,41 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 
 # ═══════════════════════════════════════════════════════════════════════
 # ⚙️ CONFIG EDITABLE — expuesto en el panel ⚙ del frontend
-#    Prioridad: env var > runtime.json > default
+#    Prioridad: env var > runtime.json > EDITABLE_DEFAULTS (app.core.defaults)
 # ═══════════════════════════════════════════════════════════════════════
+
+from app.core.defaults import EDITABLE_DEFAULTS as _D
+
+
+def _cfg(key: str) -> str:
+    return get_config_value(key, default=_D.get(key, ""))
+
 
 # ── LLM Models ───────────────────────────────────────────────────────
 
-MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4")
-MODEL_PRO_MAX_TOKENS = int(get_config_value("MODEL_PRO_MAX_TOKENS", default="8192"))
-MODEL_PRO_TEMPERATURE = float(get_config_value("MODEL_PRO_TEMPERATURE", default="0.3"))
+MODEL_PRO = _cfg("MODEL_PRO")
+MODEL_PRO_MAX_TOKENS = int(_cfg("MODEL_PRO_MAX_TOKENS"))
+MODEL_PRO_TEMPERATURE = float(_cfg("MODEL_PRO_TEMPERATURE"))
 
-MODEL_FLASH = get_config_value("MODEL_FLASH", default="google/gemma-4-31B-it")
-MODEL_FLASH_MAX_TOKENS = int(get_config_value("MODEL_FLASH_MAX_TOKENS", default="4096"))
-MODEL_FLASH_TEMPERATURE = float(
-    get_config_value("MODEL_FLASH_TEMPERATURE", default="0.1")
-)
-MODEL_FLASH_REPETITION_PENALTY = float(
-    get_config_value("MODEL_FLASH_REPETITION_PENALTY", default="1.1")
-)
-MODEL_FLASH_TOP_P = float(get_config_value("MODEL_FLASH_TOP_P", default="0.9"))
+MODEL_FLASH = _cfg("MODEL_FLASH")
+MODEL_FLASH_MAX_TOKENS = int(_cfg("MODEL_FLASH_MAX_TOKENS"))
+MODEL_FLASH_TEMPERATURE = float(_cfg("MODEL_FLASH_TEMPERATURE"))
+MODEL_FLASH_REPETITION_PENALTY = float(_cfg("MODEL_FLASH_REPETITION_PENALTY"))
+MODEL_FLASH_TOP_P = float(_cfg("MODEL_FLASH_TOP_P"))
 
 # ── Segmentation ─────────────────────────────────────────────────────
 
-SEGMENTATION_MODE = get_config_value("SEGMENTATION_MODE", default="spacy")
-SEGMENTATION_REINERT = get_config_value(
-    "SEGMENTATION_REINERT", default="false"
-).lower() in (
-    "1",
-    "true",
-    "yes",
-)
-SPACY_MODEL = get_config_value("SPACY_MODEL", default="es_core_news_lg")
-NLP_CONCURRENCY = int(get_config_value("NLP_CONCURRENCY", default="1"))
+SEGMENTATION_MODE = _cfg("SEGMENTATION_MODE")
+SEGMENTATION_REINERT = _cfg("SEGMENTATION_REINERT").lower() in ("1", "true", "yes")
+NLP_CONCURRENCY = int(_cfg("NLP_CONCURRENCY"))
 
 # ── CGT Methodology ──────────────────────────────────────────────────
 
-DEFAULT_POPULATION_ASSUMPTION = get_config_value(
-    "DEFAULT_POPULATION_ASSUMPTION",
-    default=(
-        "hábitos hipotéticos de comportamiento que procesan "
-        "preocupaciones similares o más amplias en la vida diaria "
-        "del participante"
-    ),
-)
-DEFAULT_OBJECT_OF_STUDY = get_config_value("DEFAULT_OBJECT_OF_STUDY", default="concern")
+DEFAULT_POPULATION_ASSUMPTION = _cfg("DEFAULT_POPULATION_ASSUMPTION")
+DEFAULT_OBJECT_OF_STUDY = _cfg("DEFAULT_OBJECT_OF_STUDY")
 
 # ── System ───────────────────────────────────────────────────────────
 
-ENVIRONMENT = get_config_value("ENVIRONMENT", default="dev")
-ORCHESTRATION_MODE = get_config_value("ORCHESTRATION_MODE", default="celery")
-USE_GPU = get_config_value("USE_GPU", default="false").lower() in ("1", "true", "yes")
+ENVIRONMENT = _cfg("ENVIRONMENT")
+ORCHESTRATION_MODE = _cfg("ORCHESTRATION_MODE")
+USE_GPU = _cfg("USE_GPU").lower() in ("1", "true", "yes")

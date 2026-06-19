@@ -5,6 +5,8 @@ GET  /api/v1/config  → devuelve toda la config editable + defaults
 PUT  /api/v1/config  → guarda overrides en runtime.json (persistente)
 
 Los secrets NUNCA se exponen ni se persisten aquí.
+
+Los defaults editables viven en app.core.defaults (fuente única).
 """
 
 from typing import Any
@@ -26,16 +28,30 @@ from app.core.config import (
     ORCHESTRATION_MODE,
     SEGMENTATION_MODE,
     SEGMENTATION_REINERT,
-    SPACY_MODEL,
     USE_GPU,
 )
-from app.core.runtime_config import get_runtime_config, update_runtime_config
+from app.core.nlp_models import SPACY_MODELS
+from app.core.runtime_config import (
+    get_config_value,
+    get_runtime_config,
+    update_runtime_config,
+)
 from app.models.domain.user import Usuario
 from app.services.auth import get_current_user
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["config"])
+
+
+# ── spaCy model lookup by language ────────────────────────────────────
+
+
+def _get_spacy_model() -> str:
+    """Return the spaCy model name for the currently-configured language."""
+    lang = get_config_value("NLP_LANGUAGE", default="es")
+    return SPACY_MODELS.get(lang, SPACY_MODELS["es"])
+
 
 # ── Schema for editable fields ───────────────────────────────────────
 
@@ -44,7 +60,7 @@ class LLMConfig(BaseModel):
     model_pro: str = "deepseek-ai/DeepSeek-V4"
     model_pro_max_tokens: int = 8192
     model_pro_temperature: float = 0.3
-    model_flash: str = "google/gemma-4-31B-it"
+    model_flash: str = "nvidia/nemotron-3-ultra-550b-a55b"
     model_flash_max_tokens: int = 4096
     model_flash_temperature: float = 0.1
     model_flash_repetition_penalty: float = 1.1
@@ -52,9 +68,8 @@ class LLMConfig(BaseModel):
 
 
 class SegmentationConfig(BaseModel):
-    mode: str = "spacy"  # spacy | progressive | reinert
+    mode: str = "progressive"  # spacy | progressive | reinert
     reinert: bool = False
-    spacy_model: str = "es_core_news_lg"
     nlp_concurrency: int = 1
 
 
@@ -115,7 +130,7 @@ async def get_config():
         "segmentation": {
             "mode": SEGMENTATION_MODE,
             "reinert": SEGMENTATION_REINERT,
-            "spacy_model": SPACY_MODEL,
+            "spacy_model": _get_spacy_model(),
             "nlp_concurrency": NLP_CONCURRENCY,
             "env_overrides": _env_overrides_section("segmentation"),
         },
@@ -175,7 +190,6 @@ async def save_config(
             {
                 "SEGMENTATION_MODE": body.segmentation.mode,
                 "SEGMENTATION_REINERT": str(body.segmentation.reinert).lower(),
-                "SPACY_MODEL": body.segmentation.spacy_model,
                 "NLP_CONCURRENCY": str(body.segmentation.nlp_concurrency),
             }
         )
@@ -241,7 +255,6 @@ def _env_overrides_section(section: str) -> dict[str, str]:
         "segmentation": [
             "SEGMENTATION_MODE",
             "SEGMENTATION_REINERT",
-            "SPACY_MODEL",
             "NLP_CONCURRENCY",
         ],
         "cgt": [

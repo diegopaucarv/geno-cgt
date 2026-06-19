@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
-RUN pip install spacy && python -m spacy download es_core_news_lg
+# NLP models are downloaded at runtime by app.core.nlp_models
+# based on the user's language setting
 
 COPY . .
 

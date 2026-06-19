@@ -12,9 +12,10 @@ from config import (
     REDIS_URL,
     SEGMENTATION_REINERT,
     SPACY_EXCLUDE,
-    SPACY_MODEL,
     TEI_URL,
 )
+
+MODEL_ID = os.getenv("MODEL_ID", "thomasht86/voyage-4-nano-ONNX")
 from contextual_enrichment import build_contextualized_text
 from kombu import Exchange, Queue
 
@@ -130,7 +131,7 @@ def generar_embedding(
 
     response = requests.post(
         f"{TEI_URL}/v1/embeddings",
-        json={"input": [text_to_embed], "model": "voyageai/voyage-4-nano"},
+        json={"input": [text_to_embed], "model": MODEL_ID},
         timeout=120.0,
     )
     response.raise_for_status()
@@ -237,7 +238,6 @@ def segmentar_documento(
 
     reinert = SEGMENTATION_REINERT
     segmenter = ProgressiveSegmenter(
-        spacy_model=SPACY_MODEL,
         spacy_exclude=SPACY_EXCLUDE,
         tei_url=TEI_URL,
         reinert_micro=reinert,
@@ -293,7 +293,7 @@ def segmentar_documento(
                         texts = [t for _, t, _ in segment_ids]
                         resp = requests.post(
                             f"{TEI_URL}/v1/embeddings",
-                            json={"input": texts, "model": "voyageai/voyage-4-nano"},
+                            json={"input": texts, "model": MODEL_ID},
                             timeout=120.0,
                         )
                         resp.raise_for_status()

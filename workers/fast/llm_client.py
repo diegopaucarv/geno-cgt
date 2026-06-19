@@ -19,44 +19,48 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
+from app.core.runtime_config import get_config_value
+
 logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
 
-# ── Model configuration — SINGLE SOURCE: environment variables ──
+# ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
 # These are also defined in config.py; kept here for worker self-containment.
 
-_MODEL_FLASH = os.getenv("MODEL_FLASH", "google/gemma-4-31B-it")
-_MODEL_PRO = os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
+_MODEL_FLASH = get_config_value(
+    "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
+)
+_MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4")
 
 _TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": os.getenv("MODEL_FLASH", "google/gemma-4-31B-it"),
-    "PRO": os.getenv("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro"),
+    "FLASH": _MODEL_FLASH,
+    "PRO": _MODEL_PRO,
 }
 
 _TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": int(os.getenv("MODEL_FLASH_MAX_TOKENS", "1500")),
-    "PRO": int(os.getenv("MODEL_PRO_MAX_TOKENS", "8192")),
+    "FLASH": int(get_config_value("MODEL_FLASH_MAX_TOKENS", default="1500")),
+    "PRO": int(get_config_value("MODEL_PRO_MAX_TOKENS", default="8192")),
 }
 
 _TIER_TEMPERATURE: dict[ModelTier, float] = {
-    "FLASH": float(os.getenv("MODEL_FLASH_TEMPERATURE", "0.1")),
-    "PRO": float(os.getenv("MODEL_PRO_TEMPERATURE", "0.3")),
+    "FLASH": float(get_config_value("MODEL_FLASH_TEMPERATURE", default="0.1")),
+    "PRO": float(get_config_value("MODEL_PRO_TEMPERATURE", default="0.3")),
 }
 
 _TIER_REPETITION_PENALTY: dict[ModelTier, float] = {
-    "FLASH": float(os.getenv("MODEL_FLASH_REPETITION_PENALTY", "1.1")),
-    "PRO": float(os.getenv("MODEL_PRO_REPETITION_PENALTY", "1.0")),
+    "FLASH": float(get_config_value("MODEL_FLASH_REPETITION_PENALTY", default="1.1")),
+    "PRO": float(get_config_value("MODEL_PRO_REPETITION_PENALTY", default="1.0")),
 }
 
 _TIER_FREQUENCY_PENALTY: dict[ModelTier, float] = {
-    "FLASH": float(os.getenv("MODEL_FLASH_FREQUENCY_PENALTY", "1.15")),
-    "PRO": float(os.getenv("MODEL_PRO_FREQUENCY_PENALTY", "0.0")),
+    "FLASH": float(get_config_value("MODEL_FLASH_FREQUENCY_PENALTY", default="1.15")),
+    "PRO": float(get_config_value("MODEL_PRO_FREQUENCY_PENALTY", default="0.0")),
 }
 
 _TIER_TOP_P: dict[ModelTier, float] = {
-    "FLASH": float(os.getenv("MODEL_FLASH_TOP_P", "0.9")),
-    "PRO": float(os.getenv("MODEL_PRO_TOP_P", "1.0")),
+    "FLASH": float(get_config_value("MODEL_FLASH_TOP_P", default="0.9")),
+    "PRO": float(get_config_value("MODEL_PRO_TOP_P", default="1.0")),
 }
 
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")

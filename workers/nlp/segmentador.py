@@ -8,6 +8,12 @@ from typing import Optional
 import numpy as np
 import spacy
 import torch
+from app.core.nlp_models import (
+    get_current_spacy,
+    get_current_spacy_model_name,
+    get_current_stanza_lang,
+)
+from app.core.runtime_config import get_config_value
 from embedding_client import EmbeddingClient
 from rapidfuzz import fuzz
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -18,7 +24,11 @@ from spacy.language import Language
 from torchao.quantization import Int8DynamicActivationInt8WeightConfig, quantize_
 
 # ── GPU / CPU switch ──────────────────────────────────────────────────────────
-_USE_GPU = os.getenv("USE_GPU", "false").lower() in ("1", "true", "yes")
+_USE_GPU = str(get_config_value("USE_GPU", default="false")).lower() in (
+    "1",
+    "true",
+    "yes",
+)
 if _USE_GPU:
     spacy.require_gpu()
     _stanza_gpu = True
@@ -221,9 +231,8 @@ class ClassicSegmenter:
 class ProgressiveSegmenter:
     def __init__(
         self,
-        spacy_model: str = "es_core_news_lg",
         spacy_exclude: str = "auto",
-        stanza_lang: str = "es",
+        stanza_lang: str | None = None,
         similarity_threshold: float = 0.6,
         max_depth: int = 3,
         window_size: int = 3,
@@ -234,7 +243,7 @@ class ProgressiveSegmenter:
         self.similarity_threshold = similarity_threshold
         self.max_depth = max_depth
         self.window_size = window_size
-        self.stanza_lang = stanza_lang
+        self.stanza_lang = stanza_lang or get_current_stanza_lang()
         self.stanza_use_gpu = _stanza_gpu
         self.debug_coref = debug_coref
         self.reinert_micro = reinert_micro
@@ -242,6 +251,8 @@ class ProgressiveSegmenter:
         # Embedding client → TEI (Voyage-4 ONNX, 1024-dim)
         self.embedding_client = EmbeddingClient(base_url=tei_url)
 
+        # spaCy pipeline — model name resolved by model manager
+        spacy_model = get_current_spacy_model_name()
         # spaCy pipeline — single shared instance
         if spacy_exclude == "auto":
             from memory import auto_spacy_exclude, available_memory_gb
@@ -1094,7 +1105,9 @@ class ProgressiveSegmenter:
         del self.nlp
         gc.collect()
         _free_gpu_memory()
-        self.nlp = spacy.load(self._spacy_model, exclude=self._spacy_exclude)
+        self.nlp = spacy.load(
+            get_current_spacy_model_name(), exclude=self._spacy_exclude
+        )
         if "conversational_sbd" not in self.nlp.pipe_names:
             self.nlp.add_pipe("conversational_sbd", before="parser")
         if hasattr(self, "classicseg"):
@@ -1122,9 +1135,7 @@ class AnchorBasedReconstructor:
 
     def __init__(self):
         try:
-            import spacy
-
-            self.nlp = spacy.load("es_core_news_lg")
+            self.nlp = get_current_spacy()
         except Exception:
             self.nlp = None
 

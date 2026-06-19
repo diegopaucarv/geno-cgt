@@ -4,6 +4,7 @@ from uuid import UUID
 import magic
 from app.core.config import ORCHESTRATION_MODE, SEGMENTATION_MODE
 from app.core.minio_client import minio_client
+from app.core.nlp_models import get_current_spacy
 from app.db.database import get_db
 from app.models.domain.document import Documento
 from app.models.domain.segment import Segmento
@@ -220,8 +221,7 @@ async def segment_document(
         )
         return {"status": "dispatched", "task_id": task.id}
 
-    # Default: spaCy
-    import spacy
+    # Default: spaCy (via model manager)
 
     # Eliminar segmentos previos
     existing = (
@@ -232,7 +232,7 @@ async def segment_document(
     for s in existing:
         await db.delete(s)
 
-    nlp = spacy.load("es_core_news_lg")
+    nlp = get_current_spacy()
     doc_nlp = nlp(texto)
 
     for i, sent in enumerate(doc_nlp.sents):
@@ -508,8 +508,11 @@ async def delete_all_segments(
 ):
     """Elimina todos los segmentos de un proyecto y resetea docs a crudo."""
     from sqlalchemy import text
+
     await db.execute(
-        text("DELETE FROM segmentos WHERE documento_id IN (SELECT id FROM documentos WHERE proyecto_id = :pid)"),
+        text(
+            "DELETE FROM segmentos WHERE documento_id IN (SELECT id FROM documentos WHERE proyecto_id = :pid)"
+        ),
         {"pid": project_id},
     )
     await db.execute(
@@ -518,4 +521,3 @@ async def delete_all_segments(
     )
     await db.commit()
     return {"status": "ok", "message": "Segmentos eliminados, docs reseteados a crudo"}
-

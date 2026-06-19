@@ -99,7 +99,6 @@ services:
     environment:
       - HF_HOME=/app/.cache
       - MODEL_ID=thomasht86/voyage-4-nano-ONNX
-      - USE_GPU=${USE_GPU:-false}
     ports:
       - "8080:8080"
     volumes:
@@ -147,7 +146,6 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET:-dev-jwt-secret-gt-local}
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
-      SEGMENTATION_MODE: ${SEGMENTATION_MODE:-spacy}
     depends_on:
       pgbouncer:
         condition: service_started
@@ -185,11 +183,6 @@ services:
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
-      MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
-      MODEL_FLASH_REPETITION_PENALTY: ${MODEL_FLASH_REPETITION_PENALTY:-1.1}
-      MODEL_FLASH_TOP_P: ${MODEL_FLASH_TOP_P:-0.9}
-      MODEL_FLASH_MAX_TOKENS: ${MODEL_FLASH_MAX_TOKENS:-1500}
-      MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
     volumes:
       - ./backend/app/prompts:/app/prompts:ro
       - runtime_config:/app/config:ro
@@ -222,17 +215,13 @@ services:
       - uploads_data:/app/uploads
       - ./backend:/app/backend:ro
       - runtime_config:/app/config:ro
-    command: celery -A tasks worker --queues=nlp --concurrency=${NLP_CONCURRENCY:-1} --loglevel=info
+    command: celery -A tasks worker --queues=nlp --concurrency=1 --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379/0
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       UPLOAD_DIR: /app/uploads
-      USE_GPU: ${USE_GPU:-false}
-      SEGMENTATION_REINERT: ${SEGMENTATION_REINERT:-false}
-      SPACY_MODEL: ${SPACY_MODEL:-es_core_news_lg}
-      SPACY_EXCLUDE: ${SPACY_EXCLUDE:-auto}
       PYTHONPATH: /app/backend:/app/backend/app
     mem_limit: ${NLP_MEM_LIMIT:-6g}
     # Stanza coref necesita ~2GB, spaCy lg ~600MB → minimo 4GB, recomendado 6GB
@@ -273,10 +262,7 @@ services:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
-      MODEL_FLASH: ${MODEL_FLASH:-nvidia/nemotron-3-ultra-550b-a55b}
-      MODEL_PRO: ${MODEL_PRO:-deepseek-ai/DeepSeek-V4-Pro}
       PYTHONPATH: /app/backend:/app/backend/app
-      AGENTIC_MODE: "true"
     depends_on:
       - pgbouncer
     volumes:

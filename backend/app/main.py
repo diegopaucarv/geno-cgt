@@ -19,6 +19,7 @@ from app.api.v1 import (
     pipeline,
     projects,
     rag,
+    setup,
     theoretical_codes,
 )
 from app.core.minio_client import minio_client
@@ -92,3 +93,4 @@ app.include_router(theoretical_codes.router)
 app.include_router(elaboration.router)
 app.include_router(hitl.router)
 app.include_router(memos.router)
+app.include_router(setup.router)

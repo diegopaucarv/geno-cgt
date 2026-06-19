@@ -7,6 +7,7 @@ import logging
 import os
 
 from algorithmic_checks import deduplicate_hypotheses
+from app.core.runtime_config import get_config_value
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -31,7 +32,11 @@ def _ensure_vector_adapter():
 
 
 # Feature flag para modo agencial (activar con AGENTIC_MODE=true)
-AGENTIC_MODE = os.getenv("AGENTIC_MODE", "false").lower() in ("1", "true", "yes")
+AGENTIC_MODE = str(get_config_value("AGENTIC_MODE", default="false")).lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 def _get_population_assumption(session, proyecto_id: str) -> str:

@@ -40,7 +40,7 @@ export default function Register() {
     try {
       const data = await registerUser(nombre, correo, password);
       localStorage.setItem("access_token", data.access_token);
-      navigate("/projects");
+      navigate("/setup");
     } catch (err: any) {
       setError(err.message);
     } finally {

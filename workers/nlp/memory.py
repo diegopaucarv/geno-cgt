@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import os
 
+from app.core.nlp_models import get_current_spacy_model_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,13 +70,15 @@ def available_memory_gb() -> float:
 
 def auto_spacy_exclude(
     min_available_gb: float | None = None,
-    spacy_model: str = "es_core_news_lg",
+    spacy_model: str | None = None,
 ) -> list[str]:
     """Devuelve lista de componentes spaCy a excluir según RAM disponible.
 
     IMPORTANTE: modelos 'lg' usan StaticVectors en tok2vec.
     Excluir 'vectors' rompe el pipeline. Solo se excluye en 'md' o 'sm'.
     """
+    if spacy_model is None:
+        spacy_model = get_current_spacy_model_name()
     gb = min_available_gb if min_available_gb is not None else available_memory_gb()
     is_lg = spacy_model.endswith("_lg")
 

@@ -26,7 +26,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/projects");
+      navigate("/setup");
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
