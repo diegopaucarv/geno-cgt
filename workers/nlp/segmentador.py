@@ -266,7 +266,13 @@ class ProgressiveSegmenter:
             _exclude = [c.strip() for c in spacy_exclude.split(",") if c.strip()]
         self._spacy_model = spacy_model
         self._spacy_exclude = _exclude
-        self.nlp = spacy.load(spacy_model, exclude=_exclude)
+        try:
+            self.nlp = spacy.load(spacy_model, exclude=_exclude)
+        except OSError:
+            # Model not installed yet — download on demand (safety net)
+            logging.warning("spaCy model '%s' not found — downloading...", spacy_model)
+            spacy.cli.download(spacy_model)
+            self.nlp = spacy.load(spacy_model, exclude=_exclude)
         logging.info(
             f"[Init] spaCy '{spacy_model}' loaded (excluded: {_exclude or 'none'})"
         )
@@ -1105,9 +1111,19 @@ class ProgressiveSegmenter:
         del self.nlp
         gc.collect()
         _free_gpu_memory()
-        self.nlp = spacy.load(
-            get_current_spacy_model_name(), exclude=self._spacy_exclude
-        )
+        try:
+            self.nlp = spacy.load(
+                get_current_spacy_model_name(), exclude=self._spacy_exclude
+            )
+        except OSError:
+            # Model may have been evicted — re-download safety net
+            spacy_model = get_current_spacy_model_name()
+            logging.warning(
+                "spaCy model '%s' not found during cleanup — downloading...",
+                spacy_model,
+            )
+            spacy.cli.download(spacy_model)
+            self.nlp = spacy.load(spacy_model, exclude=self._spacy_exclude)
         if "conversational_sbd" not in self.nlp.pipe_names:
             self.nlp.add_pipe("conversational_sbd", before="parser")
         if hasattr(self, "classicseg"):

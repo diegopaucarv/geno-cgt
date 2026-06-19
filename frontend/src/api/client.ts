@@ -161,6 +161,7 @@ export interface Document {
   creado_en: string;
   estado: string;
   texto_extraido?: string;
+  texto_preprocesado?: string;
 }
 
 export interface PipelineStatus {
@@ -506,6 +507,27 @@ export async function listSegments(document_id: string) {
 export async function segmentDocument(documentId: string) {
   return request<{ status: string; num_segmentos?: number; task_id?: string }>(
     `/documents/${documentId}/segment`,
+    { method: "POST" },
+  );
+}
+
+export async function deleteDocumentSegments(documentId: string) {
+  return request<{ status: string; message: string }>(
+    `/documents/${documentId}/segments`,
+    { method: "DELETE" },
+  );
+}
+
+export async function resetDocsToCrudo(projectId: string) {
+  return request<{ status: string; message: string }>(
+    `/documents/project/${projectId}/reset-to-crudo`,
+    { method: "POST" },
+  );
+}
+
+export async function restoreDocumentOriginal(documentId: string) {
+  return request<{ status: string; message: string }>(
+    `/documents/${documentId}/restore-original`,
     { method: "POST" },
   );
 }

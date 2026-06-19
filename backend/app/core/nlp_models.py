@@ -8,6 +8,7 @@ Individual model overrides: SPACY_MODEL, SPACY_EXCLUDE.
 """
 
 import logging
+import os
 
 from app.core.runtime_config import get_config_value
 
@@ -107,27 +108,14 @@ def check_models_ready(language: str) -> dict:
     spacy_model = SPACY_MODELS.get(language, "es_core_news_lg")
 
     # ── spaCy ──────────────────────────────────────────────────────
-    spacy_ready = False
-    try:
-        import spacy
-
-        spacy_ready = spacy.util.is_package(spacy_model)
-    except Exception:
-        pass
+    spacy_data_path = os.environ.get("SPACY_DATA_PATH", "/app/nlp_models/spacy")
+    spacy_ready = os.path.isdir(os.path.join(spacy_data_path, spacy_model))
 
     # ── Stanza ─────────────────────────────────────────────────────
-    stanza_ready = False
-    try:
-        import os
-
-        import stanza
-
-        stanza_resources_dir = os.path.join(
-            os.path.expanduser("~"), "stanza_resources", language
-        )
-        stanza_ready = os.path.isdir(stanza_resources_dir)
-    except Exception:
-        pass
+    stanza_resources_dir = os.environ.get(
+        "STANZA_RESOURCES_DIR", "/app/nlp_models/stanza"
+    )
+    stanza_ready = os.path.isdir(os.path.join(stanza_resources_dir, language))
 
     models_downloaded: list[str] = []
     models_pending: list[str] = []
@@ -155,6 +143,9 @@ def warmup_language(language: str, progress_callback=None) -> None:
     """
     Download (if needed) and warm up NLP models for a language.
 
+    Uses SPACY_DATA_PATH and STANZA_RESOURCES_DIR env vars to install models
+    into Docker volumes so they persist across container rebuilds.
+
     Args:
         language: Language code (e.g. 'es', 'en').
         progress_callback: Optional callable(progress: float, message: str)
@@ -163,6 +154,17 @@ def warmup_language(language: str, progress_callback=None) -> None:
     import os
 
     spacy_model = SPACY_MODELS.get(language, "es_core_news_lg")
+    spacy_data_path = os.environ.get("SPACY_DATA_PATH", "/app/nlp_models/spacy")
+    stanza_resources_dir = os.environ.get(
+        "STANZA_RESOURCES_DIR", "/app/nlp_models/stanza"
+    )
+
+    # Skip entirely if both models are already present
+    ready = check_models_ready(language)
+    if ready["spacy_ready"] and ready["stanza_ready"]:
+        if progress_callback:
+            progress_callback(1.0, f"NLP models for {language} already present")
+        return
 
     total_steps = 2  # spaCy + Stanza
     current_step = 0
@@ -178,9 +180,10 @@ def warmup_language(language: str, progress_callback=None) -> None:
     # ── spaCy ──────────────────────────────────────────────────────
     import spacy
 
-    if not spacy.util.is_package(spacy_model):
+    if not ready["spacy_ready"]:
         _update(f"Downloading spaCy model: {spacy_model}...")
-        spacy.cli.download(spacy_model)
+        os.makedirs(spacy_data_path, exist_ok=True)
+        spacy.cli.download(spacy_model, pip_args=["--target", spacy_data_path])
         _update(f"spaCy model {spacy_model} installed", step_delta=1)
     else:
         _update(f"spaCy model {spacy_model} already present", step_delta=1)
@@ -189,12 +192,10 @@ def warmup_language(language: str, progress_callback=None) -> None:
     try:
         import stanza
 
-        stanza_resources_dir = os.path.join(
-            os.path.expanduser("~"), "stanza_resources", language
-        )
-        if not os.path.isdir(stanza_resources_dir):
+        if not ready["stanza_ready"]:
             _update(f"Downloading Stanza model for {language}...")
-            stanza.download(language)
+            os.makedirs(stanza_resources_dir, exist_ok=True)
+            stanza.download(language, dir=stanza_resources_dir)
             _update(f"Stanza model for {language} installed", step_delta=1)
         else:
             _update(f"Stanza model for {language} already present", step_delta=1)

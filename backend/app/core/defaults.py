@@ -7,7 +7,7 @@ Cambia un valor aquí y se propaga a todo el sistema automáticamente.
 
 EDITABLE_DEFAULTS: dict[str, str] = {
     # ── LLM Models ──
-    "MODEL_PRO": "deepseek-ai/DeepSeek-V4",
+    "MODEL_PRO": "deepseek-ai/DeepSeek-V4-Pro",
     "MODEL_PRO_MAX_TOKENS": "8192",
     "MODEL_PRO_TEMPERATURE": "0.3",
     "MODEL_FLASH": "nvidia/nemotron-3-ultra-550b-a55b",

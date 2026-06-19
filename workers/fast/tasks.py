@@ -531,7 +531,10 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
                 meta = row[0] if row[0] else {}
                 if isinstance(meta, str):
                     meta = _json.loads(meta)
-                meta["texto_extraido"] = result["punctuated_text"]
+                # Preservar texto_original si no existe aún
+                if "texto_original" not in meta:
+                    meta["texto_original"] = meta.get("texto_extraido", "")
+                meta["texto_preprocesado"] = result["punctuated_text"]
                 meta["texto_puntuado"] = True
                 session.execute(
                     text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),

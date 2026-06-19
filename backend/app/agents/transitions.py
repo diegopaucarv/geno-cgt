@@ -291,7 +291,7 @@ def _get_texto(session, documento_id: str) -> str:
     ).fetchone()
     if row and row[0]:
         meta = row[0] if isinstance(row[0], dict) else {}
-        return meta.get("texto_extraido", "")
+        return meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
     return ""
 
 

@@ -187,6 +187,19 @@ interface PipelineAgentsProps {
   agentStatuses: Record<string, "pending" | "running" | "done" | "error">;
   onAgentClick: (agentId: string, agentLabel: string) => void;
   pipelineRunning: boolean;
+  agentOutputCounts?: Record<string, number>;
+  onEraseStageOutputs?: (stageKey: string) => void;
+  onEraseAgentOutputs?: (agentId: string) => void;
+  agentLatencies?: Record<string, number>;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+
+function formatLatency(seconds: number): string {
+  if (seconds < 1) {
+    return `${(seconds * 1000).toFixed(0)}ms`;
+  }
+  return `${seconds.toFixed(1)}s`;
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -195,15 +208,32 @@ export default function PipelineAgents({
   agentStatuses,
   onAgentClick,
   pipelineRunning,
+  agentOutputCounts,
+  onEraseStageOutputs,
+  onEraseAgentOutputs,
+  agentLatencies,
 }: PipelineAgentsProps) {
   const { t } = useI18n();
 
   // Group agents by stage
-  const agentsByStage: Record<string, Array<{ id: string; def: AgentDef }>> = {};
+  const agentsByStage: Record<
+    string,
+    Array<{ id: string; def: AgentDef }>
+  > = {};
   for (const [agentId, def] of Object.entries(AGENT_MAP)) {
     if (!agentsByStage[def.stage]) agentsByStage[def.stage] = [];
     agentsByStage[def.stage].push({ id: agentId, def });
   }
+
+  // Total output count for all agents in a stage
+  const stageOutputCount = (stageKey: string): number => {
+    const agents = agentsByStage[stageKey];
+    if (!agents || !agentOutputCounts) return 0;
+    return agents.reduce(
+      (sum, { id }) => sum + (agentOutputCounts[id] || 0),
+      0,
+    );
+  };
 
   // Pulsing animation keyframes
   const pulseKeyframes = `
@@ -219,6 +249,8 @@ export default function PipelineAgents({
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {PIPELINE_STAGES.map((stage) => {
           const agents = agentsByStage[stage.key];
+          const stageHasOutputs = stageOutputCount(stage.key) > 0;
+
           return (
             <div key={stage.key}>
               {/* Stage header */}
@@ -253,6 +285,8 @@ export default function PipelineAgents({
                     const status = agentStatuses[id] || "pending";
                     const familyColor = FAMILY_COLORS[def.family] || "#8B949E";
                     const isLast = agentIdx === agents.length - 1;
+                    const outputCount = agentOutputCounts?.[id] || 0;
+                    const latency = agentLatencies?.[id];
 
                     return (
                       <div key={id}>
@@ -279,12 +313,14 @@ export default function PipelineAgents({
                             transition: "background 0.15s",
                           }}
                           onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLDivElement).style.background =
-                              "#1C2333";
+                            (
+                              e.currentTarget as HTMLDivElement
+                            ).style.background = "#1C2333";
                           }}
                           onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLDivElement).style.background =
-                              "transparent";
+                            (
+                              e.currentTarget as HTMLDivElement
+                            ).style.background = "transparent";
                           }}
                         >
                           {/* Agent circle */}
@@ -308,11 +344,15 @@ export default function PipelineAgents({
                             }}
                           >
                             {status === "done" ? (
-                              <span style={{ color: "#3FB950", fontWeight: 700 }}>
+                              <span
+                                style={{ color: "#3FB950", fontWeight: 700 }}
+                              >
                                 ✓
                               </span>
                             ) : status === "error" ? (
-                              <span style={{ color: "#F85149", fontWeight: 700 }}>
+                              <span
+                                style={{ color: "#F85149", fontWeight: 700 }}
+                              >
                                 ✗
                               </span>
                             ) : status === "running" ? (
@@ -341,27 +381,55 @@ export default function PipelineAgents({
                             )}
                           </div>
 
-                          {/* Agent label */}
+                          {/* Agent label + info */}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
                               style={{
-                                fontSize: 11,
-                                fontWeight: status === "running" ? 600 : 400,
-                                color:
-                                  status === "done"
-                                    ? "#E6EDF3"
-                                    : status === "running"
-                                      ? "#E6EDF3"
-                                      : status === "error"
-                                        ? "#F85149"
-                                        : "#8B949E",
-                                lineHeight: 1.4,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                minWidth: 0,
                               }}
                             >
-                              {def.label}
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: status === "running" ? 600 : 400,
+                                  color:
+                                    status === "done"
+                                      ? "#E6EDF3"
+                                      : status === "running"
+                                        ? "#E6EDF3"
+                                        : status === "error"
+                                          ? "#F85149"
+                                          : "#8B949E",
+                                  lineHeight: 1.4,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}
+                              >
+                                {def.label}
+                              </span>
+                              {outputCount > 0 && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    color: "#E6EDF3",
+                                    background: "#30363D",
+                                    borderRadius: 10,
+                                    padding: "0px 6px",
+                                    lineHeight: "16px",
+                                    whiteSpace: "nowrap",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {outputCount}
+                                </span>
+                              )}
                             </div>
                             <div
                               style={{
@@ -373,12 +441,100 @@ export default function PipelineAgents({
                               }}
                             >
                               {def.family}
+                              {latency !== undefined && (
+                                <span
+                                  style={{
+                                    marginLeft: 6,
+                                    color: "#8B949E",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {formatLatency(latency)}
+                                </span>
+                              )}
                             </div>
                           </div>
+
+                          {/* Per-agent erase button */}
+                          {outputCount > 0 && onEraseAgentOutputs && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEraseAgentOutputs(id);
+                              }}
+                              title={`Erase ${def.label} outputs`}
+                              style={{
+                                background: "transparent",
+                                border: "1px solid #F8514933",
+                                color: "#F85149",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                lineHeight: "16px",
+                                opacity: 0.7,
+                                transition: "opacity 0.15s, background 0.15s",
+                                flexShrink: 0,
+                              }}
+                              onMouseEnter={(e) => {
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.opacity = "1";
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.background = "#F8514911";
+                              }}
+                              onMouseLeave={(e) => {
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.opacity = "0.7";
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.background = "transparent";
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
                   })}
+
+                  {/* Stage erase outputs button */}
+                  {stageHasOutputs && onEraseStageOutputs && (
+                    <div style={{ marginTop: 4, marginBottom: 4 }}>
+                      <button
+                        onClick={() => onEraseStageOutputs(stage.key)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          background: "transparent",
+                          border: "1px solid #F8514933",
+                          color: "#F85149",
+                          cursor: "pointer",
+                          fontSize: 10,
+                          padding: "3px 8px",
+                          borderRadius: 4,
+                          opacity: 0.7,
+                          transition: "opacity 0.15s, background 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          const el = e.currentTarget as HTMLButtonElement;
+                          el.style.opacity = "1";
+                          el.style.background = "#F8514911";
+                        }}
+                        onMouseLeave={(e) => {
+                          const el = e.currentTarget as HTMLButtonElement;
+                          el.style.opacity = "0.7";
+                          el.style.background = "transparent";
+                        }}
+                      >
+                        🗑 Erase outputs
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

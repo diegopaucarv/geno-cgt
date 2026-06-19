@@ -47,6 +47,10 @@ class Documento(Base, TimestampMixin):
     def texto_extraido(self) -> str:
         return self.metadatos.get("texto_extraido", "") if self.metadatos else ""
 
+    @property
+    def texto_preprocesado(self) -> str:
+        return self.metadatos.get("texto_preprocesado", "") if self.metadatos else ""
+
 
 # Importar aquí para que SQLAlchemy registre la clase antes de resolver relaciones
 from app.models.domain.document_process import DocumentProcess  # noqa: E402,F401

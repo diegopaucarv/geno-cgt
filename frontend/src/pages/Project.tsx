@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useI18n } from "../i18n";
 import {
@@ -10,6 +11,9 @@ import {
   punctuateDocument,
   deleteDocument,
   deleteAllDocuments,
+  deleteDocumentSegments,
+  resetDocsToCrudo,
+  restoreDocumentOriginal,
   getPipelineLog,
   getAgentMemos,
   getPendingHitl,
@@ -115,7 +119,6 @@ export default function ProjectDetail() {
   >({});
 
   // ── Execution log ──
-  const [showLog, setShowLog] = useState(false);
   const [pipelineFailed, setPipelineFailed] = useState(false);
   const [memoFilter, setMemoFilter] = useState("all");
   const [agentMemos, setAgentMemos] = useState<any[]>([]);
@@ -128,13 +131,6 @@ export default function ProjectDetail() {
   const logPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const agentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-scroll log panel
-  useEffect(() => {
-    if (logPanelRef.current && showLog && pipelineLiveLogs.length > 0) {
-      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
-    }
-  }, [pipelineLiveLogs, showLog]);
-
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
   const [showHITLModal, setShowHITLModal] = useState(false);
@@ -142,13 +138,25 @@ export default function ProjectDetail() {
   const [showConfigPanel, setShowConfigPanel] = useState(false);
 
   // ── Agent monitoring ──
-  const [sidebarViewMode, setSidebarViewMode] = useState<"stages" | "agents">(
-    "stages",
-  );
+  const [sidebarViewMode, setSidebarViewMode] = useState<
+    "stages" | "agents" | "logs"
+  >("stages");
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
   const [agentStatuses, setAgentStatuses] = useState<
     Record<string, "pending" | "running" | "done" | "error">
   >({});
+
+  // Auto-scroll log panel
+  useEffect(() => {
+    if (
+      logPanelRef.current &&
+      sidebarViewMode === "logs" &&
+      pipelineLiveLogs.length > 0
+    ) {
+      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
+    }
+  }, [pipelineLiveLogs, sidebarViewMode]);
+
   const [agentModalOpen, setAgentModalOpen] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedAgentLabel, setSelectedAgentLabel] = useState("");
@@ -164,6 +172,21 @@ export default function ProjectDetail() {
   const [switchingPattern, setSwitchingPattern] = useState(false);
   const [selectedOOS, setSelectedOOS] = useState<string>("");
   const [customLabel, setCustomLabel] = useState("");
+
+  // ── Preprocessing toggle ──
+  const [preprocessDisabled, setPreprocessDisabled] = useState<Set<string>>(
+    () => {
+      try {
+        const raw = localStorage.getItem("gt_preprocess_disabled");
+        return raw ? new Set(JSON.parse(raw)) : new Set<string>();
+      } catch {
+        return new Set<string>();
+      }
+    },
+  );
+
+  // ── Text comparison toggle (crudo vs preprocesado) ──
+  const [showPreprocessed, setShowPreprocessed] = useState(false);
 
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -242,7 +265,7 @@ export default function ProjectDetail() {
     });
   }, [pipelineLog, pipelineRunning]);
 
-  // Debug: force fetch on every render if empty
+  // Retry once on mount if memos didn't load initially
   useEffect(() => {
     if (id && agentMemos.length === 0) {
       getAgentMemos(id)
@@ -252,7 +275,7 @@ export default function ProjectDetail() {
         })
         .catch((e) => console.error("retry failed:", e));
     }
-  });
+  }, [id]); // ✅ only on mount / id change, not every render
 
   // ── HITL polling ──
   useEffect(() => {
@@ -278,7 +301,11 @@ export default function ProjectDetail() {
     s.segment =
       summary.need_segment === 0 && summary.total > 0 ? "done" : "pending";
     s.agents =
-      summary.need_agents === 0 && summary.total > 0 ? "done" : "pending";
+      summary.need_agents === 0 &&
+      summary.need_segment === 0 &&
+      summary.total > 0
+        ? "done"
+        : "pending";
     s.synthesis =
       summary.sintetizados > 0 && summary.need_synthesis === 0
         ? "done"
@@ -364,44 +391,37 @@ export default function ProjectDetail() {
 
   // Resolve view mode for a specific document
   function docViewMode(doc: Document): ViewMode {
-    // Per-doc override takes priority
     if (viewModeOverride[doc.id]) return viewModeOverride[doc.id];
-    // If global is "segmented" but doc has no segments, fall back to original
     if (globalViewMode === "segmented" && !hasSegments(doc)) return "original";
     return globalViewMode;
   }
 
   // ── Preprocesar (puntuación) ────────────────────────────────────
 
-  async function handlePunctuate(docId: string) {
-    if (punctRunning === docId) {
-      abortRef.current = true;
-      setPunctStatus((prev) => ({
-        ...prev,
-        [docId]: t("project.preprocessingCancelled"),
-      }));
-      setPunctRunning(null);
-      await fetch("/api/v1/admin/workers/fast/stop", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-        },
-      }).catch(() => {});
-      return;
-    }
+  /** Convert MIME type to a short friendly label */
+  function mimeLabel(mime: string | undefined | null): string {
+    if (!mime) return "?";
+    const map: Record<string, string> = {
+      "application/pdf": "PDF",
+      "text/plain": "TXT",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        "DOCX",
+      "application/msword": "DOC",
+      "application/vnd.oasis.opendocument.text": "ODT",
+      "text/markdown": "MD",
+      "text/csv": "CSV",
+      "application/rtf": "RTF",
+    };
+    if (map[mime]) return map[mime];
+    // fallback: strip to last segment and uppercase
+    const last = mime.split("/").pop() || mime;
+    return last.length <= 10
+      ? last.toUpperCase()
+      : last.slice(0, 8).toUpperCase();
+  }
 
-    const auth = `Bearer ${localStorage.getItem("access_token")}`;
-    abortRef.current = false;
-    setPunctRunning(docId);
-    setPunctStatus((prev) => ({
-      ...prev,
-      [docId]: t("project.preprocessingStarting"),
-    }));
-    await fetch("/api/v1/admin/workers/fast/start", {
-      method: "POST",
-      headers: { Authorization: auth },
-    });
-    await new Promise((r) => setTimeout(r, 1500));
+  /** Bare API call + status management for a single doc — no worker lifecycle */
+  async function punctuateSingleDoc(docId: string) {
     setPunctStatus((prev) => ({
       ...prev,
       [docId]: t("project.preprocessingProcessing"),
@@ -441,14 +461,100 @@ export default function ProjectDetail() {
       if (!abortRef.current)
         setPunctStatus((prev) => ({
           ...prev,
-          [docId]: t("project.preprocessingError") + err.message,
+          [docId]: t("project.preprocessingError") + (err.message || ""),
         }));
-    } finally {
-      if (abortRef.current)
+    }
+  }
+
+  /** Preprocess all documents that are still 'crudo' (raw) — one worker, many docs */
+  async function handlePreprocessAll() {
+    const crudos = docs.filter((d) => d.estado === "crudo");
+    if (crudos.length === 0) return;
+
+    abortRef.current = false;
+    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+
+    // Start worker ONCE for the batch
+    try {
+      await fetch("/api/v1/admin/workers/fast/start", {
+        method: "POST",
+        headers: { Authorization: auth },
+      });
+    } catch {
+      showToast(t("project.workerStartFailed"));
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+
+    try {
+      for (const doc of crudos) {
+        if (abortRef.current) break;
+        setPunctRunning(doc.id);
         setPunctStatus((prev) => ({
           ...prev,
-          [docId]: t("project.preprocessingCancelled"),
+          [doc.id]: t("project.preprocessingStarting"),
         }));
+        await punctuateSingleDoc(doc.id);
+        setPunctRunning(null);
+      }
+    } finally {
+      // Always stop the worker
+      await fetch("/api/v1/admin/workers/fast/stop", {
+        method: "POST",
+        headers: { Authorization: auth },
+      }).catch(() => {});
+      setPunctRunning(null);
+    }
+  }
+
+  /** Preprocess a single document (called from the per-doc button) */
+  async function handlePunctuate(docId: string) {
+    if (punctRunning === docId) {
+      // Cancel: stop worker and abort
+      abortRef.current = true;
+      setPunctStatus((prev) => ({
+        ...prev,
+        [docId]: t("project.preprocessingCancelled"),
+      }));
+      setPunctRunning(null);
+      await fetch("/api/v1/admin/workers/fast/stop", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      }).catch(() => {});
+      return;
+    }
+
+    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+    abortRef.current = false;
+    setPunctRunning(docId);
+    setPunctStatus((prev) => ({
+      ...prev,
+      [docId]: t("project.preprocessingStarting"),
+    }));
+
+    // Start worker
+    try {
+      await fetch("/api/v1/admin/workers/fast/start", {
+        method: "POST",
+        headers: { Authorization: auth },
+      });
+    } catch {
+      showToast(t("project.workerStartFailed"));
+      setPunctRunning(null);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+
+    try {
+      await punctuateSingleDoc(docId);
+    } finally {
+      // Always stop the worker
+      await fetch("/api/v1/admin/workers/fast/stop", {
+        method: "POST",
+        headers: { Authorization: auth },
+      }).catch(() => {});
       setPunctRunning(null);
     }
   }
@@ -466,6 +572,20 @@ export default function ProjectDetail() {
   }
 
   function restartFromStage(stageKey: string) {
+    // Guard: refuse if no documents at all
+    if (docs.length === 0) {
+      console.log("[restartFromStage] BLOCKED: no docs, showing error");
+      resetStages(); // force all stages back to pending
+      setPipelineMsg(t("project.pipelineNoDocs"));
+      setPipelineFailed(true);
+      return;
+    }
+    console.log(
+      "[restartFromStage] proceeding with",
+      docs.length,
+      "docs, stage:",
+      stageKey,
+    );
     const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === stageKey);
     // Mark previous stages as done, this one as running, later as pending
     PIPELINE_STAGES.forEach((s, i) => {
@@ -641,9 +761,46 @@ export default function ProjectDetail() {
       } catch {}
     }, 5000);
 
-    // Determine mode from pipeline log
+    // ── Check for work BEFORE starting workers ──
     const isContinue = !forceAll && docsNeedSegment === 0 && docsNeedAgents > 0;
 
+    // Fetch pipeline log first to determine work
+    const freshLog = await getPipelineLog(id!).catch(() => null);
+    if (freshLog) setPipelineLog(freshLog);
+
+    // Compute which documents need processing
+    const todo: Document[] = [];
+    if (forceAll) {
+      todo.push(...docs);
+    } else if (freshLog) {
+      for (const dl of freshLog.documents) {
+        if (dl.next_action !== "done") {
+          const doc = docs.find((d) => d.id === dl.document_id);
+          if (doc) todo.push(doc);
+        }
+      }
+    } else {
+      todo.push(...docs.filter((d) => d.estado !== "listo"));
+    }
+
+    // Early exit: nothing to do
+    if (todo.length === 0) {
+      resetStages();
+      setPipelineMsg(t("project.pipelineAllProcessed"));
+      setPipelineFailed(false);
+      setPipelineRunning(false);
+      if (logPollRef.current) {
+        clearInterval(logPollRef.current);
+        logPollRef.current = null;
+      }
+      if (agentPollRef.current) {
+        clearInterval(agentPollRef.current);
+        agentPollRef.current = null;
+      }
+      return;
+    }
+
+    // ── Actually start workers and process ──
     if (isContinue) {
       resetStages({ workers: "done", segment: "done" });
       updateStage("agents", "running");
@@ -662,45 +819,6 @@ export default function ProjectDetail() {
       });
       await new Promise((r) => setTimeout(r, 2000));
       updateStage("workers", "done");
-    }
-
-    // Refresh pipeline log to get current DB state
-    const freshLog = await getPipelineLog(id!).catch(() => null);
-    if (freshLog) setPipelineLog(freshLog);
-
-    // Use pipeline log to determine which docs need processing
-    const todo: Document[] = [];
-    if (forceAll) {
-      todo.push(...docs);
-    } else if (freshLog) {
-      for (const dl of freshLog.documents) {
-        if (dl.next_action !== "done") {
-          const doc = docs.find((d) => d.id === dl.document_id);
-          if (doc) todo.push(doc);
-        }
-      }
-    } else {
-      todo.push(...docs.filter((d) => d.estado !== "listo"));
-    }
-
-    if (todo.length === 0) {
-      if (!isContinue) {
-        updateStage("segment", "done");
-      }
-      updateStage("agents", "done");
-      updateStage("categories", "done");
-      updateStage("done", "done");
-      setPipelineMsg(t("project.pipelineAllProcessed"));
-      setPipelineRunning(false);
-      if (logPollRef.current) {
-        clearInterval(logPollRef.current);
-        logPollRef.current = null;
-      }
-      if (agentPollRef.current) {
-        clearInterval(agentPollRef.current);
-        agentPollRef.current = null;
-      }
-      return;
     }
 
     // Call unified orchestrator (backend handles all docs)
@@ -855,10 +973,12 @@ export default function ProjectDetail() {
   // ── Upload ───────────────────────────────────────
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !id) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !id) return;
     try {
-      await uploadDocument(id, file);
+      for (const file of Array.from(files)) {
+        await uploadDocument(id, file);
+      }
       refreshDocs();
     } catch (err: any) {
       alert(err.message);
@@ -868,15 +988,10 @@ export default function ProjectDetail() {
 
   async function handleDeleteAllDocs() {
     if (!id) return;
-    if (
-      !confirm(
-        "¿Eliminar TODOS los documentos del proyecto? Esto borra segmentos y códigos asociados.",
-      )
-    )
-      return;
+    if (!confirm(t("project.deleteAllDocsConfirm"))) return;
     try {
       const result = await deleteAllDocuments(id);
-      showToast(`✅ ${result.count} documentos eliminados`);
+      showToast(t("project.deleteAllDocsSuccess", { count: result.count }));
       refreshDocs();
       resetStages();
     } catch (err: any) {
@@ -1045,62 +1160,55 @@ export default function ProjectDetail() {
     color: string;
     bg: string;
   } {
-    const log = getDocLog(doc.id);
-    if (!log) {
-      // Fallback
-      switch (doc.estado) {
-        case "listo":
-          return {
-            text: t("project.statusReady"),
-            color: "#3FB950",
-            bg: "#3FB95022",
-          };
-        case "segmentado":
-          return {
-            text: t("project.statusSegmented"),
-            color: "#3FB950",
-            bg: "#3FB95022",
-          };
-        case "error":
-          return {
-            text: t("project.statusError"),
-            color: "#F85149",
-            bg: "#F8514922",
-          };
-        default:
-          return {
-            text: t("project.statusRaw"),
-            color: "#8B949E",
-            bg: "#8B949E22",
-          };
-      }
-    }
-    // Use real log data
-    if (log.steps.agents_done && log.steps.coded)
+    // Preprocessing actively running for this document
+    if (punctRunning === doc.id) {
       return {
-        text: t("project.statusReady"),
-        color: "#3FB950",
-        bg: "#3FB95022",
-      };
-    if (log.steps.segmented && !log.steps.coded)
-      return {
-        text: t("project.statusSegmented"),
+        text: t("project.statusPreprocessing"),
         color: "#D29922",
         bg: "#D2992222",
       };
-    if (log.steps.segmented)
+    }
+    // Preprocessing resulting in error
+    if (punctStatus[doc.id]?.startsWith("❌")) {
       return {
-        text: t("project.statusSegmented"),
-        color: "#3FB950",
-        bg: "#3FB95022",
+        text: t("project.statusError"),
+        color: "#F85149",
+        bg: "#F8514922",
       };
-    if (log.steps.text_extracted)
-      return {
-        text: t("project.statusWithText"),
-        color: "#58A6FF",
-        bg: "#58A6FF22",
-      };
-    return { text: t("project.statusRaw"), color: "#8B949E", bg: "#8B949E22" };
+    }
+    // Check document estado
+    switch (doc.estado) {
+      case "crudo":
+        return {
+          text: t("project.statusRaw"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "segmentado":
+        return {
+          text: t("project.statusSegmenting"),
+          color: "#D29922",
+          bg: "#D2992222",
+        };
+      case "listo":
+        return {
+          text: t("project.statusReady"),
+          color: "#3FB950",
+          bg: "#3FB95022",
+        };
+      case "error":
+        return {
+          text: t("project.statusError"),
+          color: "#F85149",
+          bg: "#F8514922",
+        };
+      default:
+        return {
+          text: t("project.statusRaw"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+    }
   }
 
   if (!project)
@@ -1290,27 +1398,6 @@ export default function ProjectDetail() {
                 {project.ruta_de_codificacion} · {project.estado}
               </span>
               {/* Status pills inline */}
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background:
-                    docsDone === docs.length && docs.length > 0
-                      ? "#3FB95022"
-                      : "#8B949E22",
-                  color:
-                    docsDone === docs.length && docs.length > 0
-                      ? "#3FB950"
-                      : "#8B949E",
-                  border: `1px solid ${docsDone === docs.length && docs.length > 0 ? "#3FB95033" : "#8B949E33"}`,
-                }}
-              >
-                ✓ {docsDone}{" "}
-                {t("project.readyCount")
-                  .replace("{n}", String(docsDone))
-                  .replace("{s}", docsDone !== 1 ? "s" : "")}
-              </span>
               {docsNeedSegment > 0 && (
                 <span
                   style={{
@@ -1347,85 +1434,10 @@ export default function ProjectDetail() {
                   )}
                 </span>
               )}
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background: cats.length > 0 ? "#A371F722" : "#8B949E22",
-                  color: cats.length > 0 ? "#A371F7" : "#8B949E",
-                  border: `1px solid ${cats.length > 0 ? "#A371F733" : "#8B949E33"}`,
-                }}
-              >
-                🏷️ {cats.length}
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontWeight: 600,
-                  background: playgroundReady ? "#3FB95022" : "#D2992222",
-                  color: playgroundReady ? "#3FB950" : "#D29922",
-                  border: `1px solid ${playgroundReady ? "#3FB95033" : "#D2992233"}`,
-                }}
-              >
-                {playgroundReady
-                  ? t("project.playgroundAvailable")
-                  : t("project.playgroundLocked")}
-              </span>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {/* Global view switch */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0,
-                  background: "#0D1117",
-                  borderRadius: 6,
-                  border: "1px solid #21262D",
-                  overflow: "hidden",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setGlobalViewMode("original");
-                    setViewModeOverride({});
-                  }}
-                  style={{
-                    padding: "3px 10px",
-                    border: "none",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    background:
-                      globalViewMode === "original" ? "#A371F7" : "transparent",
-                    color: globalViewMode === "original" ? "#FFF" : "#8B949E",
-                  }}
-                >
-                  {t("project.showOriginal")}
-                </button>
-                <button
-                  onClick={() => {
-                    setGlobalViewMode("segmented");
-                    setViewModeOverride({});
-                  }}
-                  style={{
-                    padding: "3px 10px",
-                    border: "none",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    background:
-                      globalViewMode === "segmented"
-                        ? "#A371F7"
-                        : "transparent",
-                    color: globalViewMode === "segmented" ? "#FFF" : "#8B949E",
-                  }}
-                >
-                  {t("project.showSegments")}
-                </button>
-              </div>
 
               {/* Delete all segments */}
               <button
@@ -2116,6 +2128,22 @@ export default function ProjectDetail() {
 
           {/* ── Upload ─────────────────────────────────── */}
           <div style={{ marginBottom: 20 }}>
+            {docs.length === 0 && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#D29922",
+                  marginBottom: 12,
+                  padding: "8px 12px",
+                  background: "#D2992218",
+                  borderRadius: 6,
+                  border: "1px solid #D2992233",
+                  lineHeight: 1.5,
+                }}
+              >
+                ⚠️ {t("project.noDocsMessage")}
+              </div>
+            )}
             <label
               style={{
                 display: "inline-block",
@@ -2132,6 +2160,7 @@ export default function ProjectDetail() {
               <input
                 type="file"
                 accept=".pdf,.txt,.docx"
+                multiple
                 style={{ display: "none" }}
                 onChange={handleUpload}
               />
@@ -2145,35 +2174,73 @@ export default function ProjectDetail() {
               justifyContent: "space-between",
               alignItems: "center",
               marginBottom: 12,
+              flexWrap: "wrap",
+              gap: 8,
             }}
           >
             <h3 style={{ margin: 0 }}>
               {t("project.documentsHeading", { count: docs.length })}
             </h3>
-            {docs.length > 0 && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <button
-                onClick={handleDeleteAllDocs}
+                onClick={() => setShowPreprocessed((p) => !p)}
                 style={{
-                  background: "#F8514918",
-                  border: "1px solid #F8514933",
-                  borderRadius: 6,
-                  color: "#F85149",
-                  fontSize: 11,
-                  fontWeight: 600,
                   padding: "3px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #A371F744",
+                  background: showPreprocessed ? "#A371F722" : "#1C2333",
+                  color: showPreprocessed ? "#A371F7" : "#8B949E",
+                  fontSize: 11,
                   cursor: "pointer",
+                  fontWeight: 500,
                 }}
-                title={t("project.deleteAllDocsTitle")}
               >
-                {t("project.deleteAllDocsButton")}
+                {showPreprocessed
+                  ? t("project.showCrudo")
+                  : t("project.showPreprocesado")}
               </button>
-            )}
+
+              {docs.length > 0 && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (!confirm(t("project.resetDocsConfirm"))) return;
+                      resetDocsToCrudo(id!).then(() => refreshDocs());
+                    }}
+                    style={{
+                      background: "#D2992218",
+                      border: "1px solid #D2992233",
+                      borderRadius: 6,
+                      color: "#D29922",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "3px 10px",
+                      cursor: "pointer",
+                    }}
+                    title={t("project.resetDocsTitle")}
+                  >
+                    {t("project.resetDocsButton")}
+                  </button>
+                  <button
+                    onClick={handleDeleteAllDocs}
+                    style={{
+                      background: "#F8514918",
+                      border: "1px solid #F8514933",
+                      borderRadius: 6,
+                      color: "#F85149",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "3px 10px",
+                      cursor: "pointer",
+                    }}
+                    title={t("project.deleteAllDocsTitle")}
+                  >
+                    {t("project.deleteAllDocsButton")}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          {docs.length === 0 && (
-            <p style={{ color: "#8B949E", fontSize: 13 }}>
-              {t("project.noDocsMessage")}
-            </p>
-          )}
           <ul style={{ listStyle: "none", padding: 0 }}>
             {docs.map((d) => {
               const docHasSegs = hasSegments(d);
@@ -2181,12 +2248,20 @@ export default function ProjectDetail() {
               return (
                 <li
                   key={d.id}
+                  onClick={(e) => {
+                    // Only toggle if click was on the card itself, not a button/input
+                    const tag = (e.target as HTMLElement).tagName;
+                    if (tag === "BUTTON" || tag === "SELECT" || tag === "INPUT")
+                      return;
+                    toggleSegments(d.id);
+                  }}
                   style={{
                     marginBottom: 8,
                     padding: "10px 14px",
                     background: "#161B22",
                     borderRadius: 8,
                     border: "1px solid #21262D",
+                    cursor: "pointer",
                   }}
                 >
                   <div
@@ -2209,8 +2284,9 @@ export default function ProjectDetail() {
                       <strong style={{ color: "#E6EDF3" }}>
                         {d.original_filename}
                       </strong>
+
                       <span style={{ fontSize: 11, color: "#8B949E" }}>
-                        {d.mime_type}
+                        {mimeLabel(d.mime_type)}
                       </span>
                       {/* Estado badge from log */}
                       {(() => {
@@ -2230,31 +2306,19 @@ export default function ProjectDetail() {
                           </span>
                         );
                       })()}
-                      {punctStatus[d.id] && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: punctStatus[d.id].startsWith("✅")
-                              ? "#3FB950"
-                              : "#8B949E",
-                          }}
-                        >
-                          {punctStatus[d.id]}
-                        </span>
-                      )}
                     </div>
                     <div
                       style={{ display: "flex", gap: 6, alignItems: "center" }}
                     >
-                      <button
+                      {/*<button
                         onClick={() => toggleSegments(d.id)}
                         style={btnSmall}
                       >
                         {expandedDoc === d.id
                           ? t("project.hideText")
                           : t("project.showText")}
-                      </button>
-                      <button
+                      </button>*/}
+                      {/*<button
                         onClick={() => handlePunctuate(d.id)}
                         disabled={d.estado !== "crudo" && punctRunning !== d.id}
                         title={
@@ -2283,7 +2347,67 @@ export default function ProjectDetail() {
                         {punctRunning === d.id
                           ? t("project.cancelPreprocess")
                           : t("project.preprocessButton")}
-                      </button>
+                      </button>*/}
+                      {/* Per-doc preprocess switch */}
+                      {d.estado === "crudo" && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <span style={{ fontSize: 10, color: "#8B949E" }}>
+                            {t("project.preprocessSwitchLabel")}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setPreprocessDisabled((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(d.id)) next.delete(d.id);
+                                else next.add(d.id);
+                                localStorage.setItem(
+                                  "gt_preprocess_disabled",
+                                  JSON.stringify([...next]),
+                                );
+                                return next;
+                              });
+                            }}
+                            title={
+                              preprocessDisabled.has(d.id)
+                                ? t("project.preprocessOffTitle")
+                                : t("project.preprocessOnTitle")
+                            }
+                            style={{
+                              width: 28,
+                              height: 16,
+                              borderRadius: 8,
+                              border: "none",
+                              background: preprocessDisabled.has(d.id)
+                                ? "#30363D"
+                                : "#A371F7",
+                              cursor: "pointer",
+                              position: "relative",
+                              transition: "background 0.2s",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                top: 1,
+                                left: preprocessDisabled.has(d.id) ? 1 : 13,
+                                width: 14,
+                                height: 14,
+                                borderRadius: "50%",
+                                background: "#FFF",
+                                transition: "left 0.2s",
+                              }}
+                            />
+                          </button>
+                        </div>
+                      )}
                       {punctRunning !== d.id && originalTexts.current[d.id] && (
                         <button
                           onClick={async () => {
@@ -2337,7 +2461,7 @@ export default function ProjectDetail() {
                   {/* ── Expanded text view ── */}
                   {expandedDoc === d.id && (
                     <div style={{ marginTop: 8 }}>
-                      {/* Per-doc override toggle (shows when doc has segments) */}
+                      {/* Per-doc view toggle + delete segments */}
                       {docHasSegs && (
                         <div
                           style={{
@@ -2350,75 +2474,123 @@ export default function ProjectDetail() {
                           <span style={{ fontSize: 11, color: "#8B949E" }}>
                             {t("project.thisDocument")}
                           </span>
-                          <button
-                            onClick={() =>
-                              setViewModeOverride((prev) => ({
-                                ...prev,
-                                [d.id]: "original",
-                              }))
-                            }
+                          {/* Pill toggle: Original ↔ Segments */}
+                          <div
                             style={{
-                              padding: "3px 10px",
-                              borderRadius: 4,
-                              border: "1px solid #21262D",
-                              background:
-                                currentView === "original"
-                                  ? "#A371F7"
-                                  : "#1C2333",
-                              color: "#E6EDF3",
-                              fontSize: 11,
-                              cursor: "pointer",
+                              display: "flex",
+                              background: "#1C2333",
+                              borderRadius: 20,
+                              border: "1px solid #30363D",
+                              overflow: "hidden",
                             }}
                           >
-                            {t("project.original")}
-                          </button>
-                          <button
-                            onClick={() =>
-                              setViewModeOverride((prev) => ({
-                                ...prev,
-                                [d.id]: "segmented",
-                              }))
-                            }
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 4,
-                              border: "1px solid #21262D",
-                              background:
-                                currentView === "segmented"
-                                  ? "#A371F7"
-                                  : "#1C2333",
-                              color: "#E6EDF3",
-                              fontSize: 11,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t("project.segmentsCount", {
-                              n: segments[d.id]?.length || "?",
-                            })}
-                          </button>
-                          {viewModeOverride[d.id] && (
                             <button
                               onClick={() =>
-                                setViewModeOverride((prev) => {
-                                  const n = { ...prev };
-                                  delete n[d.id];
-                                  return n;
-                                })
+                                setViewModeOverride((prev) => ({
+                                  ...prev,
+                                  [d.id]: "original",
+                                }))
                               }
                               style={{
-                                fontSize: 10,
-                                color: "#8B949E",
-                                background: "none",
+                                padding: "3px 12px",
                                 border: "none",
+                                borderRadius: 20,
+                                background:
+                                  currentView === "original"
+                                    ? "#A371F7"
+                                    : "transparent",
+                                color: "#E6EDF3",
+                                fontSize: 11,
                                 cursor: "pointer",
-                                textDecoration: "underline",
+                                transition: "0.15s",
                               }}
                             >
-                              {t("project.useGlobal")}
+                              {t("project.original")}
                             </button>
-                          )}
+                            <button
+                              onClick={() =>
+                                setViewModeOverride((prev) => ({
+                                  ...prev,
+                                  [d.id]: "segmented",
+                                }))
+                              }
+                              style={{
+                                padding: "3px 12px",
+                                border: "none",
+                                borderRadius: 20,
+                                background:
+                                  currentView === "segmented"
+                                    ? "#A371F7"
+                                    : "transparent",
+                                color: "#E6EDF3",
+                                fontSize: 11,
+                                cursor: "pointer",
+                                transition: "0.15s",
+                              }}
+                            >
+                              {t("project.segmentsCount", {
+                                n: segments[d.id]?.length || "?",
+                              })}
+                            </button>
+                          </div>
+
+                          {/* Restore original per doc */}
+                          <button
+                            onClick={() => {
+                              if (!confirm(t("project.restoreOriginalConfirm")))
+                                return;
+                              restoreDocumentOriginal(d.id)
+                                .then(() => refreshDocs())
+                                .catch((e) => console.error(e));
+                            }}
+                            title={
+                              t("project.restoreOriginalTitle") ||
+                              "Restore original text"
+                            }
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: 4,
+                              border: "1px solid #D2992233",
+                              background: "#D2992210",
+                              color: "#D29922",
+                              fontSize: 10,
+                              cursor: "pointer",
+                              marginBottom: 8,
+                            }}
+                          >
+                            {t("project.restoreOriginalButton")}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                !confirm(
+                                  t("project.deleteSegmentsConfirm", {
+                                    n: segments[d.id]?.length || 0,
+                                  }),
+                                )
+                              )
+                                return;
+                              deleteDocumentSegments(d.id)
+                                .then(() => refreshDocs())
+                                .catch((e) => console.error(e));
+                            }}
+                            title={t("project.deleteSegmentsTitle")}
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: 4,
+                              border: "1px solid #F8514933",
+                              background: "#F8514910",
+                              color: "#F85149",
+                              fontSize: 10,
+                              cursor: "pointer",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {t("project.deleteSegmentsButton")}
+                          </button>
                         </div>
                       )}
+
                       <textarea
                         readOnly
                         disabled={punctRunning === d.id}
@@ -2439,7 +2611,13 @@ export default function ProjectDetail() {
                             ? segments[d.id]!.map(
                                 (s) => `[${s.posicion}] ${s.texto}`,
                               ).join("\n\n")
-                            : d.texto_extraido || t("project.noTextAvailable")
+                            : showPreprocessed
+                              ? (d as any).metadatos?.texto_preprocesado ||
+                                d.texto_extraido ||
+                                ""
+                              : (d as any).metadatos?.texto_original ||
+                                d.texto_extraido ||
+                                ""
                         }
                       />
                     </div>
@@ -2450,39 +2628,6 @@ export default function ProjectDetail() {
           </ul>
 
           <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
-
-          {/* ── Categories ─────────────────────────────── */}
-          <h3 style={{ marginBottom: 12 }}>
-            {t("project.categoriesHeading", { count: cats.length })}
-          </h3>
-          {cats.length === 0 && (
-            <p style={{ color: "#8B949E", fontSize: 13 }}>
-              {t("project.noCategories")}
-            </p>
-          )}
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {cats.map((c) => (
-              <li
-                key={c.id}
-                style={{
-                  marginBottom: 8,
-                  padding: "10px 14px",
-                  background: "#161B22",
-                  borderRadius: 8,
-                  border: "1px solid #21262D",
-                }}
-              >
-                <strong>
-                  {c.nombre}
-                  {c.es_central && ` ${t("project.centralCategory")}`}
-                </strong>
-                <br />
-                <span style={{ fontSize: 13, color: "#8B949E" }}>
-                  {c.definicion}
-                </span>
-              </li>
-            ))}
-          </ul>
 
           {/* ── HITL Modal ── */}
           <style>{`
@@ -2625,105 +2770,51 @@ export default function ProjectDetail() {
           flexDirection: "column",
         }}
       >
-        {/* Pipeline Flow — inline */}
+        {/* ── Header Row ── */}
         <div
           style={{
-            marginBottom: 16,
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
+            flexShrink: 0,
+            borderBottom: "1px solid #21262D",
+            paddingBottom: 12,
+            marginBottom: 12,
           }}
         >
-          {/* Stage / Agent view toggle */}
-          <div
-            style={{
-              display: "flex",
-              marginBottom: 12,
-              borderRadius: 6,
-              overflow: "hidden",
-              border: "1px solid #30363D",
-            }}
-          >
-            <button
-              onClick={() => setSidebarViewMode("stages")}
-              style={{
-                flex: 1,
-                padding: "6px 12px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                background:
-                  sidebarViewMode === "stages" ? "#A371F7" : "transparent",
-                color: sidebarViewMode === "stages" ? "#fff" : "#8B949E",
-              }}
-            >
-              ☰ Stages
-            </button>
-            <button
-              onClick={() => setSidebarViewMode("agents")}
-              style={{
-                flex: 1,
-                padding: "6px 12px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                background:
-                  sidebarViewMode === "agents" ? "#A371F7" : "transparent",
-                color: sidebarViewMode === "agents" ? "#fff" : "#8B949E",
-              }}
-            >
-              🧠 Agents
-            </button>
-          </div>
-
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: 14,
+              marginBottom: 5,
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "#8B949E" }}>
-              {showLog ? t("project.logsTab") : t("project.flowTab")}
+              {sidebarViewMode === "logs"
+                ? t("project.logsTab")
+                : sidebarViewMode === "agents"
+                  ? t("project.flowTab")
+                  : t("project.flowTab")}
             </span>
-            <button
-              onClick={() => setShowLog(!showLog)}
-              style={{
-                background: "#21262D",
-                border: "1px solid #30363D",
-                borderRadius: 6,
-                color: "#8B949E",
-                fontSize: 11,
-                padding: "3px 8px",
-                cursor: "pointer",
-              }}
-            >
-              {showLog ? t("project.diagramTab") : t("project.logsTab")}
-            </button>
+
             {!pipelineRunning && (
-              <>
-                <button
-                  onClick={() => runPipeline(false)}
-                  disabled={docs.length === 0}
-                  style={{
-                    background: "linear-gradient(135deg, #A371F7, #3FB950)",
-                    border: "none",
-                    borderRadius: 6,
-                    color: "#FFF",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: "4px 12px",
-                    cursor: docs.length === 0 ? "not-allowed" : "pointer",
-                    opacity: docs.length === 0 ? 0.5 : 1,
-                  }}
-                >
-                  {t("project.runPipeline")}
-                </button>
-              </>
+              <button
+                onClick={() => runPipeline(false)}
+                disabled={docs.length === 0}
+                style={{
+                  background:
+                    docs.length === 0
+                      ? "#21262D"
+                      : "linear-gradient(135deg, #A371F7, #3FB950)",
+                  border: "none",
+                  borderRadius: 6,
+                  color: docs.length === 0 ? "#484F58" : "#FFF",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "4px 12px",
+                  cursor: docs.length === 0 ? "not-allowed" : "pointer",
+                }}
+              >
+                {t("project.runPipeline")}
+              </button>
             )}
             {pipelineRunning && (
               <button
@@ -2753,13 +2844,87 @@ export default function ProjectDetail() {
               </button>
             )}
           </div>
+        </div>
 
+        {/* ── Content Area (fills remaining height) ── */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+          }}
+        >
+          {/* View toggle buttons */}
+          <div
+            style={{
+              display: "flex",
+              marginBottom: 12,
+              borderRadius: 6,
+              overflow: "hidden",
+              border: "1px solid #30363D",
+              flexShrink: 0,
+            }}
+          >
+            {/* Button 1: Stages */}
+            <button
+              onClick={() => setSidebarViewMode("stages")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "stages" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "stages" ? "#fff" : "#8B949E",
+              }}
+            >
+              ☰ Stages
+            </button>
+
+            {/* Button 2: Agents */}
+            <button
+              onClick={() => setSidebarViewMode("agents")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "agents" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "agents" ? "#fff" : "#8B949E",
+              }}
+            >
+              🤖 Agents
+            </button>
+
+            {/* Button 3: Logs */}
+            <button
+              onClick={() => setSidebarViewMode("logs")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "logs" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "logs" ? "#fff" : "#8B949E",
+              }}
+            >
+              📋 {t("project.logsTab")}
+            </button>
+          </div>
           {pipelineMsg && (
             <div
               style={{
                 fontSize: 11,
                 color: pipelineFailed ? "#F85149" : "#8B949E",
-                marginBottom: 12,
                 padding: "6px 10px",
                 background: pipelineFailed ? "#F8514922" : "#21262D",
                 borderRadius: 6,
@@ -2769,8 +2934,7 @@ export default function ProjectDetail() {
               {pipelineMsg}
             </div>
           )}
-
-          {showLog ? (
+          {sidebarViewMode === "logs" ? (
             /* ── Live Log Panel ── */
             <div
               ref={logPanelRef}
@@ -2834,7 +2998,9 @@ export default function ProjectDetail() {
                 const isLast = idx === PIPELINE_STAGES.length - 1;
                 const lastDone = findLastCompletedIdx();
                 const isNextPending =
-                  status === "pending" && idx === lastDone + 1;
+                  docs.length > 0 &&
+                  status === "pending" &&
+                  idx === lastDone + 1;
                 const isClickable =
                   !pipelineRunning &&
                   (status === "done" || status === "error" || isNextPending);
@@ -2967,6 +3133,168 @@ export default function ProjectDetail() {
                         >
                           {t(stage.label)}
                         </div>
+                        {/* Stage-specific badges */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 4,
+                            marginTop: 3,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Segmentation: doc count + delete segs */}
+                          {stage.key === "segment" && (
+                            <>
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background:
+                                    docsNeedSegment > 0
+                                      ? "#D2992218"
+                                      : "#3FB95018",
+                                  color:
+                                    docsNeedSegment > 0 ? "#D29922" : "#3FB950",
+                                  border:
+                                    docsNeedSegment > 0
+                                      ? "1px solid #D2992233"
+                                      : "1px solid #3FB95033",
+                                }}
+                              >
+                                ✂️{" "}
+                                {(logSummary?.total ?? docs.length) -
+                                  docsNeedSegment}
+                                /{logSummary?.total ?? docs.length}
+                              </span>
+                              {segments && Object.keys(segments).length > 0 && (
+                                <button
+                                  onClick={async () => {
+                                    if (
+                                      !confirm(
+                                        t("project.deleteAllSegmentsConfirm"),
+                                      )
+                                    )
+                                      return;
+                                    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                                    await fetch(
+                                      `/api/v1/documents/project/${id}/segments`,
+                                      {
+                                        method: "DELETE",
+                                        headers: { Authorization: auth },
+                                      },
+                                    );
+                                    refreshDocs();
+                                    setSegments({});
+                                    getPipelineLog(id!)
+                                      .then(setPipelineLog)
+                                      .catch(() => {});
+                                  }}
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 6px",
+                                    borderRadius: 999,
+                                    background: "transparent",
+                                    color: "#F85149",
+                                    border: "1px solid #F8514933",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ✕ Segs
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {/* Open Coding: categories + delete cats */}
+                          {stage.key === "agents" && (
+                            <>
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background:
+                                    cats.length > 0 ? "#3FB95018" : "#8B949E18",
+                                  color:
+                                    cats.length > 0 ? "#3FB950" : "#8B949E",
+                                  border:
+                                    cats.length > 0
+                                      ? "1px solid #3FB95033"
+                                      : "1px solid #8B949E33",
+                                }}
+                              >
+                                📁 {cats.length}
+                              </span>
+                              {cats.length > 0 && (
+                                <button
+                                  onClick={async () => {
+                                    if (
+                                      !confirm(
+                                        t("project.deleteAllCatsConfirm"),
+                                      )
+                                    )
+                                      return;
+                                    const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                                    await fetch(
+                                      `/api/v1/projects/${id}/categories`,
+                                      {
+                                        method: "DELETE",
+                                        headers: { Authorization: auth },
+                                      },
+                                    );
+                                    setCats([]);
+                                  }}
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 6px",
+                                    borderRadius: 999,
+                                    background: "transparent",
+                                    color: "#F85149",
+                                    border: "1px solid #F8514933",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ✕ Cats
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {/* Build DB: output indicator */}
+                          {stage.key === "build_db" &&
+                            cats.some((c) => c.es_central) && (
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background: "#58A6FF18",
+                                  color: "#58A6FF",
+                                  border: "1px solid #58A6FF33",
+                                }}
+                              >
+                                {" "}
+                                {cats.filter((c) => c.es_central).length} core
+                              </span>
+                            )}
+                          {/* Theoretical Coding: link */}
+                          {stage.key === "playground" && playgroundReady && (
+                            <Link
+                              to={`/projects/${id}/theory`}
+                              style={{
+                                fontSize: 9,
+                                padding: "1px 6px",
+                                borderRadius: 999,
+                                background: "#3FB95018",
+                                color: "#3FB950",
+                                border: "1px solid #3FB95033",
+                                textDecoration: "none",
+                              }}
+                            >
+                              🧪 Open
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {!isLast && (
@@ -2994,13 +3322,16 @@ export default function ProjectDetail() {
         visible={toastVisible}
         onDone={() => setToastVisible(false)}
       />
-      <AgentModal
-        open={agentModalOpen}
-        agentId={selectedAgentId}
-        agentLabel={selectedAgentLabel}
-        agentLogs={agentLogs}
-        onClose={() => setAgentModalOpen(false)}
-      />
+      {createPortal(
+        <AgentModal
+          open={agentModalOpen}
+          agentId={selectedAgentId}
+          agentLabel={selectedAgentLabel}
+          agentLogs={agentLogs}
+          onClose={() => setAgentModalOpen(false)}
+        />,
+        document.body,
+      )}
     </div>
   );
 }

@@ -144,6 +144,7 @@ async def upload_document(
         tipo_de_fuente="TEXTO",
         estado="crudo",
         metadatos={
+            "texto_original": texto_extraido,
             "texto_extraido": texto_extraido,
             "needs_punctuation": needs_punct,
         }
@@ -206,7 +207,8 @@ async def segment_document(
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
 
-    texto = doc.metadatos.get("texto_extraido", "") if doc.metadatos else ""
+    meta = doc.metadatos or {}
+    texto = meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
     if not texto:
         raise HTTPException(400, "No hay texto extraído para segmentar")
 
@@ -262,6 +264,7 @@ async def list_documents(
         {
             **DocumentResponse.model_validate(doc).model_dump(),
             "texto_extraido": doc.texto_extraido,
+            "texto_preprocesado": (doc.metadatos or {}).get("texto_preprocesado", ""),
         }
         for doc in docs
     ]
@@ -330,7 +333,8 @@ async def punctuate_document(
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
 
-    texto = doc.metadatos.get("texto_extraido", "") if doc.metadatos else ""
+    meta = doc.metadatos or {}
+    texto = meta.get("texto_extraido", "")
     if not texto:
         raise HTTPException(400, "No hay texto extraído para puntuar")
 
@@ -372,7 +376,9 @@ async def punctuate_document(
         "punctuation_fix": True,
         "punctuated_text": output.get("punctuated_text", texto)[:500],
         "changes_made": output.get("changes_made", False),
-        "full_text": doc.texto_extraido[:500],
+        "full_text": (
+            (doc.metadatos or {}).get("texto_preprocesado") or doc.texto_extraido
+        )[:500],
     }
 
 
@@ -392,8 +398,10 @@ async def process_document(
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
 
-    texto = doc.metadatos.get("texto_extraido", "") if doc.metadatos else ""
-    if not texto:
+    meta = doc.metadatos or {}
+    texto_extraido_raw = meta.get("texto_extraido", "")
+    texto_best = meta.get("texto_preprocesado") or texto_extraido_raw
+    if not texto_extraido_raw:
         raise HTTPException(400, "No hay texto extraído para procesar")
 
     steps = (body or {}).get("steps", ["punctuate", "segment", "agents"])
@@ -404,12 +412,12 @@ async def process_document(
     result: dict = {"document_id": str(document_id), "steps": {}}
 
     if "punctuate" in steps:
-        needs = _needs_punctuation(texto)
+        needs = _needs_punctuation(texto_extraido_raw)
         if needs:
             task = celery_app.send_task(
                 "punctuate_text",
                 kwargs={
-                    "texto": texto,
+                    "texto": texto_extraido_raw,
                     "max_chars": 10000,
                     "documento_id": str(document_id),
                 },
@@ -425,7 +433,14 @@ async def process_document(
     if "segment" in steps:
         task = celery_app.send_task(
             "segmentar_documento",
-            args=[texto, 1024, doc.original_filename, "TEXTO", "", str(document_id)],
+            args=[
+                texto_best,
+                1024,
+                doc.original_filename,
+                "TEXTO",
+                "",
+                str(document_id),
+            ],
             queue="nlp",
         )
         result["steps"]["segment"] = {"task_id": task.id, "status": "dispatched"}
@@ -479,7 +494,8 @@ async def undo_punctuate(
         import json as _json
 
         meta = _json.loads(meta)
-    meta["texto_extraido"] = original
+    # texto_extraido ya no se sobreescribe; solo eliminamos el preprocesado
+    meta.pop("texto_preprocesado", None)
     meta["texto_puntuado"] = False
     doc.metadatos = meta
     await db.commit()
@@ -521,3 +537,73 @@ async def delete_all_segments(
     )
     await db.commit()
     return {"status": "ok", "message": "Segmentos eliminados, docs reseteados a crudo"}
+
+
+@router.delete("/{document_id}/segments", status_code=200)
+async def delete_document_segments(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Elimina los segmentos de UN documento, borra texto_preprocesado y lo resetea a crudo."""
+    from sqlalchemy import text
+
+    await db.execute(
+        text("DELETE FROM segmentos WHERE documento_id = :did"),
+        {"did": document_id},
+    )
+    await db.execute(
+        text(
+            "UPDATE documentos SET estado = 'crudo', "
+            "metadatos = metadatos - 'texto_preprocesado' "
+            "WHERE id = :did"
+        ),
+        {"did": document_id},
+    )
+    await db.commit()
+    return {"status": "ok", "message": f"Segmentos del doc {document_id} eliminados"}
+
+
+@router.post("/{document_id}/restore-original", status_code=200)
+async def restore_document_original(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Borra texto_preprocesado y resetea el doc a crudo, sin tocar segmentos."""
+    from sqlalchemy import text
+
+    await db.execute(
+        text(
+            "UPDATE documentos SET estado = 'crudo', "
+            "metadatos = metadatos - 'texto_preprocesado' "
+            "WHERE id = :did"
+        ),
+        {"did": document_id},
+    )
+    await db.commit()
+    return {"status": "ok", "message": f"Doc {document_id} restored to original"}
+
+
+@router.post("/project/{project_id}/reset-to-crudo", status_code=200)
+async def reset_all_docs_to_crudo(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Resetea todos los docs del proyecto a 'crudo', borrando texto_preprocesado."""
+    from sqlalchemy import text
+
+    result = await db.execute(
+        text(
+            "UPDATE documentos SET estado = 'crudo', "
+            "metadatos = metadatos - 'texto_preprocesado' "
+            "WHERE proyecto_id = :pid"
+        ),
+        {"pid": project_id},
+    )
+    await db.commit()
+    return {
+        "status": "ok",
+        "message": f"{result.rowcount} documentos reseteados a crudo",
+    }

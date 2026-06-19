@@ -2449,7 +2449,8 @@ def invoke_graph(self, proyecto_id: str, documento_id: str = None) -> dict:
                     text("SELECT metadatos FROM documentos WHERE id = :did"),
                     {"did": documento_id},
                 ).fetchone()
-                texto = (doc[0] or {}).get("texto_extraido", "") if doc else ""
+                meta = doc[0] or {} if doc else {}
+                texto = meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
             finally:
                 s.close()
 

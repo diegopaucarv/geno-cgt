@@ -156,25 +156,11 @@ async def stop_project_pipeline(
         if task.status in ("queued", "running"):
             celery_app.control.revoke(task.celery_task_id, terminate=True)
             task.status = "cancelled"
-
-            # Rollback: restaurar estado del documento
-            if task.document_id and task.doc_estado_before:
-                await db.execute(
-                    text("UPDATE documentos SET estado = :estado WHERE id = :did"),
-                    {
-                        "estado": task.doc_estado_before,
-                        "did": task.document_id,
-                    },
-                )
-
             results.append(
                 {
                     "task_id": task.celery_task_id,
                     "status": "cancelled",
-                    "doc_rolled_back": (
-                        str(task.document_id) if task.document_id else None
-                    ),
-                    "previous_state": task.doc_estado_before,
+                    "doc_id": str(task.document_id) if task.document_id else None,
                 }
             )
 

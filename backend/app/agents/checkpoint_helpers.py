@@ -104,19 +104,17 @@ def cleanup_step(session, step: str, documento_id: str) -> None:
         )
 
     elif step == "punctuation":
-        # Restaurar texto_extraido original (el worker guarda una copia antes)
-        # Nota: el worker debe guardar el texto original en metadatos.texto_original
+        # Revertir preprocesado (texto_extraido ya es inmutable)
         session.execute(
             text(
                 "UPDATE documentos SET metadatos = "
-                "metadatos - 'texto_puntuado' || "
-                "jsonb_build_object('texto_extraido', COALESCE(metadatos->>'texto_original', metadatos->>'texto_extraido')) "
+                "metadatos - 'texto_preprocesado' - 'texto_puntuado' "
                 "WHERE id = :did"
             ),
             {"did": documento_id},
         )
         logger.info(
-            "Checkpoint cleanup: restored original text for doc=%s", documento_id
+            "Checkpoint cleanup: removed preprocessed text for doc=%s", documento_id
         )
 
     elif step == "a1_population_context":

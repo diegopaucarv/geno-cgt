@@ -43,7 +43,8 @@ async def run_pipeline_stage(
             task = celery_app.send_task(
                 "segmentar_documento",
                 args=[
-                    (doc.metadatos or {}).get("texto_extraido", ""),
+                    (doc.metadatos or {}).get("texto_preprocesado")
+                    or (doc.metadatos or {}).get("texto_extraido", ""),
                     1024,
                     doc.original_filename,
                     "TEXTO",
@@ -234,7 +235,10 @@ async def get_pipeline_log(
         did = str(doc.id)
         n_segs = seg_counts.get(did, 0)
         n_codes = code_counts.get(did, 0)
-        has_text = bool((doc.metadatos or {}).get("texto_extraido", ""))
+        has_text = bool(
+            (doc.metadatos or {}).get("texto_extraido")
+            or (doc.metadatos or {}).get("texto_preprocesado")
+        )
 
         # Determinar qué pasos se completaron
         steps_done = {
@@ -824,10 +828,10 @@ async def patch_document_text(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Update document text fields (texto_extraido, original_filename)."""
+    """Update document text fields (texto_extraido, texto_preprocesado, original_filename)."""
     from sqlalchemy import text
 
-    allowed = ["texto_extraido", "original_filename"]
+    allowed = ["texto_extraido", "texto_preprocesado", "original_filename"]
     sets = []
     params = {"id": str(document_id)}
     for key, value in body.items():

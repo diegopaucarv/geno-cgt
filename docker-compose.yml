@@ -146,6 +146,8 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET:-dev-jwt-secret-gt-local}
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      SPACY_DATA_PATH: /app/nlp_models/spacy
+      STANZA_RESOURCES_DIR: /app/nlp_models/stanza
     depends_on:
       pgbouncer:
         condition: service_started
@@ -160,6 +162,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - runtime_config:/app/config
+      - nlp_models:/app/nlp_models
     networks:
       - gt_network
 
@@ -183,7 +186,9 @@ services:
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      PYTHONPATH: /app/backend:/app/backend/app
     volumes:
+      - ./backend:/app/backend:ro
       - ./backend/app/prompts:/app/prompts:ro
       - runtime_config:/app/config:ro
     depends_on:
@@ -215,6 +220,7 @@ services:
       - uploads_data:/app/uploads
       - ./backend:/app/backend:ro
       - runtime_config:/app/config:ro
+      - nlp_models:/app/nlp_models
     command: celery -A tasks worker --queues=nlp --concurrency=1 --loglevel=info
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
@@ -223,6 +229,8 @@ services:
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
       UPLOAD_DIR: /app/uploads
       PYTHONPATH: /app/backend:/app/backend/app
+      SPACY_DATA_PATH: /app/nlp_models/spacy
+      STANZA_RESOURCES_DIR: /app/nlp_models/stanza
     mem_limit: ${NLP_MEM_LIMIT:-6g}
     # Stanza coref necesita ~2GB, spaCy lg ~600MB → minimo 4GB, recomendado 6GB
     depends_on:
@@ -297,6 +305,7 @@ volumes:
       type: none
       device: "/mnt/hdd/Program Files/Docker/gt/cache"
       o: bind
+  nlp_models:
 
 networks:
   gt_network:
