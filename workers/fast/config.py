@@ -29,7 +29,7 @@ CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")
 MODEL_FLASH = get_config_value(
     "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
 )
-MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4")
+MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4-Pro")
 
 # ── TEI ──────────────────────────────────────────────────────────────
 TEI_URL = os.getenv("TEI_URL", "http://tei:8080")

@@ -325,8 +325,42 @@ def graphrag_search_local(query: str, proyecto_id: str, top_k: int = 5) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@app.task(name="punctuate_text")
-def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") -> dict:
+import signal as _signal
+
+from celery import Task as _CeleryTask
+
+
+class AbortableTask(_CeleryTask):
+    """Tarea Celery que puede ser abortada limpiamente con SIGTERM."""
+
+    def __init__(self):
+        self._aborted = False
+        self._original_sigterm = None
+
+    def __call__(self, *args, **kwargs):
+        self._original_sigterm = _signal.getsignal(_signal.SIGTERM)
+        _signal.signal(_signal.SIGTERM, self._handle_sigterm)
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            if self._original_sigterm:
+                _signal.signal(_signal.SIGTERM, self._original_sigterm)
+
+    def _handle_sigterm(self, signum, frame):
+        self._aborted = True
+        logger.warning("Task %s received SIGTERM", self.name)
+        if self._original_sigterm:
+            _signal.signal(_signal.SIGTERM, self._original_sigterm)
+        raise Exception(f"Task {self.name} cancelled by SIGTERM")
+
+
+@app.task(name="punctuate_text", base=AbortableTask, bind=True)
+def punctuate_text(
+    self,
+    texto: str,
+    max_chars: int = 3000,
+    documento_id: str = "",
+) -> dict:
     """
     Anade puntuacion a texto crudo de documentos.
     Si el texto excede max_chars, lo divide en bloques y procesa iterativamente.
@@ -335,6 +369,22 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
     texto = texto.strip()
     if not texto:
         return {"punctuated_text": "", "changes_made": False}
+
+    # ── Estado: marcar inicio de preprocesamiento ──
+    if documento_id:
+        session = SessionLocal()
+        try:
+            session.execute(
+                text("UPDATE documentos SET estado = 'preprocesando' WHERE id = :did"),
+                {"did": documento_id},
+            )
+            session.commit()
+            logger.info("Preprocessing started for doc=%s", documento_id)
+        except Exception as e:
+            logger.warning("Failed to set estado=preprocesando: %s", e)
+            session.rollback()
+        finally:
+            session.close()
 
     # Pre-corrección: intentar recuperar encoding Latin-1 mal interpretado como UTF-8
     try:
@@ -357,11 +407,15 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
         raw: str, expected_len: int | None = None, attempt: int = 0
     ) -> dict:
         """Llama al punctuator y valida integridad del texto."""
-        response = llm.run_agent(
-            "util_punctuator",
-            variables={"raw_text": raw},
-            temperature=0.3,
-        )
+        try:
+            response = llm.run_agent(
+                "util_punctuator",
+                variables={"raw_text": raw},
+                temperature=0.3,
+            )
+        except Exception as e:
+            logger.error("Punctuator LLM call failed: %s", e)
+            raise
         out = response.get("punctuated_text", raw)
         # Usar expected_len si se proporciona (bloques con overlap)
         compare_len = expected_len if expected_len is not None else len(raw)
@@ -396,8 +450,17 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
             attempt + 1,
         )
         if attempt >= 2:
-            logger.error("Punctuator: %s IRREVERSIBLE. Revirtiendo.", label)
-            return {"punctuated_text": raw, "changes_made": False}
+            # No revertir — guardar el texto preprocesado igual, marcando el warning
+            logger.warning(
+                "Punctuator: %s tras %d intentos. Guardando con advertencia.",
+                label,
+                attempt + 1,
+            )
+            return {
+                "punctuated_text": out,
+                "changes_made": True,
+                "warning": f"{label} ({ratio * 100:.0f}%% del original)",
+            }
         warn = (
             "\n\n[ADVERTENCIA CRÍTICA]\n"
             f"La salida es {ratio * 100:.0f}%% del original. "
@@ -407,148 +470,177 @@ def punctuate_text(texto: str, max_chars: int = 3000, documento_id: str = "") ->
         )
         return _safe_punctuate(raw + warn, expected_len, attempt + 1)
 
-    # Si el texto es corto, procesar en una sola llamada
-    if len(texto) <= max_chars:
-        response = _safe_punctuate(texto)
-        result = {
-            "punctuated_text": response.get("punctuated_text", texto),
-            "changes_made": response.get("changes_made", False),
-        }
-    else:
-        # Texto largo: dividir en bloques por límites semánticos naturales
-        paragraphs = texto.split("\n")
-        blocks = []
-        current = ""
-        for p in paragraphs:
-            if len(current) + len(p) < max_chars:
-                current += p + "\n"
-            else:
-                if current:
-                    blocks.append(current.strip())
-                # Si el párrafo es más largo que max_chars, buscar el último punto
-                if len(p) > max_chars:
-                    sub = p
-                    while len(sub) > max_chars:
-                        # Buscar el último . o ? o ! antes del límite
-                        cut = max_chars
-                        for sep in [". ", "? ", "! ", ".\n", ".\r"]:
-                            idx = sub.rfind(sep, 0, max_chars)
-                            if idx > max_chars // 2:
-                                cut = idx + len(sep)
-                                break
-                        blocks.append(sub[:cut].strip())
-                        sub = sub[cut:].strip()
-                    current = sub + "\n"
+    try:
+        # Si el texto es corto, procesar en una sola llamada
+        if len(texto) <= max_chars:
+            response = _safe_punctuate(texto)
+            result = {
+                "punctuated_text": response.get("punctuated_text", texto),
+                "changes_made": response.get("changes_made", False),
+            }
+        else:
+            # Texto largo: dividir en bloques por límites semánticos naturales
+            paragraphs = texto.split("\n")
+            blocks = []
+            current = ""
+            for p in paragraphs:
+                if len(current) + len(p) < max_chars:
+                    current += p + "\n"
                 else:
-                    current = p + "\n"
-        if current:
-            blocks.append(current.strip())
+                    if current:
+                        blocks.append(current.strip())
+                    # Si el párrafo es más largo que max_chars, buscar el último punto
+                    if len(p) > max_chars:
+                        sub = p
+                        while len(sub) > max_chars:
+                            # Buscar el último . o ? o ! antes del límite
+                            cut = max_chars
+                            for sep in [". ", "? ", "! ", ".\n", ".\r"]:
+                                idx = sub.rfind(sep, 0, max_chars)
+                                if idx > max_chars // 2:
+                                    cut = idx + len(sep)
+                                    break
+                            blocks.append(sub[:cut].strip())
+                            sub = sub[cut:].strip()
+                        current = sub + "\n"
+                    else:
+                        current = p + "\n"
+            if current:
+                blocks.append(current.strip())
 
-        logger.info(
-            "Punctuator: %d chars -> %d blocks (max_chars=%d)",
-            len(texto),
-            len(blocks),
-            max_chars,
-        )
+            logger.info(
+                "Punctuator: %d chars -> %d blocks (max_chars=%d)",
+                len(texto),
+                len(blocks),
+                max_chars,
+            )
 
-        # Procesar bloques en paralelo
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+            # Procesar bloques en paralelo
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        punctuated_blocks = [""] * len(blocks)
-        changes = False
+            punctuated_blocks = [""] * len(blocks)
+            changes = False
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_idx = {}
-            for i, block in enumerate(blocks):
-                # Añadir overlap: últimas 2-3 oraciones del bloque anterior
-                if i > 0:
-                    prev = blocks[i - 1]
-                    # Buscar los últimos 200 chars que empiecen en un límite natural
-                    overlap_start = max(0, len(prev) - 300)
-                    for sep in [". ", "? ", "! ", ".\n"]:
-                        idx = prev.rfind(sep, overlap_start)
-                        if idx >= 0:
-                            overlap_start = idx + len(sep)
-                            break
-                    overlap = prev[overlap_start:]
-                    if overlap:
-                        block = overlap + "\n\n[CONTINÚA AQUÍ]\n\n" + block
-
-                future_to_idx[
-                    executor.submit(_safe_punctuate, block, len(blocks[i]))
-                ] = i
-
-            for future in as_completed(future_to_idx):
-                i = future_to_idx[future]
-                try:
-                    response = future.result()
-                    out = response.get("punctuated_text", blocks[i])
-                    # Quitar overlap del output
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                future_to_idx = {}
+                for i, block in enumerate(blocks):
+                    # Añadir overlap: últimas 2-3 oraciones del bloque anterior
                     if i > 0:
-                        out_parts = out.split("[CONTINÚA AQUÍ]")
-                        if len(out_parts) > 1:
-                            out = out_parts[-1].strip()
-                    punctuated_blocks[i] = out
-                    if response.get("changes_made", False):
-                        changes = True
-                except Exception as e:
-                    logger.warning(
-                        "Punctuator: bloque %d falló: %s. Usando original.", i, e
+                        prev = blocks[i - 1]
+                        # Buscar los últimos 200 chars que empiecen en un límite natural
+                        overlap_start = max(0, len(prev) - 300)
+                        for sep in [". ", "? ", "! ", ".\n"]:
+                            idx = prev.rfind(sep, overlap_start)
+                            if idx >= 0:
+                                overlap_start = idx + len(sep)
+                                break
+                        overlap = prev[overlap_start:]
+                        if overlap:
+                            block = overlap + "\n\n[CONTINÚA AQUÍ]\n\n" + block
+
+                    future_to_idx[
+                        executor.submit(_safe_punctuate, block, len(blocks[i]))
+                    ] = i
+
+                for future in as_completed(future_to_idx):
+                    i = future_to_idx[future]
+                    try:
+                        response = future.result()
+                        out = response.get("punctuated_text", blocks[i])
+                        # Quitar overlap del output
+                        if i > 0:
+                            out_parts = out.split("[CONTINÚA AQUÍ]")
+                            if len(out_parts) > 1:
+                                out = out_parts[-1].strip()
+                        punctuated_blocks[i] = out
+                        if response.get("changes_made", False):
+                            changes = True
+                    except Exception as e:
+                        logger.warning(
+                            "Punctuator: bloque %d falló: %s. Usando original.", i, e
+                        )
+                        punctuated_blocks[i] = blocks[i]
+
+            result = {
+                "punctuated_text": "\n\n".join(punctuated_blocks),
+                "changes_made": changes,
+                "blocks_processed": len(blocks),
+            }
+
+        # Validación final: advertir si hay pérdida pero guardar igual
+        final_text = result["punctuated_text"]
+        if len(final_text) < len(texto) * 0.8:
+            logger.warning(
+                "Punctuator: PÉRDIDA de texto (%.0f%% → %.0f%%). Guardando con advertencia.",
+                len(texto),
+                len(final_text),
+            )
+            result["warning"] = (
+                f"Texto reducido al {len(final_text) / max(len(texto), 1) * 100:.0f}%% del original"
+            )
+
+        # If we have a documento_id and changes were made, update the DB
+        if documento_id and result.get("changes_made"):
+            logger.info(
+                "Punctuator: guardando. OUT muestra: %s", result["punctuated_text"][:80]
+            )
+            session = SessionLocal()
+            try:
+                import json as _json
+
+                # Get current metadatos
+                row = session.execute(
+                    text("SELECT metadatos FROM documentos WHERE id = :did"),
+                    {"did": documento_id},
+                ).fetchone()
+                if row:
+                    meta = row[0] if row[0] else {}
+                    if isinstance(meta, str):
+                        meta = _json.loads(meta)
+                    # Preservar texto_original si no existe aún
+                    if "texto_original" not in meta:
+                        meta["texto_original"] = meta.get("texto_extraido", "")
+                    meta["texto_preprocesado"] = result["punctuated_text"]
+                    meta["texto_puntuado"] = True
+                    if result.get("warning"):
+                        meta["preprocess_warning"] = result["warning"]
+                    session.execute(
+                        text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),
+                        {"meta": _json.dumps(meta), "did": documento_id},
                     )
-                    punctuated_blocks[i] = blocks[i]
+                    session.execute(
+                        text(
+                            "UPDATE documentos SET estado = 'preprocesado' WHERE id = :did"
+                        ),
+                        {"did": documento_id},
+                    )
+                    session.commit()
+                    logger.info(
+                        "Punctuator: updated doc %s with punctuated text",
+                        documento_id,
+                    )
+                    logger.info("Preprocessing completed for doc=%s", documento_id)
+            except Exception as e:
+                logger.warning("Punctuator DB update failed: %s", e)
+                session.rollback()
+            finally:
+                session.close()
 
-        result = {
-            "punctuated_text": "\n\n".join(punctuated_blocks),
-            "changes_made": changes,
-            "blocks_processed": len(blocks),
-        }
-
-    # Validación final: el texto completo no debe perder más del 20%
-    final_text = result["punctuated_text"]
-    if len(final_text) < len(texto) * 0.8:
-        logger.error(
-            "Punctuator: PÉRDIDA MASIVA de texto (%.0f%% → %.0f%%). Revirtiendo.",
-            len(texto),
-            len(final_text),
-        )
-        result = {"punctuated_text": texto, "changes_made": False}
-
-    # If we have a documento_id and changes were made, update the DB
-    if documento_id and result.get("changes_made"):
-        logger.info(
-            "Punctuator: guardando. OUT muestra: %s", result["punctuated_text"][:80]
-        )
-        session = SessionLocal()
-        try:
-            import json as _json
-
-            # Get current metadatos
-            row = session.execute(
-                text("SELECT metadatos FROM documentos WHERE id = :did"),
-                {"did": documento_id},
-            ).fetchone()
-            if row:
-                meta = row[0] if row[0] else {}
-                if isinstance(meta, str):
-                    meta = _json.loads(meta)
-                # Preservar texto_original si no existe aún
-                if "texto_original" not in meta:
-                    meta["texto_original"] = meta.get("texto_extraido", "")
-                meta["texto_preprocesado"] = result["punctuated_text"]
-                meta["texto_puntuado"] = True
+    except Exception as e:
+        logger.error("Punctuator task failed: %s", e)
+        if documento_id:
+            session = SessionLocal()
+            try:
                 session.execute(
-                    text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),
-                    {"meta": _json.dumps(meta), "did": documento_id},
+                    text("UPDATE documentos SET estado = 'error' WHERE id = :did"),
+                    {"did": documento_id},
                 )
                 session.commit()
-                logger.info(
-                    "Punctuator: updated doc %s with punctuated text",
-                    documento_id,
-                )
-        except Exception as e:
-            logger.warning("Punctuator DB update failed: %s", e)
-            session.rollback()
-        finally:
-            session.close()
+            except Exception as db_err:
+                logger.warning("Failed to set estado=error: %s", db_err)
+                session.rollback()
+            finally:
+                session.close()
+        raise
 
     return result

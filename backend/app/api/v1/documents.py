@@ -152,6 +152,16 @@ async def upload_document(
         else {},
     )
     db.add(new_doc)
+    await db.flush()
+    # Set initial sort_order
+    from sqlalchemy import text as sa_text
+
+    await db.execute(
+        sa_text(
+            "UPDATE documentos SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM documentos WHERE proyecto_id = :pid) WHERE id = :did"
+        ),
+        {"pid": project_id, "did": new_doc.id},
+    )
     await db.commit()
     await db.refresh(new_doc)
 
@@ -208,7 +218,7 @@ async def segment_document(
         raise HTTPException(404, "Documento no encontrado")
 
     meta = doc.metadatos or {}
-    texto = meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
+    texto = meta.get("texto_preprocesado") or doc.texto_extraido
     if not texto:
         raise HTTPException(400, "No hay texto extraído para segmentar")
 
@@ -257,17 +267,31 @@ async def list_documents(
     current_user: Usuario = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Documento).where(Documento.proyecto_id == proyecto_id)
+        select(Documento)
+        .where(Documento.proyecto_id == proyecto_id)
+        .order_by(Documento.sort_order)
     )
     docs = result.scalars().all()
-    return [
-        {
-            **DocumentResponse.model_validate(doc).model_dump(),
-            "texto_extraido": doc.texto_extraido,
-            "texto_preprocesado": (doc.metadatos or {}).get("texto_preprocesado", ""),
-        }
-        for doc in docs
-    ]
+    print(f"[list_documents] Found {len(docs)} documents for project {proyecto_id}")
+    response = []
+    for doc in docs:
+        try:
+            item = {
+                **DocumentResponse.model_validate(doc).model_dump(),
+                "texto_extraido": doc.texto_extraido,
+                "texto_preprocesado": (doc.metadatos or {}).get(
+                    "texto_preprocesado", ""
+                ),
+                "texto_original": (doc.metadatos or {}).get("texto_original", ""),
+                "preprocess_warning": (doc.metadatos or {}).get(
+                    "preprocess_warning", ""
+                ),
+            }
+            response.append(item)
+        except Exception as e:
+            print(f"[list_documents] ERROR validating doc {doc.id}: {e}")
+    print(f"[list_documents] Returning {len(response)} documents")
+    return response
 
 
 @router.get("/tasks/{task_id}")
@@ -333,8 +357,7 @@ async def punctuate_document(
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
 
-    meta = doc.metadatos or {}
-    texto = meta.get("texto_extraido", "")
+    texto = doc.texto_extraido  # uses model property (falls back to texto_original)
     if not texto:
         raise HTTPException(400, "No hay texto extraído para puntuar")
 
@@ -347,7 +370,6 @@ async def punctuate_document(
         }
 
     from app.core.celery_app import celery_app
-    from celery.result import AsyncResult
 
     task = celery_app.send_task(
         "punctuate_text",
@@ -359,27 +381,7 @@ async def punctuate_document(
         queue="fast",
     )
 
-    # Esperar resultado (hasta 3 min, sin bloquear event loop)
-    import asyncio
-
-    result = AsyncResult(task.id, app=celery_app)
-    try:
-        output = await asyncio.to_thread(result.get, timeout=600)
-    except Exception:
-        return {"status": "error", "message": "Timeout o error en el procesamiento"}
-
-    # Refrescar documento
-    await db.refresh(doc)
-
-    return {
-        "status": "ok",
-        "punctuation_fix": True,
-        "punctuated_text": output.get("punctuated_text", texto)[:500],
-        "changes_made": output.get("changes_made", False),
-        "full_text": (
-            (doc.metadatos or {}).get("texto_preprocesado") or doc.texto_extraido
-        )[:500],
-    }
+    return {"status": "dispatched", "task_id": task.id}
 
 
 @router.post("/{document_id}/process")
@@ -399,7 +401,7 @@ async def process_document(
         raise HTTPException(404, "Documento no encontrado")
 
     meta = doc.metadatos or {}
-    texto_extraido_raw = meta.get("texto_extraido", "")
+    texto_extraido_raw = doc.texto_extraido
     texto_best = meta.get("texto_preprocesado") or texto_extraido_raw
     if not texto_extraido_raw:
         raise HTTPException(400, "No hay texto extraído para procesar")
@@ -508,9 +510,28 @@ async def delete_document(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    """Elimina un documento y sus referencias."""
+    from sqlalchemy import text
+
     doc = await db.get(Documento, document_id)
     if not doc:
         raise HTTPException(404, "Documento no encontrado")
+
+    # Borrar dependencias primero (pipeline_tasks, segments, etc.)
+    await db.execute(
+        text(
+            "DELETE FROM task_step_checkpoints WHERE pipeline_task_id IN (SELECT id FROM pipeline_tasks WHERE document_id = :did)"
+        ),
+        {"did": document_id},
+    )
+    await db.execute(
+        text("DELETE FROM pipeline_tasks WHERE document_id = :did"),
+        {"did": document_id},
+    )
+    await db.execute(
+        text("DELETE FROM segmentos WHERE documento_id = :did"),
+        {"did": document_id},
+    )
     await minio_client.delete_file(doc.storage_key)
     await db.delete(doc)
     await db.commit()
@@ -570,15 +591,20 @@ async def restore_document_original(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Borra texto_preprocesado y resetea el doc a crudo, sin tocar segmentos."""
+    """Borra texto_preprocesado, warning, y resetea el doc a crudo."""
     from sqlalchemy import text
 
     await db.execute(
         text(
             "UPDATE documentos SET estado = 'crudo', "
-            "metadatos = metadatos - 'texto_preprocesado' "
+            "metadatos = metadatos - 'texto_preprocesado' - 'preprocess_warning' - 'texto_puntuado' "
             "WHERE id = :did"
         ),
+        {"did": document_id},
+    )
+    # Also delete segments so the doc really goes back to raw
+    await db.execute(
+        text("DELETE FROM segmentos WHERE documento_id = :did"),
         {"did": document_id},
     )
     await db.commit()
@@ -591,13 +617,13 @@ async def reset_all_docs_to_crudo(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Resetea todos los docs del proyecto a 'crudo', borrando texto_preprocesado."""
+    """Resetea todos los docs del proyecto a 'crudo', borrando preprocesado y warnings."""
     from sqlalchemy import text
 
     result = await db.execute(
         text(
             "UPDATE documentos SET estado = 'crudo', "
-            "metadatos = metadatos - 'texto_preprocesado' "
+            "metadatos = metadatos - 'texto_preprocesado' - 'preprocess_warning' - 'texto_puntuado' "
             "WHERE proyecto_id = :pid"
         ),
         {"pid": project_id},
@@ -607,3 +633,26 @@ async def reset_all_docs_to_crudo(
         "status": "ok",
         "message": f"{result.rowcount} documentos reseteados a crudo",
     }
+
+
+@router.post("/project/{project_id}/reorder", status_code=200)
+async def reorder_documents(
+    project_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Reordena documentos. Body: {"order": [{"id": "...", "sort_order": 1.0}, ...]}"""
+    from sqlalchemy import text
+
+    items = body.get("order", [])
+    if not items:
+        raise HTTPException(400, "Se requiere order[] con {id, sort_order}")
+
+    for item in items:
+        await db.execute(
+            text("UPDATE documentos SET sort_order = :so WHERE id = :did"),
+            {"so": item["sort_order"], "did": item["id"]},
+        )
+    await db.commit()
+    return {"status": "ok", "count": len(items)}

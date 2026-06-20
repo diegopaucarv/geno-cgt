@@ -242,6 +242,26 @@ def segmentar_documento(
         tei_url=TEI_URL,
         reinert_micro=reinert,
     )
+
+    if not texto or not texto.strip():
+        logger.error("Segmentacion: texto vacio para doc=%s", documento_id)
+        if documento_id and _proj_id:
+            try:
+                from agents.transitions import _to_error
+
+                db_url_sa = DATABASE_URL.replace(
+                    "postgresql+asyncpg", "postgresql"
+                ).replace("postgresql+psycopg2", "postgresql")
+                from sqlalchemy import create_engine
+                from sqlalchemy.orm import Session as SASession
+
+                engine = create_engine(db_url_sa)
+                with SASession(engine) as s:
+                    _to_error(s, documento_id)
+            except Exception as _e:
+                logger.error("Failed to mark doc as error: %s", _e)
+        return {"num_segmentos": 0, "error": "empty_text"}
+
     segmentos = segmenter.segment_text(texto, max_tokens=max_tokens)
 
     if documento_id:
@@ -372,6 +392,27 @@ def segmentar_documento(
                         _to_error(s, documento_id)
                 except Exception as _e:
                     logger.error("Failed to mark doc as error: %s", _e)
+            # After _to_error call, push error signal to Redis
+            try:
+                import json as _j
+                import os as _os
+
+                import redis as _r
+
+                rr = _r.Redis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+                rr.set(
+                    f"pipeline_error:{_proj_id}",
+                    _j.dumps(
+                        {
+                            "document_id": documento_id,
+                            "error": str(e),
+                            "ts": __import__("time").time(),
+                        }
+                    ),
+                    ex=3600,
+                )
+            except Exception:
+                pass
             raise  # re-raise so Celery sees the failure
 
     return {

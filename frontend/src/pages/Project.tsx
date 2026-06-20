@@ -9,6 +9,7 @@ import {
   listSegments,
   uploadDocument,
   punctuateDocument,
+  getTaskStatus,
   deleteDocument,
   deleteAllDocuments,
   deleteDocumentSegments,
@@ -45,6 +46,7 @@ import ProjectConfigPanel from "../components/ProjectConfigPanel";
 import PipelineAgents from "../components/PipelineAgents";
 import AgentModal from "../components/AgentModal";
 import { getAgentLogs, type AgentLogEntry } from "../api/client";
+import { PIPELINE_STAGES, FAMILY_COLORS } from "../config/pipelineChains";
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -57,30 +59,6 @@ const btnSmall: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
-
-// ── Pipeline stage definitions ────────────────────────────────────
-
-interface StageDef {
-  key: string;
-  icon: string;
-  label: string;
-}
-
-const PIPELINE_STAGES: StageDef[] = [
-  { key: "segment", icon: "✂️", label: "project.stageSegmentation" },
-  { key: "agents", icon: "🧠", label: "project.stageOpenCoding" },
-  { key: "synthesis", icon: "🔗", label: "project.stageCrossDoc" },
-  { key: "maturity", icon: "🔍", label: "project.stageVerifyingMaturity" },
-  { key: "find_cc", icon: "🎯", label: "project.stagePatternOfInterest" },
-  { key: "reduce", icon: "✂️", label: "project.stageSelectiveReduction" },
-  { key: "saturate", icon: "🔄", label: "project.stageCoreSaturation" },
-  { key: "build_db", icon: "🗄️", label: "project.stageDatabaseA" },
-  {
-    key: "playground",
-    icon: "🎨",
-    label: "project.stageTheoreticalPlayground",
-  },
-];
 
 type StageStatus = "pending" | "running" | "done" | "error";
 type ViewMode = "original" | "segmented";
@@ -98,11 +76,34 @@ export default function ProjectDetail() {
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const [punctStatus, setPunctStatus] = useState<Record<string, string>>({});
   const [punctRunning, setPunctRunning] = useState<string | null>(null);
+  const punctTaskRef = useRef<string | null>(null);
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
   const abortRef = useRef(false);
   const originalTexts = useRef<Record<string, string>>({});
+
+  /** Floating confirmation bar — replaces blocked window.confirm() */
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const confirmResolve = useRef<((ok: boolean) => void) | null>(null);
+  function safeConfirm(msg: string): Promise<boolean> {
+    // Try native confirm first
+    const start = performance.now();
+    const ok = window.confirm(msg);
+    if (ok || performance.now() - start > 100) {
+      return Promise.resolve(ok);
+    }
+    // Native confirm blocked — show floating bar
+    return new Promise((resolve) => {
+      confirmResolve.current = resolve;
+      setConfirmMsg(msg);
+    });
+  }
+  function resolveConfirm(ok: boolean) {
+    setConfirmMsg(null);
+    confirmResolve.current?.(ok);
+    confirmResolve.current = null;
+  }
 
   // ── Pipeline state ──
   const [pipelineLog, setPipelineLog] = useState<PipelineLog | null>(null);
@@ -124,6 +125,7 @@ export default function ProjectDetail() {
   const [agentMemos, setAgentMemos] = useState<any[]>([]);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastType, setToastType] = useState<"info" | "error">("info");
   const [pipelineLiveLogs, setPipelineLiveLogs] = useState<
     Array<{ ts: number; msg: string }>
   >([]);
@@ -140,22 +142,11 @@ export default function ProjectDetail() {
   // ── Agent monitoring ──
   const [sidebarViewMode, setSidebarViewMode] = useState<
     "stages" | "agents" | "logs"
-  >("stages");
+  >("agents");
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
   const [agentStatuses, setAgentStatuses] = useState<
     Record<string, "pending" | "running" | "done" | "error">
   >({});
-
-  // Auto-scroll log panel
-  useEffect(() => {
-    if (
-      logPanelRef.current &&
-      sidebarViewMode === "logs" &&
-      pipelineLiveLogs.length > 0
-    ) {
-      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
-    }
-  }, [pipelineLiveLogs, sidebarViewMode]);
 
   const [agentModalOpen, setAgentModalOpen] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -185,10 +176,42 @@ export default function ProjectDetail() {
     },
   );
 
+  // ── Text editing state ──
+  const [textEdits, setTextEdits] = useState<Record<string, string>>({});
+  const [textSaving, setTextSaving] = useState<Record<string, boolean>>({});
+
+  // ── Drag-and-drop state ──
+  const dragDoc = useRef<string | null>(null);
+
+  // ── Agent execution state ──
+  const [completedAgents, setCompletedAgents] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [iterations, setIterations] = useState<Record<string, number>>({});
+
   // ── Text comparison toggle (crudo vs preprocesado) ──
   const [showPreprocessed, setShowPreprocessed] = useState(false);
 
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Cleanup on unmount — clear local intervals ──
+  useEffect(() => {
+    return () => {
+      if (logPollRef.current) clearInterval(logPollRef.current);
+      if (agentPollRef.current) clearInterval(agentPollRef.current);
+    };
+  }, []);
+
+  // Auto-scroll log panel al recibir nuevos logs
+  useEffect(() => {
+    if (
+      logPanelRef.current &&
+      sidebarViewMode === "logs" &&
+      pipelineLiveLogs.length > 0
+    ) {
+      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
+    }
+  }, [pipelineLiveLogs, sidebarViewMode]);
 
   useEffect(() => {
     if (!id) return;
@@ -227,43 +250,85 @@ export default function ProjectDetail() {
     setCustomLabel(label);
   }, [project]);
 
-  // ── Derive stage statuses from pipeline log on load ──
+  // ── Derive stageStatuses from pipelineLog (MERGE: never go backwards) ──
   useEffect(() => {
     if (!pipelineLog || pipelineRunning) return;
-    const s = pipelineLog.summary;
-    if (s.total === 0) return;
+    const { summary } = pipelineLog;
+    if (summary.total === 0) return;
 
     setStageStatuses((prev) => {
       const next = { ...prev };
 
-      // Segment done if no docs need segmentation
-      if (s.need_segment === 0) next.segment = "done";
+      const setIfForward = (key: string, desired: StageStatus) => {
+        const cur = next[key] || "pending";
+        // Only allow pending→running→done; never go backwards
+        if (cur === "pending" && (desired === "running" || desired === "done"))
+          next[key] = desired;
+        else if (cur === "running" && desired === "done") next[key] = "done";
+        else if (cur === "error") {
+          /* keep error */
+        } else if (desired === "pending") {
+          /* never reset to pending */
+        } else if (desired === cur) {
+          /* no change */
+        }
+      };
 
-      // Agents done only if BOTH segment and agents are complete
-      if (s.need_agents === 0 && s.need_segment === 0) {
-        next.agents = "done";
-      }
+      // data_management: done if no docs need segmentation
+      if (summary.need_segment === 0 && summary.total > 0)
+        setIfForward("data_management", "done");
 
-      // Synthesis and downstream stages done if playground_ready
-      if (s.playground_ready) {
-        next.synthesis = "done";
-        next.find_cc = "done";
-        next.reduce = "done";
-        next.saturate = "done";
-        next.build_db = "done";
-        next.playground = "done";
-      }
+      // open_coding: done if need_agents === 0 && need_segment === 0
+      if (
+        summary.need_agents === 0 &&
+        summary.need_segment === 0 &&
+        summary.total > 0
+      )
+        setIfForward("open_coding", "done");
+
+      // selective_coding: done if project_state in ['playground_ready','completed'] or playground_ready
+      const ps = summary.project_state || "collecting";
+      if (
+        ["playground_ready", "completed"].includes(ps) ||
+        summary.playground_ready
+      )
+        setIfForward("selective_coding", "done");
+
+      // theoretical_coding: done if project_state === 'completed'
+      if (ps === "completed") setIfForward("theoretical_coding", "done");
 
       // All done: every doc fully processed
-      if (s.done === s.total && s.total > 0) {
+      if (summary.done === summary.total && summary.total > 0) {
         PIPELINE_STAGES.forEach((stage) => {
-          next[stage.key] = "done";
+          setIfForward(stage.key, "done");
         });
       }
 
       return next;
     });
   }, [pipelineLog, pipelineRunning]);
+
+  // ── HITL: mark relevant stage as "running" when HITL is pending ──
+  useEffect(() => {
+    if (!pipelineLog || hitlPending.length === 0) return;
+    const gate = hitlPending[0].gate_name;
+
+    setStageStatuses((prev) => {
+      const next = { ...prev };
+      // Map gate → new stage key
+      if (gate === "pattern_of_interest" || gate === "core_category")
+        next.open_coding = "running";
+      if (
+        gate === "selective_reduction" ||
+        gate === "core_saturation" ||
+        gate === "database_a" ||
+        gate === "database_b" ||
+        gate === "global_saturation"
+      )
+        next.selective_coding = "running";
+      return next;
+    });
+  }, [hitlPending]);
 
   // Retry once on mount if memos didn't load initially
   useEffect(() => {
@@ -291,78 +356,6 @@ export default function ProjectDetail() {
     hitlPollRef.current = poll;
     return () => clearInterval(poll);
   }, [id]);
-
-  // ── Compute stageStatuses from pipelineLog ──
-  useEffect(() => {
-    if (!pipelineLog) return;
-    const s: Record<string, StageStatus> = {};
-    const { summary } = pipelineLog;
-
-    s.segment =
-      summary.need_segment === 0 && summary.total > 0 ? "done" : "pending";
-    s.agents =
-      summary.need_agents === 0 &&
-      summary.need_segment === 0 &&
-      summary.total > 0
-        ? "done"
-        : "pending";
-    s.synthesis =
-      summary.sintetizados > 0 && summary.need_synthesis === 0
-        ? "done"
-        : "pending";
-
-    const ps = summary.project_state || "collecting";
-    s.find_cc = [
-      "finding_cc",
-      "reducing",
-      "saturating",
-      "building_db",
-      "playground_ready",
-      "completed",
-    ].includes(ps)
-      ? "done"
-      : "pending";
-    s.reduce = [
-      "reducing",
-      "saturating",
-      "building_db",
-      "playground_ready",
-      "completed",
-    ].includes(ps)
-      ? "done"
-      : "pending";
-    s.saturate = [
-      "saturating",
-      "building_db",
-      "playground_ready",
-      "completed",
-    ].includes(ps)
-      ? "done"
-      : "pending";
-    s.build_db = ["building_db", "playground_ready", "completed"].includes(ps)
-      ? "done"
-      : "pending";
-    s.playground = ["playground_ready", "completed"].includes(ps)
-      ? "done"
-      : "pending";
-
-    // Mark running if HITL pending for a gate
-    if (hitlPending.length > 0) {
-      const gate = hitlPending[0].gate_name;
-      if (gate === "pattern_of_interest" || gate === "core_category")
-        s.find_cc = "running";
-      if (gate === "selective_reduction") s.reduce = "running";
-      if (gate === "core_saturation") s.saturate = "running";
-      if (
-        gate === "database_a" ||
-        gate === "database_b" ||
-        gate === "global_saturation"
-      )
-        s.build_db = "running";
-    }
-
-    setStageStatuses(s);
-  }, [pipelineLog, hitlPending]);
 
   function refreshDocs() {
     if (!id) return;
@@ -420,8 +413,9 @@ export default function ProjectDetail() {
       : last.slice(0, 8).toUpperCase();
   }
 
-  /** Bare API call + status management for a single doc — no worker lifecycle */
+  /** API call + poll until Celery task completes. Keeps punctRunning alive. */
   async function punctuateSingleDoc(docId: string) {
+    console.log("[punctuateSingleDoc] starting for", docId);
     setPunctStatus((prev) => ({
       ...prev,
       [docId]: t("project.preprocessingProcessing"),
@@ -432,7 +426,87 @@ export default function ProjectDetail() {
     }
     try {
       const res = await punctuateDocument(docId);
+      console.log("[punctuateSingleDoc] response for", docId, ":", res);
       if (abortRef.current) return;
+
+      if (res.status === "ok" && !res.task_id) {
+        // Backend determined no punctuation needed (already OK)
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingOK"),
+        }));
+        return;
+      }
+
+      if (res.task_id) {
+        // Task dispatched — poll until completion
+        punctTaskRef.current = res.task_id;
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: t("project.preprocessingProcessing") + "…",
+        }));
+        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const ts = await getTaskStatus(res.task_id);
+            console.log(
+              "[punctuateSingleDoc] poll",
+              poll,
+              "status:",
+              ts.status,
+            );
+            if (ts.status === "SUCCESS") {
+              const output = ts.result;
+              const changed =
+                output && typeof output === "object" && output.changes_made;
+              if (changed) {
+                setPunctStatus((prev) => ({
+                  ...prev,
+                  [docId]: t("project.preprocessingImproved"),
+                }));
+                refreshDocs();
+                setSegments((prev) => {
+                  const n = { ...prev };
+                  delete n[docId];
+                  return n;
+                });
+              } else {
+                setPunctStatus((prev) => ({
+                  ...prev,
+                  [docId]: t("project.preprocessingOK"),
+                }));
+              }
+              return;
+            }
+            if (ts.status === "FAILURE") {
+              setPunctStatus((prev) => ({
+                ...prev,
+                [docId]:
+                  t("project.preprocessingError") + (ts.result?.error || ""),
+              }));
+              showErrorToast(
+                "Error del worker de preprocesado: " +
+                  (ts.result?.error || "Fallo interno"),
+              );
+              return;
+            }
+            // Still PENDING/STARTED — keep waiting
+          } catch {
+            // polling error, keep trying
+          }
+        }
+        // Timeout after 120s
+        if (!abortRef.current) {
+          setPunctStatus((prev) => ({
+            ...prev,
+            [docId]: t("project.preprocessingError") + "Timeout",
+          }));
+          showErrorToast("Timeout: el preprocesado no respondio en 120s");
+        }
+        return;
+      }
+
+      // Fallback: old-style response
       if (res.status === "ok" && (res as any).changes_made) {
         setPunctStatus((prev) => ({
           ...prev,
@@ -452,43 +526,51 @@ export default function ProjectDetail() {
       } else {
         setPunctStatus((prev) => ({
           ...prev,
-          [docId]:
-            t("project.preprocessingError") +
-            (res.message || t("project.preprocessingErrorFallback")),
+          [docId]: t("project.preprocessingError") + (res.message || ""),
         }));
       }
     } catch (err: any) {
-      if (!abortRef.current)
+      if (!abortRef.current) {
+        console.error("[punctuateSingleDoc] error for", docId, ":", err);
         setPunctStatus((prev) => ({
           ...prev,
           [docId]: t("project.preprocessingError") + (err.message || ""),
         }));
+        showErrorToast(
+          "Error de API al preprocesar: " +
+            (err.message || "Sin respuesta del servidor"),
+        );
+      }
     }
   }
 
-  /** Preprocess all documents that are still 'crudo' (raw) — one worker, many docs */
+  /** Preprocess all documents that are still 'crudo' or 'preprocesado' (raw) */
   async function handlePreprocessAll() {
-    const crudos = docs.filter((d) => d.estado === "crudo");
-    if (crudos.length === 0) return;
+    const toProcess = docs.filter(
+      (d) =>
+        (d.estado === "crudo" || d.estado === "preprocesado") &&
+        !preprocessDisabled.has(d.id),
+    );
+    console.log(
+      "[preprocessAll] candidates:",
+      toProcess.length,
+      "of",
+      docs.length,
+      "docs. preprocessDisabled:",
+      [...preprocessDisabled],
+    );
+    if (toProcess.length === 0) return;
 
     abortRef.current = false;
-    const auth = `Bearer ${localStorage.getItem("access_token")}`;
-
-    // Start worker ONCE for the batch
-    try {
-      await fetch("/api/v1/admin/workers/fast/start", {
-        method: "POST",
-        headers: { Authorization: auth },
-      });
-    } catch {
-      showToast(t("project.workerStartFailed"));
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 1500));
 
     try {
-      for (const doc of crudos) {
+      for (const doc of toProcess) {
         if (abortRef.current) break;
+        console.log(
+          "[preprocessAll] processing doc",
+          doc.id,
+          doc.original_filename,
+        );
         setPunctRunning(doc.id);
         setPunctStatus((prev) => ({
           ...prev,
@@ -498,11 +580,6 @@ export default function ProjectDetail() {
         setPunctRunning(null);
       }
     } finally {
-      // Always stop the worker
-      await fetch("/api/v1/admin/workers/fast/stop", {
-        method: "POST",
-        headers: { Authorization: auth },
-      }).catch(() => {});
       setPunctRunning(null);
     }
   }
@@ -510,23 +587,29 @@ export default function ProjectDetail() {
   /** Preprocess a single document (called from the per-doc button) */
   async function handlePunctuate(docId: string) {
     if (punctRunning === docId) {
-      // Cancel: stop worker and abort
+      // Cancel: abort polling + revoke Celery task
       abortRef.current = true;
       setPunctStatus((prev) => ({
         ...prev,
         [docId]: t("project.preprocessingCancelled"),
       }));
       setPunctRunning(null);
-      await fetch("/api/v1/admin/workers/fast/stop", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-        },
-      }).catch(() => {});
+      // Revocar el task de Celery (el endpoint cancela + rollback del estado)
+      const taskId = punctTaskRef.current;
+      punctTaskRef.current = null;
+      if (taskId) {
+        fetch(`/api/v1/admin/tasks/${taskId}/cancel`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        })
+          .then(() => refreshDocs())
+          .catch(() => {});
+      }
       return;
     }
 
-    const auth = `Bearer ${localStorage.getItem("access_token")}`;
     abortRef.current = false;
     setPunctRunning(docId);
     setPunctStatus((prev) => ({
@@ -534,27 +617,9 @@ export default function ProjectDetail() {
       [docId]: t("project.preprocessingStarting"),
     }));
 
-    // Start worker
-    try {
-      await fetch("/api/v1/admin/workers/fast/start", {
-        method: "POST",
-        headers: { Authorization: auth },
-      });
-    } catch {
-      showToast(t("project.workerStartFailed"));
-      setPunctRunning(null);
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 1500));
-
     try {
       await punctuateSingleDoc(docId);
     } finally {
-      // Always stop the worker
-      await fetch("/api/v1/admin/workers/fast/stop", {
-        method: "POST",
-        headers: { Authorization: auth },
-      }).catch(() => {});
       setPunctRunning(null);
     }
   }
@@ -683,9 +748,42 @@ export default function ProjectDetail() {
     showToast(t("project.memoChangesPermanent"));
   }
 
-  function showToast(msg: string) {
+  function showToast(msg: string, type: "info" | "error" = "info") {
     setToastMsg(msg);
+    setToastType(type);
     setToastVisible(true);
+  }
+
+  function showErrorToast(msg: string) {
+    showToast(msg, "error");
+  }
+
+  // ── Save edited document text ──
+  async function saveDocText(docId: string) {
+    const newText = textEdits[docId];
+    if (newText === undefined) return;
+    setTextSaving((prev) => ({ ...prev, [docId]: true }));
+    try {
+      const field = showPreprocessed ? "texto_preprocesado" : "texto_original";
+      await fetch(`/api/v1/documents/${docId}/text`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+        body: JSON.stringify({ [field]: newText }),
+      });
+      setTextEdits((prev) => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+      refreshDocs();
+    } catch (e: any) {
+      showErrorToast("Error al guardar: " + (e.message || ""));
+    } finally {
+      setTextSaving((prev) => ({ ...prev, [docId]: false }));
+    }
   }
 
   // ── Modification callback ───────────────────
@@ -802,8 +900,8 @@ export default function ProjectDetail() {
 
     // ── Actually start workers and process ──
     if (isContinue) {
-      resetStages({ workers: "done", segment: "done" });
-      updateStage("agents", "running");
+      resetStages({ workers: "done", data_management: "done" });
+      updateStage("open_coding", "running");
       setPipelineMsg(t("project.pipelineContinuing"));
     } else {
       resetStages();
@@ -823,8 +921,8 @@ export default function ProjectDetail() {
 
     // Call unified orchestrator (backend handles all docs)
     setPipelineMsg(t("project.pipelineOrchestrator"));
-    if (stageStatuses.segment !== "done") {
-      updateStage("segment", "running");
+    if (stageStatuses.data_management !== "done") {
+      updateStage("data_management", "running");
     }
 
     let pipelineOk = false;
@@ -849,26 +947,52 @@ export default function ProjectDetail() {
 
       const res = await response.json();
 
+      // ── Orchestrator returned a fatal error (segmentation/preprocessing failure) ──
+      if (res.status === "error") {
+        setPipelineMsg(
+          `❌ ${res.message || "Pipeline blocked by fatal error"}`,
+        );
+        setPipelineFailed(true);
+        updateStage("data_management", "error");
+        updateStage("open_coding", "error");
+        abortRef.current = true;
+        showErrorToast(
+          "Error de segmentacion: " +
+            (res.message || "Fallo en worker — revisa los logs"),
+        );
+        // Clear fatal error signal so user can retry
+        try {
+          await fetch(`/api/v1/admin/projects/${id}/stop`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+            },
+          });
+        } catch {}
+        return;
+      }
+
       pipelineOk = true;
 
       if (res.status === "no_docs") {
         setPipelineMsg(t("project.noDocuments"));
-        updateStage("segment", "done");
-        updateStage("agents", "done");
+        updateStage("data_management", "done");
+        updateStage("open_coding", "done");
       } else {
         setPipelineMsg(res.message || t("project.pipelineTriggered"));
-        if (res.summary?.need_segment === 0) updateStage("segment", "done");
+        if (res.summary?.need_segment === 0)
+          updateStage("data_management", "done");
         if (res.summary?.need_agents === 0) {
           if ((res.summary?.need_segment ?? 1) === 0) {
-            updateStage("agents", "done");
+            updateStage("open_coding", "done");
           }
         } else {
-          updateStage("agents", "running");
+          updateStage("open_coding", "running");
         }
 
-        // Phase B (synthesis) detection
+        // Phase B (synthesis) detection → selective_coding is running
         if ((res as any).task_ids?.phase_b) {
-          updateStage("synthesis", "running");
+          updateStage("selective_coding", "running");
           setPipelineMsg(t("project.pipelinePhaseB"));
         }
 
@@ -889,25 +1013,30 @@ export default function ProjectDetail() {
                 t("project.pipelineFailed") +
                   (errNames || t("project.document")),
               );
-              updateStage("segment", "error");
-              updateStage("agents", "error");
-              updateStage("synthesis", "error");
+              updateStage("data_management", "error");
+              updateStage("open_coding", "error");
+              updateStage("selective_coding", "error");
               setPipelineFailed(true);
               abortRef.current = true;
+              showErrorToast(
+                "Error de segmentacion en " +
+                  (errNames || "documento") +
+                  " — pipeline detenido",
+              );
               break;
             }
 
             if (status.summary.need_segment === 0)
-              updateStage("segment", "done");
+              updateStage("data_management", "done");
             if (
               status.summary.need_agents === 0 &&
               status.summary.need_segment === 0
             )
-              updateStage("agents", "done");
+              updateStage("open_coding", "done");
 
-            // Synthesis (Phase B) completion: playground_ready = codes assigned to segments
+            // Selective Coding completion: playground_ready
             if (status.summary.playground_ready) {
-              updateStage("synthesis", "done");
+              updateStage("selective_coding", "done");
             }
 
             if (status.summary.done === status.summary.total) {
@@ -920,6 +1049,9 @@ export default function ProjectDetail() {
       }
     } catch (e: any) {
       setPipelineMsg(`❌ ${e.message}`);
+      showErrorToast(
+        "Error del pipeline: " + (e.message || "Fallo inesperado"),
+      );
     }
 
     if (abortRef.current) {
@@ -935,25 +1067,18 @@ export default function ProjectDetail() {
       await stopProjectPipeline(id!).catch(() => {});
       if (pipelineFailed) {
         // Keep error states set during polling
-        [
-          "synthesis",
-          "find_cc",
-          "reduce",
-          "saturate",
-          "build_db",
-          "playground",
-        ].forEach((k) => updateStage(k, "error"));
+        ["selective_coding", "theoretical_coding"].forEach((k) =>
+          updateStage(k, "error"),
+        );
       } else {
         resetStages();
         setPipelineMsg(t("project.pipelineCancelled"));
       }
     } else if (pipelineOk) {
       // Pipeline completed normally
-      updateStage("segment", "done");
-      updateStage("agents", "done");
-      updateStage("synthesis", "done");
-      updateStage("categories", "done");
-      updateStage("done", "done");
+      updateStage("data_management", "done");
+      updateStage("open_coding", "done");
+      updateStage("selective_coding", "done");
       setPipelineMsg(t("project.pipelineCompleted"));
     }
 
@@ -980,6 +1105,9 @@ export default function ProjectDetail() {
         await uploadDocument(id, file);
       }
       refreshDocs();
+      getPipelineLog(id!)
+        .then(setPipelineLog)
+        .catch(() => {});
     } catch (err: any) {
       alert(err.message);
     }
@@ -988,7 +1116,7 @@ export default function ProjectDetail() {
 
   async function handleDeleteAllDocs() {
     if (!id) return;
-    if (!confirm(t("project.deleteAllDocsConfirm"))) return;
+    if (!(await safeConfirm(t("project.deleteAllDocsConfirm")))) return;
     try {
       const result = await deleteAllDocuments(id);
       showToast(t("project.deleteAllDocsSuccess", { count: result.count }));
@@ -1098,10 +1226,10 @@ export default function ProjectDetail() {
   const playgroundReady = logSummary?.playground_ready ?? cats.length > 0;
 
   // Next pipeline stage (dynamic, from PIPELINE_STAGES)
-  const nextStageKey = docsNeedSegment > 0 ? "segment" : "agents";
+  const nextStageKey = docsNeedSegment > 0 ? "data_management" : "open_coding";
   const nextStage = PIPELINE_STAGES.find((s) => s.key === nextStageKey)!;
   const nextStageCount =
-    nextStageKey === "segment" ? docsNeedSegment : docsNeedAgents;
+    nextStageKey === "data_management" ? docsNeedSegment : docsNeedAgents;
 
   function getDocLog(docId: string): DocPipelineLog | undefined {
     return pipelineLog?.documents.find((d) => d.document_id === docId);
@@ -1184,17 +1312,59 @@ export default function ProjectDetail() {
           color: "#8B949E",
           bg: "#8B949E22",
         };
-      case "segmentado":
+      case "preprocesando":
         return {
-          text: t("project.statusSegmenting"),
+          text: t("project.statusPreprocessing"),
           color: "#D29922",
           bg: "#D2992222",
+        };
+      case "preprocesado":
+        return {
+          text: t("project.preprocessingOK"),
+          color: "#3FB950",
+          bg: "#3FB95022",
+        };
+      case "segmentando":
+        return {
+          text: t("project.statusSegmenting"),
+          color: "#A371F7",
+          bg: "#A371F722",
+        };
+      case "segmentado":
+        return {
+          text: t("project.statusSegmented"),
+          color: "#D29922",
+          bg: "#D2992222",
+        };
+      case "procesando":
+        return {
+          text: t("project.pipelineProcessing"),
+          color: "#A371F7",
+          bg: "#A371F722",
         };
       case "listo":
         return {
           text: t("project.statusReady"),
           color: "#3FB950",
           bg: "#3FB95022",
+        };
+      case "resumiendo":
+        return {
+          text: t("project.statusSummarizing"),
+          color: "#D29922",
+          bg: "#D2992222",
+        };
+      case "resumido":
+        return {
+          text: t("project.statusSummarized"),
+          color: "#3FB950",
+          bg: "#3FB95022",
+        };
+      case "sintetizado":
+        return {
+          text: t("project.statusSynthesized"),
+          color: "#58A6FF",
+          bg: "#58A6FF22",
         };
       case "error":
         return {
@@ -1204,7 +1374,7 @@ export default function ProjectDetail() {
         };
       default:
         return {
-          text: t("project.statusRaw"),
+          text: doc.estado || t("project.statusRaw"),
           color: "#8B949E",
           bg: "#8B949E22",
         };
@@ -1442,7 +1612,10 @@ export default function ProjectDetail() {
               {/* Delete all segments */}
               <button
                 onClick={async () => {
-                  if (!confirm(t("project.deleteAllSegmentsConfirm"))) return;
+                  if (
+                    !(await safeConfirm(t("project.deleteAllSegmentsConfirm")))
+                  )
+                    return;
                   const auth = `Bearer ${localStorage.getItem("access_token")}`;
                   await fetch(`/api/v1/documents/project/${id}/segments`, {
                     method: "DELETE",
@@ -2182,29 +2355,12 @@ export default function ProjectDetail() {
               {t("project.documentsHeading", { count: docs.length })}
             </h3>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <button
-                onClick={() => setShowPreprocessed((p) => !p)}
-                style={{
-                  padding: "3px 10px",
-                  borderRadius: 6,
-                  border: "1px solid #A371F744",
-                  background: showPreprocessed ? "#A371F722" : "#1C2333",
-                  color: showPreprocessed ? "#A371F7" : "#8B949E",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  fontWeight: 500,
-                }}
-              >
-                {showPreprocessed
-                  ? t("project.showCrudo")
-                  : t("project.showPreprocesado")}
-              </button>
-
               {docs.length > 0 && (
                 <>
                   <button
-                    onClick={() => {
-                      if (!confirm(t("project.resetDocsConfirm"))) return;
+                    onClick={async () => {
+                      if (!(await safeConfirm(t("project.resetDocsConfirm"))))
+                        return;
                       resetDocsToCrudo(id!).then(() => refreshDocs());
                     }}
                     style={{
@@ -2248,6 +2404,50 @@ export default function ProjectDetail() {
               return (
                 <li
                   key={d.id}
+                  draggable
+                  onDragStart={(e) => {
+                    dragDoc.current = d.id;
+                    (e.target as HTMLElement).style.opacity = "0.5";
+                  }}
+                  onDragEnd={(e) => {
+                    dragDoc.current = null;
+                    (e.target as HTMLElement).style.opacity = "1";
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    (e.target as HTMLElement).style.borderTop =
+                      "2px solid #A371F7";
+                  }}
+                  onDragLeave={(e) => {
+                    (e.target as HTMLElement).style.borderTop = "";
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    (e.target as HTMLElement).style.borderTop = "";
+                    (e.target as HTMLElement).style.opacity = "1";
+                    const fromId = dragDoc.current;
+                    if (!fromId || fromId === d.id) return;
+                    const fromIdx = docs.findIndex((x) => x.id === fromId);
+                    const toIdx = docs.findIndex((x) => x.id === d.id);
+                    if (fromIdx === -1 || toIdx === -1) return;
+                    const reordered = [...docs];
+                    const [moved] = reordered.splice(fromIdx, 1);
+                    reordered.splice(toIdx, 0, moved);
+                    setDocs(reordered);
+                    // Save using reordered array, not stale state
+                    const order = reordered.map((d, i) => ({
+                      id: d.id,
+                      sort_order: i + 1,
+                    }));
+                    fetch(`/api/v1/documents/project/${id}/reorder`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                      },
+                      body: JSON.stringify({ order }),
+                    }).catch(() => {});
+                  }}
                   onClick={(e) => {
                     // Only toggle if click was on the card itself, not a button/input
                     const tag = (e.target as HTMLElement).tagName;
@@ -2291,64 +2491,51 @@ export default function ProjectDetail() {
                       {/* Estado badge from log */}
                       {(() => {
                         const badge = getEstadoBadge(d);
+                        const warning = (d as any).preprocess_warning;
                         return (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              padding: "2px 8px",
-                              borderRadius: 999,
-                              background: badge.bg,
-                              color: badge.color,
-                              border: `1px solid ${badge.color}33`,
-                            }}
-                          >
-                            {badge.text}
-                          </span>
+                          <>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                background: badge.bg,
+                                color: badge.color,
+                                border: `1px solid ${badge.color}33`,
+                              }}
+                            >
+                              {badge.text}
+                            </span>
+                            {warning && (
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  padding: "2px 8px",
+                                  borderRadius: 999,
+                                  background: "#D2992218",
+                                  color: "#D29922",
+                                  border: "1px solid #D2992233",
+                                  maxWidth: 200,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={warning}
+                              >
+                                {"⚠️ "}
+                                {warning.length > 30
+                                  ? warning.slice(0, 30) + "…"
+                                  : warning}
+                              </span>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
                     <div
                       style={{ display: "flex", gap: 6, alignItems: "center" }}
                     >
-                      {/*<button
-                        onClick={() => toggleSegments(d.id)}
-                        style={btnSmall}
-                      >
-                        {expandedDoc === d.id
-                          ? t("project.hideText")
-                          : t("project.showText")}
-                      </button>*/}
-                      {/*<button
-                        onClick={() => handlePunctuate(d.id)}
-                        disabled={d.estado !== "crudo" && punctRunning !== d.id}
-                        title={
-                          d.estado !== "crudo"
-                            ? t("project.cantPreprocessAfterSegment")
-                            : t("project.improvePunctuation")
-                        }
-                        style={{
-                          ...btnSmall,
-                          background:
-                            d.estado !== "crudo" && punctRunning !== d.id
-                              ? "#21262D"
-                              : punctRunning === d.id
-                                ? "#F85149"
-                                : "#A371F7",
-                          color:
-                            d.estado !== "crudo" && punctRunning !== d.id
-                              ? "#484F58"
-                              : "#FFF",
-                          cursor:
-                            d.estado !== "crudo" && punctRunning !== d.id
-                              ? "not-allowed"
-                              : "pointer",
-                        }}
-                      >
-                        {punctRunning === d.id
-                          ? t("project.cancelPreprocess")
-                          : t("project.preprocessButton")}
-                      </button>*/}
-                      {/* Per-doc preprocess switch */}
+                      {/* Preprocess toggle switch */}
                       {d.estado === "crudo" && (
                         <div
                           onClick={(e) => e.stopPropagation()}
@@ -2384,13 +2571,13 @@ export default function ProjectDetail() {
                               height: 16,
                               borderRadius: 8,
                               border: "none",
-                              background: preprocessDisabled.has(d.id)
-                                ? "#30363D"
-                                : "#A371F7",
+                              flexShrink: 0,
                               cursor: "pointer",
                               position: "relative",
                               transition: "background 0.2s",
-                              flexShrink: 0,
+                              background: preprocessDisabled.has(d.id)
+                                ? "#30363D"
+                                : "#A371F7",
                             }}
                           >
                             <span
@@ -2408,13 +2595,86 @@ export default function ProjectDetail() {
                           </button>
                         </div>
                       )}
-                      {punctRunning !== d.id && originalTexts.current[d.id] && (
+                      {/* Unified preprocess button — 4 estados */}
+                      {(() => {
+                        const isRunning = punctRunning === d.id;
+                        const isCrudo = d.estado === "crudo";
+                        const isSwitchOff =
+                          isCrudo && preprocessDisabled.has(d.id);
+                        const label = isRunning
+                          ? t("project.cancelPreprocess")
+                          : isCrudo
+                            ? isSwitchOff
+                              ? t("project.preprocessButton")
+                              : t("project.preprocessButton")
+                            : t("project.restoreOriginalButton");
+                        const bg = isRunning
+                          ? "#F85149"
+                          : isCrudo
+                            ? isSwitchOff
+                              ? "#30363D"
+                              : "#A371F7"
+                            : "#D29922";
+                        const fg = isCrudo && isSwitchOff ? "#484F58" : "#FFF";
+                        const disabled = isCrudo && isSwitchOff && !isRunning;
+                        const action = isRunning
+                          ? () => handlePunctuate(d.id)
+                          : isCrudo && !isSwitchOff
+                            ? () => handlePunctuate(d.id)
+                            : isCrudo && isSwitchOff
+                              ? undefined
+                              : async () => {
+                                  if (
+                                    !(await safeConfirm(
+                                      t("project.restoreOriginalConfirm"),
+                                    ))
+                                  )
+                                    return;
+                                  try {
+                                    await restoreDocumentOriginal(d.id);
+                                    refreshDocs();
+                                  } catch (e: any) {
+                                    showErrorToast(
+                                      "Error al restaurar: " +
+                                        (e.message || ""),
+                                    );
+                                  }
+                                };
+                        return (
+                          <button
+                            onClick={action}
+                            disabled={disabled}
+                            title={
+                              isRunning
+                                ? "Cancelar preprocesamiento"
+                                : isCrudo && isSwitchOff
+                                  ? "Preprocesado desactivado (switch OFF)"
+                                  : isCrudo
+                                    ? t("project.improvePunctuation")
+                                    : t("project.restoreOriginalTitle") ||
+                                      "Restaurar original"
+                            }
+                            style={{
+                              ...btnSmall,
+                              background: bg,
+                              color: fg,
+                              border: "none",
+                              cursor: disabled ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })()}
+                      {/*{punctRunning !== d.id && originalTexts.current[d.id] && (
                         <button
                           onClick={async () => {
                             const orig = originalTexts.current[d.id];
                             if (
                               !orig ||
-                              !confirm(t("project.restoreOriginalConfirm"))
+                              !(await safeConfirm(
+                                t("project.restoreOriginalConfirm"),
+                              ))
                             )
                               return;
                             await fetch(
@@ -2444,12 +2704,19 @@ export default function ProjectDetail() {
                         >
                           {t("project.undo")}
                         </button>
-                      )}
+                      )}*/}
                       <button
                         onClick={async () => {
-                          if (!confirm(t("project.deleteConfirm"))) return;
-                          await deleteDocument(d.id);
-                          refreshDocs();
+                          if (!(await safeConfirm(t("project.deleteConfirm"))))
+                            return;
+                          try {
+                            await deleteDocument(d.id);
+                            refreshDocs();
+                          } catch (e: any) {
+                            showErrorToast(
+                              "Error al eliminar: " + (e.message || ""),
+                            );
+                          }
                         }}
                         style={{ ...btnSmall, color: "#F85149" }}
                       >
@@ -2534,40 +2801,14 @@ export default function ProjectDetail() {
                             </button>
                           </div>
 
-                          {/* Restore original per doc */}
                           <button
-                            onClick={() => {
-                              if (!confirm(t("project.restoreOriginalConfirm")))
-                                return;
-                              restoreDocumentOriginal(d.id)
-                                .then(() => refreshDocs())
-                                .catch((e) => console.error(e));
-                            }}
-                            title={
-                              t("project.restoreOriginalTitle") ||
-                              "Restore original text"
-                            }
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 4,
-                              border: "1px solid #D2992233",
-                              background: "#D2992210",
-                              color: "#D29922",
-                              fontSize: 10,
-                              cursor: "pointer",
-                              marginBottom: 8,
-                            }}
-                          >
-                            {t("project.restoreOriginalButton")}
-                          </button>
-                          <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                !confirm(
+                                !(await safeConfirm(
                                   t("project.deleteSegmentsConfirm", {
                                     n: segments[d.id]?.length || 0,
                                   }),
-                                )
+                                ))
                               )
                                 return;
                               deleteDocumentSegments(d.id)
@@ -2591,9 +2832,41 @@ export default function ProjectDetail() {
                         </div>
                       )}
 
+                      {currentView !== "segmented" && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPreprocessed((p) => !p);
+                          }}
+                          style={{
+                            fontSize: 10,
+                            color: "#8B949E",
+                            marginBottom: 4,
+                            cursor: "pointer",
+                            userSelect: "none",
+                          }}
+                          title="Click para alternar entre original y preprocesado"
+                        >
+                          {showPreprocessed
+                            ? (d as any).texto_preprocesado
+                              ? "📝 Preprocesado"
+                              : "📝 Preprocesado (sin cambios)"
+                            : (d as any).texto_original &&
+                                (d as any).texto_original !== d.texto_extraido
+                              ? "📄 Original (editado)"
+                              : "📄 Original"}
+                          {textEdits[d.id] !== undefined && " · sin guardar"}
+                        </div>
+                      )}
                       <textarea
-                        readOnly
                         disabled={punctRunning === d.id}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          setTextEdits((prev) => ({
+                            ...prev,
+                            [d.id]: e.target.value,
+                          }))
+                        }
                         style={{
                           width: "100%",
                           minHeight: 150,
@@ -2601,25 +2874,72 @@ export default function ProjectDetail() {
                           fontSize: 13,
                           background: "#0D1117",
                           color: "#E6EDF3",
-                          border: "1px solid #21262D",
+                          border: `1px solid ${textEdits[d.id] !== undefined ? "#D29922" : "#21262D"}`,
                           borderRadius: 6,
                           padding: 8,
                           resize: "vertical",
                         }}
                         value={
-                          currentView === "segmented" && segments[d.id]?.length
-                            ? segments[d.id]!.map(
-                                (s) => `[${s.posicion}] ${s.texto}`,
-                              ).join("\n\n")
-                            : showPreprocessed
-                              ? (d as any).metadatos?.texto_preprocesado ||
-                                d.texto_extraido ||
-                                ""
-                              : (d as any).metadatos?.texto_original ||
-                                d.texto_extraido ||
-                                ""
+                          textEdits[d.id] !== undefined
+                            ? textEdits[d.id]
+                            : currentView === "segmented" &&
+                                segments[d.id]?.length
+                              ? segments[d.id]!.map(
+                                  (s) => `[${s.posicion}] ${s.texto}`,
+                                ).join("\n\n")
+                              : showPreprocessed
+                                ? (d as any).texto_preprocesado ||
+                                  d.texto_extraido ||
+                                  ""
+                                : (d as any).texto_original ||
+                                  d.texto_extraido ||
+                                  ""
                         }
                       />
+                      {textEdits[d.id] !== undefined && (
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          <button
+                            onClick={() => saveDocText(d.id)}
+                            disabled={textSaving[d.id]}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 4,
+                              border: "none",
+                              background: textSaving[d.id]
+                                ? "#30363D"
+                                : "#3FB950",
+                              color: "#FFF",
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: textSaving[d.id]
+                                ? "not-allowed"
+                                : "pointer",
+                            }}
+                          >
+                            {textSaving[d.id] ? "Guardando…" : "✓ Guardar"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setTextEdits((prev) => {
+                                const next = { ...prev };
+                                delete next[d.id];
+                                return next;
+                              })
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 4,
+                              border: "1px solid #30363D",
+                              background: "transparent",
+                              color: "#8B949E",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Descartar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </li>
@@ -2638,6 +2958,10 @@ export default function ProjectDetail() {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        @keyframes stagePulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(163,113,247,0.4); }
+          50% { opacity: 0.5; box-shadow: 0 0 0 6px rgba(163,113,247,0); }
         }
       `}</style>
 
@@ -2761,9 +3085,9 @@ export default function ProjectDetail() {
           flexShrink: 0,
           borderRight: "1px solid #21262D",
           background: "#0D1117",
-          padding: "16px 14px",
+          padding: "16px 14px 40px",
+          height: "100vh",
           overflowY: "auto",
-          maxHeight: "100vh",
           position: "sticky",
           top: 0,
           display: "flex",
@@ -2789,36 +3113,68 @@ export default function ProjectDetail() {
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "#8B949E" }}>
               {sidebarViewMode === "logs"
-                ? t("project.logsTab")
+                ? "Logs"
                 : sidebarViewMode === "agents"
-                  ? t("project.flowTab")
-                  : t("project.flowTab")}
+                  ? "Agentes"
+                  : "Etapas"}
             </span>
 
-            {!pipelineRunning && (
+            {!pipelineRunning ? (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button
+                  onClick={() => restartFromStage("selective_coding")}
+                  disabled={docs.length === 0 || docsDone === 0}
+                  title={
+                    docsDone === 0
+                      ? "Run pipeline first"
+                      : "Restart from Selective Coding"
+                  }
+                  style={{
+                    background:
+                      docs.length === 0 || docsDone === 0
+                        ? "#21262D"
+                        : "#1C2333",
+                    border: "1px solid #30363D",
+                    borderRadius: 6,
+                    color:
+                      docs.length === 0 || docsDone === 0
+                        ? "#484F58"
+                        : "#58A6FF",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    cursor:
+                      docs.length === 0 || docsDone === 0
+                        ? "not-allowed"
+                        : "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  {"\u21BB"}
+                </button>
+                <button
+                  onClick={() => runPipeline(false)}
+                  disabled={docs.length === 0}
+                  style={{
+                    background:
+                      docs.length === 0
+                        ? "#21262D"
+                        : "linear-gradient(135deg, #A371F7, #3FB950)",
+                    border: "none",
+                    borderRadius: 6,
+                    color: docs.length === 0 ? "#484F58" : "#FFF",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "4px 12px",
+                    cursor: docs.length === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  ▶ {t("project.runPipeline")}
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={() => runPipeline(false)}
-                disabled={docs.length === 0}
-                style={{
-                  background:
-                    docs.length === 0
-                      ? "#21262D"
-                      : "linear-gradient(135deg, #A371F7, #3FB950)",
-                  border: "none",
-                  borderRadius: 6,
-                  color: docs.length === 0 ? "#484F58" : "#FFF",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "4px 12px",
-                  cursor: docs.length === 0 ? "not-allowed" : "pointer",
-                }}
-              >
-                {t("project.runPipeline")}
-              </button>
-            )}
-            {pipelineRunning && (
-              <button
-                onClick={() => {
+                onClick={async () => {
                   abortRef.current = true;
                   if (logPollRef.current) {
                     clearInterval(logPollRef.current);
@@ -2828,25 +3184,37 @@ export default function ProjectDetail() {
                     clearInterval(agentPollRef.current);
                     agentPollRef.current = null;
                   }
+                  await fetch(`/api/v1/admin/projects/${id}/stop`, {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                    },
+                  }).catch(() => {});
+                  setPipelineRunning(false);
+                  setPipelineMsg(t("project.pipelineCancelled"));
+                  resetStages();
+                  getPipelineLog(id!)
+                    .then(setPipelineLog)
+                    .catch(() => {});
                 }}
                 style={{
-                  background: "#F8514922",
-                  border: "1px solid #F8514944",
+                  background: "#D2992222",
+                  border: "1px solid #D2992244",
                   borderRadius: 6,
-                  color: "#F85149",
+                  color: "#D29922",
                   fontSize: 11,
                   fontWeight: 600,
-                  padding: "4px 8px",
+                  padding: "4px 12px",
                   cursor: "pointer",
                 }}
               >
-                {t("project.stopPipeline")}
+                ⏸ {t("project.pausePipeline")}
               </button>
             )}
           </div>
         </div>
 
-        {/* ── Content Area (fills remaining height) ── */}
+        {/* ── Content Area ── */}
         <div
           style={{
             flex: 1,
@@ -2855,7 +3223,7 @@ export default function ProjectDetail() {
             minHeight: 0,
           }}
         >
-          {/* View toggle buttons */}
+          {/* View toggle buttons — 2 tabs */}
           <div
             style={{
               display: "flex",
@@ -2866,25 +3234,6 @@ export default function ProjectDetail() {
               flexShrink: 0,
             }}
           >
-            {/* Button 1: Stages */}
-            <button
-              onClick={() => setSidebarViewMode("stages")}
-              style={{
-                flex: 1,
-                padding: "6px 12px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                background:
-                  sidebarViewMode === "stages" ? "#A371F7" : "transparent",
-                color: sidebarViewMode === "stages" ? "#fff" : "#8B949E",
-              }}
-            >
-              ☰ Stages
-            </button>
-
-            {/* Button 2: Agents */}
             <button
               onClick={() => setSidebarViewMode("agents")}
               style={{
@@ -2899,10 +3248,24 @@ export default function ProjectDetail() {
                 color: sidebarViewMode === "agents" ? "#fff" : "#8B949E",
               }}
             >
-              🤖 Agents
+              🤖 Agentes
             </button>
-
-            {/* Button 3: Logs */}
+            <button
+              onClick={() => setSidebarViewMode("stages")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "stages" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "stages" ? "#fff" : "#8B949E",
+              }}
+            >
+              📋 Etapas
+            </button>
             <button
               onClick={() => setSidebarViewMode("logs")}
               style={{
@@ -2917,9 +3280,10 @@ export default function ProjectDetail() {
                 color: sidebarViewMode === "logs" ? "#fff" : "#8B949E",
               }}
             >
-              📋 {t("project.logsTab")}
+              📋 Logs
             </button>
           </div>
+
           {pipelineMsg && (
             <div
               style={{
@@ -2929,13 +3293,14 @@ export default function ProjectDetail() {
                 background: pipelineFailed ? "#F8514922" : "#21262D",
                 borderRadius: 6,
                 border: `1px solid ${pipelineFailed ? "#F8514944" : "#30363D"}`,
+                marginBottom: 12,
               }}
             >
               {pipelineMsg}
             </div>
           )}
+
           {sidebarViewMode === "logs" ? (
-            /* ── Live Log Panel ── */
             <div
               ref={logPanelRef}
               style={{
@@ -2943,11 +3308,11 @@ export default function ProjectDetail() {
                 borderRadius: 6,
                 border: "1px solid #21262D",
                 padding: 8,
-                maxHeight: 400,
+                flex: 1,
                 overflowY: "auto",
                 fontSize: 10,
                 fontFamily: "monospace",
-                marginBottom: 12,
+                minHeight: 0,
               }}
             >
               {pipelineLiveLogs.length === 0 && (
@@ -2966,13 +3331,7 @@ export default function ProjectDetail() {
                     ? "#58A6FF"
                     : "#8B949E";
                 return (
-                  <div
-                    key={i}
-                    style={{
-                      padding: "1px 0",
-                      color,
-                    }}
-                  >
+                  <div key={i} style={{ padding: "1px 0", color }}>
                     <span style={{ color: "#484F58" }}>
                       {new Date(l.ts * 1000).toLocaleTimeString()}
                     </span>{" "}
@@ -2984,12 +3343,23 @@ export default function ProjectDetail() {
           ) : sidebarViewMode === "agents" ? (
             <PipelineAgents
               agentStatuses={agentStatuses}
-              onAgentClick={(agentId, agentLabel) => {
-                setSelectedAgentId(agentId);
-                setSelectedAgentLabel(agentLabel);
-                setAgentModalOpen(true);
+              onRunAgent={(agentId) => {
+                console.log("[PipelineAgents] run", agentId);
+                const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                fetch(`/api/v1/projects/${id}/pipeline/run-agent/${agentId}`, {
+                  method: "POST",
+                  headers: { Authorization: auth },
+                }).catch((e) =>
+                  showErrorToast("Error al ejecutar agente: " + e.message),
+                );
+              }}
+              onStopAgent={(agentId) => {
+                console.log("[PipelineAgents] stop", agentId);
               }}
               pipelineRunning={pipelineRunning}
+              completedAgents={completedAgents}
+              iterations={iterations}
+              stages={PIPELINE_STAGES}
             />
           ) : (
             <>
@@ -3039,38 +3409,13 @@ export default function ProjectDetail() {
                 return (
                   <div key={stage.key}>
                     <div
-                      onClick={() => {
-                        if (!isClickable) return;
-                        if (status === "error") {
-                          restartFromStage(stage.key);
-                          return;
-                        }
-                        if (isNextPending) {
-                          restartFromStage(stage.key);
-                          return;
-                        }
-                        if (idx === lastDone) {
-                          restartFromStage(stage.key);
-                        } else if (idx < lastDone) {
-                          if (
-                            !confirm(
-                              t("project.restartFromConfirm", {
-                                stage: t(stage.label),
-                              }),
-                            )
-                          )
-                            return;
-                          restartFromStage(stage.key);
-                        }
-                      }}
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         gap: 12,
                         padding: "10px 12px",
                         margin: "2px 0",
                         borderRadius: 8,
-                        cursor: isClickable ? "pointer" : "default",
                         opacity:
                           status === "pending" &&
                           !isNextPending &&
@@ -3082,7 +3427,33 @@ export default function ProjectDetail() {
                         transition: "all 0.2s ease",
                       }}
                     >
+                      {/* Status circle — clickeable */}
                       <div
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!isClickable) return;
+                          if (status === "error") {
+                            restartFromStage(stage.key);
+                            return;
+                          }
+                          if (isNextPending) {
+                            restartFromStage(stage.key);
+                            return;
+                          }
+                          if (idx === lastDone) {
+                            restartFromStage(stage.key);
+                          } else if (idx < lastDone) {
+                            if (
+                              !(await safeConfirm(
+                                t("project.restartFromConfirm", {
+                                  stage: t(stage.label),
+                                }),
+                              ))
+                            )
+                              return;
+                            restartFromStage(stage.key);
+                          }
+                        }}
                         style={{
                           width: 32,
                           height: 32,
@@ -3094,9 +3465,10 @@ export default function ProjectDetail() {
                           fontSize: 14,
                           background: circleBg,
                           border: circleBorder,
+                          cursor: isClickable ? "pointer" : "default",
                           animation:
                             status === "running"
-                              ? "pulse 1.5s ease-in-out infinite"
+                              ? "stagePulse 1.5s ease-in-out infinite"
                               : "none",
                         }}
                       >
@@ -3119,9 +3491,11 @@ export default function ProjectDetail() {
                             {t("project.stagePlay")}
                           </span>
                         ) : (
-                          <span style={{ fontSize: 14 }}>{stage.icon}</span>
+                          <span style={{ fontSize: 16 }}>{stage.icon}</span>
                         )}
                       </div>
+
+                      {/* Label + chain info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
@@ -3133,136 +3507,163 @@ export default function ProjectDetail() {
                         >
                           {t(stage.label)}
                         </div>
-                        {/* Stage-specific badges */}
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 4,
-                            marginTop: 3,
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* Segmentation: doc count + delete segs */}
-                          {stage.key === "segment" && (
-                            <>
-                              <span
+                        {/* Chain descriptions */}
+                        {stage.agents && stage.agents.length > 0 && (
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{ fontSize: 9, color: "#484F58" }}>
+                              {
+                                stage.agents.filter(
+                                  (a) =>
+                                    (agentStatuses[a.id] || "pending") ===
+                                    "running",
+                                ).length
+                              }{" "}
+                              activos · {stage.agents.length} agentes
+                            </span>
+                          </div>
+                        )}
+                        {/* Special indicators per stage */}
+                        {stage.key === "data_management" && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 4,
+                              marginTop: 4,
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span
+                              style={{
+                                fontSize: 9,
+                                padding: "1px 6px",
+                                borderRadius: 999,
+                                background:
+                                  docsNeedSegment > 0
+                                    ? "#D2992218"
+                                    : "#3FB95018",
+                                color:
+                                  docsNeedSegment > 0 ? "#D29922" : "#3FB950",
+                                border:
+                                  docsNeedSegment > 0
+                                    ? "1px solid #D2992233"
+                                    : "1px solid #3FB95033",
+                              }}
+                            >
+                              ✂️{" "}
+                              {(logSummary?.total ?? docs.length) -
+                                docsNeedSegment}
+                              /{logSummary?.total ?? docs.length}
+                            </span>
+                            {docs.length > 0 && (
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !(await safeConfirm(
+                                      t("project.deleteAllSegmentsConfirm"),
+                                    ))
+                                  )
+                                    return;
+                                  const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                                  await fetch(
+                                    `/api/v1/documents/project/${id}/segments`,
+                                    {
+                                      method: "DELETE",
+                                      headers: { Authorization: auth },
+                                    },
+                                  );
+                                  refreshDocs();
+                                  setSegments({});
+                                  getPipelineLog(id!)
+                                    .then(setPipelineLog)
+                                    .catch(() => {});
+                                }}
                                 style={{
                                   fontSize: 9,
                                   padding: "1px 6px",
                                   borderRadius: 999,
-                                  background:
-                                    docsNeedSegment > 0
-                                      ? "#D2992218"
-                                      : "#3FB95018",
-                                  color:
-                                    docsNeedSegment > 0 ? "#D29922" : "#3FB950",
-                                  border:
-                                    docsNeedSegment > 0
-                                      ? "1px solid #D2992233"
-                                      : "1px solid #3FB95033",
+                                  background: "transparent",
+                                  color: "#F85149",
+                                  border: "1px solid #F8514933",
+                                  cursor: "pointer",
                                 }}
                               >
-                                ✂️{" "}
-                                {(logSummary?.total ?? docs.length) -
-                                  docsNeedSegment}
-                                /{logSummary?.total ?? docs.length}
-                              </span>
-                              {segments && Object.keys(segments).length > 0 && (
-                                <button
-                                  onClick={async () => {
-                                    if (
-                                      !confirm(
-                                        t("project.deleteAllSegmentsConfirm"),
-                                      )
-                                    )
-                                      return;
-                                    const auth = `Bearer ${localStorage.getItem("access_token")}`;
-                                    await fetch(
-                                      `/api/v1/documents/project/${id}/segments`,
-                                      {
-                                        method: "DELETE",
-                                        headers: { Authorization: auth },
-                                      },
-                                    );
-                                    refreshDocs();
-                                    setSegments({});
-                                    getPipelineLog(id!)
-                                      .then(setPipelineLog)
-                                      .catch(() => {});
-                                  }}
-                                  style={{
-                                    fontSize: 9,
-                                    padding: "1px 6px",
-                                    borderRadius: 999,
-                                    background: "transparent",
-                                    color: "#F85149",
-                                    border: "1px solid #F8514933",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  ✕ Segs
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {/* Open Coding: categories + delete cats */}
-                          {stage.key === "agents" && (
-                            <>
-                              <span
+                                ✕ Segs
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {stage.key === "open_coding" && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 4,
+                              marginTop: 4,
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span
+                              style={{
+                                fontSize: 9,
+                                padding: "1px 6px",
+                                borderRadius: 999,
+                                background:
+                                  cats.length > 0 ? "#3FB95018" : "#8B949E18",
+                                color: cats.length > 0 ? "#3FB950" : "#8B949E",
+                                border:
+                                  cats.length > 0
+                                    ? "1px solid #3FB95033"
+                                    : "1px solid #8B949E33",
+                              }}
+                            >
+                              📁 {cats.length}
+                            </span>
+                            {cats.length > 0 && (
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !(await safeConfirm(
+                                      t("project.deleteAllCatsConfirm"),
+                                    ))
+                                  )
+                                    return;
+                                  const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                                  await fetch(
+                                    `/api/v1/projects/${id}/categories`,
+                                    {
+                                      method: "DELETE",
+                                      headers: { Authorization: auth },
+                                    },
+                                  );
+                                  setCats([]);
+                                }}
                                 style={{
                                   fontSize: 9,
                                   padding: "1px 6px",
                                   borderRadius: 999,
-                                  background:
-                                    cats.length > 0 ? "#3FB95018" : "#8B949E18",
-                                  color:
-                                    cats.length > 0 ? "#3FB950" : "#8B949E",
-                                  border:
-                                    cats.length > 0
-                                      ? "1px solid #3FB95033"
-                                      : "1px solid #8B949E33",
+                                  background: "transparent",
+                                  color: "#F85149",
+                                  border: "1px solid #F8514933",
+                                  cursor: "pointer",
                                 }}
                               >
-                                📁 {cats.length}
-                              </span>
-                              {cats.length > 0 && (
-                                <button
-                                  onClick={async () => {
-                                    if (
-                                      !confirm(
-                                        t("project.deleteAllCatsConfirm"),
-                                      )
-                                    )
-                                      return;
-                                    const auth = `Bearer ${localStorage.getItem("access_token")}`;
-                                    await fetch(
-                                      `/api/v1/projects/${id}/categories`,
-                                      {
-                                        method: "DELETE",
-                                        headers: { Authorization: auth },
-                                      },
-                                    );
-                                    setCats([]);
-                                  }}
-                                  style={{
-                                    fontSize: 9,
-                                    padding: "1px 6px",
-                                    borderRadius: 999,
-                                    background: "transparent",
-                                    color: "#F85149",
-                                    border: "1px solid #F8514933",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  ✕ Cats
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {/* Build DB: output indicator */}
-                          {stage.key === "build_db" &&
-                            cats.some((c) => c.es_central) && (
+                                ✕ Cats
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {stage.key === "selective_coding" &&
+                          cats.some((c) => c.es_central) && (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 4,
+                                marginTop: 4,
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <span
                                 style={{
                                   fontSize: 9,
@@ -3273,36 +3674,38 @@ export default function ProjectDetail() {
                                   border: "1px solid #58A6FF33",
                                 }}
                               >
-                                {" "}
                                 {cats.filter((c) => c.es_central).length} core
                               </span>
-                            )}
-                          {/* Theoretical Coding: link */}
-                          {stage.key === "playground" && playgroundReady && (
-                            <Link
-                              to={`/projects/${id}/theory`}
-                              style={{
-                                fontSize: 9,
-                                padding: "1px 6px",
-                                borderRadius: 999,
-                                background: "#3FB95018",
-                                color: "#3FB950",
-                                border: "1px solid #3FB95033",
-                                textDecoration: "none",
-                              }}
-                            >
-                              🧪 Open
-                            </Link>
+                            </div>
                           )}
-                        </div>
+                        {stage.key === "theoretical_coding" &&
+                          playgroundReady && (
+                            <div style={{ marginTop: 4 }}>
+                              <Link
+                                to={`/projects/${id}/theory`}
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background: "#3FB95018",
+                                  color: "#3FB950",
+                                  border: "1px solid #3FB95033",
+                                  textDecoration: "none",
+                                }}
+                              >
+                                🧪 Open
+                              </Link>
+                            </div>
+                          )}
                       </div>
                     </div>
+                    {/* Connector line to next stage */}
                     {!isLast && (
                       <div style={{ display: "flex", paddingLeft: 27 }}>
                         <div
                           style={{
                             width: 2,
-                            height: 14,
+                            height: 20,
                             background:
                               status === "done" ? "#3FB95044" : "#21262D",
                             borderRadius: 1,
@@ -3320,8 +3723,64 @@ export default function ProjectDetail() {
       <Toast
         message={toastMsg}
         visible={toastVisible}
+        type={toastType}
         onDone={() => setToastVisible(false)}
       />
+      {/* Floating confirmation bar */}
+      {confirmMsg && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            padding: "12px 24px",
+            borderRadius: 10,
+            background: "#161B22",
+            border: "1px solid #A371F7",
+            boxShadow: "0 8px 32px rgba(163,113,247,0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            maxWidth: "90vw",
+          }}
+        >
+          <span style={{ color: "#E6EDF3", fontSize: 13, fontWeight: 500 }}>
+            {confirmMsg}
+          </span>
+          <button
+            onClick={() => resolveConfirm(true)}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: "none",
+              background: "#A371F7",
+              color: "#FFF",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            OK
+          </button>
+          <button
+            onClick={() => resolveConfirm(false)}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: "1px solid #30363D",
+              background: "transparent",
+              color: "#8B949E",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       {createPortal(
         <AgentModal
           open={agentModalOpen}

@@ -23,7 +23,7 @@ interface Props {
   onClose: () => void;
 }
 
-type TabKey = "config" | "history" | "suggestions" | "policy";
+type TabKey = "config" | "history" | "suggestions" | "policy" | "preprocess";
 
 /* ── Key maps (backend field / trigger / level → i18n key) ────────── */
 
@@ -281,6 +281,60 @@ export default function ProjectConfigPanel({
   const [editOQValue, setEditOQValue] = useState("");
   const [rqSaving, setRqSaving] = useState(false);
 
+  // ── Preprocess prompt state ──
+  const DEFAULT_PROMPT = [
+    "## System",
+    "",
+    "[Objective]",
+    "You are an orthotypographic corrector. You correct punctuation, capitalization, and corrupt characters in qualitative transcriptions.",
+    "",
+    "[Context]",
+    "The texts are transcribed documents. They may have: missing punctuation, missing capitals, corrupt characters from encoding, and unseparated paragraphs.",
+    "",
+    "[Constraints]",
+    "- ONLY correct formatting. Do not change, summarize, or reorder words.",
+    "- Each change of topic or idea -> new paragraph.",
+    "- Corrupt characters -> reconstruct from context.",
+    "- Long paragraphs -> separate with blank lines.",
+    "- Filler words and repetitions -> leave intact.",
+    "",
+    "## Task",
+    "",
+    "<texto_crudo>",
+    "{raw_text}",
+    "</texto_crudo>",
+    "",
+    "Return ONLY a JSON object with punctuated_text and changes_made.",
+  ].join("\n");
+
+  const [prePrompt, setPrePrompt] = useState(() => {
+    try {
+      return localStorage.getItem("gt_pp_prompt") || DEFAULT_PROMPT;
+    } catch {
+      return DEFAULT_PROMPT;
+    }
+  });
+  const [preSwitches, setPreSwitches] = useState(() => {
+    try {
+      const r = localStorage.getItem("gt_pp_switches");
+      return r
+        ? JSON.parse(r)
+        : { punct: true, caps: true, corrupt: true, parag: true };
+    } catch {
+      return { punct: true, caps: true, corrupt: true, parag: true };
+    }
+  });
+  const [preSaved, setPreSaved] = useState(false);
+
+  function savePreConfig() {
+    try {
+      localStorage.setItem("gt_pp_prompt", prePrompt);
+      localStorage.setItem("gt_pp_switches", JSON.stringify(preSwitches));
+    } catch {}
+    setPreSaved(true);
+    setTimeout(() => setPreSaved(false), 2000);
+  }
+
   useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -403,6 +457,131 @@ export default function ProjectConfigPanel({
   if (!open) return null;
 
   /* ── Render helpers ──────────────────────────────────────────── */
+
+  const renderPreprocessTab = () => {
+    const SW = {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "8px 0",
+      borderBottom: "1px solid #21262D",
+    } as CSSProperties;
+    const swLabel: CSSProperties = { fontSize: 12, color: "#E6EDF3" };
+    const swTrack: CSSProperties = {
+      width: 36,
+      height: 20,
+      borderRadius: 10,
+      border: "none",
+      cursor: "pointer",
+      position: "relative",
+      flexShrink: 0,
+    };
+    const swKnob = (on: boolean): CSSProperties => ({
+      position: "absolute",
+      top: 2,
+      left: on ? 18 : 2,
+      width: 16,
+      height: 16,
+      borderRadius: "50%",
+      background: "#FFF",
+      transition: "left 0.15s",
+    });
+
+    const switches: [string, string, keyof typeof preSwitches][] = [
+      ["📝", "Corregir puntuacion", "punct"],
+      ["🔠", "Corregir mayusculas", "caps"],
+      ["🔧", "Reconstruir caracteres corruptos", "corrupt"],
+      ["¶", "Separar parrafos", "parag"],
+    ];
+
+    return (
+      <div>
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: "#8B949E",
+              marginBottom: 6,
+              textTransform: "uppercase",
+            }}
+          >
+            Opciones de preprocesado
+          </div>
+          {switches.map(([icon, label, key]) => (
+            <div key={String(key)} style={SW}>
+              <span style={swLabel}>
+                {icon} {label}
+              </span>
+              <button
+                onClick={() =>
+                  setPreSwitches((p: typeof preSwitches) => ({
+                    ...p,
+                    [key]: !p[key],
+                  }))
+                }
+                style={{
+                  ...swTrack,
+                  background: preSwitches[key] ? "#A371F7" : "#30363D",
+                }}
+              >
+                <span style={swKnob(preSwitches[key])} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            fontSize: 11,
+            color: "#8B949E",
+            marginBottom: 6,
+            textTransform: "uppercase",
+          }}
+        >
+          Prompt (editable)
+        </div>
+        <textarea
+          value={prePrompt}
+          onChange={(e) => setPrePrompt(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: 300,
+            padding: 10,
+            borderRadius: 6,
+            background: "#0D1117",
+            border: "1px solid #30363D",
+            color: "#E6EDF3",
+            fontSize: 12,
+            fontFamily: "monospace",
+            resize: "vertical",
+          }}
+        />
+
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button
+            onClick={() => {
+              setPrePrompt(DEFAULT_PROMPT);
+              setPreSwitches({
+                punct: true,
+                caps: true,
+                corrupt: true,
+                parag: true,
+              });
+            }}
+            style={{ ...BTN_SECONDARY, fontSize: 11 }}
+          >
+            Reset default
+          </button>
+          <button
+            onClick={savePreConfig}
+            style={{ ...BTN_PRIMARY, fontSize: 11 }}
+          >
+            {preSaved ? "✓ Guardado" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderConfigTab = () => {
     if (!config)
@@ -1156,6 +1335,7 @@ export default function ProjectConfigPanel({
               ["history", t("projectConfig.tabHistory")],
               ["suggestions", t("projectConfig.tabSuggestions")],
               ["policy", t("projectConfig.tabPolicy")],
+              ["preprocess", "📝 Preprocesado"],
             ] as [TabKey, string][]
           ).map(([key, label]) => (
             <button
@@ -1194,6 +1374,7 @@ export default function ProjectConfigPanel({
           {tab === "history" && renderHistoryTab()}
           {tab === "suggestions" && renderSuggestionsTab()}
           {tab === "policy" && renderPolicyTab()}
+          {tab === "preprocess" && renderPreprocessTab()}
         </div>
 
         {/* Footer */}
@@ -1203,7 +1384,9 @@ export default function ProjectConfigPanel({
               ? `${history.length}${t("projectConfig.footerChanges")}`
               : tab === "suggestions"
                 ? `${config?.pending_suggestions?.length || 0}${t("projectConfig.footerSuggestions")}`
-                : `${t("projectConfig.footerStatus")}${config?.estado || "—"}`}
+                : tab === "preprocess"
+                  ? "Prompt de preprocesado"
+                  : `${t("projectConfig.footerStatus")}${config?.estado || "—"}`}
           </span>
           <button style={BTN_SECONDARY} onClick={onClose}>
             {t("projectConfig.closeButton")}

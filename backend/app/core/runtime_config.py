@@ -9,7 +9,7 @@ This allows the frontend config panel to persist changes without touching .env o
 Usage:
     from app.core.runtime_config import get_runtime_config, update_runtime_config
     cfg = get_runtime_config()
-    model_pro = cfg.get("MODEL_PRO", "deepseek-ai/DeepSeek-V4")
+    model_pro = cfg.get("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro")
 """
 
 import json

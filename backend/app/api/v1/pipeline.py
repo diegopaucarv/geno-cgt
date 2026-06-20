@@ -238,6 +238,7 @@ async def get_pipeline_log(
         has_text = bool(
             (doc.metadatos or {}).get("texto_extraido")
             or (doc.metadatos or {}).get("texto_preprocesado")
+            or (doc.metadatos or {}).get("texto_original")
         )
 
         # Determinar qué pasos se completaron
@@ -281,7 +282,13 @@ async def get_pipeline_log(
         )
 
     # Resumen con nuevos estados
-    docs_need_segment = sum(1 for d in doc_logs if d["next_action"] == "segment")
+    # docs that haven't been segmented yet — count ALL non-segmented docs
+    docs_need_segment = sum(
+        1
+        for d in doc_logs
+        if d["next_action"] in ("segment", "extract_text")
+        or (d["next_action"] not in ("done", "error") and d["segments_count"] == 0)
+    )
     docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
     docs_need_synthesis = sum(
         1 for d in doc_logs if d["next_action"] == "run_synthesis"
@@ -828,21 +835,34 @@ async def patch_document_text(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Update document text fields (texto_extraido, texto_preprocesado, original_filename)."""
+    """Update document text fields stored in metadatos JSONB."""
+    import json as _json
+
     from sqlalchemy import text
 
-    allowed = ["texto_extraido", "texto_preprocesado", "original_filename"]
-    sets = []
-    params = {"id": str(document_id)}
-    for key, value in body.items():
-        if key in allowed:
-            sets.append(f"{key} = :{key}")
-            params[key] = value
-    if not sets:
-        raise HTTPException(400, "No valid fields")
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+
+    meta = doc.metadatos or {}
+    if isinstance(meta, str):
+        meta = _json.loads(meta)
+
+    allowed = ["texto_original", "texto_preprocesado"]
+    changed = False
+    for key in allowed:
+        if key in body:
+            meta[key] = body[key]
+            changed = True
+
+    if not changed:
+        raise HTTPException(
+            400, "No valid fields. Use texto_original or texto_preprocesado"
+        )
 
     await db.execute(
-        text(f"UPDATE documentos SET {', '.join(sets)} WHERE id = :id"), params
+        text("UPDATE documentos SET metadatos = :meta WHERE id = :did"),
+        {"meta": _json.dumps(meta), "did": str(document_id)},
     )
     await db.commit()
     return {"status": "updated", "id": str(document_id)}
@@ -858,3 +878,47 @@ async def _get_project_state(db: AsyncSession, project_id: UUID) -> str:
     )
     result = row.fetchone()
     return result[0] if result else "collecting"
+
+
+@router.post("/projects/{project_id}/pipeline/run-agent/{agent_id}")
+async def run_single_agent(
+    project_id: UUID,
+    agent_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Ejecuta un solo agente por su ID. Útil para ejecución manual desde el frontend."""
+    from app.core.celery_app import celery_app
+
+    # Map agent IDs to Celery task names
+    agent_task_map: dict[str, str] = {
+        "util_punctuator": "punctuate_text",
+        "segmentar_documento": "segmentar_documento",
+        "fa_glaser_data_classifier": "fa_glaser_data_classifier",
+        "fa_document_pattern_extractor": "fa_document_pattern_extractor",
+        "incident_extractor": "incident_extractor",
+    }
+
+    task_name = agent_task_map.get(agent_id, agent_id)
+
+    # Dispatch the task to the appropriate queue
+    nlp_agents = {"segmentar_documento"}
+    fast_agents = {"punctuate_text", "util_punctuator"}
+    queue = (
+        "nlp"
+        if agent_id in nlp_agents
+        else ("fast" if agent_id in fast_agents else "heavy")
+    )
+
+    task = celery_app.send_task(
+        task_name,
+        args=[str(project_id)],
+        queue=queue,
+    )
+
+    return {
+        "status": "dispatched",
+        "agent_id": agent_id,
+        "task_name": task_name,
+        "task_id": task.id,
+    }

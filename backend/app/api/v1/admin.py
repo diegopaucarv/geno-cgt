@@ -31,18 +31,25 @@ async def stop_worker(worker_name: str):
 
     worker_name: 'fast' | 'heavy' | 'nlp'
     """
-    # 1. Purgar tareas pendientes (no empezadas aún)
-    celery_app.control.purge()
+    # 1. Purgar tareas pendientes solo de la cola especificada
+    import os as _os
 
-    # 2. Terminar tareas en ejecución
+    import redis.asyncio as _aredis
+
+    r = _aredis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+    await r.delete(worker_name)
+    await r.close()
+
+    # 2. Terminar tareas en ejecución solo del worker especificado
     inspector = celery_app.control.inspect()
     active_tasks = inspector.active() or {}
 
     revoked = 0
-    for _worker, tasks in active_tasks.items():
-        for task in tasks:
-            celery_app.control.revoke(task["id"], terminate=True, signal="SIGTERM")
-            revoked += 1
+    for worker, tasks in active_tasks.items():
+        if worker_name in worker:
+            for task in tasks:
+                celery_app.control.revoke(task["id"], terminate=True, signal="SIGTERM")
+                revoked += 1
 
     return {
         "status": "stopped",
@@ -176,6 +183,29 @@ async def stop_project_pipeline(
         ),
         {"pid": str(project_id)},
     )
+    await db.commit()
+
+    # 3.6 Rollback de documentos a su estado anterior
+    for task in tasks:
+        if task.document_id and task.doc_estado_before:
+            row_result = await db.execute(
+                text("SELECT estado FROM documentos WHERE id = :did"),
+                {"did": task.document_id},
+            )
+            current_estado = row_result.scalar_one_or_none()
+            if current_estado in (
+                "segmentando",
+                "procesando",
+                "preprocesando",
+                "resumiendo",
+            ):
+                await db.execute(
+                    text("UPDATE documentos SET estado = :estado WHERE id = :did"),
+                    {
+                        "estado": task.doc_estado_before,
+                        "did": task.document_id,
+                    },
+                )
     await db.commit()
 
     # 4. Limpiar logs de Redis + purgar colas pendientes

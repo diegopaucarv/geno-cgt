@@ -2,7 +2,7 @@
 import uuid
 
 from app.models.base import Base, TimestampMixin
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,10 +25,13 @@ class Documento(Base, TimestampMixin):
     # Metadatos flexibles (estructuras complejas, resúmenes IA)
     metadatos: Mapped[dict] = mapped_column(JSONB, default=dict)
 
+    # ── Ordering ──
+    sort_order: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+
     # ── Pipeline state ──────────────────────────────
     estado: Mapped[str] = mapped_column(String(50), default="crudo")
     """
-    crudo → segmentando → segmentado → procesando → listo → sintetizado
+    crudo → preprocesando → preprocesado → segmentando → segmentado → procesando → listo → resumiendo → resumido → sintetizado
     """
 
     # Relaciones
@@ -45,7 +48,11 @@ class Documento(Base, TimestampMixin):
 
     @property
     def texto_extraido(self) -> str:
-        return self.metadatos.get("texto_extraido", "") if self.metadatos else ""
+        if not self.metadatos:
+            return ""
+        return self.metadatos.get("texto_extraido") or self.metadatos.get(
+            "texto_original", ""
+        )
 
     @property
     def texto_preprocesado(self) -> str:

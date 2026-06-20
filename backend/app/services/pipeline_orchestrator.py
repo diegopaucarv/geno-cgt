@@ -35,6 +35,16 @@ TRANSITIONS: dict[str, dict] = {
         "task_name": "segmentar_documento",
         "queue": "nlp",
     },
+    "preprocesando": {
+        "next_state": "preprocesado",
+        "task_name": None,  # worker updates estado directly
+        "queue": None,
+    },
+    "preprocesado": {
+        "next_state": "segmentando",
+        "task_name": "segmentar_documento",
+        "queue": "nlp",
+    },
     "segmentando": {
         "next_state": "segmentado",
         "task_name": None,  # NLP worker updates estado directly
@@ -51,7 +61,17 @@ TRANSITIONS: dict[str, dict] = {
         "queue": None,
     },
     "listo": {
-        "next_state": None,  # terminal
+        "next_state": None,  # terminal (open coding completado)
+        "task_name": None,
+        "queue": None,
+    },
+    "resumiendo": {
+        "next_state": "resumido",
+        "task_name": None,  # worker updates estado directly
+        "queue": None,
+    },
+    "resumido": {
+        "next_state": None,  # terminal (incident summaries done)
         "task_name": None,
         "queue": None,
     },
@@ -89,7 +109,7 @@ class PipelineOrchestrator:
         # Obtener docs
         docs = self.db.execute(
             text(
-                "SELECT id, estado, metadatos FROM documentos WHERE proyecto_id = :pid"
+                "SELECT id, estado, metadatos FROM documentos WHERE proyecto_id = :pid ORDER BY sort_order"
             ),
             {"pid": project_id},
         ).fetchall()
@@ -97,16 +117,38 @@ class PipelineOrchestrator:
         if not docs:
             return {"status": "no_docs", "message": "No hay documentos"}
 
-        # Clean old processing states on force (allow re-trigger of Phase B)
+        # ── 0. Check for fatal errors before dispatching anything ──
+        pid_str = str(project_id)
+        fatal_error = self._check_fatal_error(pid_str)
+        if fatal_error:
+            return {
+                "status": "error",
+                "message": f"Pipeline blocked: fatal error on document {fatal_error.get('document_id', 'unknown')[:8]}... — {fatal_error.get('error', 'unknown error')}",
+                "fatal_error": fatal_error,
+            }
+
+        # Clean old processing states AND error signals on force
         if force:
             self.db.execute(
                 text(
                     "DELETE FROM processing_states WHERE entity_type = 'project' "
                     "AND entity_id = :pid"
                 ),
-                {"pid": str(project_id)},
+                {"pid": pid_str},
             )
             self.db.commit()
+            # Clear any fatal error signal from Redis
+            try:
+                import os as _os2
+
+                import redis as _r2
+
+                rr = _r2.Redis.from_url(
+                    _os2.getenv("REDIS_URL", "redis://redis:6379/0")
+                )
+                rr.delete(f"pipeline_error:{pid_str}")
+            except Exception:
+                pass
 
         # Crear PipelineRun
         run = PipelineRun(
@@ -118,59 +160,95 @@ class PipelineOrchestrator:
         self.db.add(run)
         self.db.flush()
 
-        # Analizar cada doc y despachar
+        # Dispatch ONE segment and ONE agents task at a time.
+        # The transition chain handles subsequent docs sequentially.
         dispatched_segment = 0
         dispatched_agents = 0
         skipped = 0
         task_ids = {"segment": [], "agents": []}
 
-        for row in docs:
-            doc_id = str(row[0])
-            estado = row[1] or "crudo"
-            metadatos = row[2] if isinstance(row[2], dict) else {}
-
-            if force:
-                # Forzar desde cero: limpiar y empezar
+        if force:
+            # Forzar desde cero: reset all, but dispatch only the FIRST doc
+            first_doc = None
+            for row in docs:
+                doc_id = str(row[0])
                 self._reset_document(doc_id)
+                if first_doc is None:
+                    raw_meta = row[2]
+                    if isinstance(raw_meta, dict):
+                        meta = raw_meta
+                    elif isinstance(raw_meta, str):
+                        try:
+                            meta = __import__("json").loads(raw_meta)
+                        except Exception:
+                            meta = {}
+                    else:
+                        meta = {}
+                    first_doc = (doc_id, meta)
+
+            if first_doc:
+                doc_id, metadatos = first_doc
                 task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
                 if task:
                     dispatched_segment += 1
                     task_ids["segment"].append(
                         {"doc_id": doc_id, "task_id": task["celery_task_id"]}
                     )
-                continue
+                skipped = len(docs) - 1
+        else:
+            # Find first doc needing segment and first doc needing agents.
+            # Only ONE of each type at a time.
+            for row in docs:
+                doc_id = str(row[0])
+                estado = row[1] or "crudo"
+                raw_meta = row[2]
+                if isinstance(raw_meta, dict):
+                    metadatos = raw_meta
+                elif isinstance(raw_meta, str):
+                    try:
+                        metadatos = __import__("json").loads(raw_meta)
+                    except Exception:
+                        metadatos = {}
+                else:
+                    metadatos = {}
 
-            # Chequear estado real
-            n_segs = self._count_segments(doc_id, self.db)
-            n_codes = self._count_codes(doc_id, self.db)
-
-            # Reset errored docs so they can be retried
-            if estado == "error":
-                self.db.execute(
-                    text("UPDATE documentos SET estado = 'crudo' WHERE id = :did"),
-                    {"did": doc_id},
-                )
-                self.db.flush()
-                estado = "crudo"
-
-            if n_segs == 0:
-                # Necesita segmentación
-                task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
-                if task:
-                    dispatched_segment += 1
-                    task_ids["segment"].append(
-                        {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                # Reset errored docs so they can be retried
+                if estado == "error":
+                    self.db.execute(
+                        text("UPDATE documentos SET estado = 'crudo' WHERE id = :did"),
+                        {"did": doc_id},
                     )
-            elif n_codes == 0:
-                # Ya tiene segmentos, necesita agentes
-                task = self._dispatch("segmentado", doc_id, project_id, metadatos, run)
-                if task:
-                    dispatched_agents += 1
-                    task_ids["agents"].append(
-                        {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                    self.db.flush()
+                    estado = "crudo"
+
+                n_segs = self._count_segments(doc_id, self.db)
+                n_codes = self._count_codes(doc_id, self.db)
+
+                if n_segs == 0 and dispatched_segment == 0:
+                    # First doc needing segmentation (crudo or preprocesado)
+                    from_state = "crudo"
+                    if estado == "preprocesado":
+                        from_state = "preprocesado"
+                    task = self._dispatch(
+                        from_state, doc_id, project_id, metadatos, run
                     )
-            else:
-                skipped += 1
+                    if task:
+                        dispatched_segment += 1
+                        task_ids["segment"].append(
+                            {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                        )
+                elif n_segs > 0 and n_codes == 0 and dispatched_agents == 0:
+                    # First doc needing agents
+                    task = self._dispatch(
+                        "segmentado", doc_id, project_id, metadatos, run
+                    )
+                    if task:
+                        dispatched_agents += 1
+                        task_ids["agents"].append(
+                            {"doc_id": doc_id, "task_id": task["celery_task_id"]}
+                        )
+                elif n_segs > 0 and n_codes > 0:
+                    skipped += 1
 
         run.summary = {
             "total_docs": len(docs),
@@ -339,3 +417,28 @@ class PipelineOrchestrator:
                 ),
                 {"did": doc_id},
             ).fetchone()[0]
+
+    @staticmethod
+    def _check_fatal_error(project_id: str) -> dict | None:
+        """Check Redis for fatal error signals from workers.
+
+        Called before dispatching any new task. If a segmentation
+        or preprocessing worker reported a fatal error, the pipeline
+        is blocked until the researcher clears the error.
+
+        Returns:
+            dict with error details if found, None if pipeline is clear.
+        """
+        try:
+            import json as _j
+            import os as _os
+
+            import redis as _r
+
+            rr = _r.Redis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379/0"))
+            raw = rr.get(f"pipeline_error:{project_id}")
+            if raw:
+                return _j.loads(raw)
+        except Exception:
+            pass
+        return None

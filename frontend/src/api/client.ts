@@ -162,6 +162,9 @@ export interface Document {
   estado: string;
   texto_extraido?: string;
   texto_preprocesado?: string;
+  texto_original?: string;
+  preprocess_warning?: string;
+  sort_order?: number;
 }
 
 export interface PipelineStatus {
@@ -549,8 +552,9 @@ export async function punctuateDocument(documentId: string) {
   return request<{
     status: string;
     task_id?: string;
-    punctuation_fix: boolean;
+    punctuation_fix?: boolean;
     message?: string;
+    changes_made?: boolean;
   }>(`/documents/${documentId}/punctuate`, { method: "POST" });
 }
 

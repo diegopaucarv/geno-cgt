@@ -35,16 +35,20 @@ _celery_app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 NEXT: dict[str, tuple[str, str | None, str | None]] = {
     # (estado_actual) → (next_state, next_task_name, queue)
     "crudo": ("segmentando", "segmentar_documento", "nlp"),
+    "preprocesando": ("preprocesado", None, None),  # worker updates directly
+    "preprocesado": ("segmentando", "segmentar_documento", "nlp"),
     "segmentando": ("segmentado", None, None),  # NLP actualiza al terminar
     "segmentado": ("procesando", "process_document_agents_a", "heavy"),
     "procesando": ("listo", None, None),  # heavy actualiza al terminar
     "listo": (None, None, None),  # terminal (open coding completado)
+    "resumiendo": ("resumido", None, None),  # worker updates directly
+    "resumido": (None, None, None),  # terminal (incident summaries done)
     "sintetizado": (None, None, None),  # terminal (cross-doc synthesis completada)
     "error": ("crudo", None, None),  # reset en retry
 }
 
 # Estados terminales (no se despacha nada después)
-TERMINAL = {"listo", "sintetizado", "error"}
+TERMINAL = {"listo", "sintetizado", "resumido", "error"}
 
 # ═══════════════════════════════════════════════════════════════════════
 # Project state machine (nivel proyecto — post open coding)

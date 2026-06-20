@@ -1,546 +1,316 @@
+import { useState } from "react";
+import type { StageDef, AgentDef } from "../config/pipelineChains";
+import { FAMILY_COLORS, canRunAgent } from "../config/pipelineChains";
 import { useI18n } from "../i18n";
-
-// ── Agent definition map ───────────────────────────────────────────
-
-interface AgentDef {
-  stage: string;
-  family: "PRO" | "FLASH" | "NLP";
-  label: string;
-}
-
-const AGENT_MAP: Record<string, AgentDef> = {
-  // ── Stage: segment ──
-  segmentar_documento: {
-    stage: "segment",
-    family: "NLP",
-    label: "Segmentar documento",
-  },
-
-  // ── Stage: agents ──
-  fa_document_pattern_extractor: {
-    stage: "agents",
-    family: "FLASH",
-    label: "FA: Document Pattern Extractor",
-  },
-  fa_gerund_sweep: {
-    stage: "agents",
-    family: "FLASH",
-    label: "FA: Gerund Sweep",
-  },
-  fa_recontextualize_code: {
-    stage: "agents",
-    family: "FLASH",
-    label: "FA: Recontextualize Code",
-  },
-  pro_a1_initial_coding: {
-    stage: "agents",
-    family: "PRO",
-    label: "PRO: A1 – Initial Coding",
-  },
-  pro_a2_focused_coding: {
-    stage: "agents",
-    family: "PRO",
-    label: "PRO: A2 – Focused Coding",
-  },
-  pro_a3_axial_coding: {
-    stage: "agents",
-    family: "PRO",
-    label: "PRO: A3 – Axial Coding",
-  },
-  pro_a14_core_emergence: {
-    stage: "agents",
-    family: "PRO",
-    label: "PRO: A14 – Core Emergence",
-  },
-
-  // ── Stage: synthesis ──
-  pro_b1_cross_document_merge: {
-    stage: "synthesis",
-    family: "PRO",
-    label: "PRO: B1 – Cross-Document Merge",
-  },
-  pro_b2_property_dimension: {
-    stage: "synthesis",
-    family: "PRO",
-    label: "PRO: B2 – Property/Dimension",
-  },
-  pro_b25_selective_coding: {
-    stage: "synthesis",
-    family: "PRO",
-    label: "PRO: B2.5 – Selective Coding",
-  },
-  pro_b3_theoretical_integration: {
-    stage: "synthesis",
-    family: "PRO",
-    label: "PRO: B3 – Theoretical Integration",
-  },
-  fa_cross_doc_pattern_linker: {
-    stage: "synthesis",
-    family: "FLASH",
-    label: "FA: Cross-Doc Pattern Linker",
-  },
-  fa_b1_cluster_auditor: {
-    stage: "synthesis",
-    family: "FLASH",
-    label: "FA: B1 – Cluster Auditor",
-  },
-
-  // ── Stage: find_cc ──
-  pro_cc_core_category_verifier: {
-    stage: "find_cc",
-    family: "PRO",
-    label: "PRO: CC – Core Category Verifier",
-  },
-  fa_cc_pattern_ranker: {
-    stage: "find_cc",
-    family: "FLASH",
-    label: "FA: CC – Pattern Ranker",
-  },
-  fa_cc_saturation_checker: {
-    stage: "find_cc",
-    family: "FLASH",
-    label: "FA: CC – Saturation Checker",
-  },
-
-  // ── Stage: reduce ──
-  pro_selective_reduction: {
-    stage: "reduce",
-    family: "PRO",
-    label: "PRO: Selective Reduction",
-  },
-  fa_selective_reduction_critic: {
-    stage: "reduce",
-    family: "FLASH",
-    label: "FA: Selective Reduction Critic",
-  },
-
-  // ── Stage: saturate ──
-  pro_core_saturation: {
-    stage: "saturate",
-    family: "PRO",
-    label: "PRO: Core Saturation",
-  },
-  fa_core_saturation_critic: {
-    stage: "saturate",
-    family: "FLASH",
-    label: "FA: Core Saturation Critic",
-  },
-
-  // ── Stage: build_db ──
-  pro_database_a_builder: {
-    stage: "build_db",
-    family: "PRO",
-    label: "PRO: Database A Builder",
-  },
-  fa_database_a_critic: {
-    stage: "build_db",
-    family: "FLASH",
-    label: "FA: Database A Critic",
-  },
-  pro_database_b_builder: {
-    stage: "build_db",
-    family: "PRO",
-    label: "PRO: Database B Builder",
-  },
-  fa_database_b_critic: {
-    stage: "build_db",
-    family: "FLASH",
-    label: "FA: Database B Critic",
-  },
-};
-
-// ── Pipeline stage definitions (mirrors Project.tsx PIPELINE_STAGES) ──
-
-interface StageDef {
-  key: string;
-  icon: string;
-  label: string;
-}
-
-const PIPELINE_STAGES: StageDef[] = [
-  { key: "segment", icon: "✂️", label: "project.stageSegmentation" },
-  { key: "agents", icon: "🧠", label: "project.stageOpenCoding" },
-  { key: "synthesis", icon: "🔗", label: "project.stageCrossDoc" },
-  { key: "maturity", icon: "🔍", label: "project.stageVerifyingMaturity" },
-  { key: "find_cc", icon: "🎯", label: "project.stagePatternOfInterest" },
-  { key: "reduce", icon: "✂️", label: "project.stageSelectiveReduction" },
-  { key: "saturate", icon: "🔄", label: "project.stageCoreSaturation" },
-  { key: "build_db", icon: "🗄️", label: "project.stageDatabaseA" },
-  {
-    key: "playground",
-    icon: "🎨",
-    label: "project.stageTheoreticalPlayground",
-  },
-];
-
-// ── Family colors ──────────────────────────────────────────────────
-
-const FAMILY_COLORS: Record<string, string> = {
-  PRO: "#A371F7",
-  FLASH: "#3FB950",
-  NLP: "#58A6FF",
-};
 
 // ── Props ──────────────────────────────────────────────────────────
 
 interface PipelineAgentsProps {
   agentStatuses: Record<string, "pending" | "running" | "done" | "error">;
-  onAgentClick: (agentId: string, agentLabel: string) => void;
+  onRunAgent: (agentId: string) => void;
+  onStopAgent: (agentId: string) => void;
   pipelineRunning: boolean;
-  agentOutputCounts?: Record<string, number>;
-  onEraseStageOutputs?: (stageKey: string) => void;
-  onEraseAgentOutputs?: (agentId: string) => void;
-  agentLatencies?: Record<string, number>;
+  completedAgents: Set<string>;
+  iterations: Record<string, number>;
+  stages?: StageDef[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function formatLatency(seconds: number): string {
-  if (seconds < 1) {
-    return `${(seconds * 1000).toFixed(0)}ms`;
+function statusIcon(s: string): string {
+  switch (s) {
+    case "done":
+      return "✓";
+    case "running":
+      return "●";
+    case "error":
+      return "✕";
+    default:
+      return "○";
   }
-  return `${seconds.toFixed(1)}s`;
+}
+
+function statusColor(s: string): string {
+  switch (s) {
+    case "done":
+      return "#3FB950";
+    case "running":
+      return "#A371F7";
+    case "error":
+      return "#F85149";
+    default:
+      return "#484F58";
+  }
 }
 
 // ── Component ──────────────────────────────────────────────────────
 
 export default function PipelineAgents({
   agentStatuses,
-  onAgentClick,
+  onRunAgent,
+  onStopAgent,
   pipelineRunning,
-  agentOutputCounts,
-  onEraseStageOutputs,
-  onEraseAgentOutputs,
-  agentLatencies,
+  completedAgents,
+  iterations,
+  stages,
 }: PipelineAgentsProps) {
   const { t } = useI18n();
+  const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
 
-  // Group agents by stage
-  const agentsByStage: Record<
-    string,
-    Array<{ id: string; def: AgentDef }>
-  > = {};
-  for (const [agentId, def] of Object.entries(AGENT_MAP)) {
-    if (!agentsByStage[def.stage]) agentsByStage[def.stage] = [];
-    agentsByStage[def.stage].push({ id: agentId, def });
+  if (!stages || stages.length === 0) {
+    return (
+      <div style={{ padding: 12, color: "#8B949E", fontSize: 11 }}>
+        No hay etapas configuradas
+      </div>
+    );
   }
 
-  // Total output count for all agents in a stage
-  const stageOutputCount = (stageKey: string): number => {
-    const agents = agentsByStage[stageKey];
-    if (!agents || !agentOutputCounts) return 0;
-    return agents.reduce(
-      (sum, { id }) => sum + (agentOutputCounts[id] || 0),
-      0,
-    );
-  };
-
-  // Pulsing animation keyframes
-  const pulseKeyframes = `
-    @keyframes agentPulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-  `;
-
   return (
-    <>
-      <style>{pulseKeyframes}</style>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {PIPELINE_STAGES.map((stage) => {
-          const agents = agentsByStage[stage.key];
-          const stageHasOutputs = stageOutputCount(stage.key) > 0;
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {stages.map((stage) => (
+        <div key={stage.key}>
+          {/* Stage header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 6,
+              padding: "4px 0",
+              borderBottom: "1px solid #21262D",
+            }}
+          >
+            <span style={{ fontSize: 13 }}>{stage.icon}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#E6EDF3" }}>
+              {t(stage.label)}
+            </span>
+            <span style={{ fontSize: 10, color: "#484F58" }}>
+              {stage.agents.filter((a) => completedAgents.has(a.id)).length}/
+              {stage.agents.length}
+            </span>
+          </div>
 
-          return (
-            <div key={stage.key}>
-              {/* Stage header */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: 6,
-                  cursor: "default",
-                }}
-              >
-                <span style={{ fontSize: 14 }}>{stage.icon}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#8B949E",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  {t(stage.label)}
-                </span>
-              </div>
+          {/* Group agents by chain */}
+          {(() => {
+            const chains = new Map<string, AgentDef[]>();
+            const independents: AgentDef[] = [];
 
-              {/* Agent nodes */}
-              {agents && agents.length > 0 && (
-                <div style={{ paddingLeft: 20 }}>
-                  {agents.map(({ id, def }, agentIdx) => {
-                    const status = agentStatuses[id] || "pending";
-                    const familyColor = FAMILY_COLORS[def.family] || "#8B949E";
-                    const isLast = agentIdx === agents.length - 1;
-                    const outputCount = agentOutputCounts?.[id] || 0;
-                    const latency = agentLatencies?.[id];
+            for (const agent of stage.agents) {
+              if (agent.chain) {
+                const existing = chains.get(agent.chain) || [];
+                existing.push(agent);
+                chains.set(agent.chain, existing);
+              } else {
+                independents.push(agent);
+              }
+            }
 
-                    return (
-                      <div key={id}>
-                        {/* Connecting line */}
-                        <div
-                          style={{
-                            width: 2,
-                            height: 8,
-                            marginLeft: 13,
-                            background: isLast ? "transparent" : "#21262D",
-                          }}
-                        />
+            // Sort chains by their first agent's chainOrder
+            const sortedChains = [...chains.entries()].sort((a, b) => {
+              const aOrder = a[1][0]?.chainOrder ?? 99;
+              const bOrder = b[1][0]?.chainOrder ?? 99;
+              return aOrder - bOrder;
+            });
 
-                        {/* Agent node */}
-                        <div
-                          onClick={() => onAgentClick(id, def.label)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "6px 8px",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            transition: "background 0.15s",
-                          }}
-                          onMouseEnter={(e) => {
-                            (
-                              e.currentTarget as HTMLDivElement
-                            ).style.background = "#1C2333";
-                          }}
-                          onMouseLeave={(e) => {
-                            (
-                              e.currentTarget as HTMLDivElement
-                            ).style.background = "transparent";
-                          }}
-                        >
-                          {/* Agent circle */}
-                          <div
-                            style={{
-                              width: 28,
-                              height: 28,
-                              minWidth: 28,
-                              borderRadius: "50%",
-                              border: `2px solid ${familyColor}`,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 11,
-                              background:
-                                status === "done"
-                                  ? `${familyColor}22`
-                                  : status === "running"
-                                    ? `${familyColor}11`
-                                    : "transparent",
-                            }}
-                          >
-                            {status === "done" ? (
-                              <span
-                                style={{ color: "#3FB950", fontWeight: 700 }}
-                              >
-                                ✓
-                              </span>
-                            ) : status === "error" ? (
-                              <span
-                                style={{ color: "#F85149", fontWeight: 700 }}
-                              >
-                                ✗
-                              </span>
-                            ) : status === "running" ? (
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  width: 10,
-                                  height: 10,
-                                  borderRadius: "50%",
-                                  background: familyColor,
-                                  animation:
-                                    "agentPulse 1.5s ease-in-out infinite",
-                                }}
-                              />
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: 9,
-                                  color: familyColor,
-                                  opacity: 0.7,
-                                  fontFamily: "monospace",
-                                }}
-                              >
-                                {def.family.slice(0, 1)}
-                              </span>
-                            )}
-                          </div>
+            return (
+              <>
+                {/* Independent agents */}
+                {independents.map((agent) => renderAgent(agent))}
 
-                          {/* Agent label + info */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                minWidth: 0,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: status === "running" ? 600 : 400,
-                                  color:
-                                    status === "done"
-                                      ? "#E6EDF3"
-                                      : status === "running"
-                                        ? "#E6EDF3"
-                                        : status === "error"
-                                          ? "#F85149"
-                                          : "#8B949E",
-                                  lineHeight: 1.4,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  flex: 1,
-                                  minWidth: 0,
-                                }}
-                              >
-                                {def.label}
-                              </span>
-                              {outputCount > 0 && (
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: "#E6EDF3",
-                                    background: "#30363D",
-                                    borderRadius: 10,
-                                    padding: "0px 6px",
-                                    lineHeight: "16px",
-                                    whiteSpace: "nowrap",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  {outputCount}
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 9,
-                                color: familyColor,
-                                opacity: 0.7,
-                                fontFamily: "monospace",
-                                marginTop: 1,
-                              }}
-                            >
-                              {def.family}
-                              {latency !== undefined && (
-                                <span
-                                  style={{
-                                    marginLeft: 6,
-                                    color: "#8B949E",
-                                    fontFamily: "monospace",
-                                  }}
-                                >
-                                  {formatLatency(latency)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                {/* Chain groups */}
+                {sortedChains.map(([chainLabel, agents]) => {
+                  const sorted = [...agents].sort(
+                    (a, b) => (a.chainOrder ?? 0) - (b.chainOrder ?? 0),
+                  );
+                  const iterKey = sorted[0]?.iterationKey;
+                  const iterCount = iterKey ? iterations[iterKey] || 0 : 0;
 
-                          {/* Per-agent erase button */}
-                          {outputCount > 0 && onEraseAgentOutputs && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEraseAgentOutputs(id);
-                              }}
-                              title={`Erase ${def.label} outputs`}
-                              style={{
-                                background: "transparent",
-                                border: "1px solid #F8514933",
-                                color: "#F85149",
-                                cursor: "pointer",
-                                fontSize: 12,
-                                padding: "2px 6px",
-                                borderRadius: 4,
-                                lineHeight: "16px",
-                                opacity: 0.7,
-                                transition: "opacity 0.15s, background 0.15s",
-                                flexShrink: 0,
-                              }}
-                              onMouseEnter={(e) => {
-                                (
-                                  e.currentTarget as HTMLButtonElement
-                                ).style.opacity = "1";
-                                (
-                                  e.currentTarget as HTMLButtonElement
-                                ).style.background = "#F8514911";
-                              }}
-                              onMouseLeave={(e) => {
-                                (
-                                  e.currentTarget as HTMLButtonElement
-                                ).style.opacity = "0.7";
-                                (
-                                  e.currentTarget as HTMLButtonElement
-                                ).style.background = "transparent";
-                              }}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Stage erase outputs button */}
-                  {stageHasOutputs && onEraseStageOutputs && (
-                    <div style={{ marginTop: 4, marginBottom: 4 }}>
-                      <button
-                        onClick={() => onEraseStageOutputs(stage.key)}
+                  return (
+                    <div key={chainLabel} style={{ marginTop: 4 }}>
+                      <div
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          background: "transparent",
-                          border: "1px solid #F8514933",
-                          color: "#F85149",
-                          cursor: "pointer",
-                          fontSize: 10,
-                          padding: "3px 8px",
-                          borderRadius: 4,
-                          opacity: 0.7,
-                          transition: "opacity 0.15s, background 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          const el = e.currentTarget as HTMLButtonElement;
-                          el.style.opacity = "1";
-                          el.style.background = "#F8514911";
-                        }}
-                        onMouseLeave={(e) => {
-                          const el = e.currentTarget as HTMLButtonElement;
-                          el.style.opacity = "0.7";
-                          el.style.background = "transparent";
+                          fontSize: 9,
+                          color: "#8B949E",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          paddingLeft: 14,
+                          marginBottom: 2,
+                          display: "flex",
+                          justifyContent: "space-between",
                         }}
                       >
-                        🗑 Erase outputs
-                      </button>
+                        <span>{chainLabel}</span>
+                        {iterCount > 0 && (
+                          <span style={{ color: "#A371F7", fontWeight: 600 }}>
+                            ×{iterCount}
+                          </span>
+                        )}
+                      </div>
+                      {sorted.map((agent) => renderAgent(agent))}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
+                  );
+                })}
+              </>
+            );
+          })()}
+        </div>
+      ))}
+    </div>
   );
+
+  function renderAgent(agent: AgentDef) {
+    const status = agentStatuses[agent.id] || "pending";
+    const canRun = canRunAgent(agent.id, completedAgents) && !pipelineRunning;
+    const isHovered = hoveredAgent === agent.id;
+    const isRunning = status === "running";
+    const tierColor = FAMILY_COLORS[agent.tier] || "#8B949E";
+    const depsUnmet = agent.dependencies.filter((d) => !completedAgents.has(d));
+
+    return (
+      <div
+        key={agent.id}
+        onMouseEnter={() => setHoveredAgent(agent.id)}
+        onMouseLeave={() => setHoveredAgent(null)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "3px 8px",
+          borderRadius: 4,
+          marginLeft: agent.chain ? 16 : 4,
+          cursor: canRun || isRunning ? "pointer" : "default",
+          background: isHovered ? "#A371F708" : "transparent",
+          transition: "background 0.15s",
+          opacity: canRun || isRunning || status === "done" ? 1 : 0.5,
+        }}
+        title={
+          depsUnmet.length > 0
+            ? `Dependencias pendientes: ${depsUnmet.join(", ")}`
+            : t(agent.label)
+        }
+      >
+        {/* Status dot */}
+        <span
+          style={{
+            fontSize: 8,
+            color: statusColor(status),
+            minWidth: 12,
+            textAlign: "center",
+          }}
+        >
+          {isRunning ? (
+            <span
+              style={{
+                display: "inline-block",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#A371F7",
+                animation: "stagePulse 1.5s ease-in-out infinite",
+              }}
+            />
+          ) : (
+            statusIcon(status)
+          )}
+        </span>
+
+        {/* Tier indicator */}
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: tierColor,
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Label */}
+        <span
+          style={{
+            fontSize: 10,
+            color:
+              status === "done"
+                ? "#3FB950"
+                : status === "error"
+                  ? "#F85149"
+                  : "#C9D1D9",
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {t(agent.label)}
+        </span>
+
+        {/* Play/Pause button on hover */}
+        {isHovered && !isRunning && canRun && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunAgent(agent.id);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#3FB950",
+              cursor: "pointer",
+              fontSize: 12,
+              padding: "0 2px",
+              lineHeight: 1,
+            }}
+            title="Ejecutar agente"
+          >
+            ▶
+          </button>
+        )}
+        {isHovered && isRunning && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStopAgent(agent.id);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#F85149",
+              cursor: "pointer",
+              fontSize: 12,
+              padding: "0 2px",
+              lineHeight: 1,
+            }}
+            title="Detener agente"
+          >
+            ⏹
+          </button>
+        )}
+        {!isHovered && isRunning && (
+          <span style={{ fontSize: 8, color: "#A371F7" }}>●</span>
+        )}
+
+        {/* Error retry */}
+        {status === "error" && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunAgent(agent.id);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#D29922",
+              cursor: "pointer",
+              fontSize: 10,
+              padding: "0 2px",
+            }}
+            title="Reintentar"
+          >
+            ↻
+          </button>
+        )}
+      </div>
+    );
+  }
 }

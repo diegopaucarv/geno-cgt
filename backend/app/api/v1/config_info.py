@@ -57,7 +57,7 @@ def _get_spacy_model() -> str:
 
 
 class LLMConfig(BaseModel):
-    model_pro: str = "deepseek-ai/DeepSeek-V4"
+    model_pro: str = "deepseek-ai/DeepSeek-V4-Pro"
     model_pro_max_tokens: int = 8192
     model_pro_temperature: float = 0.3
     model_flash: str = "nvidia/nemotron-3-ultra-550b-a55b"

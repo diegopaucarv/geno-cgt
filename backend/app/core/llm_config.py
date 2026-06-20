@@ -32,7 +32,7 @@ class ModelEndpoint:
 MODEL_REGISTRY: dict[str, ModelEndpoint] = {
     # ── PRO tier: DeepSeek V4 Pro via Together.ai ──────────────────
     "deepseek-pro": ModelEndpoint(
-        model_id=get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4"),
+        model_id=get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4-Pro"),
         display_name="DeepSeek Pro (V4)",
         tier="pro",
         max_tokens_default=int(

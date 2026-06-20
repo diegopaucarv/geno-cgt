@@ -10,6 +10,9 @@ sequenceDiagram
     participant LLM as 🤖 LLM (Together.ai)
     participant DB as 🗄️ PostgreSQL
 
+    %% ── LEYENDA ──────────────────────────────────────────────────────
+    Note over U,DB: 🔗 = Cadena proposer→critic | 🔘 = Independiente | 🎭 = Theoretical Playground | ✍️ = Redacción | 🛑 = HITL gate | 💾 = Persiste en DB
+
     %% ═══════════════════════════════════════════════════════════════════
     %% FASE 0: CONFIGURACIÓN DEL PROYECTO
     %% ═══════════════════════════════════════════════════════════════════
@@ -60,59 +63,75 @@ sequenceDiagram
         loop Por cada documento del lote
             CEL->>HVY: process_document_agents_a(doc_id, proyecto_id)
 
-            Note over HVY: Segmentación
-            HVY->>NLP: segmentar_documento
+            Note over HVY,LLM: 🔘 Pre-procesador de texto (independiente, FLASH)
+            HVY->>LLM: 🟡 FLASH · util_punctuator<br/>(limpieza de texto: puntuación, normalización)
+            LLM-->>HVY: texto normalizado
+
+            Note over HVY,NLP: 🔘 Segmentación semántica (NLP Worker, no-LLM)
+            HVY->>NLP: segmentar_documento (spaCy/Stanza)
             NLP-->>HVY: segmentos[]
             HVY->>DB: INSERT segmentos
 
-            Note over HVY: Glaser Classification
-            HVY->>LLM: 🟡 FLASH · fa_glaser_data_classifier (batch)
+            Note over HVY,LLM: 🔘 Clasificación Glaser (batch, FLASH)
+            HVY->>LLM: 🟡 FLASH · fa_glaser_data_classifier
             LLM-->>HVY: {classifications[] per segmento}
             HVY->>DB: UPDATE segmentos.tipo_dato_glaser
 
-            Note over HVY: Pattern & Incident Extraction (unified PRO)
-            HVY->>LLM: 🟣 PRO · fa_document_pattern_extractor
+            Note over HVY,LLM: 🔘 Incident Extractor (unificado, PRO)
+            HVY->>LLM: 🟣 PRO · fa_document_pattern_extractor<br/>(patterns + incidents + prime_mover en una sola llamada)
             LLM-->>HVY: {patterns[], incidents[], document_signals}
             HVY->>DB: INSERT extracted_incidents
 
-            Note over HVY: A1/A2 — Auxiliary (non-blocking)
+            Note over HVY,LLM: 🔗 Chain A1-A3: Contexto poblacional + Proceso (auxiliares, non-blocking)
             HVY->>LLM: 🟣 PRO · fa_population_context
             LLM-->>HVY: {surprising_details, language_patterns}
             HVY->>LLM: 🟣 PRO · fa_process_identifier
             LLM-->>HVY: {process_description}
 
+            Note over HVY,LLM: 🔘 A3: Sense-making (independiente)
+            HVY->>LLM: 🟣 PRO · fa_sense_maker
+            LLM-->>HVY: {sense_status, hypotheses}
+
             HVY-->>CEL: ✅ documento procesado
         end
 
-        Note over HVY: ─── SÍNTESIS CROSS-DOC ───
+        Note over HVY,LLM: ─── SÍNTESIS CROSS-DOC ───
 
-        Note over HVY: B1 — Incident Grouper
+        Note over HVY,LLM: 🔗 Chain B1→B2→B3: Grouper → Labeler → Critic
         HVY->>LLM: 🟣 PRO · fb_incident_grouper
         LLM-->>HVY: {incident_groups[], ungrouped[]}
 
-        Note over HVY: B2 — Pattern Labeler (per-concept)
         loop Por cada grupo de incidentes
             HVY->>LLM: 🟣 PRO · fb_pattern_labeler
             LLM-->>HVY: {proposed_label, description, anomalies[]}
         end
 
-        Note over HVY: B3 — Label Critic
         HVY->>LLM: 🟣 PRO · fb_label_critic
         LLM-->>HVY: {observations[], coverage_gaps[]}
 
+        Note over HVY,LLM: 🔗 Chain B2a→B2b: Indicadores → Códigos (indirecto)
+        HVY->>LLM: 🟡 FLASH · fb_indicators_extractor
+        LLM-->>HVY: {indicators[]}
+        HVY->>LLM: 🟣 PRO · fb_code_generator
+        LLM-->>HVY: {codes[{code_name, definition}]}
         HVY->>DB: INSERT categorias
 
-        Note over HVY: ═══ EVERY-3-DOC PAUSE ═══
+        Note over HVY,LLM: 🔗 Chain B3: Hipótesis + Evidence Classifier
+        HVY->>LLM: 🟣 PRO · fb_hypothesis_generator
+        LLM-->>HVY: {hypotheses[]}
+        HVY->>LLM: 🟡 FLASH · fb_evidence_classifier
+        LLM-->>HVY: {classification per segmento}
+        HVY->>DB: INSERT hypotheses
 
-        Note over HVY: Synthesizer 1 — Category Unification
+        Note over HVY,LLM: ═══ EVERY-3-DOC PAUSE ═══
+
+        Note over HVY,LLM: 🔗 Chain S1→S2→S3: Synthesizers + Config Critic
         HVY->>LLM: 🟣 PRO · fd_category_synthesizer
         LLM-->>HVY: {unified_categories[], merges[], renames[]}
 
-        Note over HVY: Synthesizer 2 — Hypothesis Update
         HVY->>LLM: 🟣 PRO · fd_hypothesis_synthesizer
         LLM-->>HVY: {updated_hypotheses[]}
 
-        Note over HVY: Configuration Critic
         HVY->>LLM: 🟣 PRO · fd_config_critic
         LLM-->>HVY: {concerns[], population_variants[], coding_style_rec}
 
@@ -402,17 +421,43 @@ sequenceDiagram
     %% FASE 6b: THEORETICAL PLAYGROUND
     %% ═══════════════════════════════════════════════════════════════════
 
-    Note over U,DB: ═══ FASE 6b: Theoretical Playground ═══
+    Note over U,DB: ═══ FASE 6b: Theoretical Playground 🎭 ═══
+
+    Note over HVY,DB: 🎭 El Playground es un espacio de exploración teórica.<br/>Todos los agentes son independientes — el investigador<br/>decide qué elaborar y en qué orden.
 
     HVY->>DB: Seed 12 theoretical coding families
-    HVY->>LLM: 🟣 PRO · f6b_ghost_blob_mapper (uncategorized memos)
-    LLM-->>HVY: {suggested_category, affinity}
 
+    Note over HVY,LLM: 🎭 Ghost Blob Mapper — memos huérfanos → categorías
+    HVY->>LLM: 🟣 PRO · f6b_ghost_blob_mapper
+    LLM-->>HVY: {suggested_category, affinity}
+    HVY->>DB: INSERT ghost_blobs
+
+    Note over HVY,LLM: 🎭 Memo Theoretical Tagger — 12 familias canónicas
     loop Por cada memo
         HVY->>LLM: 🟡 FLASH · f6b_memo_theoretical_tagger
         LLM-->>HVY: {family_affinities[{family, has_affinity}], primary_family}
         HVY->>DB: UPDATE memos.metadata
     end
+
+    Note over HVY,LLM: 🎭 Ecosystem Gap Detector — 5 tipos de gaps
+    HVY->>LLM: 🟣 PRO · f6b_ecosystem_gap_detector
+    LLM-->>HVY: {gaps[{type, severity, suggestion}]}
+
+    Note over HVY,LLM: 🎭 Conceptual Elaborator — expandir relaciones
+    HVY->>LLM: 🟣 PRO · f6b_conceptual_elaborator
+    LLM-->>HVY: {relationship_summary, converging_evidence, diverging_evidence, has_conceptual_fit}
+
+    Note over HVY,LLM: 🎭 Definition Writer — definiciones CGT formales
+    HVY->>LLM: 🟣 PRO · f6b_definition_writer
+    LLM-->>HVY: {formal_definition, theoretical_positioning, conceptual_boundaries}
+
+    Note over HVY,LLM: 🎭 Incident Elaborator — expandir incidentes
+    HVY->>LLM: 🟣 PRO · f6b_incident_elaborator
+    LLM-->>HVY: {elaborated_incident, new_properties}
+
+    Note over HVY,LLM: 🎭 Rename Suggester — mejores nombres
+    HVY->>LLM: 🟣 PRO · f6b_rename_suggester
+    LLM-->>HVY: {suggested_names[{name, rationale}]}
 
     opt >= 3 unlinked ghosts
         HVY->>LLM: 🟣 PRO · f6b_gap_alerter
@@ -422,20 +467,23 @@ sequenceDiagram
     HVY-->>CEL: ✅ playground ready
 
     %% ═══════════════════════════════════════════════════════════════════
-    %% FASE 6a: REDACCIÓN NATURAL
+    %% FASE 6a: REDACCIÓN NATURAL ✍️
     %% ═══════════════════════════════════════════════════════════════════
 
-    Note over U,DB: ═══ FASE 6a: Redacción Natural ═══
+    Note over U,DB: ═══ FASE 6a: Redacción Natural ✍️ ═══
+
+    Note over HVY,LLM: ✍️ La redacción es seguir analizando.<br/>Escribir desde las pilas de memos, nunca desde cero.
 
     U->>FE: Iniciar redacción (sorting group)
     FE->>API: POST /writing/write-section
     API->>CEL: dispatch write_section → heavy
 
+    Note over HVY,LLM: 🔗 Chain Writer→Critic→Gap Feeler
     HVY->>LLM: 🟣 PRO · f6a_natural_writer
     LLM-->>HVY: {draft, citations[], concepts[]}
     HVY->>LLM: 🟣 PRO · f6a_writing_critic
     LLM-->>HVY: {verdict: SAT|MOD|FORCED, issues[]}
-    HVY->>LLM: 🟡 FLASH · f6a_gap_feeler (background)
+    HVY->>LLM: 🟡 FLASH · f6a_gap_feeler (background, non-blocking)
     LLM-->>HVY: {gaps[{type, description}]}
     HVY-->>FE: {draft, critique, gaps}
 
@@ -445,6 +493,7 @@ sequenceDiagram
 
     Note over U,DB: ═══ FASE 6c: Diálogo con Literatura ═══
 
+    Note over HVY,LLM: 🔗 Chain Comparer→Critic: literatura como datos
     U->>FE: Comparar con literatura
     FE->>API: POST /literature/compare
     API->>CEL: dispatch compare_literature → heavy
@@ -461,6 +510,7 @@ sequenceDiagram
 
     Note over U,DB: ═══ FASE 6d: Aplicabilidad ═══
 
+    Note over HVY,LLM: 🔗 Chain Engine→Critic: variables de control y acceso
     U->>FE: Generar guías de aplicabilidad
     FE->>API: POST /applicability/generate
     API->>CEL: dispatch generate_applicability → heavy
@@ -477,14 +527,15 @@ sequenceDiagram
 
     Note over U,DB: ═══ FASE 6e: Final Report ═══
 
+    Note over HVY,LLM: 🔘 Reporte final (independiente, PRO)
     U->>FE: Generar reporte final
     FE->>API: POST /projects/{id}/pipeline/run-stage/final_report
     API->>CEL: dispatch final_report → heavy
 
     HVY->>DB: SELECT all accumulated data
     HVY->>LLM: 🟣 PRO · f6a_final_report
-    LLM-->>HVY: {report: {title, abstract, core_pattern, core_category, theoretical_model, population_dimensions, literature_dialogue, applicability, research_trajectory}}
-    HVY->>DB: INSERT final_reports
+    LLM-->>HVY: {report: 8 secciones}
+    HVY->>DB: INSERT final_reports 💾
     HVY-->>CEL: ✅ terminal node
     FE-->>U: 📄 Reporte final generado
 
@@ -495,8 +546,23 @@ sequenceDiagram
     %% ═══════════════════════════════════════════════════════════════════
 
     Note over U,DB: ═══ Transversal: HITL Gates ═══
-    Note over U,FE: Gates en orden:<br/>1. batch_review 🔄 (cada 3 docs)<br/>2. pattern_of_interest 🎯<br/>3. core_category ⭐<br/>4. selective_reduction ✂️<br/>5. core_saturation 📊 (opcional)<br/>6. database_a 🗄️<br/>7. database_b 🔗
+    Note over U,FE: Gates en orden:<br/>🛑 1. batch_review 🔄 (cada 3 docs)<br/>🛑 2. pattern_of_interest 🎯<br/>🛑 3. core_category ⭐<br/>🛑 4. selective_reduction ✂️<br/>🛑 5. core_saturation 📊 (opcional)<br/>🛑 6. database_a 🗄️<br/>🛑 7. database_b 🔗
     Note over U,FE: Cada gate: Accept → avanza / Modify → re-ejecuta / Reject → pausa
+
+    Note over U,DB: ═══ Transversal: HITL Modification Chain 🔗 ═══
+    Note over HVY,LLM: 🔗 Chain Filter→Planner→Executor→Evaluator<br/>(modificación de prompts/memos por el investigador)
+    Note over HVY,LLM: Fase 1: Filter (FLASH) — ¿el pedido es válido?
+    HVY->>LLM: 🟡 FLASH · hitl_modification_filter
+    LLM-->>HVY: {valid_request, filter_reason}
+    Note over HVY,LLM: Fase 2: Planner (PRO) — plan de verificación
+    HVY->>LLM: 🟣 PRO · hitl_modification_planner
+    LLM-->>HVY: {verification_plan, falsification_hypothesis}
+    Note over HVY,LLM: Fase 3: Evidence Collector (FLASH) — buscar evidencia
+    HVY->>LLM: 🟡 FLASH · hitl_evidence_collector
+    LLM-->>HVY: {search_queries[], evidence[]}
+    Note over HVY,LLM: Fase 4: Evaluator (PRO) — ¿es recomendable?
+    HVY->>LLM: 🟣 PRO · hitl_modification_evaluator
+    LLM-->>HVY: {recommended, is_confident, reason, evidence_sufficient}
 
     Note over U,DB: ═══ Transversal: AbortableTask ═══
     Note over CEL,HVY: Todas las tareas Celery usan AbortableTask → cancelación segura

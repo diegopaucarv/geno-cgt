@@ -30,7 +30,7 @@ ModelTier = Literal["PRO", "FLASH"]
 _MODEL_FLASH = get_config_value(
     "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
 )
-_MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4")
+_MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4-Pro")
 
 _TIER_MODELS: dict[ModelTier, str] = {
     "FLASH": _MODEL_FLASH,
@@ -170,6 +170,8 @@ def _parse_yaml_format(raw: str) -> dict[str, Any]:
         prompt_parts.append(sections["System"])
     if sections.get("User"):
         prompt_parts.append(sections["User"])
+    if sections.get("Task"):
+        prompt_parts.append(sections["Task"])
     prompt = "\n\n".join(prompt_parts).strip()
 
     schema = None
