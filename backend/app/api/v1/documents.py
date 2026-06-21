@@ -218,7 +218,12 @@ async def segment_document(
         raise HTTPException(404, "Documento no encontrado")
 
     meta = doc.metadatos or {}
-    texto = meta.get("texto_preprocesado") or doc.texto_extraido
+    # Priority: classified (baseline_data tags) → preprocessed → extracted
+    texto = (
+        meta.get("texto_clasificado")
+        or meta.get("texto_preprocesado")
+        or doc.texto_extraido
+    )
     if not texto:
         raise HTTPException(400, "No hay texto extraído para segmentar")
 
@@ -594,19 +599,23 @@ async def delete_document_segments(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Elimina los segmentos de UN documento, borra texto_preprocesado y lo resetea a crudo."""
+    """Elimina los segmentos de UN documento y lo devuelve a estado 'clasificado'."""
     from sqlalchemy import text
 
     await db.execute(
         text("DELETE FROM segmentos WHERE documento_id = :did"),
         {"did": document_id},
     )
+    # Clear stage progress for segmenter
     await db.execute(
         text(
-            "UPDATE documentos SET estado = 'crudo', "
-            "metadatos = metadatos - 'texto_preprocesado' "
-            "WHERE id = :did"
+            "DELETE FROM document_stage_progress "
+            "WHERE documento_id = :did AND agent_id = 'segmentar_documento'"
         ),
+        {"did": document_id},
+    )
+    await db.execute(
+        text("UPDATE documentos SET estado = 'clasificado' WHERE id = :did"),
         {"did": document_id},
     )
     await db.commit()
@@ -627,6 +636,14 @@ async def restore_document_original(
             "UPDATE documentos SET estado = 'crudo', "
             "metadatos = metadatos - 'texto_preprocesado' - 'preprocess_warning' - 'texto_puntuado' "
             "WHERE id = :did"
+        ),
+        {"did": document_id},
+    )
+    # Clear stage progress for this agent
+    await db.execute(
+        text(
+            "DELETE FROM document_stage_progress "
+            "WHERE documento_id = :did AND agent_id = 'util_punctuator'"
         ),
         {"did": document_id},
     )
@@ -660,13 +677,48 @@ async def reset_all_docs_to_crudo(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Resetea todos los docs del proyecto a 'crudo', borrando preprocesado y warnings."""
+    """Resetea TODOS los docs del proyecto a 'crudo'.
+    Borra: preprocesado, clasificado, segmentos, y stage_progress."""
     from sqlalchemy import text
 
+    # Delete FK-dependent data first
+    await db.execute(
+        text(
+            "DELETE FROM extracted_incidents WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
+        ),
+        {"pid": project_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM codigos_segmento WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
+        ),
+        {"pid": project_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM segmentos WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid)"
+        ),
+        {"pid": project_id},
+    )
+    # Clear all stage progress for project
+    await db.execute(
+        text(
+            "DELETE FROM document_stage_progress WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid)"
+        ),
+        {"pid": project_id},
+    )
+    # Reset all docs: estado=crudo, strip all processing keys from metadatos
     result = await db.execute(
         text(
             "UPDATE documentos SET estado = 'crudo', "
-            "metadatos = metadatos - 'texto_preprocesado' - 'preprocess_warning' - 'texto_puntuado' "
+            "metadatos = metadatos - 'texto_preprocesado' - 'preprocess_warning' "
+            "- 'texto_puntuado' - 'texto_clasificado' - 'baseline_tags' "
             "WHERE proyecto_id = :pid"
         ),
         {"pid": project_id},
@@ -747,20 +799,28 @@ async def classify_glaser_document(
 
 
 @router.delete("/{document_id}/classify-glaser")
-async def clear_glaser_classification(
+async def delete_classified_text(
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Clears Glaser classification from a document. Resets estado to preprocesado."""
-    doc = await db.get(Documento, document_id)
-    if not doc:
-        raise HTTPException(404, "Documento no encontrado")
-    meta = doc.metadatos or {}
-    meta.pop("texto_clasificado", None)
-    meta.pop("baseline_tags", None)
-    doc.metadatos = meta
-    if doc.estado == "clasificado":
-        doc.estado = "preprocesado"
+    """Borra texto_clasificado, baseline_tags, y devuelve el doc a preprocesado."""
+    from sqlalchemy import text
+
+    await db.execute(
+        text(
+            "UPDATE documentos SET estado = 'preprocesado', "
+            "metadatos = metadatos - 'texto_clasificado' - 'baseline_tags' "
+            "WHERE id = :did"
+        ),
+        {"did": document_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM document_stage_progress "
+            "WHERE documento_id = :did AND agent_id = 'fa_glaser_data_classifier'"
+        ),
+        {"did": document_id},
+    )
     await db.commit()
-    return {"status": "cleared", "document_id": str(document_id)}
+    return {"status": "ok", "message": f"Classified text cleared for doc {document_id}"}

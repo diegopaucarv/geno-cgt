@@ -189,6 +189,46 @@ export default function ProjectDetail() {
     refreshDocs();
   }
 
+  /** Unified task dispatch + poll + refresh. All per-doc handlers and the
+   *  sidebar dispatchAgentLoop delegate to this. */
+  async function runDocTask(
+    docId: string,
+    endpoint: string,
+    signal: { current: boolean },
+  ): Promise<"success" | "failed" | "aborted" | "timeout"> {
+    const token = `Bearer ${localStorage.getItem("access_token")}`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token,
+      },
+      body: JSON.stringify({ document_id: docId }),
+    }).then((r) => r.json());
+
+    const taskId = res.task_id;
+    punctTaskRef.current = taskId;
+    if (!taskId) {
+      refreshDocs();
+      return "success";
+    }
+
+    for (let i = 0; i < 60 && !signal.current; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const ts = await getTaskStatus(taskId);
+        if (ts.status === "SUCCESS") {
+          refreshDocs();
+          return "success";
+        }
+        if (ts.status === "FAILURE") return "failed";
+      } catch {
+        /* polling error, keep trying */
+      }
+    }
+    return signal.current ? "aborted" : "timeout";
+  }
+
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
@@ -263,9 +303,22 @@ export default function ProjectDetail() {
     "stages" | "agents" | "logs"
   >("agents");
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
-  const [agentStatuses, setAgentStatuses] = useState<
-    Record<string, "pending" | "running" | "done" | "error">
-  >({});
+  /** Ephemeral: agent IDs currently executing (pulse animation).
+   *  Set on play, cleared on finish/abort. NOT derived from docs. */
+  const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(
+    new Set(),
+  );
+  /** Synthesized: "running" if in runningAgentIds, else "pending".
+   *  PipelineAgents derives done/canRun from agentDocCounts internally. */
+  const agentStatuses: Record<
+    string,
+    "pending" | "running" | "done" | "error"
+  > = {};
+  for (const agentId of Object.keys(PER_DOC_AGENTS)) {
+    agentStatuses[agentId] = runningAgentIds.has(agentId)
+      ? "running"
+      : "pending";
+  }
 
   const [agentModalOpen, setAgentModalOpen] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -305,6 +358,10 @@ export default function ProjectDetail() {
     }
   });
   const runningTaskRef = useRef<string | null>(null);
+  /** Tracks the currently-running operation per document.
+   *  Multiple docs can have ops in flight - we use a Record, not a single
+   *  string, so finishing doc A's preprocess does not clear doc B's classify. */
+  const [runningOps, setRunningOps] = useState<Record<string, string>>({});
   const [iterations, setIterations] = useState<Record<string, number>>(() => {
     try {
       const raw = localStorage.getItem("gt_iterations");
@@ -313,6 +370,20 @@ export default function ProjectDetail() {
       return {};
     }
   });
+
+  // Per-doc agent state is derived PURELY from docs[].estado. PipelineAgents
+  // receives agentDocCounts + eligibleDocCounts and computes canRun/done
+  // internally. The only external signal is runningAgentIds (set on play,
+  // cleared on finish). completedAgents persists only project-level agents.
+  //
+  // NO DB polling — document estados ARE the source of truth.
+  useEffect(() => {
+    // No-op: per-doc agent state is now derived from docs[].estado.
+    // This useEffect remains as a placeholder to clear the interval refs
+    // and to avoid breaking the dependency chain with [docs, id].
+    // completedAgents is only for project-level agents (open_coding+),
+    // not for data_management agents.
+  }, [docs, id]);
 
   // Persist completed agents to localStorage
   useEffect(() => {
@@ -380,7 +451,7 @@ export default function ProjectDetail() {
     getAgentLogs(id)
       .then((logs) => {
         setAgentLogs(logs);
-        setAgentStatuses(deriveAgentStatuses(logs));
+        // agentStatuses is now derived from runningAgentIds, not from logs.
       })
       .catch(() => {});
   }, [id]);
@@ -454,26 +525,6 @@ export default function ProjectDetail() {
       return next;
     });
   }, [pipelineLog, pipelineRunning]);
-
-  // Sync per-doc agent statuses from document estados (unified)
-  useEffect(() => {
-    setAgentStatuses((prev) => {
-      const next = { ...prev };
-      for (const [agentId, { input, output }] of Object.entries(
-        PER_DOC_AGENTS,
-      )) {
-        const inputCount = docs.filter((d) => d.estado === input).length;
-        const outputCount = docs.filter((d) =>
-          (BEYOND[output] || []).includes(d.estado),
-        ).length;
-        const totalRelevant = inputCount + outputCount;
-        if (totalRelevant > 0 && inputCount === 0) {
-          next[agentId] = "done";
-        }
-      }
-      return next;
-    });
-  }, [docs]);
 
   // ── HITL: mark relevant stage as "running" when HITL is pending ──
   useEffect(() => {
@@ -747,14 +798,17 @@ export default function ProjectDetail() {
 
   /** Preprocess a single document (called from the per-doc button) */
   async function handlePunctuate(docId: string) {
-    if (punctRunning === docId) {
-      // Cancel: abort polling + revoke Celery task
+    if (runningOps[docId]) {
       abortRef.current = true;
       setPunctStatus((prev) => ({
         ...prev,
         [docId]: t("project.preprocessingCancelled"),
       }));
-      setPunctRunning(null);
+      setRunningOps((prev) => {
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
       // Revocar el task de Celery (el endpoint cancela + rollback del estado)
       const taskId = punctTaskRef.current;
       punctTaskRef.current = null;
@@ -772,8 +826,7 @@ export default function ProjectDetail() {
     }
 
     abortRef.current = false;
-    setPunctRunning(docId);
-    runningOp.current = { docId, op: "punctuate" };
+    setRunningOps((prev) => ({ ...prev, [docId]: "punctuate" }));
     setPunctStatus((prev) => ({
       ...prev,
       [docId]: t("project.preprocessingStarting"),
@@ -781,6 +834,7 @@ export default function ProjectDetail() {
 
     try {
       await punctuateSingleDoc(docId);
+      markAgentDone("preprocesado");
       setDocError((prev) => {
         const n = { ...prev };
         delete n[docId];
@@ -883,6 +937,8 @@ export default function ProjectDetail() {
     abortRef.current = false;
     setPunctRunning(docId);
     runningOp.current = { docId, op: "classify" };
+    setPunctStatus((prev) => ({ ...prev, [docId]: "Clasificando…" }));
+
     try {
       const token = `Bearer ${localStorage.getItem("access_token")}`;
       const res = await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
@@ -892,34 +948,60 @@ export default function ProjectDetail() {
 
       if (res.task_id) {
         punctTaskRef.current = res.task_id;
-        // Immediate refresh so badge shows "Clasificando..."
-        refreshDocs();
         for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
             const ts = await getTaskStatus(res.task_id);
             if (ts.status === "SUCCESS") {
+              markAgentDone("clasificado");
+              // ── Final refresh after completion ──
               refreshDocs();
+              setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
               return;
             }
-            if (ts.status === "FAILURE") return;
+            if (ts.status === "FAILURE") {
+              setPunctStatus((prev) => ({
+                ...prev,
+                [docId]: "Error de clasificación",
+              }));
+              return;
+            }
           } catch {}
         }
         if (!abortRef.current) {
           showErrorToast("Timeout: clasificación no respondió en 120s");
         }
       } else {
+        // Synchronous completion — no task_id
+        markAgentDone("clasificado");
         refreshDocs();
+        setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
       }
     } catch (e: any) {
       if (!abortRef.current) {
         showErrorToast("Error: " + (e.message || ""));
+        setPunctStatus((prev) => ({
+          ...prev,
+          [docId]: "Error: " + (e.message || ""),
+        }));
       }
     } finally {
       runningOp.current = null;
       setPunctRunning(null);
-      refreshDocs();
     }
+  }
+
+  /** Synchronise completedAgents after a PROJECT-LEVEL agent succeeds.
+   *  Per-doc agents (data_management) do NOT use completedAgents — their
+   *  state is derived purely from docs[].estado. */
+  function markAgentDone(estado: string) {
+    // Per-doc agents: no-op. PipelineAgents derives state from docs.
+  }
+
+  /** Clear completedAgents downstream from a given estado (used on restore).
+   *  Per-doc agents don't use completedAgents — no-op. */
+  function clearAgentsFrom(estado: string) {
+    // Per-doc agents: no-op.
   }
 
   /** Route action based on doc estado */
@@ -1003,20 +1085,25 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Segment a single document.
-   *  The backend `segmentar_documento` task reads from
-   *  `documentos.metadatos->>'texto_clasificado'` and only extracts
-   *  content within `<baseline_data>` tags for segmentation. */
+  /** Segment a single document via the pipeline run-agent endpoint
+   *  (same endpoint the sidebar agent uses — unified). */
   async function handleSegment(docId: string) {
     abortRef.current = false;
     setPunctRunning(docId);
     runningOp.current = { docId, op: "segment" };
     try {
       const token = `Bearer ${localStorage.getItem("access_token")}`;
-      const res = await fetch(`/api/v1/documents/${docId}/segment`, {
-        method: "POST",
-        headers: { Authorization: token },
-      }).then((r) => r.json());
+      const res = await fetch(
+        `/api/v1/projects/${id}/pipeline/run-agent/segmentar_documento`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token,
+          },
+          body: JSON.stringify({ document_id: docId }),
+        },
+      ).then((r) => r.json());
 
       if (res.task_id) {
         punctTaskRef.current = res.task_id;
@@ -1025,6 +1112,7 @@ export default function ProjectDetail() {
           try {
             const ts = await getTaskStatus(res.task_id);
             if (ts.status === "SUCCESS") {
+              markAgentDone("segmentado");
               refreshDocs();
               return;
             }
@@ -1043,25 +1131,55 @@ export default function ProjectDetail() {
   }
 
   /** Restore one step back based on current estado.
-   *  Chain: crudo -> preprocesado -> clasificado -> segmentado -> procesado -> codificado
-   *  Each step undoes exactly one layer. */
-  async function handleRestoreAll(docId: string) {
+   *  Chain: crudo -> preprocesado -> clasificado -> segmentado -> ...
+   *  Each step undoes exactly one layer, clears stage_progress, and
+   *  syncs the sidebar agent status. */
+  async function handleRestoreStep(docId: string) {
     if (!(await safeConfirm(t("project.restoreOriginalConfirm")))) return;
     try {
       const doc = docs.find((d) => d.id === docId);
       if (!doc) return;
       const token = `Bearer ${localStorage.getItem("access_token")}`;
-      // Map estado → rollback op (inverse of the chain)
-      if (doc.estado === "clasificado") {
+      // Map estado -> rollback op (inverse of the chain)
+      if (doc.estado === "preprocesado") {
+        // Clear preprocessed text + progress, return to crudo
+        await fetch(`/api/v1/documents/${docId}/restore-original`, {
+          method: "POST",
+          headers: { Authorization: token },
+        }).catch(() => {});
+        clearAgentsFrom("preprocesado");
+      } else if (doc.estado === "clasificado") {
         await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
           method: "DELETE",
           headers: { Authorization: token },
         }).catch(() => {});
+        clearAgentsFrom("clasificado");
       } else if (doc.estado === "segmentado") {
         await deleteDocumentSegments(docId).catch(() => {});
+        clearAgentsFrom("segmentado");
+      } else if (
+        doc.estado === "incidentes_extraidos" ||
+        doc.estado === "procesado" ||
+        doc.estado === "listo"
+      ) {
+        // For post-segmentation states: restore to crudo (full reset)
+        await restoreDocumentOriginal(docId);
+        await deleteDocumentSegments(docId).catch(() => {});
+        await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
+          method: "DELETE",
+          headers: { Authorization: token },
+        }).catch(() => {});
+        // Per-doc agent state derives from docs[].estado — no state to clear.
       } else {
+        // crudo or unknown -> restore to crudo
         await restoreDocumentOriginal(docId);
       }
+      // Clear any error state for this document
+      setDocError((prev) => {
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
       refreshDocs();
     } catch (e: any) {
       showErrorToast("Error: " + (e.message || ""));
@@ -1245,21 +1363,6 @@ export default function ProjectDetail() {
     showToast(t("project.memoModificationApplied"));
   }
 
-  // ── Agent monitoring ───────────────────────────────
-
-  function deriveAgentStatuses(
-    logs: AgentLogEntry[],
-  ): Record<string, "pending" | "running" | "done" | "error"> {
-    const status: Record<string, "pending" | "running" | "done" | "error"> = {};
-    for (const e of logs) {
-      if (!status[e.agent_id]) status[e.agent_id] = "pending";
-      if (e.type === "prompt_sent" && status[e.agent_id] === "pending")
-        status[e.agent_id] = "running";
-      if (e.type === "prompt_response") status[e.agent_id] = "done";
-    }
-    return status;
-  }
-
   // ── Pipeline IA ──────────────────────────────────
 
   function resetStages(presets?: Record<string, StageStatus>) {
@@ -1301,7 +1404,7 @@ export default function ProjectDetail() {
       try {
         const logs = await getAgentLogs(id!);
         setAgentLogs(logs);
-        setAgentStatuses(deriveAgentStatuses(logs));
+        // agentStatuses is derived from runningAgentIds, not from logs.
       } catch {}
     }, 5000);
 
@@ -1734,11 +1837,18 @@ export default function ProjectDetail() {
     color: string;
     bg: string;
   } {
-    if (punctRunning === doc.id) {
+    if (runningOps[doc.id]) {
+      const op = runningOps[doc.id];
+      if (op === "classify") {
+        return { text: "Clasificando…", color: "#3FB950", bg: "#3FB95022" };
+      }
+      if (op === "segment") {
+        return { text: "Segmentando…", color: "#58A6FF", bg: "#58A6FF22" };
+      }
       return {
         text: t("project.statusPreprocessing"),
-        color: "#8B949E",
-        bg: "#8B949E22",
+        color: "#A371F7",
+        bg: "#A371F722",
       };
     }
     if (punctStatus[doc.id]?.startsWith("\u274C")) {
@@ -1758,68 +1868,74 @@ export default function ProjectDetail() {
       case "preprocesando":
         return {
           text: t("project.statusPreprocessing"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#A371F7",
+          bg: "#A371F722",
         };
       case "preprocesado":
         return {
           text: t("project.statusPreprocessed"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#A371F7",
+          bg: "#A371F722",
+        };
+      case "clasificando":
+        return {
+          text: t("project.statusClassifying"),
+          color: "#3FB950",
+          bg: "#3FB95022",
         };
       case "clasificado":
         return {
           text: t("project.statusClassified"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#3FB950",
+          bg: "#3FB95022",
         };
       case "segmentando":
         return {
           text: t("project.statusSegmenting"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#58A6FF",
+          bg: "#58A6FF22",
         };
       case "segmentado":
         return {
           text: t("project.statusSegmented"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#58A6FF",
+          bg: "#58A6FF22",
         };
       case "extrayendo":
         return {
           text: t("project.statusExtracting"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#D29922",
+          bg: "#D2992222",
         };
       case "incidentes_extraidos":
         return {
           text: t("project.statusIncidentsExtracted"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#D29922",
+          bg: "#D2992222",
         };
       case "procesado":
         return {
           text: t("project.statusIncidentsExtracted"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#D29922",
+          bg: "#D2992222",
         };
       case "codificando":
         return {
           text: t("project.statusCoding"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#A371F7",
+          bg: "#A371F722",
         };
       case "codificado":
         return {
           text: t("project.statusCoded"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#3FB950",
+          bg: "#3FB95022",
         };
       case "listo":
         return {
           text: t("project.statusReady"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#3FB950",
+          bg: "#3FB95022",
         };
       case "resumiendo":
         return {
@@ -1836,8 +1952,8 @@ export default function ProjectDetail() {
       case "sintetizado":
         return {
           text: t("project.statusSynthesized"),
-          color: "#8B949E",
-          bg: "#8B949E22",
+          color: "#3FB950",
+          bg: "#3FB95022",
         };
       case "error":
         return {
@@ -2864,17 +2980,6 @@ export default function ProjectDetail() {
                     onClick={async () => {
                       if (!(await safeConfirm(t("project.resetDocsConfirm"))))
                         return;
-                      // Also clear classified data for all docs
-                      await Promise.all(
-                        docs.map((doc) =>
-                          fetch(`/api/v1/documents/${doc.id}/classify-glaser`, {
-                            method: "DELETE",
-                            headers: {
-                              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-                            },
-                          }).catch(() => {}),
-                        ),
-                      );
                       resetDocsToCrudo(id!).then(() => refreshDocs());
                     }}
                     style={{
@@ -3121,7 +3226,7 @@ export default function ProjectDetail() {
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            await handleRestoreAll(d.id);
+                            await handleRestoreStep(d.id);
                           }}
                           title="Restaurar a estado original"
                           style={{
@@ -3919,6 +4024,7 @@ export default function ProjectDetail() {
                   const stateOrder = [
                     "crudo",
                     "preprocesado",
+                    "clasificado",
                     "segmentado",
                     "listo",
                   ];
@@ -3929,12 +4035,10 @@ export default function ProjectDetail() {
                   };
                   const minState = agentMinState[agentId] || "listo";
                   const minIdx = stateOrder.indexOf(minState);
-                  const hasExistingWork =
-                    completedAgents.has(agentId) ||
-                    docs.some((d) => {
-                      const docIdx = stateOrder.indexOf(d.estado);
-                      return docIdx >= minIdx && docIdx > 0;
-                    });
+                  const hasExistingWork = docs.some((d) => {
+                    const docIdx = stateOrder.indexOf(d.estado);
+                    return docIdx >= minIdx && docIdx > 0;
+                  });
                   if (hasExistingWork) {
                     const ok = await new Promise<boolean>((resolve) => {
                       confirmResolve.current = resolve;
@@ -3952,10 +4056,7 @@ export default function ProjectDetail() {
                     docsToProcess: typeof eligible,
                   ) {
                     abortRef.current = false;
-                    setAgentStatuses((prev) => ({
-                      ...prev,
-                      [agentId]: "running",
-                    }));
+                    setRunningAgentIds((prev) => new Set([...prev, agentId]));
                     for (const doc of docsToProcess) {
                       if (abortRef.current) break;
                       try {
@@ -3994,25 +4095,41 @@ export default function ProjectDetail() {
                       // Refresh after EACH doc completes so badges update immediately
                       refreshDocs();
                     }
-                    // Final refresh after all docs
-                    refreshDocs();
+                    // Per-doc agent finished its loop — clear running state.
+                    // PipelineAgents will recompute canRun/done from docs[].estado.
                     runningTaskRef.current = null;
-                    if (!abortRef.current) {
-                      setAgentStatuses((prev) => ({
-                        ...prev,
-                        [agentId]: "done",
-                      }));
-                      setCompletedAgents((prev) => new Set([...prev, agentId]));
-                    }
+                    setRunningAgentIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(agentId);
+                      return next;
+                    });
+                    refreshDocs();
                   }
                 } else {
-                  // Unknown agent — blocked. Only per-doc agents
-                  // (util_punctuator, fa_glaser_data_classifier, segmentar_documento)
-                  // can be run manually from this panel.
-                  // Project-level agents run via the pipeline only.
-                  showErrorToast(
-                    "Agente '" + agentId + "' no se ejecuta manualmente. Usa el pipeline.",
-                  );
+                  // Project-level agent
+                  setRunningAgentIds((prev) => new Set([...prev, agentId]));
+                  fetch(
+                    `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: auth,
+                      },
+                      body: JSON.stringify({}),
+                    },
+                  )
+                    .then(() => {
+                      setRunningAgentIds((prev) => {
+                        const next = new Set(prev);
+                        next.delete(agentId);
+                        return next;
+                      });
+                      setCompletedAgents((prev) => new Set([...prev, agentId]));
+                    })
+                    .catch((e) =>
+                      showErrorToast("Error al ejecutar agente: " + e.message),
+                    );
                 }
               }}
               onStopAgent={(agentId) => {
@@ -4028,7 +4145,11 @@ export default function ProjectDetail() {
                 })
                   .then(() => refreshDocs())
                   .catch(() => {});
-                setAgentStatuses((prev) => ({ ...prev, [agentId]: "pending" }));
+                setRunningAgentIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(agentId);
+                  return next;
+                });
               }}
               pipelineRunning={pipelineRunning}
               completedAgents={completedAgents}
@@ -4041,11 +4162,7 @@ export default function ProjectDetail() {
                       done: docs.filter((d) =>
                         (BEYOND[output] || []).includes(d.estado),
                       ).length,
-                      total: docs.filter(
-                        (d) =>
-                          d.estado === input ||
-                          (BEYOND[output] || []).includes(d.estado),
-                      ).length,
+                      total: docs.length,
                     },
                   ],
                 ),
@@ -4054,6 +4171,13 @@ export default function ProjectDetail() {
                 Object.entries(PER_DOC_AGENTS).map(([agentId, { input }]) => [
                   agentId,
                   docs.filter((d) => d.estado === input).length,
+                ]),
+              )}
+              upstreamDocCounts={Object.fromEntries(
+                Object.entries(PER_DOC_AGENTS).map(([agentId, { output }]) => [
+                  agentId,
+                  docs.filter((d) => (BEYOND[output] || []).includes(d.estado))
+                    .length,
                 ]),
               )}
               stages={PIPELINE_STAGES}

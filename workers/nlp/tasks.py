@@ -359,6 +359,8 @@ def segmentar_documento(
 
                         engine = create_engine(db_url_sa)
                         with SASession(engine) as s:
+                            from sqlalchemy import text as stxt
+
                             transition(
                                 s,
                                 documento_id,
@@ -367,6 +369,14 @@ def segmentar_documento(
                                 "segmentar_documento",
                                 True,
                             )
+                            s.execute(
+                                stxt(
+                                    "INSERT INTO document_stage_progress (documento_id, agent_id) "
+                                    "VALUES (:did, 'segmentar_documento') ON CONFLICT DO NOTHING"
+                                ),
+                                {"did": documento_id},
+                            )
+                            s.commit()
                     except Exception as _e:
                         logger.warning("Transition failed: %s", _e)
             except Exception:

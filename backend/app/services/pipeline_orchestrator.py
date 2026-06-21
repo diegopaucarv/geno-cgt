@@ -322,8 +322,10 @@ class PipelineOrchestrator:
 
         # Dispatch Celery task via shared app instance
         if trans["task_name"] == "segmentar_documento":
+            # Priority: classified (baseline_data XML tags) → preprocessed → extracted → original
             texto = (
-                metadatos.get("texto_preprocesado")
+                metadatos.get("texto_clasificado")
+                or metadatos.get("texto_preprocesado")
                 or metadatos.get("texto_extraido", "")
                 or metadatos.get("texto_original", "")
             )

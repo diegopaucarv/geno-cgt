@@ -29,22 +29,23 @@ VALID_TAGS = {
 
 # ── System prompt (instructions, NO raw text) ──
 CLASSIFIER_SYSTEM_PROMPT = """[ROL]
-Eres un clasificador de datos cualitativos. Tu tarea es envolver pasajes de texto en tags XML segun su tipo de dato.
+Eres un clasificador de datos cualitativos. Tu tarea es envolver pasajes de texto en tags XML segun su tipo de dato. DEBES usar al menos 2 tipos de tag diferentes.
 
 [REGLAS ABSOLUTAS]
 1. SOLO puedes usar estos 4 tags: <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data>
-2. NO uses ningun otro tag. Si un pasaje no encaja en ninguna categoria, usa <baseline_data>.
+2. NUNCA uses <baseline_data> como categoria por defecto. Si un pasaje no encaja claramente en baseline_data, usa <contextual_data>.
 3. TODO el texto del input DEBE estar dentro de algun tag. No puede haber texto suelto fuera de tags.
 4. Cada bloque de texto dentro de un tag debe ser un pasaje continuo del texto original.
 5. NO modifiques, resumas, ni reordenes el texto. Preservalo exactamente como esta.
 6. NO uses tags anidados. Los tags no deben solaparse.
 7. NO uses markdown code fences. Devuelve SOLO el XML.
+8. USA AL MENOS 2 TIPOS DE TAG DIFERENTES. Si todo el texto es de un solo tipo, estas clasificando mal.
 
-[TIPOS DE DATO]
-- <baseline_data>: datos centrales del fenomeno. Lo que la persona dice, piensa, siente o hace respecto al tema principal. La mayoria del texto debe ir aqui.
-- <interviewer_context>: preguntas o intervenciones del entrevistador. Si el texto no es una entrevista, no uses este tag.
-- <processual_data>: descripciones de secuencias temporales, pasos, etapas, cambios en el tiempo, narrativas de eventos.
-- <contextual_data>: descripciones del entorno fisico, social o institucional. Background que no es parte del fenomeno central pero lo contextualiza."""
+[TIPOS DE DATO — definiciones ESTRICTAS]
+- <baseline_data>: SOLO pasajes donde el hablante exprese EXPLICITAMENTE: lo que PIENSA (opiniones, creencias, juicios), lo que SIENTE (emociones, afectos, valoraciones), o lo que HACE (acciones, comportamientos, practicas) respecto al tema central. NO incluyas narraciones, descripciones de contexto, introducciones, ni secuencias temporales aqui.
+- <interviewer_context>: SOLO preguntas o intervenciones del entrevistador. Identificalas por signos de interrogacion, frases como "cuenteme sobre...", "podria explicar...", o cambios de tema iniciados por otra persona. Si no hay entrevistador, no uses este tag.
+- <processual_data>: SOLO descripciones de secuencias temporales explicitas: pasos ("primero... luego..."), etapas, cambios en el tiempo ("antes... ahora..."), narrativas de eventos con principio y fin, o verbos de transformacion ("empezo a...", "dejo de...", "se convirtio en...").
+- <contextual_data>: descripciones del entorno fisico, social, institucional o historico. Background, setting, datos demograficos, fechas, lugares, roles. Tambien introducciones, transiciones, y pasajes que no expresan contenido sustantivo del fenomeno."""
 
 
 # ── Validator system prompt ──

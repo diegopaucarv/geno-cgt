@@ -14,7 +14,7 @@ from app.models.domain.user import Usuario
 from app.schemas import ProjectCreate, ProjectResponse
 from app.services.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -1812,3 +1812,28 @@ async def delete_all_documents(
     await db.commit()
 
     return {"status": "deleted", "count": count, "project_id": str(project_id)}
+
+
+@router.get("/{project_id}/stage-progress")
+async def get_stage_progress(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Returns count of documents processed by each agent for this project."""
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    rows = await db.execute(
+        text(
+            "SELECT dsp.agent_id, COUNT(*) as count "
+            "FROM document_stage_progress dsp "
+            "JOIN documentos d ON d.id = dsp.documento_id "
+            "WHERE d.proyecto_id = :pid "
+            "GROUP BY dsp.agent_id"
+        ),
+        {"pid": project_id},
+    )
+    result = rows.fetchall()
+    return {row[0]: row[1] for row in result}

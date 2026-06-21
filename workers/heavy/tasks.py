@@ -2835,6 +2835,13 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
                 text("UPDATE documentos SET estado = 'clasificado' WHERE id = :did"),
                 {"did": documento_id},
             )
+            session.execute(
+                text(
+                    "INSERT INTO document_stage_progress (documento_id, agent_id) "
+                    "VALUES (:did, 'fa_glaser_data_classifier') ON CONFLICT DO NOTHING"
+                ),
+                {"did": documento_id},
+            )
             session.commit()
             logger.info(
                 "run_glaser_classifier: doc=%s marked as 'clasificado'",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { StageDef, AgentDef } from "../config/pipelineChains";
-import { FAMILY_COLORS, canRunAgent } from "../config/pipelineChains";
+import { FAMILY_COLORS } from "../config/pipelineChains";
 import { useI18n } from "../i18n";
 
 // ── Props ──────────────────────────────────────────────────────────
@@ -13,9 +13,8 @@ interface PipelineAgentsProps {
   completedAgents: Set<string>;
   iterations: Record<string, number>;
   agentDocCounts: Record<string, { done: number; total: number }>;
-  /** Per-agent count of documents actually eligible (in the correct estado for this agent).
-   *  If 0, the agent button is disabled regardless of dependency status. */
   eligibleDocCounts: Record<string, number>;
+  upstreamDocCounts: Record<string, number>;
   stages?: StageDef[];
 }
 
@@ -24,13 +23,13 @@ interface PipelineAgentsProps {
 function statusIcon(s: string): string {
   switch (s) {
     case "done":
-      return "✓";
+      return "\u2713";
     case "running":
-      return "●";
+      return "\u25CF";
     case "error":
-      return "✕";
+      return "\u2715";
     default:
-      return "○";
+      return "\u25CB";
   }
 }
 
@@ -58,6 +57,7 @@ export default function PipelineAgents({
   iterations,
   agentDocCounts,
   eligibleDocCounts,
+  upstreamDocCounts,
   stages,
 }: PipelineAgentsProps) {
   const { t } = useI18n();
@@ -75,7 +75,6 @@ export default function PipelineAgents({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {stages.map((stage) => (
         <div key={stage.key}>
-          {/* Stage header */}
           <div
             style={{
               display: "flex",
@@ -96,7 +95,6 @@ export default function PipelineAgents({
             </span>
           </div>
 
-          {/* Group agents by chain */}
           {(() => {
             const chains = new Map<string, AgentDef[]>();
             const independents: AgentDef[] = [];
@@ -111,7 +109,6 @@ export default function PipelineAgents({
               }
             }
 
-            // Sort chains by their first agent's chainOrder
             const sortedChains = [...chains.entries()].sort((a, b) => {
               const aOrder = a[1][0]?.chainOrder ?? 99;
               const bOrder = b[1][0]?.chainOrder ?? 99;
@@ -120,10 +117,8 @@ export default function PipelineAgents({
 
             return (
               <>
-                {/* Independent agents */}
                 {independents.map((agent) => renderAgent(agent))}
 
-                {/* Chain groups */}
                 {sortedChains.map(([chainLabel, agents]) => {
                   const sorted = [...agents].sort(
                     (a, b) => (a.chainOrder ?? 0) - (b.chainOrder ?? 0),
@@ -148,7 +143,7 @@ export default function PipelineAgents({
                         <span>{chainLabel}</span>
                         {iterCount > 0 && (
                           <span style={{ color: "#A371F7", fontWeight: 600 }}>
-                            ×{iterCount}
+                            x{iterCount}
                           </span>
                         )}
                       </div>
@@ -164,21 +159,49 @@ export default function PipelineAgents({
     </div>
   );
 
+  function depsSatisfied(_agentId: string, agent: AgentDef): boolean {
+    for (const dep of agent.dependencies) {
+      const upCount = upstreamDocCounts[dep];
+      if (upCount !== undefined) {
+        if (upCount === 0) return false;
+        continue;
+      }
+      if (!completedAgents.has(dep)) return false;
+    }
+    return true;
+  }
+
   function renderAgent(agent: AgentDef) {
     const docCount = agentDocCounts[agent.id];
+    const doneCount = docCount?.done ?? 0;
     const totalDocs = docCount?.total ?? 0;
+    const hasWork = totalDocs > 0;
     const eligible = (eligibleDocCounts[agent.id] ?? 0) > 0;
-    // Agent shows ✓ only when NO docs remain to process AND all have passed this stage
-    const status =
-      totalDocs > 0 && docCount.done >= totalDocs && eligible === false
-        ? "done"
-        : agentStatuses[agent.id] || "pending";
-    const depsMet = canRunAgent(agent.id, completedAgents);
-    const canRun = depsMet && eligible && !pipelineRunning;
+
+    const isExternallyRunning =
+      (agentStatuses[agent.id] || "pending") === "running";
+    const allDone = hasWork && doneCount >= totalDocs && !eligible;
+    const status: string = allDone
+      ? "done"
+      : isExternallyRunning
+        ? "running"
+        : "pending";
+
+    const depsMet = depsSatisfied(agent.id, agent);
+    // canRun = deps satisfied AND not pipeline-running.
+    // eligible only controls whether the play button shows (there's work to do).
+    // An agent with depsMet but no eligible docs still shows as clickable
+    // because its dependency already produced output — downstream agents
+    // can see it as "passed".
+    const canRun = depsMet && !pipelineRunning;
     const isHovered = hoveredAgent === agent.id;
-    const isRunning = status === "running";
+    const isRunning = isExternallyRunning;
     const tierColor = FAMILY_COLORS[agent.tier] || "#8B949E";
-    const depsUnmet = agent.dependencies.filter((d) => !completedAgents.has(d));
+    const depsUnmet = agent.dependencies.filter((d) => {
+      const upCount = upstreamDocCounts[d];
+      if (upCount !== undefined) return upCount === 0;
+      return !completedAgents.has(d);
+    });
 
     return (
       <div
@@ -203,7 +226,6 @@ export default function PipelineAgents({
             : t(agent.label)
         }
       >
-        {/* Status dot */}
         <span
           style={{
             fontSize: 8,
@@ -228,7 +250,6 @@ export default function PipelineAgents({
           )}
         </span>
 
-        {/* Tier indicator */}
         <span
           style={{
             width: 6,
@@ -239,7 +260,6 @@ export default function PipelineAgents({
           }}
         />
 
-        {/* Label */}
         <span
           style={{
             fontSize: 10,
@@ -271,8 +291,8 @@ export default function PipelineAgents({
           )}
         </span>
 
-        {/* Play/Pause button on hover */}
-        {isHovered && !isRunning && canRun && (
+        {/* Play button: only if canRun AND there's eligible work */}
+        {isHovered && !isRunning && canRun && eligible && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -316,7 +336,6 @@ export default function PipelineAgents({
           <span style={{ fontSize: 8, color: "#A371F7" }}>●</span>
         )}
 
-        {/* Error retry */}
         {status === "error" && (
           <button
             onClick={(e) => {

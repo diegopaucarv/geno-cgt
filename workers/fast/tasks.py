@@ -614,6 +614,13 @@ def punctuate_text(
                         ),
                         {"did": documento_id},
                     )
+                    session.execute(
+                        text(
+                            "INSERT INTO document_stage_progress (documento_id, agent_id) "
+                            "VALUES (:did, 'util_punctuator') ON CONFLICT DO NOTHING"
+                        ),
+                        {"did": documento_id},
+                    )
                     session.commit()
                     logger.info(
                         "Punctuator: updated doc %s with punctuated text",
