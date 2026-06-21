@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tables",
+    "simplified_memo",
+    "core_statements",
+    "tensions_flagged",
+    "simplifier_note"
+  ],
+  "properties": {
+    "tables": {
+      "type": "array",
+      "description": "Tablas de análisis de doble entrada. Una tabla por dimensión del paradigma.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "rows"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "description": "Nombre de la dimensión del paradigma: ej. 'Condiciones', 'Consecuencias', 'Estrategias', 'Propiedades'."
+          },
+          "rows": {
+            "type": "array",
+            "description": "Filas que mapean cada propiedad a la evidencia por documento/incidente.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["property", "documents"],
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "description": "El nombre de la propiedad (ej. 'Variación temporal', 'Calibración de riesgo')."
+                },
+                "documents": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Mapa de nombre de documento → texto de evidencia de ese documento que respalda esta propiedad."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "simplified_memo": {
+      "type": "string",
+      "description": "Versión condensada de 150-250 palabras del memo descriptivo. Elimina redundancia preservando esencia, variación e ideas centrales. Escribe en presente conceptual."
+    },
+    "core_statements": {
+      "type": "array",
+      "description": "3-5 afirmaciones de lo que los datos muestran consistentemente, cada una respaldada por evidencia específica.",
+      "items": {
+        "type": "string",
+        "description": "Una afirmación central: 'Afirmación — lo que los datos muestran, con referencia de evidencia.'"
+      },
+      "minItems": 1
+    },
+    "tensions_flagged": {
+      "type": "array",
+      "description": "Contradicciones o paradojas entre hallazgos que sugieren una dimensión no capturada.",
+      "items": {
+        "type": "string",
+        "description": "Una tensión: 'Tensión entre hallazgo X y hallazgo Y — posible paradoja o dimensión no capturada.'"
+      }
+    },
+    "simplifier_note": {
+      "type": "string",
+      "description": "Transparencia metodológica: qué se eliminó, condensó o reestructuró y por qué."
+    }
+  }
+}

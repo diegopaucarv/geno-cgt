@@ -1,19 +1,13 @@
 {
   "type": "object",
-  "required": [
-    "codes"
-  ],
+  "required": ["codes", "_self_evaluation"],
   "properties": {
     "codes": {
       "type": "array",
       "description": "Codes generated from the indicators.",
       "items": {
         "type": "object",
-        "required": [
-          "code_name",
-          "definition",
-          "relationship_to_existing"
-        ],
+        "required": ["code_name", "definition", "relationship_to_existing"],
         "properties": {
           "code_name": {
             "type": "string",
@@ -40,6 +34,56 @@
           }
         }
       }
+    },
+    "referenced_entities": {
+      "type": "object",
+      "description": "Entities from the database that were referenced in this analysis. Populated by the orchestration layer for traceability.",
+      "properties": {
+        "segment_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Segment IDs referenced in this output."
+        },
+        "code_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Category/code IDs referenced in this output."
+        },
+        "hypothesis_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hypothesis IDs referenced in this output."
+        },
+        "incident_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Incident IDs referenced in this output."
+        },
+        "document_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Document IDs referenced in this output."
+        }
+      }
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true if you consider your output is incomplete, low quality, or requires additional refinement"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "ONLY if needs_retry=true. CONCRETE and ACTIONABLE instruction on what to improve in the next attempt. E.g.: 'Label too generic — specify distinctive properties', 'Missing evidence from segment 47', 'Definition mixes two different concepts — separate'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Recommended action: proceed (output correct, continue), retry (retry with feedback), escalate_to_hitl (human decision needed), skip (skip this agent, not relevant), abort (unrecoverable error, stop everything)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

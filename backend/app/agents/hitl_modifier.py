@@ -297,6 +297,31 @@ class HITLModificationAgent:
             if restart_from:
                 self._restart_pipeline(proyecto_id, restart_from)
 
+            # Publicar evento SSE
+            try:
+                import os as _os
+                from datetime import datetime, timezone
+
+                import redis
+
+                r = redis.from_url(_os.getenv("REDIS_URL", "redis://redis:6379"))
+                r.publish(
+                    f"project:{proyecto_id}:events",
+                    json.dumps(
+                        {
+                            "type": "modification_applied",
+                            "agent_id": agent_id,
+                            "entity_type": impact.get("output_table", ""),
+                            "entity_id": memo_id,
+                            "wiped_tables": wiped,
+                            "restart_from": restart_from,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ),
+                )
+            except Exception:
+                pass
+
             return {
                 "status": "applied",
                 "wiped_tables": wiped,
@@ -425,6 +450,8 @@ class HITLModificationAgent:
                 "agent_family": "familia",
             },
         )
+        # Registrar CWM tools (Context Window Management)
+        tools.register_all_defaults()
 
         runner = ReactRunner(
             agent_id="hitl_modification_executor",
@@ -657,20 +684,41 @@ class HITLModificationAgent:
             s.close()
 
     def _restart_pipeline(self, proyecto_id: str, restart_from: str) -> None:
-        """Dispara el reinicio del pipeline desde un checkpoint."""
+        """Dispara el reinicio del pipeline desde un checkpoint.
+
+        Mapea restart_from a la tarea Celery y cola correspondiente.
+        Si restart_from no está en el mapa, default a process_synthesis_agents_b.
+        """
         import os as _os
+
+        # Mapeo de restart_from → (task_name, queue)
+        RESTART_MAP: dict[str, tuple[str, str]] = {
+            "segment_and_index": ("segmentar_documento", "nlp"),
+            "data_management": ("process_document_agents_a", "heavy"),
+            "open_coding": ("process_synthesis_agents_b", "heavy"),
+            "selective_coding": ("selective_coding_coordinator", "heavy"),
+            "prepare_playground": ("_prepare_playground_for_project", "heavy"),
+        }
+
+        task_name, queue = RESTART_MAP.get(
+            restart_from, ("process_synthesis_agents_b", "heavy")
+        )
 
         try:
             from celery import Celery
 
             app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
             app.send_task(
-                "process_synthesis_agents_b",
+                task_name,
                 args=[proyecto_id],
-                queue="heavy",
+                queue=queue,
             )
             logger.info(
-                "Pipeline restarted for %s from %s", proyecto_id[:8], restart_from
+                "Pipeline restarted for %s with task '%s' on queue '%s' (restart_from=%s)",
+                proyecto_id[:8],
+                task_name,
+                queue,
+                restart_from,
             )
         except Exception as e:
             logger.warning("Pipeline restart failed: %s", e)

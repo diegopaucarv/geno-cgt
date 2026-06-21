@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["local_groups"],
+  "properties": {
+    "local_groups": {
+      "type": "array",
+      "description": "Gruppen von Vorfällen, die innerhalb dieses Batches gefunden wurden und dasselbe Verhaltensmuster belegen. Kann leer sein, wenn kein Muster erkannt wird.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "rationale"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Ein kurzer Satz (1-5 Wörter), der erfasst, was all diese Vorfälle auf Verhaltensebene gemeinsam haben — das ZUGRUNDELIEGENDE MUSTER, auf das diese verschiedenen Ausdrücke hinweisen. KEINE formale Bezeichnung, nur ein beschreibendes Signal. Z.B.: 'verlängerte Arbeitszeiten', 'Vorführung für Bewerter', 'Verhandeln mit Algorithmen'"
+          },
+          "incident_ids": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            },
+            "description": "EXAKTE Vorfall-IDs aus dem Eingabe-Batch, die dieses Muster belegen. Mindestens 2 IDs. Verwenden Sie die IDs genau so, wie sie in der Eingabe erscheinen."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Ein prägnanter Satz (15-40 Wörter), der den ZUGRUNDELIEGENDEN VERHALTENSPROZESS erklärt, der diese Vorfälle trotz ihrer oberflächlichen Unterschiede verbindet. Konzentrieren Sie sich auf den gemeinsamen Prozess, nicht auf die oberflächlichen Beschreibungen."
+          }
+        }
+      }
+    }
+  }
+}

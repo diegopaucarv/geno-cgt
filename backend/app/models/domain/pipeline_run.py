@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from app.models.base import Base, TimestampMixin
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -90,3 +91,48 @@ class TaskStepCheckpoint(Base, TimestampMixin):
     affected_rows: Mapped[dict] = mapped_column(JSONB, default=dict)
     # Snapshot de lo que se insertó/modificó en este paso (para limpieza en resume)
     # Ej: {"table": "segmentos", "count": 45}
+
+
+class BatchExecution(Base, TimestampMixin):
+    """Registro de ejecución batch (Map-Reduce / fragmentación de contexto).
+
+    Cuando los datos del proyecto exceden la ventana de contexto,
+    se fragmentan en batches. Esta tabla registra cada ejecución batch
+    para trazabilidad y debugging del ContextWindowManager.
+    """
+
+    __tablename__ = "batch_executions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proyectos.id"))
+
+    agent_id: Mapped[str] = mapped_column(String(100))
+    """Qué agente se ejecutó en batch (ej. 'open_coding', 'memo_proposer')."""
+
+    total_items: Mapped[int] = mapped_column(Integer)
+    """Total de items a procesar (segmentos, incidentes, memos)."""
+
+    batches: Mapped[int] = mapped_column(Integer)
+    """Número de batches en que se dividió el trabajo."""
+
+    items_per_batch: Mapped[int] = mapped_column(Integer)
+    """Items promedio por batch."""
+
+    tokens_per_batch: Mapped[int] = mapped_column(Integer, default=0)
+    """Tokens estimados por batch."""
+
+    map_strategy: Mapped[str] = mapped_column(String(30))
+    """Estrategia de Map: 'ai_only' | 'map_reduce' | 'hybrid_react'."""
+
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    """Estado de la ejecución batch: 'running' | 'completed' | 'failed'."""
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    """Timestamp de inicio de la ejecución batch."""
+
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    """Timestamp de finalización de la ejecución batch."""

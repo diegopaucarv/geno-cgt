@@ -165,30 +165,53 @@ def b2_label_groups(proyecto_id: str) -> dict:
             # Wrap single group as array — pattern_labeler expects array input
             group_json = json.dumps([group], indent=2, ensure_ascii=False)
             history: list[dict] = []
-            previous_labels_json: str = ""
-            accumulated_feedback: list[str] = []
             final_label: dict = {}
             label_converged = False
 
             for iteration in range(1, max_iterations + 1):
                 total_iterations += 1
 
-                # 1. PROPOSE (PRO) — ONE group → ONE label
-                gen_vars = {
-                    "groups_json": group_json,
-                    "object_of_study": object_of_study,
-                    "existing_labels": existing_labels,
-                    "operational_question": operational_question
-                    or "(not yet generated)",
-                    "coding_style_instruction": coding_style_instruction,
-                    "previous_labels": previous_labels_json,
-                    "accumulated_feedback": "\n\n---\n".join(accumulated_feedback) if accumulated_feedback else "",
-                }
-
-                gen_response = llm.run_agent(
-                    agent_id="fb_pattern_labeler",
-                    variables=gen_vars,
-                )
+                if iteration == 1:
+                    # ── FIRST ITERATION: full prompt, no history ──
+                    gen_vars = {
+                        "groups_json": group_json,
+                        "object_of_study": object_of_study,
+                        "existing_labels": existing_labels,
+                        "operational_question": operational_question
+                        or "(not yet generated)",
+                        "coding_style_instruction": coding_style_instruction,
+                        "previous_labels": "",
+                        "accumulated_feedback": "",
+                    }
+                    gen_response = llm.run_agent(
+                        agent_id="fb_pattern_labeler",
+                        variables=gen_vars,
+                    )
+                else:
+                    # ── ITERATION 2+: conversational with history + short prompt ──
+                    label_name = final_label.get("label", "?")
+                    # Last user message in history is the critic feedback from previous iter
+                    last_user = history[-1]["content"] if history else ""
+                    override_user_prompt = (
+                        f"Refina la etiqueta '{label_name}' basándote en esta crítica: "
+                        f"{last_user}. Los incidentes fuente son los mismos de antes."
+                    )
+                    gen_vars = {
+                        "groups_json": group_json,
+                        "object_of_study": object_of_study,
+                        "existing_labels": existing_labels,
+                        "operational_question": operational_question
+                        or "(not yet generated)",
+                        "coding_style_instruction": coding_style_instruction,
+                        "previous_labels": "",
+                        "accumulated_feedback": "",
+                    }
+                    gen_response = llm.run_agent(
+                        agent_id="fb_pattern_labeler",
+                        variables=gen_vars,
+                        history=history,
+                        override_user_prompt=override_user_prompt,
+                    )
 
                 gen_text = json.dumps(gen_response, ensure_ascii=False)
                 history.append(_build_assistant_message(gen_text, gen_response))
@@ -200,7 +223,10 @@ def b2_label_groups(proyecto_id: str) -> dict:
                         group_id[:8],
                         iteration,
                         list(gen_response.keys())
-                        if isinstance(gen_response, dict)
+                        if (
+                            hasattr(gen_response, "keys")
+                            or isinstance(gen_response, dict)
+                        )
                         else type(gen_response).__name__,
                         str(gen_response)[:300],
                     )
@@ -209,11 +235,6 @@ def b2_label_groups(proyecto_id: str) -> dict:
                 # Take the label for THIS group (group_index 0 since single group)
                 label_info = proposed_labels[0] if proposed_labels else {}
                 final_label = label_info
-
-                # G15: Save own output for next iteration's targeted refinement
-                previous_labels_json = json.dumps(
-                    {"proposed_labels": [label_info]}, ensure_ascii=False
-                )[:4000]
 
                 # 2. CRITIC (FLASH) — ONE label against ONE group's incidents
                 label_json = json.dumps(label_info, ensure_ascii=False)
@@ -227,14 +248,21 @@ def b2_label_groups(proyecto_id: str) -> dict:
                 )
 
                 issues = critic_response.get("issues", [])
+                conceptually_fitted = critic_response.get("conceptually_fitted", False)
 
                 logger.info(
-                    "B2 group=%s iter=%d: label=%s, issues=%d",
+                    "B2 group=%s iter=%d: label=%s, issues=%d, conceptually_fitted=%s",
                     group_id[:8],
                     iteration,
                     label_info.get("label", "?"),
                     len(issues),
+                    conceptually_fitted,
                 )
+
+                # G17: conceptually_fitted ends the loop immediately
+                if conceptually_fitted:
+                    label_converged = True
+                    break
 
                 if not issues:
                     # Label is good — move to next group
@@ -249,7 +277,7 @@ def b2_label_groups(proyecto_id: str) -> dict:
                         str(iss.get("description", ""))[:120],
                     )
 
-                # 3. FEEDBACK para siguiente iteración
+                # 3. FEEDBACK para siguiente iteración (as user message in conversation)
                 if iteration < max_iterations:
                     feedback_parts = [f"=== Iteration {iteration} Critic Review ==="]
                     for issue in issues:
@@ -262,7 +290,6 @@ def b2_label_groups(proyecto_id: str) -> dict:
                     feedback = "\n".join(feedback_parts)
 
                     history.append({"role": "user", "content": feedback})
-                    accumulated_feedback.append(feedback)  # G16: accumulate all
                 # If last iteration with issues, keep final_label as-is
 
             # ── Persist label for this group ────────────────────────

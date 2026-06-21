@@ -11,6 +11,22 @@ interface MemoType {
   icon: string;
   color: string;
   description: string;
+  requires_agent?: string;
+  agent_status?: "not_run" | "completed";
+}
+
+interface StructuredFields {
+  // TEORICO
+  family?: string;
+  layer?: string;
+  visualization_hint?: string;
+  // DATABASE_NODE
+  entity_type?: string;
+  is_core?: boolean;
+  // DATABASE_EDGE
+  relationship_type?: string;
+  direction?: string;
+  strength?: number;
 }
 
 interface AddMemoModalProps {
@@ -18,6 +34,46 @@ interface AddMemoModalProps {
   onClose: () => void;
   onCreated: () => void;
 }
+
+// ── Option constants ───────────────────────────────────────────────
+
+const FAMILIES = [
+  "Causes",
+  "Consequences",
+  "Conditions",
+  "Process",
+  "Degree",
+  "Dimension",
+  "Type",
+  "Strategy",
+  "Structural",
+  "Functional",
+  "Interaction",
+  "Identity",
+] as const;
+
+const LAYERS = ["core", "intermediate", "surface"] as const;
+
+const ENTITY_TYPES = [
+  "PROCESS",
+  "ACTOR",
+  "CONDITION",
+  "CONSEQUENCE",
+  "CONTEXT",
+  "STRATEGY",
+] as const;
+
+const RELATIONSHIP_TYPES = [
+  "PROCESSES",
+  "LEADS_TO",
+  "IS_A_STRATEGY_FOR",
+  "IS_A_CONSEQUENCE_OF",
+  "IS_A_CONDITION_FOR",
+  "VARIES_WITH",
+  "CO_OCCURS_WITH",
+] as const;
+
+const DIRECTIONS = ["unidirectional", "bidirectional"] as const;
 
 // ── Styles ──────────────────────────────────────────────────────────
 
@@ -74,6 +130,26 @@ const TEXTAREA: CSSProperties = {
   boxSizing: "border-box",
 };
 
+const INPUT: CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 6,
+  background: "#0D1117",
+  border: "1px solid #21262D",
+  color: "#E6EDF3",
+  fontSize: 13,
+  boxSizing: "border-box",
+};
+
+const CHECKBOX_ROW: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 10,
+  fontSize: 12,
+  color: "#E6EDF3",
+};
+
 const BUTTON_ROW: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
@@ -106,6 +182,23 @@ const INFOBOX: CSSProperties = {
   fontSize: 12,
   color: "#58A6FF",
   lineHeight: 1.5,
+};
+
+const SF_SECTION: CSSProperties = {
+  marginTop: 8,
+  padding: "10px 12px",
+  borderRadius: 8,
+  background: "#0D1117",
+  border: "1px solid #21262D",
+};
+
+const SF_TITLE: CSSProperties = {
+  fontSize: 10,
+  color: "#8B949E",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  marginBottom: 6,
+  letterSpacing: "0.5px",
 };
 
 // ── ColorBadge ────────────────────────────────────────────────────────
@@ -181,6 +274,39 @@ function ErrorBox(msg: string) {
   );
 }
 
+// ── Helper: build structured_fields payload, dropping empty values ──
+
+function buildStructuredPayload(
+  tipo: string,
+  sd: StructuredFields,
+): Record<string, unknown> | undefined {
+  const result: Record<string, unknown> = {};
+
+  if (tipo === "TEORICO") {
+    if (sd.family) result.family = sd.family;
+    if (sd.layer) result.layer = sd.layer;
+    if (sd.visualization_hint) result.visualization_hint = sd.visualization_hint;
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  if (tipo === "DATABASE_NODE") {
+    if (sd.entity_type) result.entity_type = sd.entity_type;
+    result.is_core = sd.is_core === true; // always send boolean
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  if (tipo === "DATABASE_EDGE") {
+    if (sd.relationship_type) result.relationship_type = sd.relationship_type;
+    if (sd.direction) result.direction = sd.direction;
+    if (sd.strength !== undefined) result.strength = sd.strength;
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  return undefined;
+}
+
+// ── Main Component ───────────────────────────────────────────────────
+
 export default function AddMemoModal({
   projectId,
   onClose,
@@ -196,6 +322,7 @@ export default function AddMemoModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [structuredData, setStructuredData] = useState<StructuredFields>({});
 
   useEffect(() => {
     getAvailableMemoTypes(projectId)
@@ -211,15 +338,22 @@ export default function AddMemoModal({
       .finally(() => setLoading(false));
   }, [projectId, t]);
 
+  // Reset structured fields when type changes
+  useEffect(() => {
+    setStructuredData({});
+  }, [selectedType]);
+
   const handleSubmit = async () => {
     if (!selectedType || !content.trim()) return;
     setSubmitting(true);
     setError("");
     try {
+      const sf = buildStructuredPayload(selectedType, structuredData);
       await createMemo(projectId, {
         tipo: selectedType,
         contenido: content,
         es_confidencial: isConfidential,
+        ...(sf && { structured_fields: sf }),
       });
       onCreated();
       onClose();
@@ -231,6 +365,11 @@ export default function AddMemoModal({
   };
 
   const selected = types.find((mt) => mt.key === selectedType);
+
+  // ── Helpers to update structured fields ──
+  const setField = (field: keyof StructuredFields, value: unknown) => {
+    setStructuredData((prev) => ({ ...prev, [field]: value }));
+  };
 
   if (loading) {
     return (
@@ -305,6 +444,7 @@ export default function AddMemoModal({
           {types.map((mt) => (
             <option key={mt.key} value={mt.key}>
               {mt.icon} {mt.label}
+              {mt.agent_status === "not_run" ? " ⚠️" : ""}
             </option>
           ))}
         </select>
@@ -312,6 +452,30 @@ export default function AddMemoModal({
 
         {/* Color indicator */}
         {selected && ColorBadge(selected)}
+
+        {/* Agent not-run warning (FIX 5) */}
+        {selected && selected.agent_status === "not_run" && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "8px 12px",
+              borderRadius: 6,
+              background: "#D2992218",
+              border: "1px solid #D2992244",
+              color: "#D29922",
+              fontSize: 12,
+              lineHeight: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <span>
+              {t("memo.agentNotRunWarning")}
+            </span>
+          </div>
+        )}
 
         {/* Content */}
         <div style={LABEL}>{t("memo.content")}</div>
@@ -322,6 +486,129 @@ export default function AddMemoModal({
           placeholder={t("memo.contentPlaceholder")}
           rows={8}
         />
+
+        {/* ── Structured Fields (conditional by tipo) ── */}
+
+        {selectedType === "TEORICO" && (
+          <div style={SF_SECTION}>
+            <div style={SF_TITLE}>Structured Fields — Código Teórico</div>
+
+            <div style={LABEL}>Family</div>
+            <select
+              style={SELECT}
+              value={structuredData.family || ""}
+              onChange={(e) => setField("family", e.target.value)}
+            >
+              <option value="">— Select family —</option>
+              {FAMILIES.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+
+            <div style={LABEL}>Layer</div>
+            <select
+              style={SELECT}
+              value={structuredData.layer || ""}
+              onChange={(e) => setField("layer", e.target.value)}
+            >
+              <option value="">— Select layer —</option>
+              {LAYERS.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+
+            <div style={LABEL}>Visualization Hint</div>
+            <input
+              style={INPUT}
+              type="text"
+              value={structuredData.visualization_hint || ""}
+              onChange={(e) => setField("visualization_hint", e.target.value)}
+              placeholder="e.g. tendril, matrix, arrow_diagram"
+            />
+          </div>
+        )}
+
+        {selectedType === "DATABASE_NODE" && (
+          <div style={SF_SECTION}>
+            <div style={SF_TITLE}>Structured Fields — Database Node</div>
+
+            <div style={LABEL}>Entity Type</div>
+            <select
+              style={SELECT}
+              value={structuredData.entity_type || ""}
+              onChange={(e) => setField("entity_type", e.target.value)}
+            >
+              <option value="">— Select entity type —</option>
+              {ENTITY_TYPES.map((et) => (
+                <option key={et} value={et}>
+                  {et}
+                </option>
+              ))}
+            </select>
+
+            <label style={CHECKBOX_ROW}>
+              <input
+                type="checkbox"
+                checked={structuredData.is_core === true}
+                onChange={(e) => setField("is_core", e.target.checked)}
+              />
+              Is Core Category?
+            </label>
+          </div>
+        )}
+
+        {selectedType === "DATABASE_EDGE" && (
+          <div style={SF_SECTION}>
+            <div style={SF_TITLE}>Structured Fields — Database Edge</div>
+
+            <div style={LABEL}>Relationship Type</div>
+            <select
+              style={SELECT}
+              value={structuredData.relationship_type || ""}
+              onChange={(e) => setField("relationship_type", e.target.value)}
+            >
+              <option value="">— Select relationship type —</option>
+              {RELATIONSHIP_TYPES.map((rt) => (
+                <option key={rt} value={rt}>
+                  {rt}
+                </option>
+              ))}
+            </select>
+
+            <div style={LABEL}>Direction</div>
+            <select
+              style={SELECT}
+              value={structuredData.direction || ""}
+              onChange={(e) => setField("direction", e.target.value)}
+            >
+              <option value="">— Select direction —</option>
+              {DIRECTIONS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+
+            <div style={LABEL}>Strength</div>
+            <input
+              style={INPUT}
+              type="number"
+              min={0}
+              max={1}
+              step={0.1}
+              value={structuredData.strength ?? ""}
+              onChange={(e) => {
+                const val = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                setField("strength", val);
+              }}
+              placeholder="0.0 – 1.0"
+            />
+          </div>
+        )}
 
         {/* Confidential toggle */}
         <label

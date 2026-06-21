@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "descriptive_memo",
+    "what_emerged",
+    "what_remains_open",
+    "evolution_narrative",
+    "representative_incidents"
+  ],
+  "properties": {
+    "descriptive_memo": {
+      "type": "string",
+      "description": "400-800 word narrative describing what the DATA shows. Write in conceptual present tense using gerunds. Use participants' language. Include variation: 'in some cases... in others...'. Do not force a conditions/consequences structure if the data does not support it."
+    },
+    "what_emerged": {
+      "type": "array",
+      "description": "3-5 key findings consolidated across paradigm iterations. Each entry describes a pattern that solidified, including when it appeared and what incidents support it.",
+      "items": {
+        "type": "string",
+        "description": "A single finding: 'Finding N — pattern consolidated across iterations, with evidence note.'"
+      },
+      "minItems": 1
+    },
+    "what_remains_open": {
+      "type": "array",
+      "description": "Unresolved questions — properties or dimensions that need more evidence to be fully documented.",
+      "items": {
+        "type": "string",
+        "description": "A single open question: 'Open question — what remains to be documented and why.'"
+      }
+    },
+    "evolution_narrative": {
+      "type": "string",
+      "description": "How the category definition evolved across paradigm iterations: version 1 → version 2 → ... → version N. Describe what changed at each iteration and why (which incident or expansion drove the change)."
+    },
+    "representative_incidents": {
+      "type": "array",
+      "description": "Maximum 3 incidents that best represent the category. Select incidents that show variation or critical turning points.",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "document", "why"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The incident text (verbatim quote or close paraphrase from the segment)."
+          },
+          "document": {
+            "type": "string",
+            "description": "Source document name (original_filename)."
+          },
+          "why": {
+            "type": "string",
+            "description": "Why this incident is representative: what pattern, dimension, or variation it exemplifies."
+          }
+        }
+      }
+    }
+  }
+}

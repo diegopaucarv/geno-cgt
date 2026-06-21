@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resolutions"],
+  "properties": {
+    "resolutions": {
+      "type": "array",
+      "description": "Eine Auflösung pro untersuchtem konfliktbehaftetem Gruppensatz.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conflict_id", "resolution", "rationale", "affected_groups", "evidence_sources"],
+        "properties": {
+          "conflict_id": {
+            "type": "string",
+            "description": "Die conflict_id aus der Eingabe, die diese Auflösung adressiert."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["MERGE", "SPLIT", "KEEP_SEPARATE"],
+            "description": "Aufgelöste Aktion. MERGE: Gruppen zu einer zusammenführen. SPLIT: in verschiedene Gruppen mit unterschiedlichen Signalen trennen. KEEP_SEPARATE: als separate, theoretisch verwandte Gruppen beibehalten."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Detaillierte Begründung (2-5 Sätze), gestützt auf Belege, die durch CWM-Tools oder bereitgestellte Daten beobachtet wurden. Verweisen Sie auf spezifische untersuchte Vorfälle und die Verhaltenslogik, die diese Auflösung stützt."
+          },
+          "affected_groups": {
+            "type": "array",
+            "description": "Die von dieser Auflösung betroffenen Gruppen mit ihrer neuen Disposition.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_batch", "original_signal", "action"],
+              "properties": {
+                "source_batch": {
+                  "type": "integer",
+                  "description": "Batch-Index der ursprünglichen lokalen Gruppe."
+                },
+                "original_signal": {
+                  "type": "string",
+                  "description": "Ursprüngliches Signal der lokalen Gruppe."
+                },
+                "action": {
+                  "type": "string",
+                  "enum": ["merged_into", "split_to", "kept_as", "discarded"],
+                  "description": "Was mit dieser Gruppe geschieht. merged_into: mit einer anderen Gruppe kombiniert. split_to: in eine eigene Gruppe getrennt. kept_as: mit möglicherweise umbenanntem Signal beibehalten. discarded: entfernt."
+                },
+                "target_signal": {
+                  "type": "string",
+                  "description": "Bei merged_into oder split_to: das Signal der Zielgruppe. Bei kept_as: das neue Signal (kann unverändert sein). Leerstring bei discarded."
+                }
+              }
+            }
+          },
+          "evidence_sources": {
+            "type": "array",
+            "description": "Liste der aufgerufenen Tools und während der Untersuchung gesammelten Belege.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tool", "query", "finding"],
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "enum": ["expand_incident", "search_related_segments", "get_document_context", "provided_data"],
+                  "description": "Das aufgerufene CWM-Tool oder 'provided_data', wenn Belege aus dem Eingabekontext stammen."
+                },
+                "query": {
+                  "type": "string",
+                  "description": "Was abgefragt wurde (Vorfall-ID, Suchtext, Dokument-ID)."
+                },
+                "finding": {
+                  "type": "string",
+                  "description": "Wesentliche Beobachtung aus der Tool-Ausgabe, die die Auflösung informierte (1-2 Sätze)."
+                }
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"],
+            "description": "Vertrauen in diese Auflösung. HIGH: klare Belege aus mehreren Quellen. MEDIUM: Belege stützen, aber etwas Mehrdeutigkeit bleibt. LOW: schwache Belege, Entscheidung ist urteilsbasiert. UNCERTAIN: Tools nicht verfügbar oder unzureichende Daten, beste Schätzung."
+          },
+          "suggested_global_signal": {
+            "type": "string",
+            "description": "Bei MERGE oder KEEP_SEPARATE: vorgeschlagenes Signal für die resultierende(n) globale(n) Gruppe(n). Bei SPLIT: vorgeschlagene Signale für die getrennten Gruppen, als kommagetrennter String."
+          }
+        }
+      }
+    }
+  }
+}

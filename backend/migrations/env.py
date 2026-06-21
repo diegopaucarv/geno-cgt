@@ -49,6 +49,7 @@ from app.models.domain.incident import (
 )
 from app.models.domain.memo import Memo
 from app.models.domain.pipeline_run import (
+    BatchExecution,
     PipelineRun,
     PipelineTask,
     TaskStepCheckpoint,

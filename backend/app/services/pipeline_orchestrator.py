@@ -322,8 +322,10 @@ class PipelineOrchestrator:
 
         # Dispatch Celery task via shared app instance
         if trans["task_name"] == "segmentar_documento":
-            texto = metadatos.get("texto_preprocesado") or metadatos.get(
-                "texto_extraido", ""
+            texto = (
+                metadatos.get("texto_preprocesado")
+                or metadatos.get("texto_extraido", "")
+                or metadatos.get("texto_original", "")
             )
             task = celery_app.send_task(
                 trans["task_name"],

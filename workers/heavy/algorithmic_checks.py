@@ -7,7 +7,7 @@ sin depender del juicio del LLM. El LLM solo recibe datos ya filtrados.
 Pattern 1: Anti-duplicación de códigos (B2)
 Pattern 2: Deduplicación de hipótesis (B3)
 Pattern 3: Filtro de dimensiones demográficas sin evidencia (B1)
-Pattern 4: Pre-clasificación Glaser por señales textuales (A2)
+Pattern 4: Clasificación Glaser del documento completo (pre-segmentación)
 Pattern 5: Verificación post-hoc de alucinaciones (todos)
 """
 
@@ -136,130 +136,130 @@ def filter_empty_dimensions(dimensions: List[dict]) -> List[dict]:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Pattern 4: Pre-clasificación Glaser por señales textuales (A2)
+# Pattern 4: Clasificación Glaser del documento completo (pre-segmentación)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def classify_segments_batch(
-    segments: list[dict],
+def classify_document_glaser(
+    raw_text: str,
+    research_question: str,
+    object_of_study: str,
     llm_client,
-    allow_interviewer_as_baseline: bool = False,
-) -> list[dict]:
-    """AI-only Glaser data classifier for a batch of segments.
+    max_retries: int = 3,
+) -> dict:
+    """Clasifica un documento COMPLETO por tipos de datos Glaser (pre-segmentacion).
 
-    Sends ALL segments in ONE PRO call. No algorithmic pre-filter.
-    The AI does explication de texte and classifies each segment.
+    Envia el texto crudo completo al LLM con la research question como ancla.
+    El LLM inserta tags Markdown (<!-- baseline_data -->...<!-- /baseline_data -->)
+    para delimitar secciones por tipo Glaser. Un parser extrae las secciones
+    etiquetadas, con un loop de reintento para robustez.
 
-    Interviewer questions, titles, subtitles, and metadata are classified
-    as "interviewer_context" — NOT baseline/properline/interpreted/vague —
-    unless allow_interviewer_as_baseline=True.
+    SOLO el texto baseline_data se envia al segmentador.
+    Los demas tipos se almacenan como metadata.
 
     Args:
-        segments: List of {id, text} dicts.
-        llm_client: LLMClient instance.
-        allow_interviewer_as_baseline: If True, interviewer speech MAY be
-            classified as baseline_data. Default False.
+        raw_text: Texto completo del documento (post-correccion de puntuacion).
+        research_question: La research question principal del proyecto.
+        object_of_study: El objeto de estudio (concern, emotion, behavior, etc.).
+        llm_client: Instancia de LLMClient.
+        max_retries: Maximos reintentos del LLM si el parseo falla.
 
     Returns:
-        List of {segment_id, glaser_data_type, confidence, rationale, is_interviewer}
+        {
+            "status": "ok" | "error",
+            "sections": {
+                "baseline_data": str,        # ← se envia al segmentador
+                "properline_data": str,      # metadata
+                "interpreted_data": str,     # metadata
+                "vague_data": str,           # metadata
+                "interviewer_context": str,  # metadata
+            },
+            "baseline_text": str,  # alias de conveniencia
+            "error": str | None,
+            "retries": int,
+        }
     """
-    if not segments:
-        return []
-
-    # Build a compact JSON with all segments
-    segments_json = json.dumps(
-        [
-            {
-                "seg": i + 1,
-                "id": s["id"],
-                "text": s["text"][:1500],
-            }
-            for i, s in enumerate(segments)
-        ],
-        ensure_ascii=False,
-    )
-
-    interviewer_rule = (
-        "Interviewer questions and speech CAN be classified as baseline_data or properline_data if they reveal the interviewer's own behavioral patterns."
-        if allow_interviewer_as_baseline
-        else "Interviewer questions, titles, subtitles, and metadata are NEVER participant data. Classify them as 'interviewer_context' ONLY."
-    )
-
+    # Importacion tardia para evitar dependencia circular con el worker NLP
     try:
+        from workers.nlp.glaser_parser import parse_glaser_tags
+    except ImportError:
+        logger.warning("glaser_parser not found in workers.nlp, trying relative import")
+        # En el worker heavy, el PYTHONPATH puede diferir
+        import os
+        import sys
+
+        nlp_path = os.path.join(os.path.dirname(__file__), "..", "nlp")
+        if nlp_path not in sys.path:
+            sys.path.insert(0, nlp_path)
+        from glaser_parser import parse_glaser_tags
+
+    if not raw_text or not raw_text.strip():
+        return {
+            "status": "error",
+            "sections": {},
+            "baseline_text": "",
+            "error": "Empty input text",
+            "retries": 0,
+        }
+
+    def _call_llm(text: str, error_feedback: str | None = None) -> str:
+        """Llama al LLM. En reintento, antepone el feedback de error."""
+        variables: dict = {
+            "raw_text": text,
+            "research_question": research_question,
+            "object_of_study": object_of_study,
+        }
+        if error_feedback:
+            variables["raw_text"] = (
+                f"[PREVIOUS ATTEMPT FAILED: {error_feedback}]\n\n{text}"
+            )
         response = llm_client.run_agent(
             agent_id="fa_glaser_data_classifier",
-            variables={
-                "segments_json": segments_json,
-                "interviewer_rule": interviewer_rule,
-            },
+            variables=variables,
         )
+        # El nuevo prompt devuelve texto plano, no JSON
+        if hasattr(response, "data") and isinstance(response.data, dict):
+            return response.data.get(
+                "tagged_text", response.data.get("text", str(response))
+            )
+        if isinstance(response, dict):
+            return response.get("tagged_text", response.get("text", str(response)))
+        return str(response)
+
+    def _retry_callback(previous_tagged: str, error_msg: str) -> str:
+        """Callback de reintento: re-llama al LLM con feedback del parser."""
+        return _call_llm(raw_text, error_msg)
+
+    # ── Primer intento ──
+    try:
+        tagged_text = _call_llm(raw_text)
     except Exception as e:
-        logger.warning("Batch classification failed: %s. Falling back to defaults.", e)
-        return [
-            {
-                "segment_id": s["id"],
-                "glaser_data_type": "baseline_data",
-                "confidence": 0.3,
-                "rationale": f"Batch LLM error: {e}",
-                "is_interviewer": False,
-                "method": "batch_fallback",
-            }
-            for s in segments
-        ]
-
-    if response.get("mock_note") or response.get("error"):
-        logger.info("Batch classification: mock/error. Using conservative defaults.")
-        return [
-            {
-                "segment_id": s["id"],
-                "glaser_data_type": "baseline_data",
-                "confidence": 0.3,
-                "rationale": response.get("mock_note", response.get("error", "mock")),
-                "is_interviewer": False,
-                "method": "batch_mock",
-            }
-            for s in segments
-        ]
-
-    # Parse AI response: expect {"classifications": [{seg, glaser_data_type, ...}, ...]}
-    classifications = response.get("classifications", [])
-    results = []
-
-    # Build a lookup from seg index to result
-    ai_by_seg = {}
-    for c in classifications:
-        seg_id = c.get("segment_id")
-        if seg_id is not None:
-            # Normalize: convert string "1" to int 1
-            try:
-                seg_num = int(seg_id) if isinstance(seg_id, str) else seg_id
-            except (ValueError, TypeError):
-                seg_num = None
-            if seg_num is not None:
-                ai_by_seg[seg_num] = c
-
-    for i, s in enumerate(segments):
-        seg_num = i + 1
-        ai = ai_by_seg.get(seg_num, {})
-        glaser_type = ai.get("glaser_data_type", "baseline_data")
-        is_interviewer = ai.get("is_interviewer", False)
-
-        # Enforce interviewer rule: if flagged as interviewer, force type
-        if is_interviewer and not allow_interviewer_as_baseline:
-            glaser_type = "interviewer_context"
-
-        results.append(
-            {
-                "segment_id": s["id"],
-                "glaser_data_type": glaser_type,
-                "confidence": ai.get("confidence", 0.5),
-                "rationale": ai.get("rationale", ""),
-                "is_interviewer": is_interviewer,
-                "method": "ai_batch",
-            }
+        logger.warning(
+            "Glaser classification LLM call failed: %s. Using raw text as fallback.",
+            e,
         )
+        return {
+            "status": "error",
+            "sections": {"baseline_data": raw_text},
+            "baseline_text": raw_text,
+            "error": f"LLM call failed: {e}",
+            "retries": 0,
+        }
 
-    return results
+    # ── Parsear con loop de reintento ──
+    result = parse_glaser_tags(
+        tagged_text,
+        max_retries=max_retries,
+        retry_callback=_retry_callback,
+    )
+
+    return {
+        "status": result["status"],
+        "sections": result["sections"],
+        "baseline_text": result["sections"].get("baseline_data", ""),
+        "error": result.get("error"),
+        "retries": result["retries"],
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -278,9 +278,9 @@ def prescreen_segments_against_codes(
     Pre-filtra segmentos sin codificar contra códigos existentes usando
     similitud de embeddings.
 
-    - similarity > 0.85 → auto-asignar (ni siquiera llamar al LLM)
-    - 0.60 < similarity < 0.85 → pedir al LLM que confirme
-    - similarity < 0.60 → el LLM genera código nuevo
+    - similarity > 0.85 -> auto-asignar (ni siquiera llamar al LLM)
+    - 0.60 < similarity < 0.85 -> pedir al LLM que confirme
+    - similarity < 0.60 -> el LLM genera código nuevo
 
     Si los segmentos no tienen embedding, devuelve todos como "necesitan LLM".
 
@@ -305,7 +305,7 @@ def prescreen_segments_against_codes(
         ).fetchone()
 
         if not row or row[0] is None:
-            # Sin embedding → necesita LLM
+            # Sin embedding -> necesita LLM
             result["needs_new_code"].append(seg_id)
             continue
 
@@ -416,7 +416,7 @@ def deduplicate_hypotheses(
 
             if jaccard >= similarity_threshold:
                 logger.info(
-                    "Hipótesis duplicada (Jaccard=%.2f): '%s...' ≈ '%s...'",
+                    "Hipotesis duplicada (Jaccard=%.2f): '%s...' = '%s...'",
                     jaccard,
                     hyp_text[:50],
                     ex_text[:50],
@@ -430,7 +430,7 @@ def deduplicate_hypotheses(
             hyp["dedup_status"] = "new"
             filtered.append(hyp)
         else:
-            # Aún la incluimos pero marcada como reforzada
+            # Aun la incluimos pero marcada como reforzada
             filtered.append(hyp)
 
     return filtered
@@ -484,13 +484,14 @@ def triadic_recategorization_decision(
 
 class HypothesisEvidenceCounter:
     """
-    Calculadora de conteos de evidencia para hipotesis.
+    Analizador inductivo de patrones para hipotesis.
     Equivalente al Code in Python (Beta)1 del category saturator.json.
 
-    Tres categorias de evidencia:
-    - POSITIVE: evidencia directa a favor de la hipotesis
-    - CONTRAST: confirma por oposicion (el fenomeno opuesto)
-    - NO_EVIDENCE: el documento no muestra datos relevantes
+    Cuatro categorias de revelacion:
+    - REVEALS_NEW_PROPERTY: revela una nueva dimension, propiedad o condicion del fenomeno
+    - REVEALS_VARIATION: muestra una variacion del mismo patron subyacente
+    - REVEALS_COUNTERPATTERN: muestra un patron opuesto que complejiza la hipotesis
+    - NO_NEW_INFORMATION: el documento no agrega nada nuevo
     """
 
     def count_evidence(
@@ -503,11 +504,11 @@ class HypothesisEvidenceCounter:
         """
         Itera todos los documentos del proyecto. Para cada uno,
         busca segmentos relevantes via similitud de embeddings y
-        clasifica la evidencia.
+        analiza que revelan inductivamente sobre el fenomeno.
 
         Returns:
-            {hypothesis_id, positive_count, contrast_count,
-             no_evidence_count, confirmation_ratio, is_saturated}
+            {hypothesis_id, new_property_count, variation_count,
+             counterpattern_count, no_new_info_count, discovery_rate, is_saturated}
         """
         hyp = session.execute(
             text("SELECT text FROM hypotheses WHERE id = :hid"),
@@ -521,7 +522,7 @@ class HypothesisEvidenceCounter:
             {"pid": proyecto_id},
         ).fetchall()
 
-        positive, contrast, no_evidence = [], [], []
+        new_property, variation, counterpattern, no_new_info = [], [], [], []
 
         for (doc_id,) in docs:
             # Buscar segmentos con embedding mas cercano
@@ -539,7 +540,7 @@ class HypothesisEvidenceCounter:
             ).fetchall()
 
             if not similar or similar[0][1] < 0.5:
-                no_evidence.append(str(doc_id))
+                no_new_info.append(str(doc_id))
                 continue
 
             # Clasificar via LLM ligero (FLASH)
@@ -553,26 +554,31 @@ class HypothesisEvidenceCounter:
                     },
                     temperature=0.1,
                 )
-                classification = verdict.get("classification", "NO_EVIDENCE")
+                classification = verdict.get("classification", "NO_NEW_INFORMATION")
             else:
                 # Sin LLM: heuristica simple
-                classification = "NO_EVIDENCE"
+                classification = "NO_NEW_INFORMATION"
 
-            if classification == "POSITIVE":
-                positive.append(str(doc_id))
-            elif classification == "CONTRAST":
-                contrast.append(str(doc_id))
+            if classification == "REVEALS_NEW_PROPERTY":
+                new_property.append(str(doc_id))
+            elif classification == "REVEALS_VARIATION":
+                variation.append(str(doc_id))
+            elif classification == "REVEALS_COUNTERPATTERN":
+                counterpattern.append(str(doc_id))
             else:
-                no_evidence.append(str(doc_id))
+                no_new_info.append(str(doc_id))
 
         total = len(docs)
         return {
             "hypothesis_id": hypothesis_id,
-            "positive_count": len(positive),
-            "contrast_count": len(contrast),
-            "no_evidence_count": len(no_evidence),
-            "confirmation_ratio": (len(positive) + len(contrast)) / max(total, 1),
-            "is_saturated": len(positive) >= 5,
-            "positive_doc_ids": positive,
-            "contrast_doc_ids": contrast,
+            "new_property_count": len(new_property),
+            "variation_count": len(variation),
+            "counterpattern_count": len(counterpattern),
+            "no_new_info_count": len(no_new_info),
+            "discovery_rate": (len(new_property) + len(variation) + len(counterpattern))
+            / max(total, 1),
+            "is_saturated": len(new_property) == 0 and len(variation) > 0,
+            "new_property_doc_ids": new_property,
+            "variation_doc_ids": variation,
+            "counterpattern_doc_ids": counterpattern,
         }

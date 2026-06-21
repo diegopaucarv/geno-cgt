@@ -1,0 +1,99 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global_groups", "merge_summary"],
+  "properties": {
+    "global_groups": {
+      "type": "array",
+      "description": "Konsolidierte globale Gruppen nach Deduplizierung und Zusammenführung über alle Batches hinweg.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "merged_from_batches", "confidence"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Synthetisiertes Signal (1-6 Wörter), das das gemeinsame Verhaltensmuster aller zusammengeführten lokalen Gruppen erfasst. Kann eines der vorhandenen lokalen Signale oder eine neue Synthese sein."
+          },
+          "incident_ids": {
+            "type": "array",
+            "minItems": 2,
+            "items": {"type": "string"},
+            "description": "Vereinigung aller Vorfall-IDs aus zusammengeführten lokalen Gruppen, dedupliziert. Mindestens 2. EXAKTE IDs aus der Eingabe verwenden."
+          },
+          "merged_from_batches": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "integer", "minimum": 0},
+            "description": "Indizes (0-basiert) der Batches, deren lokale Gruppen in diese globale Gruppe zusammengeführt wurden. Mindestens 1."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Vertrauen in diese Zusammenführung. HIGH: eindeutig derselbe Verhaltensprozess über Batches hinweg, Begründungen konvergieren. MEDIUM: wahrscheinlich derselbe Prozess, aber nur in einem Batch bestätigt oder geringfügige Abweichung in Begründungen. LOW: erzwungene Zusammenführung aufgrund ähnlicher Oberflächensignale, aber Begründungen beschreiben möglicherweise unterschiedliche Prozesse."
+          },
+          "original_signals": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Die ursprünglichen Signale der lokalen Gruppen, die zu dieser globalen Gruppe zusammengeführt wurden. Bietet Rückverfolgbarkeit zu den Quell-Batches."
+          },
+          "conflict_note": {
+            "type": "string",
+            "description": "Wenn diese Zusammenführung eine Konfliktlösung beinhaltete (SPLIT-Entscheidung, überlappende Vorfälle, Teilmenge/Obermenge), beschreiben Sie den Konflikt und wie er gelöst wurde. Leerstring wenn kein Konflikt."
+          }
+        }
+      }
+    },
+    "merge_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_local_groups_received", "total_global_groups_produced", "merges_performed", "splits_performed", "low_confidence_count"],
+      "properties": {
+        "total_local_groups_received": {
+          "type": "integer",
+          "description": "Gesamtzahl der empfangenen lokalen Gruppen aus allen Batches."
+        },
+        "total_global_groups_produced": {
+          "type": "integer",
+          "description": "Gesamtzahl der globalen Gruppen nach Zusammenführung und Deduplizierung."
+        },
+        "merges_performed": {
+          "type": "integer",
+          "description": "Anzahl der durchgeführten Zusammenführungsoperationen (zwei oder mehr lokale Gruppen zu einer globalen Gruppe kombiniert)."
+        },
+        "splits_performed": {
+          "type": "integer",
+          "description": "Anzahl der durchgeführten Trennungsoperationen (lokale Gruppen mit gleichem Signal aufgrund divergierender Begründungen in verschiedene globale Gruppen aufgeteilt)."
+        },
+        "low_confidence_count": {
+          "type": "integer",
+          "description": "Anzahl der globalen Gruppen mit confidence=LOW. Diese sind Kandidaten für ReAct-Exploration."
+        },
+        "divergences_for_react": {
+          "type": "array",
+          "description": "Gruppen, die für mögliche ReAct-Exploration markiert sind. Leer wenn keine Divergenzen.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["global_group_signal", "reason"],
+            "properties": {
+              "global_group_signal": {
+                "type": "string",
+                "description": "Signal der globalen Gruppe mit ungelöster Divergenz."
+              },
+              "reason": {
+                "type": "string",
+                "enum": ["LOW_CONFIDENCE_MERGE", "CONFLICTING_RATIONALES", "SAME_SIGNAL_DIFFERENT_PROCESS", "OVERLAPPING_INCIDENTS_UNRESOLVED"],
+                "description": "Grund, warum diese Divergenz ReAct-Exploration benötigt."
+              },
+              "detail": {
+                "type": "string",
+                "description": "Spezifische Beschreibung der Divergenz: welche Signale im Konflikt stehen, welche Batches nicht übereinstimmen, was die Auflösung mehrdeutig macht."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

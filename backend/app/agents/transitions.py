@@ -33,22 +33,37 @@ _celery_app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 # ═══════════════════════════════════════════════════════════════════════
 
 NEXT: dict[str, tuple[str, str | None, str | None]] = {
-    # (estado_actual) → (next_state, next_task_name, queue)
+    # ── Stage 1: Data Management (per-document) ──
     "crudo": ("segmentando", "segmentar_documento", "nlp"),
-    "preprocesando": ("preprocesado", None, None),  # worker updates directly
+    "preprocesando": ("preprocesado", None, None),
     "preprocesado": ("segmentando", "segmentar_documento", "nlp"),
-    "segmentando": ("segmentado", None, None),  # NLP actualiza al terminar
-    "segmentado": ("procesando", "process_document_agents_a", "heavy"),
-    "procesando": ("listo", None, None),  # heavy actualiza al terminar
-    "listo": (None, None, None),  # terminal (open coding completado)
-    "resumiendo": ("resumido", None, None),  # worker updates directly
-    "resumido": (None, None, None),  # terminal (incident summaries done)
-    "sintetizado": (None, None, None),  # terminal (cross-doc synthesis completada)
-    "error": ("crudo", None, None),  # reset en retry
+    "clasificando": ("clasificado", None, None),
+    "clasificado": ("segmentando", "segmentar_documento", "nlp"),
+    "segmentando": ("segmentado", None, None),
+    # ── F2.3: Extractor unificado de patrones e incidentes ──
+    "segmentado": ("extrayendo", "extract_patterns_and_incidents", "heavy"),
+    "extrayendo": ("incidentes_extraidos", None, None),
+    "incidentes_extraidos": (None, None, None),  # waits for batch trigger (3+ docs)
+    # ── Stage 2: Open Coding (batch, cross-document) ──
+    "codificando": ("codificado", None, None),
+    "codificado": (None, None, None),
+    # ── Legacy / terminal ──
+    "listo": (None, None, None),
+    "procesado": (None, None, None),  # legacy alias for incidentes_extraidos
+    "resumiendo": ("resumido", None, None),
+    "resumido": (None, None, None),
+    "error": ("crudo", None, None),
 }
 
 # Estados terminales (no se despacha nada después)
-TERMINAL = {"listo", "sintetizado", "resumido", "error"}
+TERMINAL = {
+    "incidentes_extraidos",
+    "procesado",
+    "codificado",
+    "listo",
+    "resumido",
+    "error",
+}
 
 # ═══════════════════════════════════════════════════════════════════════
 # Project state machine (nivel proyecto — post open coding)
@@ -136,9 +151,9 @@ def transition(
             next_state or from_state,
         )
 
-    # ── 3. Si llegó a listo, verificar Phase B + Iteration ──
-    if next_state == "listo":
-        # Phase B: >=3 docs listos → synthesis
+    # ── 3. Si llegó a estado de batch-ready, verificar Phase B + Iteration ──
+    if next_state in ("listo", "incidentes_extraidos"):
+        # Phase B: >=3 docs listos/incidentes_extraidos → synthesis
         result = _maybe_trigger_phase_b(session, proyecto_id)
         if result:
             return result
@@ -215,11 +230,15 @@ def _dispatch_next(
 
 
 def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
-    """Dispara Phase B si >= 3 docs listos y no se disparó ya."""
+    """Dispara Phase B si >= 3 docs listos y no se disparó ya.
+
+    Si pause_mode == 'auto' → despacha process_synthesis_agents_b automáticamente.
+    Si pause_mode == 'manual' → publica evento Redis 'batch_ready' y NO despacha.
+    """
     listos = session.execute(
         text(
             "SELECT COUNT(*) FROM documentos "
-            "WHERE proyecto_id = :pid AND estado = 'listo'"
+            "WHERE proyecto_id = :pid AND estado IN ('listo', 'incidentes_extraidos', 'procesado')"
         ),
         {"pid": proyecto_id},
     ).fetchone()[0]
@@ -249,6 +268,36 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
     if already:
         return None
 
+    # ── Check pause_mode before dispatching ──
+    pause_row = session.execute(
+        text("SELECT pause_mode FROM proyectos WHERE id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()
+    pause_mode = pause_row[0] if pause_row and pause_row[0] else "manual"
+
+    if pause_mode == "manual":
+        # Marcar step para evitar re-triggereo
+        session.execute(
+            text(
+                "INSERT INTO processing_states (entity_type, entity_id, step) "
+                "VALUES ('project', :pid, :step) ON CONFLICT DO NOTHING"
+            ),
+            {"pid": proyecto_id, "step": step},
+        )
+        session.commit()
+
+        # Publicar evento Redis → el frontend muestra "N docs procesados. ¿Continuar?"
+        _publish_batch_ready(proyecto_id, listos, total_docs)
+
+        logger.info(
+            "Phase B paused (manual mode): project=%s (%d/%d docs listos)",
+            proyecto_id,
+            listos,
+            total_docs,
+        )
+        return {"paused": True, "docs_ready": listos, "total_docs": total_docs}
+
+    # ── auto mode: dispatch automatically (current behavior) ──
     # Marcar ANTES de despachar (previene race condition)
     session.execute(
         text(
@@ -295,7 +344,11 @@ def _get_texto(session, documento_id: str) -> str:
     ).fetchone()
     if row and row[0]:
         meta = row[0] if isinstance(row[0], dict) else {}
-        return meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
+        return (
+            meta.get("texto_preprocesado")
+            or meta.get("texto_extraido", "")
+            or meta.get("texto_original", "")
+        )
     return ""
 
 
@@ -357,6 +410,36 @@ def transition_project(
         logger.debug("Redis pub/sub failed (non-critical): %s", _e)
 
     return True
+
+
+def _publish_batch_ready(proyecto_id: str, docs_ready: int, total_docs: int) -> None:
+    """Publica evento Redis 'batch_ready' para que el frontend muestre el prompt."""
+    try:
+        import json as _json
+
+        import redis as _redis
+
+        r = _redis.from_url(
+            _os.getenv("REDIS_URL", "redis://redis:6379"),
+            decode_responses=True,
+        )
+        payload = _json.dumps(
+            {
+                "type": "batch_ready",
+                "docs_ready": docs_ready,
+                "total_docs": total_docs,
+                "message": f"{docs_ready} documentos procesados. ¿Continuar?",
+            }
+        )
+        r.publish(f"project:{proyecto_id}:events", payload)
+        logger.info(
+            "Published batch_ready event for project=%s (%d/%d docs)",
+            proyecto_id,
+            docs_ready,
+            total_docs,
+        )
+    except Exception as _e:
+        logger.warning("Failed to publish batch_ready event: %s", _e)
 
 
 def hitl_gate(

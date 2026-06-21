@@ -41,6 +41,13 @@ class TheoreticalCode(Base, TimestampMixin):
     layer: Mapped[str] = mapped_column(String(50))
     visualization_hint: Mapped[str] = mapped_column(String(50), default="tendril")
 
+    # ── Memo↔Entity sync ────────────────────────────
+    source_memo_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("memos.id"), nullable=True
+    )
+    """Memo de origen. NOT NULL = creado manualmente desde un memo.
+    NULL = built-in o generado por agente."""
+
     # Relaciones
     relationships = relationship(
         "ConceptualRelationship", back_populates="theoretical_code"

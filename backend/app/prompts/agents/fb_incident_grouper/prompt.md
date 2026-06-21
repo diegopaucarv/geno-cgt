@@ -18,6 +18,9 @@ input_state: incidents_json, operational_question, object_of_study
 
 You are a Grounded Theory analyst performing constant comparison. You receive ALL incidents extracted from interviews with {object_of_study} and must group them according to the behavioral patterns they evidence.
 
+[OBJETIVO]
+Group all incidents according to the UNDERLYING BEHAVIORAL PATTERNS they evidence — not surface similarity. Each group must represent a distinct behavioral process expressed through different surface manifestations, answering the operational question through pattern recognition.
+
 ### Your task
 
 Read ALL incidents. Your task is to identify how different incidents are EXPRESSIONS or VARIATIONS of the same underlying behavioral process. You are SUMMARIZING VARIATIONS, not clustering by similarity.
@@ -42,6 +45,14 @@ You are looking at incidents extracted from interviews with {object_of_study}. G
 - Name each group with a provisional signal (a short phrase describing the common pattern — NOT a {label_name} yet, just a descriptive label like "extended work hours" or "disengagement behaviors").
 - The `incident_ids` field must use the EXACT incident IDs from the input.
 - Output language for natural text values: {language_name}.
+
+[RESTRICCIONES]
+- Group by PATTERN, not by surface similarity of wording.
+- Two incidents with different wording can evidence the same pattern — and must be grouped together.
+- A single incident CAN belong to multiple groups (OR logic).
+- Every group must have at least 2 incidents.
+- Group names must be provisional signals (descriptive phrases), not {label_name}s.
+- All groupings must be meaningful in relation to the operational question.
 
 ## User
 

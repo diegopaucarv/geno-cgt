@@ -17,6 +17,37 @@
     "data_production_context": {
       "type": "string",
       "description": "Was Sie darüber beobachten, wie dieses Dokument produziert wurde: physische Umgebung, Teilnehmerhaltung, Machtdynamiken, vermiedene Themen. Wenn keine neuen Beobachtungen: 'Keine Änderungen zur vorherigen Version.' Wenn der Text keine Hinweise auf den Produktionskontext enthält: 'Unzureichende Evidenz in diesem Dokument.'"
+    },
+    "referenced_entities": {
+      "type": "object",
+      "description": "Entities from the database that were referenced in this analysis. Populated by the orchestration layer for traceability.",
+      "properties": {
+        "segment_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Segment IDs referenced in this output."
+        },
+        "code_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Category/code IDs referenced in this output."
+        },
+        "hypothesis_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hypothesis IDs referenced in this output."
+        },
+        "incident_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Incident IDs referenced in this output."
+        },
+        "document_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Document IDs referenced in this output."
+        }
+      }
     }
   }
 }

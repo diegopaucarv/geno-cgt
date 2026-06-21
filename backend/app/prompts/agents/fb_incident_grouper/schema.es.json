@@ -1,7 +1,7 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["groups"],
+  "required": ["groups", "_self_evaluation"],
   "properties": {
     "groups": {
       "type": "array",
@@ -26,6 +26,25 @@
           }
         }
       }
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true si consideras que tu output está incompleto, es de baja calidad, o requiere refinamiento adicional"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "SOLO si needs_retry=true. Instrucción CONCRETA y ACCIONABLE de qué mejorar en el próximo intento. Ej: 'Etiqueta demasiado genérica — especificar propiedades distintivas', 'Falta evidencia del segmento 47', 'La definición mezcla dos conceptos distintos — separar'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Acción recomendada: proceed (output correcto, avanzar), retry (reintentar con feedback), escalate_to_hitl (decisión humana necesaria), skip (saltar este agente, no es relevante), abort (error irrecuperable, detener todo)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

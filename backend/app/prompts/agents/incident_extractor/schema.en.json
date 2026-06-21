@@ -7,37 +7,50 @@
   "properties": {
     "extracted_incidents": {
       "type": "array",
-      "description": "Incidents of the category found in the document. Empty array if the category does not appear.",
+      "description": "Incidents of the target category found in the document. Returns an empty array if the category does not appear.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "exact_quote",
-          "proposed_property",
-          "paradigm_element"
+          "contextual_meaning",
+          "revealed_property",
+          "incident_summary",
+          "exact_quotes",
+          "classification",
+          "classification_rationale"
         ],
         "properties": {
-          "exact_quote": {
+          "contextual_meaning": {
             "type": "string",
-            "description": "Exact verbatim quote from the document. Do not paraphrase. Between 10 and 300 words."
+            "description": "Steps 1 & 2: Critical analysis of what this manifestation means in its textual context without leaving anything aside."
           },
-          "proposed_property": {
+          "revealed_property": {
             "type": "string",
-            "description": "Category property this incident reveals (e.g., 'high intensity', 'work context')."
+            "description": "Step 3: The specific feature or property of the category that this incident reveals."
           },
-          "paradigm_element": {
+          "incident_summary": {
+            "type": "string",
+            "description": "Step 4: A compact, precise one-sentence summary of the incident in simple language, avoiding academic jargon."
+          },
+          "exact_quotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Step 5: Exact, verbatim quotes from the text that show how the incident manifests in real life. Do not paraphrase."
+          },
+          "classification": {
             "type": "string",
             "enum": [
-              "dimension",
-              "condition",
-              "consequence",
-              "strategy"
+              "CONTRADICTS",
+              "EXPANDS",
+              "CONFIRMS"
             ],
-            "description": "CGT paradigm element: dimension (varying property), condition (circumstance), consequence (outcome), strategy (action)."
+            "description": "Step 6: Classification of how the incident relates to the current definition of the category."
           },
-          "ambiguity_note": {
+          "classification_rationale": {
             "type": "string",
-            "description": "If the incident could belong to another category, note it here. Empty string if no ambiguity."
+            "description": "Step 6: A short rationale connecting the classification choice to the meaning of the category."
           }
         }
       }

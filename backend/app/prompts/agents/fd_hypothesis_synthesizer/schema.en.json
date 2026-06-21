@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_hypotheses"],
+  "properties": {
+    "unified_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "action", "source_hypotheses"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Final hypothesis text, combining evidence from all sources."
+          },
+          "level": {
+            "type": "string",
+            "enum": ["general", "specific", "emergent"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["descriptive", "relational", "causal", "process", "typological"]
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Combined evidence from all merged sources."
+          },
+          "linked_categories": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Category names this hypothesis connects."
+          },
+          "concern_relevance": {
+            "type": "string",
+            "enum": ["DIRECT", "INDIRECT", "NONE"],
+            "description": "Relevance to the chosen concern (only if concern is set)."
+          },
+          "population_fit": {
+            "type": "string",
+            "enum": ["FITS", "PARTIAL", "OUT_OF_SCOPE"],
+            "description": "Fit with the chosen population scope (only if population is set)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["keep", "merge", "rename"],
+            "description": "Action taken on this hypothesis."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Texts of source hypotheses that were merged."
+          },
+          "source_hypotheses": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of all hypotheses that contributed."
+          },
+          "is_core_candidate": {
+            "type": "boolean",
+            "description": "True if this hypothesis connects to a potential core category."
+          }
+        }
+      }
+    }
+  }
+}

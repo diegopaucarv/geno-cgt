@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,6 +25,104 @@ from app.core.runtime_config import get_config_value
 logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
+
+# ═══════════════════════════════════════════════════════════════════════
+# ChainOrchestrator v3 — Dataclasses y fallback para _self_evaluation
+# ═══════════════════════════════════════════════════════════════════════
+
+DEFAULT_SELF_EVAL: dict[str, Any] = {
+    "needs_retry": False,
+    "retry_reason": None,
+    "suggested_action": "proceed",
+}
+
+
+@dataclass
+class SelfEval:
+    """Parsed _self_evaluation from agent output."""
+
+    needs_retry: bool
+    retry_reason: str | None
+    suggested_action: str  # "proceed" | "retry" | "escalate_to_hitl" | "skip" | "abort"
+
+
+@dataclass
+class AgentOutput:
+    """Resultado estructurado de una ejecucion de agente.
+
+    Compatible con ChainOrchestrator v3.
+    Supports dict-like access for backward compatibility (response["key"] -> response.data["key"]).
+    """
+
+    success: bool
+    data: dict  # The parsed JSON output
+    tokens_used: int  # Total tokens for this call
+    conversation: list[dict]  # Full conversation messages
+    self_eval: SelfEval | None = None  # Parsed _self_evaluation from data
+    error: str | None = None
+    iterations: int = 0
+
+    def __getitem__(self, key: str) -> Any:
+        """Backward-compatible dict access: output['codes'] -> output.data['codes']."""
+        # Special keys exposed at AgentOutput level
+        if key == "error" and self.error:
+            return self.error
+        if key == "mock_note":
+            if isinstance(self.data, dict) and "mock_note" in self.data:
+                return self.data["mock_note"]
+            return None
+        if isinstance(self.data, dict):
+            return self.data[key]
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Backward-compatible .get(): output.get('codes', []) -> output.data.get('codes', [])."""
+        # Special keys exposed at AgentOutput level
+        if key == "error":
+            return self.error or default
+        if key == "mock_note":
+            if isinstance(self.data, dict) and "mock_note" in self.data:
+                return self.data["mock_note"]
+            return default
+        if isinstance(self.data, dict):
+            return self.data.get(key, default)
+        return default
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Backward-compatible .get(): output.get('codes', []) -> output.data.get('codes', [])."""
+        if isinstance(self.data, dict):
+            return self.data.get(key, default)
+        return default
+
+    def __contains__(self, key: str) -> bool:
+        """Backward-compatible 'in' operator."""
+        if isinstance(self.data, dict):
+            return key in self.data
+        return False
+
+    def keys(self):
+        """Backward-compatible .keys()."""
+        if isinstance(self.data, dict):
+            return self.data.keys()
+        return {}.keys()
+
+    def items(self):
+        """Backward-compatible .items()."""
+        if isinstance(self.data, dict):
+            return self.data.items()
+        return {}.items()
+
+    def values(self):
+        """Backward-compatible .values()."""
+        if isinstance(self.data, dict):
+            return self.data.values()
+        return {}.values()
+
+    def __len__(self) -> int:
+        if isinstance(self.data, dict):
+            return len(self.data)
+        return 0
+
 
 # ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
 
@@ -360,7 +459,12 @@ MOCK_RESPONSES: dict[str, dict] = {
         ],
         "anomalies": [],
     },
-    "fb_label_critic": {"all_valid": True, "issues": []},
+    "fb_label_critic": {
+        "all_valid": True,
+        "issues": [],
+        "conceptually_fitted": False,
+        "ready_for_selective": False,
+    },
     "fa_document_pattern_extractor": {
         "patterns": [
             {
@@ -503,11 +607,22 @@ class LLMClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         language: str | None = None,
-    ) -> dict[str, Any]:
+        history: list[dict] | None = None,
+        override_user_prompt: str | None = None,
+        conversation_history: list[dict] | None = None,
+    ) -> AgentOutput:
         """Carga prompt, reemplaza variables, inyecta schema i18n, llama al LLM.
 
         Args:
             language: 'en','es','de','pt'. Default: class-level _user_language.
+            history: Optional conversation history (list of {"role":..., "content":...})
+                     inserted between system and user messages for conversational refinement.
+            override_user_prompt: If provided, replaces the default generic user prompt.
+            conversation_history: ChainOrchestrator v3 retry history.
+                     When provided, injected as prior attempts before current user input.
+
+        Returns:
+            AgentOutput with parsed data, tokens, conversation, and _self_evaluation.
         """
         lang = language or self._user_language
         LANG_NAMES = {
@@ -529,8 +644,20 @@ class LLMClient:
             except Exception:
                 pass  # graceful fallback — tokens simply won't be injected
         if self.is_mock:
-            return dict(
-                MOCK_RESPONSES.get(agent_id, {"mock_note": f"No mock for {agent_id}"})
+            mock_data = MOCK_RESPONSES.get(
+                agent_id, {"mock_note": f"No mock for {agent_id}"}
+            )
+            return AgentOutput(
+                success=True,
+                data=mock_data,
+                tokens_used=0,
+                conversation=[],
+                self_eval=SelfEval(
+                    needs_retry=False,
+                    retry_reason=None,
+                    suggested_action="proceed",
+                ),
+                iterations=1,
             )
 
         for tier in ("PRO", "FLASH"):
@@ -540,7 +667,13 @@ class LLMClient:
             except FileNotFoundError:
                 continue
         else:
-            return {"error": f"Prompt no encontrado para {agent_id}"}
+            return AgentOutput(
+                success=False,
+                data={},
+                tokens_used=0,
+                conversation=[],
+                error=f"Prompt no encontrado para {agent_id}",
+            )
 
         declared_tier = parsed["metadata"].get("tier", "PRO")
         model_tier: ModelTier = (
@@ -615,8 +748,16 @@ class LLMClient:
         except Exception:
             pass
 
-        result = self._call_llm(
-            model_tier, model, system_prompt, schema, max_tokens, temperature
+        result, conversation = self._call_llm(
+            model_tier,
+            model,
+            system_prompt,
+            schema,
+            max_tokens,
+            temperature,
+            history=history,
+            override_user_prompt=override_user_prompt,
+            conversation_history=conversation_history,
         )
 
         # ── Log LLM response after receiving it ──────────────────────
@@ -632,7 +773,48 @@ class LLMClient:
         except Exception:
             pass
 
-        return result
+        # ── Build AgentOutput with _self_evaluation parsing ────────────
+        tokens_used = result.get("usage", {}).get("total_tokens", 0) if isinstance(result, dict) else 0
+        error = result.get("error") if isinstance(result, dict) else None
+
+        # Parse _self_evaluation from agent output
+        self_eval = None
+        if isinstance(result, dict) and "_self_evaluation" in result:
+            raw_eval = result["_self_evaluation"]
+            if isinstance(raw_eval, dict):
+                try:
+                    self_eval = SelfEval(
+                        needs_retry=bool(raw_eval.get("needs_retry", False)),
+                        retry_reason=raw_eval.get("retry_reason"),
+                        suggested_action=raw_eval.get("suggested_action", "proceed"),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Agent %s: failed to parse _self_evaluation, using default",
+                        agent_id,
+                    )
+                    self_eval = SelfEval(
+                        needs_retry=False,
+                        retry_reason=None,
+                        suggested_action="proceed",
+                    )
+        elif isinstance(result, dict) and "_self_evaluation" not in result:
+            # Agent doesn't have _self_evaluation — use fallback
+            logger.info(
+                "Agent %s: no _self_evaluation in output, using DEFAULT_SELF_EVAL",
+                agent_id,
+            )
+            self_eval = SelfEval(**DEFAULT_SELF_EVAL)
+
+        return AgentOutput(
+            success=error is None,
+            data=result if isinstance(result, dict) else {},
+            tokens_used=tokens_used,
+            conversation=conversation,
+            self_eval=self_eval,
+            error=error,
+            iterations=1,
+        )
 
     def _call_llm(
         self,
@@ -643,8 +825,14 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         retry: bool = True,
-    ) -> dict[str, Any]:
+        history: list[dict] | None = None,
+        override_user_prompt: str | None = None,
+        conversation_history: list[dict] | None = None,
+    ) -> tuple[dict[str, Any], list[dict]]:
         """Llama a Together.ai con response_format json_object.
+
+        Returns:
+            (parsed_result, conversation_messages)
 
         Retry strategy:
         - 429 (rate limit): exponential backoff 2s, 4s, 8s, 16s, max 4 retries
@@ -659,7 +847,7 @@ class LLMClient:
                 + json.dumps(schema, indent=2)
             )
 
-        user_prompt = (
+        user_prompt = override_user_prompt or (
             "[TAREA]\nResponde según el formato y razonamiento indicados arriba.\n"
             f"Output language: {self._user_language}. "
             "All natural language values (names, definitions, descriptions, jots, rationale) "
@@ -677,12 +865,18 @@ class LLMClient:
 
         while True:
             try:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                ]
+                if conversation_history:
+                    messages.extend(conversation_history)
+                if history:
+                    messages.extend(history)
+                messages.append({"role": "user", "content": user_prompt})
+
                 response = self.client.chat.completions.create(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
+                    messages=messages,
                     response_format={"type": "json_object"},
                     max_tokens=max_tokens,
                     temperature=temperature,
@@ -702,7 +896,15 @@ class LLMClient:
                 result = json.loads(content)
                 if reasoning:
                     result["_reasoning_content"] = reasoning
-                return result
+                # Build full conversation for caller
+                full_conversation = list(messages)
+                full_conversation.append({
+                    "role": "assistant",
+                    "content": content,
+                })
+                if reasoning:
+                    full_conversation[-1]["reasoning_content"] = reasoning
+                return result, full_conversation
 
             except json.JSONDecodeError as e:
                 last_error = e
@@ -780,7 +982,7 @@ class LLMClient:
         return {
             "error": str(last_error),
             "mock_note": f"LLM failed after retries: {str(last_error)[:100]}",
-        }
+        }, []
 
 
 # ═══════════════════════════════════════════════════════════════════════

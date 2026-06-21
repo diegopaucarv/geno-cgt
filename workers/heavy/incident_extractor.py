@@ -274,13 +274,15 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
             max_tokens=2048,
             temperature=0.1,
         )
+        # _call_llm returns (result_dict, conversation) since ChainOrchestrator v3
+        response_data = response[0] if isinstance(response, tuple) else response
 
         # ── 4. Validar respuesta ──────────────────────────────────────
-        if response.get("mock_note") or response.get("error"):
+        if response_data.get("mock_note") or response_data.get("error"):
             logger.warning(
                 "extract_incident: LLM fallback/mock para seg=%s — %s",
                 segment_id[:8],
-                response.get("mock_note", response.get("error", "")),
+                response_data.get("mock_note", response_data.get("error", "")),
             )
             # Insertar con valores default
             result = session.execute(

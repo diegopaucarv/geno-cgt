@@ -1,17 +1,24 @@
 """Pipeline execution endpoints — dispara stages y devuelve task_ids para polling."""
 
+import logging
 from uuid import UUID
 
 from app.core.celery_app import celery_app
+from app.core.context_config import context_config
 from app.db.database import get_db
 from app.models.domain.document import Documento
+from app.models.domain.project import Proyecto
 from app.models.domain.user import Usuario
+from app.schemas.hitl import PauseConfigRequest
 from app.services.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1", tags=["pipeline"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/projects/{project_id}/pipeline/run-stage/{stage_name}")
@@ -783,7 +790,11 @@ async def delete_agent_output(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Delete an agent output. memo_id format: {prefix}-{uuid} (e.g. pc-xxx, dp-xxx, cat-xxx)"""
+    """Delete an agent output. memo_id format: {prefix}-{uuid} (e.g. pc-xxx, dp-xxx, cat-xxx)
+
+    Para categorías (cat-*) con source_memo_id, marca el memo de origen como
+    absorbido en vez de dejarlo huérfano (sincronización Memo↔Entidad P4).
+    """
     from sqlalchemy import text
 
     parts = memo_id.split("-", 1)
@@ -791,6 +802,30 @@ async def delete_agent_output(
         raise HTTPException(400, f"Invalid memo_id format: {memo_id}")
     prefix, row_id = parts
     table, _ = TABLE_MAP[prefix]
+
+    # ── Sync: si es una categoría con source_memo_id, actualizar el memo ──
+    if prefix == "cat":
+        source = await db.execute(
+            text("SELECT source_memo_id FROM categorias WHERE id = :id"),
+            {"id": row_id},
+        )
+        source_row = source.fetchone()
+        if source_row and source_row[0]:
+            source_memo_id = str(source_row[0])
+            # Marcar el memo como absorbido/eliminado lógicamente
+            await db.execute(
+                text(
+                    "UPDATE memos SET estado = 'ABSORBIDO', version = version + 1 "
+                    "WHERE id = :mid"
+                ),
+                {"mid": source_memo_id},
+            )
+            logger.info(
+                "Marked source memo %s as ABSORBIDO after category %s deletion",
+                source_memo_id,
+                row_id,
+            )
+
     await db.execute(text(f"DELETE FROM {table} WHERE id = :id"), {"id": row_id})
     await db.commit()
     return {"status": "deleted", "id": memo_id}
@@ -803,7 +838,11 @@ async def patch_agent_output(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Update fields on an agent output. body: {field: value, ...}"""
+    """Update fields on an agent output. body: {field: value, ...}
+
+    Para categorías (cat-*) con source_memo_id, sincroniza los cambios de
+    nombre/definición de vuelta al memo de origen (sincronización Memo↔Entidad P4).
+    """
     from sqlalchemy import text
 
     parts = memo_id.split("-", 1)
@@ -824,6 +863,32 @@ async def patch_agent_output(
     await db.execute(
         text(f"UPDATE {table} SET {', '.join(sets)} WHERE id = :id"), params
     )
+
+    # ── Sync: si es una categoría con source_memo_id, sincronizar al memo ──
+    if prefix == "cat" and ("nombre" in body or "definicion" in body):
+        source = await db.execute(
+            text(
+                "SELECT source_memo_id, nombre, definicion FROM categorias WHERE id = :id"
+            ),
+            {"id": row_id},
+        )
+        source_row = source.fetchone()
+        if source_row and source_row[0]:
+            source_memo_id = str(source_row[0])
+            cat_def = source_row[2] or ""
+            await db.execute(
+                text(
+                    "UPDATE memos SET contenido = :contenido, version = version + 1 "
+                    "WHERE id = :mid"
+                ),
+                {"contenido": cat_def, "mid": source_memo_id},
+            )
+            logger.info(
+                "Synced source memo %s after category %s update",
+                source_memo_id,
+                row_id,
+            )
+
     await db.commit()
     return {"status": "updated", "id": memo_id}
 
@@ -884,41 +949,131 @@ async def _get_project_state(db: AsyncSession, project_id: UUID) -> str:
 async def run_single_agent(
     project_id: UUID,
     agent_id: str,
+    body: dict | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Ejecuta un solo agente por su ID. Útil para ejecución manual desde el frontend."""
+    """Ejecuta un solo agente por su ID.
+    Body opcional: {"document_id": "..."} para agentes per-documento.
+    """
     from app.core.celery_app import celery_app
+    from sqlalchemy import text
 
-    # Map agent IDs to Celery task names
-    agent_task_map: dict[str, str] = {
-        "util_punctuator": "punctuate_text",
-        "segmentar_documento": "segmentar_documento",
-        "fa_glaser_data_classifier": "fa_glaser_data_classifier",
-        "fa_document_pattern_extractor": "fa_document_pattern_extractor",
-        "incident_extractor": "incident_extractor",
-    }
+    doc_id = (body or {}).get("document_id")
+    task_name = agent_id  # Celery task names match agent IDs
 
-    task_name = agent_task_map.get(agent_id, agent_id)
+    # Per-document agents need document context
+    if doc_id:
+        doc = await db.get(Documento, UUID(doc_id))
+        if not doc:
+            raise HTTPException(404, "Documento no encontrado")
 
-    # Dispatch the task to the appropriate queue
-    nlp_agents = {"segmentar_documento"}
-    fast_agents = {"punctuate_text", "util_punctuator"}
-    queue = (
-        "nlp"
-        if agent_id in nlp_agents
-        else ("fast" if agent_id in fast_agents else "heavy")
-    )
+        texto = (
+            (doc.metadatos or {}).get("texto_preprocesado")
+            or (doc.metadatos or {}).get("texto_extraido")
+            or (doc.metadatos or {}).get("texto_original", "")
+        )
 
-    task = celery_app.send_task(
-        task_name,
-        args=[str(project_id)],
-        queue=queue,
-    )
+        if agent_id == "segmentar_documento":
+            task = celery_app.send_task(
+                agent_id,
+                args=[texto, 1024, "", "TEXTO", "", doc_id, True],  # manual_mode=True
+                queue="nlp",
+            )
+        elif agent_id in ("punctuate_text", "util_punctuator"):
+            task = celery_app.send_task(
+                "punctuate_text",
+                kwargs={"texto": texto, "max_chars": 10000, "documento_id": doc_id},
+                queue="fast",
+            )
+        else:
+            task = celery_app.send_task(
+                agent_id,
+                args=[doc_id, str(project_id)],
+                queue="heavy",
+            )
+    else:
+        # Project-level agents (cross-doc, synthesizers, etc.)
+        task = celery_app.send_task(
+            agent_id,
+            args=[str(project_id)],
+            queue="heavy",
+        )
 
     return {
         "status": "dispatched",
         "agent_id": agent_id,
-        "task_name": task_name,
         "task_id": task.id,
+    }
+
+
+@router.patch("/projects/{project_id}/pipeline/pause-config")
+async def update_pause_config(
+    project_id: UUID,
+    config: PauseConfigRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Actualiza el modo de pausa del pipeline: auto (cada 3 docs) o manual."""
+    if config.mode not in ("auto", "manual"):
+        raise HTTPException(status_code=400, detail="mode must be 'auto' or 'manual'")
+
+    await session.execute(
+        text("UPDATE proyectos SET pause_mode = :mode WHERE id = :pid"),
+        {"mode": config.mode, "pid": project_id},
+    )
+    await session.commit()
+
+    return {"status": "ok", "pause_mode": config.mode}
+
+
+class ContextWindowRequest(BaseModel):
+    context_window_real: int = Field(
+        ge=10_000,
+        le=250_000,
+        description="Tokens disponibles para datos (10K-250K)",
+    )
+
+
+@router.patch("/projects/{project_id}/pipeline/context-window")
+async def update_context_window(
+    project_id: UUID,
+    config: ContextWindowRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Permite al usuario disminuir la ventana de contexto real. Nunca aumentarla."""
+    # Validar que no exceda el máximo del modelo
+    if config.context_window_real > context_config.MODEL_MAX_CONTEXT_TOKENS:
+        raise HTTPException(
+            400,
+            f"No puede exceder {context_config.MODEL_MAX_CONTEXT_TOKENS} tokens",
+        )
+
+    # Obtener proyecto para validar que existe y obtener el valor actual
+    result = await session.execute(select(Proyecto).where(Proyecto.id == project_id))
+    proyecto = result.scalar_one_or_none()
+    if proyecto is None:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    # Validar que no se intente aumentar la ventana (solo disminuir)
+    if config.context_window_real > proyecto.context_window_real:
+        raise HTTPException(
+            400,
+            f"Solo se permite disminuir la ventana de contexto. "
+            f"Valor actual: {proyecto.context_window_real}",
+        )
+
+    await session.execute(
+        text("UPDATE proyectos SET context_window_real = :cw WHERE id = :pid"),
+        {"cw": config.context_window_real, "pid": project_id},
+    )
+    await session.commit()
+
+    return {
+        "status": "ok",
+        "context_window_real": config.context_window_real,
+        "model_max_context_tokens": context_config.MODEL_MAX_CONTEXT_TOKENS,
+        "effective_window": context_config.effective_window,
+        "available_for_data": context_config.available_for_data,
     }

@@ -56,7 +56,9 @@ class SelfRefinementLoop(BaseAgent):
 
         # ⚠️ CLAVE: Preservar reasoning_content para que el modelo
         # no pierda el contexto de su reflexión entre iteraciones.
-        gen_text = json.dumps(gen_response, ensure_ascii=False)
+        # AgentOutput: access .data for the raw dict, use .get() for dict-like access
+        gen_data = gen_response.data if hasattr(gen_response, "data") else gen_response
+        gen_text = json.dumps(gen_data, ensure_ascii=False)
         assistant_msg = self._build_assistant_message(gen_text, gen_response)
         history.append(assistant_msg)
 

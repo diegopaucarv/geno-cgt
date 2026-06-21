@@ -32,6 +32,7 @@ EDITABLE_DEFAULTS: dict[str, str] = {
     "USE_GPU": "false",
     # ── Advanced ──
     "CODING_STYLES": "gerundio,in_vivo",
+    "GLASER_CLASSIFIER_PROMPT": "",
     "MODEL_FLASH_FREQUENCY_PENALTY": "1.15",
     "MODEL_PRO_FREQUENCY_PENALTY": "0.0",
     "MODEL_PRO_REPETITION_PENALTY": "1.0",

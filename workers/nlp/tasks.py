@@ -206,6 +206,7 @@ def segmentar_documento(
     source_type: str = "",
     global_summary: str = "",
     documento_id: str = "",
+    manual_mode: bool = False,
 ):
     """Segmenta y persiste en DB si se proporciona documento_id."""
     from segmentador import ProgressiveSegmenter
@@ -345,8 +346,8 @@ def segmentar_documento(
                     len(segmentos),
                 )
 
-                # Transicionar: NLP terminó → despachar agentes
-                if _proj_id:
+                # Transicionar: NLP terminó → despachar agentes (solo si no es manual)
+                if _proj_id and not manual_mode:
                     try:
                         from agents.transitions import transition
 

@@ -3,7 +3,8 @@
   "additionalProperties": false,
   "required": [
     "punctuated_text",
-    "changes_made"
+    "changes_made",
+    "_self_evaluation"
   ],
   "properties": {
     "punctuated_text": {
@@ -13,6 +14,25 @@
     "changes_made": {
       "type": "boolean",
       "description": "true wenn mindestens ein Zeichen geändert wurde."
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true, wenn du der Meinung bist, dass deine Ausgabe unvollständig, von geringer Qualität ist oder zusätzliche Verfeinerung benötigt"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "NUR wenn needs_retry=true. KONKRETE und UMSETZBARE Anweisung, was beim nächsten Versuch verbessert werden soll. Z.B.: 'Label zu allgemein — spezifische Eigenschaften angeben', 'Fehlende Evidenz aus Segment 47', 'Definition vermischt zwei verschiedene Konzepte — trennen'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Empfohlene Aktion: proceed (Ausgabe korrekt, fortfahren), retry (mit Feedback wiederholen), escalate_to_hitl (menschliche Entscheidung erforderlich), skip (diesen Agenten überspringen, nicht relevant), abort (nicht behebbarer Fehler, alles stoppen)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tables",
+    "simplified_memo",
+    "core_statements",
+    "tensions_flagged",
+    "simplifier_note"
+  ],
+  "properties": {
+    "tables": {
+      "type": "array",
+      "description": "Double-entry analysis tables. One table per paradigm dimension.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "rows"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "description": "Paradigm dimension name: e.g. 'Conditions', 'Consequences', 'Strategies', 'Properties'."
+          },
+          "rows": {
+            "type": "array",
+            "description": "Rows mapping each property to evidence per document/incident.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["property", "documents"],
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "description": "The property name (e.g. 'Temporal variation', 'Risk calibration')."
+                },
+                "documents": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Map of document name → evidence text from that document supporting this property."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "simplified_memo": {
+      "type": "string",
+      "description": "150-250 word condensed version of the descriptive memo. Eliminate redundancy while preserving essence, variation, and core insights. Write in conceptual present tense."
+    },
+    "core_statements": {
+      "type": "array",
+      "description": "3-5 affirmative statements of what the data consistently shows, each backed by specific evidence.",
+      "items": {
+        "type": "string",
+        "description": "A single core statement: 'Statement — what the data shows, with evidence reference.'"
+      },
+      "minItems": 1
+    },
+    "tensions_flagged": {
+      "type": "array",
+      "description": "Contradictions or paradoxes between findings that suggest an uncaptured dimension.",
+      "items": {
+        "type": "string",
+        "description": "A tension: 'Tension between finding X and finding Y — possible paradox or uncaptured dimension.'"
+      }
+    },
+    "simplifier_note": {
+      "type": "string",
+      "description": "Methodological transparency: what was removed, condensed, or restructured and why."
+    }
+  }
+}

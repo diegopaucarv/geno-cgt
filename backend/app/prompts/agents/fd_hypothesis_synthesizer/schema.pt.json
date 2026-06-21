@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_hypotheses"],
+  "properties": {
+    "unified_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "action", "source_hypotheses"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Texto final da hipótese, combinando evidência de todas as fontes."
+          },
+          "level": {
+            "type": "string",
+            "enum": ["geral", "específica", "emergente"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["descritiva", "relacional", "causal", "de processo", "tipológica"]
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Evidência combinada de todas as fontes fundidas."
+          },
+          "linked_categories": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Nomes de categorias que esta hipótese conecta."
+          },
+          "concern_relevance": {
+            "type": "string",
+            "enum": ["DIRETA", "INDIRETA", "NENHUMA"],
+            "description": "Relevância para o concern escolhido (apenas se concern definido)."
+          },
+          "population_fit": {
+            "type": "string",
+            "enum": ["ENCAIXA", "PARCIAL", "FORA_DE_ESCOPO"],
+            "description": "Ajuste com o escopo populacional escolhido (apenas se população definida)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["manter", "fundir", "renomear"],
+            "description": "Ação tomada sobre esta hipótese."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Textos das hipóteses fonte que foram fundidas."
+          },
+          "source_hypotheses": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs de todas as hipóteses que contribuíram."
+          },
+          "is_core_candidate": {
+            "type": "boolean",
+            "description": "Verdadeiro se esta hipótese conecta com uma possível categoria central."
+          }
+        }
+      }
+    }
+  }
+}

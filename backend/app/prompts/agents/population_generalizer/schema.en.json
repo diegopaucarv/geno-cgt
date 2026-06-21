@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spatial_frame", "temporal_frame", "generalized_population"],
+  "properties": {
+    "spatial_frame": {
+      "type": "string",
+      "enum": ["cohabiting_group", "sparse", "high_diversity"],
+      "description": "How population members are spatially distributed."
+    },
+    "temporal_frame": {
+      "type": "string",
+      "enum": ["present_continuous", "retrospective", "prospective", "longitudinal"],
+      "description": "Time frame of the population under study."
+    },
+    "generalized_population": {
+      "type": "string",
+      "description": "2-3 sentence abstract generalization of the population, without specific locations/names/numbers."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Brief justification for the chosen frames."
+    }
+  }
+}

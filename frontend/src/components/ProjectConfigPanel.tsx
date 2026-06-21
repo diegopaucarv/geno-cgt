@@ -281,6 +281,49 @@ export default function ProjectConfigPanel({
   const [editOQValue, setEditOQValue] = useState("");
   const [rqSaving, setRqSaving] = useState(false);
 
+  // ── Classification prompt state ──
+  // The classifier prompt is stored in localStorage so backend workers can read it.
+  // Backend workers should read from the same localStorage key: "gt_classifier_prompt".
+  const DEFAULT_CLASSIFIER_PROMPT = [
+    "## System",
+    "",
+    "[ROL]",
+    "Eres un clasificador de datos cualitativos según la metodología Glaser.",
+    "",
+    "[OBJETIVO]",
+    "1. Clasifica cada segmento del texto en EXACTAMENTE uno de estos tipos:",
+    "   - baseline_data: datos centrales del fenómeno estudiado",
+    "   - interviewer_context: preguntas o intervenciones del entrevistador",
+    "   - processual_data: descripciones de procesos, secuencias, cambios",
+    "   - contextual_data: información de contexto, setting, background",
+    "2. Envuelve CADA segmento en su tag XML correspondiente.",
+    "3. NO dejes texto fuera de tags.",
+    "",
+    "[RESTRICCIONES]",
+    "- Usa SOLO los 4 tags permitidos.",
+    "- Cada bloque de texto debe estar envuelto en EXACTAMENTE un tag.",
+    "- Los tags NO deben solaparse.",
+    "- Preserva el texto original sin modificarlo.",
+    "- Responde directamente. NO uses herramientas externas.",
+    "",
+    "## Task",
+    "",
+    "<texto>",
+    "{raw_text}",
+    "</texto>",
+    "",
+    "Return the full text with XML tags wrapping each classified segment.",
+  ].join("\n");
+
+  const [classifierPrompt, setClassifierPrompt] = useState(() => {
+    try {
+      return localStorage.getItem("gt_classifier_prompt") || DEFAULT_CLASSIFIER_PROMPT;
+    } catch {
+      return DEFAULT_CLASSIFIER_PROMPT;
+    }
+  });
+  const [classifierSaved, setClassifierSaved] = useState(false);
+
   // ── Preprocess prompt state ──
   const DEFAULT_PROMPT = [
     "## System",
@@ -334,6 +377,13 @@ export default function ProjectConfigPanel({
     setPreSaved(true);
     setTimeout(() => setPreSaved(false), 2000);
   }
+
+  function saveClassifierConfig() {
+    localStorage.setItem("gt_classifier_prompt", classifierPrompt);
+    setClassifierSaved(true);
+    setTimeout(() => setClassifierSaved(false), 2000);
+  }
+
 
   useEffect(() => {
     if (!open) return;
@@ -578,6 +628,67 @@ export default function ProjectConfigPanel({
           >
             {preSaved ? "✓ Guardado" : "Guardar"}
           </button>
+        </div>
+
+        {/* ── Classification prompt ── */}
+        <div
+          style={{
+            borderTop: "1px solid #30363D",
+            marginTop: 20,
+            paddingTop: 16,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#E6EDF3",
+              marginBottom: 4,
+            }}
+          >
+            Clasificación Glaser
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "#8B949E",
+              marginBottom: 6,
+              textTransform: "uppercase",
+            }}
+          >
+            Prompt de clasificación (editable)
+          </div>
+          <textarea
+            value={classifierPrompt}
+            onChange={(e) => setClassifierPrompt(e.target.value)}
+            style={{
+              width: "100%",
+              minHeight: 300,
+              padding: 10,
+              borderRadius: 6,
+              background: "#0D1117",
+              border: "1px solid #30363D",
+              color: "#E6EDF3",
+              fontSize: 12,
+              fontFamily: "monospace",
+              resize: "vertical",
+            }}
+          />
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button
+              onClick={() => setClassifierPrompt(DEFAULT_CLASSIFIER_PROMPT)}
+              style={{ ...BTN_SECONDARY, fontSize: 11 }}
+            >
+              Reset default
+            </button>
+            <button
+              onClick={saveClassifierConfig}
+              style={{ ...BTN_PRIMARY, fontSize: 11 }}
+            >
+              {classifierSaved ? "✓ Guardado" : "Guardar"}
+            </button>
+          </div>
         </div>
       </div>
     );

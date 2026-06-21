@@ -1,7 +1,7 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["unified_categories"],
+  "required": ["unified_categories", "_self_evaluation"],
   "properties": {
     "unified_categories": {
       "type": "array",
@@ -36,6 +36,25 @@
           }
         }
       }
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true se você considera que sua saída está incompleta, é de baixa qualidade ou requer refinamento adicional"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "APENAS se needs_retry=true. Instrução CONCRETA e ACIONÁVEL sobre o que melhorar na próxima tentativa. Ex.: 'Rótulo muito genérico — especificar propriedades distintivas', 'Falta evidência do segmento 47', 'Definição mistura dois conceitos diferentes — separar'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Ação recomendada: proceed (saída correta, avançar), retry (repetir com feedback), escalate_to_hitl (decisão humana necessária), skip (pular este agente, não é relevante), abort (erro irrecuperável, parar tudo)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

@@ -262,6 +262,12 @@ services:
         - action: sync+restart
           path: ./workers/heavy/database.py
           target: /app/database.py
+        - action: sync+restart
+          path: ./workers/heavy/pattern_extractor.py
+          target: /app/pattern_extractor.py
+        - action: sync+restart
+          path: ./workers/heavy/glaser_classifier.py
+          target: /app/glaser_classifier.py
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild

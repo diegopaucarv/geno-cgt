@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unified_hypotheses"],
+  "properties": {
+    "unified_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "action", "source_hypotheses"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Texto final de la hipótesis, combinando evidencia de todas las fuentes."
+          },
+          "level": {
+            "type": "string",
+            "enum": ["general", "específica", "emergente"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["descriptiva", "relacional", "causal", "de proceso", "tipológica"]
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Evidencia combinada de todas las fuentes fusionadas."
+          },
+          "linked_categories": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Nombres de categorías que esta hipótesis conecta."
+          },
+          "concern_relevance": {
+            "type": "string",
+            "enum": ["DIRECTA", "INDIRECTA", "NINGUNA"],
+            "description": "Relevancia para el concern elegido (solo si hay concern)."
+          },
+          "population_fit": {
+            "type": "string",
+            "enum": ["ENC_AJA", "PARCIAL", "FUERA_DE_ALCANCE"],
+            "description": "Ajuste con el alcance poblacional elegido (solo si hay población)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["mantener", "fusionar", "renombrar"],
+            "description": "Acción tomada sobre esta hipótesis."
+          },
+          "merged_from": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Textos de hipótesis fuente que fueron fusionadas."
+          },
+          "source_hypotheses": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs de todas las hipótesis que contribuyeron."
+          },
+          "is_core_candidate": {
+            "type": "boolean",
+            "description": "Verdadero si esta hipótesis conecta con una posible categoría central."
+          }
+        }
+      }
+    }
+  }
+}

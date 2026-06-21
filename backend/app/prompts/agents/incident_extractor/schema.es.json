@@ -1,43 +1,50 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "extracted_incidents"
-  ],
+  "required": ["extracted_incidents"],
   "properties": {
     "extracted_incidents": {
       "type": "array",
-      "description": "Incidentes de la categoría encontrados en el documento. Array vacío si la categoría no aparece.",
+      "description": "Incidentes de la categoría objetivo encontrados en el documento. Devuelve un array vacío si la categoría no aparece.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "exact_quote",
-          "proposed_property",
-          "paradigm_element"
+          "contextual_meaning",
+          "revealed_property",
+          "incident_summary",
+          "exact_quotes",
+          "classification",
+          "classification_rationale"
         ],
         "properties": {
-          "exact_quote": {
+          "contextual_meaning": {
             "type": "string",
-            "description": "Cita textual exacta del documento. No parafrasear. Entre 10 y 300 palabras."
+            "description": "Pasos 1 y 2: Análisis crítico de lo que esta manifestación significa en su contexto textual, sin dejar nada de lado."
           },
-          "proposed_property": {
+          "revealed_property": {
             "type": "string",
-            "description": "Propiedad de la categoría que este incidente revela (ej., 'alta intensidad', 'contexto laboral')."
+            "description": "Paso 3: La característica o propiedad específica de la categoría que este incidente revela."
           },
-          "paradigm_element": {
+          "incident_summary": {
             "type": "string",
-            "enum": [
-              "dimension",
-              "condition",
-              "consequence",
-              "strategy"
-            ],
-            "description": "Elemento del paradigma CGT: dimension (propiedad variable), condition (circunstancia), consequence (resultado), strategy (acción)."
+            "description": "Paso 4: Un resumen compacto y preciso en una sola oración del incidente, en lenguaje simple, evitando jerga académica."
           },
-          "ambiguity_note": {
+          "exact_quotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paso 5: Citas textuales exactas del texto que muestran cómo el incidente se manifiesta en la vida real. No parafrasear."
+          },
+          "classification": {
             "type": "string",
-            "description": "Si el incidente podría pertenecer a otra categoría, anotarlo aquí. Cadena vacía si no hay ambigüedad."
+            "enum": ["CONTRADICE", "EXPANDE", "CONFIRMA"],
+            "description": "Paso 6: Clasificación de cómo el incidente se relaciona con la definición actual de la categoría."
+          },
+          "classification_rationale": {
+            "type": "string",
+            "description": "Paso 6: Una justificación corta que conecta la clasificación con el significado de la categoría."
           }
         }
       }

@@ -121,6 +121,10 @@ PROMPT_TIER_MAP: dict[str, str] = {
     "resegmenter": "flash",
     "text_cleaner": "flash",
     "f0_population_generalizer": "flash",
+    # === CWM (Context Window Management) ===
+    "cwm_map_grouper": "flash",
+    "cwm_reduce_merger": "pro",
+    "cwm_react_explorer": "pro",
 }
 
 

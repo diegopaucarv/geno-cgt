@@ -8,6 +8,7 @@ import os
 
 from algorithmic_checks import deduplicate_hypotheses
 from app.core.runtime_config import get_config_value
+from context_utils import inject_chosen_context
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -147,7 +148,11 @@ def _b2a_extract_indicators(segments_text: str) -> dict:
 
 
 def _b2b_generate_codes(
-    pop_assumption: str, pop_context: str, existing_codes: str, indicators_text: str
+    pop_assumption: str,
+    pop_context: str,
+    existing_codes: str,
+    indicators_text: str,
+    proyecto_id: str = "",
 ) -> dict:
     """DEPRECATED since F4.1 — B2b (PRO): Generate codes from pre-extracted indicators.
 
@@ -161,16 +166,23 @@ def _b2b_generate_codes(
         DeprecationWarning,
         stacklevel=2,
     )
+    variables = {
+        "population_assumption": pop_assumption,
+        "population_context": pop_context,
+        "existing_codes": existing_codes,
+        "indicators": indicators_text,
+        "object_of_study": "concern",
+        "operational_question": "(not yet generated)",
+    }
+    if proyecto_id:
+        s = SessionLocal()
+        try:
+            variables = inject_chosen_context(proyecto_id, s, variables)
+        finally:
+            s.close()
     return llm.run_agent(
         agent_id="fb_code_generator",
-        variables={
-            "population_assumption": pop_assumption,
-            "population_context": pop_context,
-            "existing_codes": existing_codes,
-            "indicators": indicators_text,
-            "object_of_study": "concern",
-            "operational_question": "(not yet generated)",
-        },
+        variables=variables,
         temperature=0.3,
     )
 
@@ -633,9 +645,10 @@ def b3_generate_hypotheses(
                 operational_question,
             )
         else:
-            response = llm.run_agent(
-                agent_id="fb_hypothesis_generator",
-                variables={
+            variables = inject_chosen_context(
+                proyecto_id,
+                session,
+                {
                     "population_assumption": pop_assumption,
                     "population_context": pop_ctx[0] if pop_ctx else "",
                     "processes": processes_text,
@@ -645,6 +658,10 @@ def b3_generate_hypotheses(
                     "operational_question": operational_question
                     or "(not yet generated)",
                 },
+            )
+            response = llm.run_agent(
+                agent_id="fb_hypothesis_generator",
+                variables=variables,
                 temperature=0.4,
             )
             raw_hypotheses = response.get("hypotheses", [])
@@ -666,6 +683,11 @@ def b3_generate_hypotheses(
                 hyp["_linked_category_ids"] = cat_ids
 
         filtered = deduplicate_hypotheses(raw_hypotheses, session, proyecto_id)
+        batch_row = session.execute(
+            text("SELECT batch_number FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+        batch_num = batch_row[0] if batch_row and batch_row[0] else 0
         created = 0
         reinforced = 0
         for hyp in filtered:
@@ -678,14 +700,15 @@ def b3_generate_hypotheses(
             linked_ids = hyp.get("_linked_category_ids", [])
             session.execute(
                 text(
-                    "INSERT INTO hypotheses (id, project_id, text, level, confidence, status, concern_labels) "
-                    "VALUES (gen_random_uuid(), :pid, :txt, :lvl, 0.5, 'candidate', CAST(:labels AS jsonb))"
+                    "INSERT INTO hypotheses (id, project_id, text, level, confidence, status, concern_labels, batch_number) "
+                    "VALUES (gen_random_uuid(), :pid, :txt, :lvl, 0.5, 'candidate', CAST(:labels AS jsonb), :batch_num)"
                 ),
                 {
                     "pid": proyecto_id,
                     "txt": hyp_text,
                     "lvl": hyp.get("level", "emergent"),
                     "labels": json.dumps(linked_ids) if linked_ids else None,
+                    "batch_num": batch_num,
                 },
             )
             created += 1
@@ -801,9 +824,10 @@ def update_hypotheses_incremental(proyecto_id: str) -> dict:
         )
 
         # ── 6. Call AI to update relationships ──
-        response = llm.run_agent(
-            agent_id="fb_hypothesis_generator",
-            variables={
+        variables = inject_chosen_context(
+            proyecto_id,
+            session,
+            {
                 "population_assumption": pop_assumption,
                 "population_context": "(incremental update — recurring hypotheses agent)",
                 "processes": processes_text,
@@ -814,6 +838,10 @@ def update_hypotheses_incremental(proyecto_id: str) -> dict:
                 "object_of_study": "concern",
                 "operational_question": "(recurring relationship update — evaluar relaciones entre todas las categorías)",
             },
+        )
+        response = llm.run_agent(
+            agent_id="fb_hypothesis_generator",
+            variables=variables,
             temperature=0.4,
         )
 
@@ -999,6 +1027,8 @@ def b3_generate_hypotheses_agentic(
         "search_similar_codes",
         "Busca codigos similares (anti-redundancia).",
     )
+    # Registrar CWM tools (Context Window Management)
+    tools.register_all_defaults()
 
     runner = ReactRunner(
         agent_id="fb_hypothesis_generator",
@@ -1008,18 +1038,29 @@ def b3_generate_hypotheses_agentic(
         timeout_seconds=300.0,
     )
 
+    # ── Open short-lived session for chosen_context injection ──
+    _s = SessionLocal()
+    try:
+        generate_vars = inject_chosen_context(
+            proyecto_id,
+            _s,
+            {
+                "population_assumption": pop_assumption,
+                "population_context": pop_context,
+                "processes": processes_text,
+                "codes": codes_text,
+                "existing_hypotheses": hyp_text,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
+            },
+        )
+    finally:
+        _s.close()
+
     result = runner.run(
         project_id=proyecto_id,
         role_description="Eres un generador de hipotesis para Grounded Theory con acceso a herramientas de busqueda.",
-        generate_vars={
-            "population_assumption": pop_assumption,
-            "population_context": pop_context,
-            "processes": processes_text,
-            "codes": codes_text,
-            "existing_hypotheses": hyp_text,
-            "object_of_study": object_of_study,
-            "operational_question": operational_question or "(not yet generated)",
-        },
+        generate_vars=generate_vars,
     )
 
     if result.success:
@@ -1034,17 +1075,26 @@ def b3_generate_hypotheses_agentic(
 
     # Fallback to single-shot on failure
     logger.warning("Agentic B3 failed: %s. Falling back to single-shot.", result.error)
+    _s2 = SessionLocal()
+    try:
+        fallback_vars = inject_chosen_context(
+            proyecto_id,
+            _s2,
+            {
+                "population_assumption": pop_assumption,
+                "population_context": pop_context,
+                "processes": processes_text,
+                "codes": codes_text,
+                "existing_hypotheses": hyp_text,
+                "object_of_study": object_of_study,
+                "operational_question": operational_question or "(not yet generated)",
+            },
+        )
+    finally:
+        _s2.close()
     response = llm.run_agent(
         agent_id="fb_hypothesis_generator",
-        variables={
-            "population_assumption": pop_assumption,
-            "population_context": pop_context,
-            "processes": processes_text,
-            "codes": codes_text,
-            "existing_hypotheses": hyp_text,
-            "object_of_study": object_of_study,
-            "operational_question": operational_question or "(not yet generated)",
-        },
+        variables=fallback_vars,
         temperature=0.4,
     )
     return response.get("hypotheses", [])

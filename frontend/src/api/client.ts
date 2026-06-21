@@ -162,6 +162,7 @@ export interface Document {
   estado: string;
   texto_extraido?: string;
   texto_preprocesado?: string;
+  texto_clasificado?: string;
   texto_original?: string;
   preprocess_warning?: string;
   sort_order?: number;
@@ -1014,6 +1015,8 @@ export interface MemoTypeItem {
   icon: string;
   color: string;
   description: string;
+  requires_agent?: string;
+  agent_status?: "not_run" | "completed";
 }
 
 export interface AvailableMemoTypes {
@@ -1044,7 +1047,12 @@ export async function getEntityTypeColors(): Promise<{
 
 export async function createMemo(
   projectId: string,
-  body: { tipo: string; contenido: string; es_confidencial: boolean },
+  body: {
+    tipo: string;
+    contenido: string;
+    es_confidencial: boolean;
+    structured_fields?: Record<string, unknown>;
+  },
 ): Promise<{ id: string; tipo: string; stage: string; user_created: boolean }> {
   return request(`/projects/${projectId}/memos`, {
     method: "POST",
@@ -1091,6 +1099,48 @@ export async function getPipelineDecisions(projectId: string): Promise<{
   >;
 }> {
   return request(`/projects/${projectId}/pipeline/decisions`);
+}
+
+// ── Chain Runs ───────────────────────────────────────────────────────
+
+export interface AgentRunItem {
+  agent_id: string;
+  attempt_number: number;
+  output: Record<string, any>;
+  tokens_used: number;
+  tool_calls_count: number;
+  retry_count: number;
+  orchestrator_action: "proceed" | "force_proceed" | "skip";
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface ChainRunItem {
+  id: string;
+  project_id: string;
+  chain_id: string;
+  parent_chain_run_id: string | null;
+  status: "running" | "completed" | "aborted" | "paused_hitl";
+  agent_runs: AgentRunItem[] | null;
+  total_tokens: number;
+  total_retries: number;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: string;
+  created_at: string | null;
+}
+
+export async function getChainRuns(
+  projectId: string,
+  chainId?: string,
+  limit?: number,
+  includeAgentRuns?: boolean,
+): Promise<ChainRunItem[]> {
+  const params = new URLSearchParams();
+  if (chainId) params.set("chain_id", chainId);
+  if (limit) params.set("limit", String(limit));
+  params.set("include_agent_runs", String(includeAgentRuns ?? true));
+  return request(`/projects/${projectId}/chain-runs?${params}`);
 }
 
 // ── Agent Log Types ──

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 
+from context_utils import inject_chosen_context
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -267,10 +268,14 @@ def synthesize_categories(proyecto_id: str, batch_start_doc_index: int) -> dict:
         # ── 5. Call AI ──
         response = llm.run_agent(
             agent_id="fd_category_synthesizer",
-            variables={
-                "previous_categories": previous_formatted,
-                "new_categories": new_formatted,
-            },
+            variables=inject_chosen_context(
+                proyecto_id,
+                session,
+                {
+                    "previous_categories": previous_formatted,
+                    "new_categories": new_formatted,
+                },
+            ),
         )
 
         unified = response.get("unified_categories", [])

@@ -3,7 +3,8 @@
   "required": [
     "surprising_details",
     "language_patterns",
-    "data_production_context"
+    "data_production_context",
+    "_self_evaluation"
   ],
   "properties": {
     "surprising_details": {
@@ -17,6 +18,25 @@
     "data_production_context": {
       "type": "string",
       "description": "What you observe about how this document was produced: physical setting, participant attitude, power dynamics, avoided topics. If no new observations: 'No changes from the previous version.' If the text contains no clues about the production context: 'Insufficient evidence in this document.'"
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true if you consider your output is incomplete, low quality, or requires additional refinement"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "ONLY if needs_retry=true. CONCRETE and ACTIONABLE instruction on what to improve in the next attempt. E.g.: 'Label too generic — specify distinctive properties', 'Missing evidence from segment 47', 'Definition mixes two different concepts — separate'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Recommended action: proceed (output correct, continue), retry (retry with feedback), escalate_to_hitl (human decision needed), skip (skip this agent, not relevant), abort (unrecoverable error, stop everything)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

@@ -1,22 +1,60 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "classification"
-  ],
+  "required": ["classification", "revealed_insight"],
   "properties": {
     "classification": {
       "type": "string",
       "enum": [
-        "POSITIVE",
-        "CONTRAST",
-        "NO_EVIDENCE"
+        "REVEALS_NEW_PROPERTY",
+        "REVEALS_VARIATION",
+        "REVEALS_COUNTERPATTERN",
+        "NO_NEW_INFORMATION"
       ],
-      "description": "POSITIVE: evidência direta a favor. CONTRAST: confirma por oposição. NO_EVIDENCE: sem dado relevante ou ambíguo."
+      "description": "REVEALS_NEW_PROPERTY: revela uma nova dimensão, propriedade ou condição. REVEALS_VARIATION: mostra uma variação do mesmo padrão. REVEALS_COUNTERPATTERN: mostra um padrão oposto que complexifica a hipótese. NO_NEW_INFORMATION: não acrescenta nada de novo."
+    },
+    "revealed_insight": {
+      "type": "string",
+      "description": "Uma frase que captura O QUE os segmentos revelam sobre o fenômeno (não se confirmam a hipótese)."
+    },
+    "suggested_hypothesis_refinement": {
+      "type": "string",
+      "description": "Se REVEALS_NEW_PROPERTY ou REVEALS_COUNTERPATTERN, sugira como refinar a hipótese. Caso contrário, omitir."
     },
     "brief_rationale": {
       "type": "string",
       "description": "Uma frase justificando a classificação, citando o segmento-chave."
+    },
+    "referenced_entities": {
+      "type": "object",
+      "description": "Entities from the database that were referenced in this analysis. Populated by the orchestration layer for traceability.",
+      "properties": {
+        "segment_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Segment IDs referenced in this output."
+        },
+        "code_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Category/code IDs referenced in this output."
+        },
+        "hypothesis_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hypothesis IDs referenced in this output."
+        },
+        "incident_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Incident IDs referenced in this output."
+        },
+        "document_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Document IDs referenced in this output."
+        }
+      }
     }
   }
 }

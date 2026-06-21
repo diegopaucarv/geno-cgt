@@ -2,7 +2,8 @@
   "type": "object",
   "required": [
     "process_description",
-    "data_classification"
+    "data_classification",
+    "_self_evaluation"
   ],
   "properties": {
     "process_description": {
@@ -27,6 +28,25 @@
     "difference_from_previous": {
       "type": "string",
       "description": "How it DIFFERS from the previous one. If it is the first participant: 'N/A — first participant'."
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true if you consider your output is incomplete, low quality, or requires additional refinement"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "ONLY if needs_retry=true. CONCRETE and ACTIONABLE instruction on what to improve in the next attempt. E.g.: 'Label too generic — specify distinctive properties', 'Missing evidence from segment 47', 'Definition mixes two different concepts — separate'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Recommended action: proceed (output correct, continue), retry (retry with feedback), escalate_to_hitl (human decision needed), skip (skip this agent, not relevant), abort (unrecoverable error, stop everything)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

@@ -3,7 +3,8 @@
   "required": [
     "surprising_details",
     "language_patterns",
-    "data_production_context"
+    "data_production_context",
+    "_self_evaluation"
   ],
   "properties": {
     "surprising_details": {
@@ -17,6 +18,25 @@
     "data_production_context": {
       "type": "string",
       "description": "Qué observas sobre cómo se produjo este documento: entorno físico, actitud del participante, dinámicas de poder, temas evitados. Si no hay observaciones nuevas: 'Sin cambios respecto a la versión anterior.' Si el texto no contiene pistas sobre el contexto de producción: 'Evidencia insuficiente en este documento.'"
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true si consideras que tu output está incompleto, es de baja calidad, o requiere refinamiento adicional"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "SOLO si needs_retry=true. Instrucción CONCRETA y ACCIONABLE de qué mejorar en el próximo intento. Ej: 'Etiqueta demasiado genérica — especificar propiedades distintivas', 'Falta evidencia del segmento 47', 'La definición mezcla dos conceptos distintos — separar'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Acción recomendada: proceed (output correcto, avanzar), retry (reintentar con feedback), escalate_to_hitl (decisión humana necesaria), skip (saltar este agente, no es relevante), abort (error irrecuperable, detener todo)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

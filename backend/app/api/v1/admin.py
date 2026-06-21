@@ -137,7 +137,7 @@ async def stop_project_pipeline(
     ).scalar_one_or_none()
 
     if not run:
-        # Sin run activo, revocar cualquier tarea suelta
+        # Sin run activo — revocar todo + purgar colas + resetear docs
         inspector = celery_app.control.inspect()
         active = inspector.active() or {}
         revoked = 0
@@ -145,6 +145,26 @@ async def stop_project_pipeline(
             for task in tasks:
                 celery_app.control.revoke(task["id"], terminate=True)
                 revoked += 1
+        # Purge queues
+        try:
+            import os as _os2
+
+            import redis.asyncio as _aredis2
+
+            r = _aredis2.from_url(_os2.getenv("REDIS_URL", "redis://redis:6379/0"))
+            for queue in ("nlp", "heavy", "fast"):
+                await r.delete(queue)
+            await r.close()
+        except Exception:
+            pass
+        # Reset intermediate doc estados
+        await db.execute(
+            text(
+                "UPDATE documentos SET estado = 'crudo' WHERE estado IN "
+                "('preprocesando', 'segmentando', 'procesando', 'resumiendo')"
+            ),
+        )
+        await db.commit()
         return {
             "status": "stopped",
             "active_run": None,

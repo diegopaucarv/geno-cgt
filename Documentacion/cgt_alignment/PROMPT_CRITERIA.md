@@ -328,6 +328,8 @@ constraints:
 |--------|-------|
 | `punctuator.md` | Textos largos (>2000 chars). Requiere precisión ortotipográfica que Nemotron no entrega. DeepSeek V4 lo hace en 4s. |
 | `a2_process_identifier.md` | Requiere razonamiento cualitativo (identificar proceso central de un entrevistado). Inputs de longitud variable. |
+| `glaser_data_classifier.md` | PRO — pre-segmentación con tags markdown. Una llamada por documento. |
+| `fe_core_saturation_critic.md` | Promovido a PRO — requiere razonamiento cualitativo para determinar equivalencia semántica entre propiedades (no es clasificación simple). |
 
 ### Mantenidos como FLASH
 
@@ -335,9 +337,8 @@ constraints:
 |--------|-------|
 | `b2a_extract_indicators.md` | Extracción determinista de frases. Inputs acotados (segmentos individuales). |
 | `evidence_classifier.md` | Clasificación binaria simple (POSITIVE/CONTRAST/NO_EVIDENCE). |
-| `glaser_data_classifier.md` | Clasificación por segmento individual. Textos cortos. ⚙️+FLASH (dos capas). |
 | `corpus_scanner.md` | Escaneo de presencia/ausencia. Baja ambigüedad. |
-| `incident_extractor.md` | Output ≤1 párrafo (4 respuestas cortas + jot). Alto volumen (cientos/proyecto). Keep-moving. |
+| `incident_extractor.md` | Reemplazado por extract_patterns_and_incidents (PRO, per-documento unificado). ~15 llamadas → 1 llamada PRO. |
 
 ### Legacy (.txt, sintaxis vieja)
 

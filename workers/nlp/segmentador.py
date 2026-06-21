@@ -329,7 +329,6 @@ class ProgressiveSegmenter:
                     processors="tokenize,pos,lemma,depparse,constituency,coref",
                     use_gpu=self.stanza_use_gpu,
                     verbose=False,
-                    download_method=None,  # no descargar, usar modelos locales
                 )
 
                 print("[COREF] ✓ Stanza coref pipeline cargado.")

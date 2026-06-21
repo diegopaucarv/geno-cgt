@@ -50,24 +50,13 @@ def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
     """
     session = SessionLocal()
     try:
-        # ── Load previous categories with variation summaries ──
-        prev_cats = session.execute(
+        # ── Load incident IDs from already-formed groups (no labels/definitions) ──
+        prev_groups = session.execute(
             text(
-                "SELECT c.nombre, c.definicion, "
-                "COALESCE(jsonb_array_length(ig.incident_ids_json), 0) as inc_count "
-                "FROM categorias c "
-                "LEFT JOIN incident_groups ig ON ig.label = c.nombre "
-                "AND ig.proyecto_id = c.proyecto_id "
-                "WHERE c.proyecto_id = :pid"
+                "SELECT incident_ids_json FROM incident_groups WHERE proyecto_id = :pid"
             ),
             {"pid": proyecto_id},
         ).fetchall()
-        previous_categories_text = ""
-        if prev_cats:
-            previous_categories_text = (
-                "PREVIOUS CATEGORIES (from earlier batches):\n"
-                + "\n".join(f"- {c[0]}: {c[1]} ({c[2]} incidents)" for c in prev_cats)
-            )
 
         # ── Load incidents grouped by document ──
         rows = session.execute(
@@ -114,10 +103,27 @@ def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
         if current_block:
             doc_blocks.append((current_doc, current_block))
 
+        # ── Build note about already-grouped incidents (short IDs only, no labels) ──
+        uuid_to_short = {v: k for k, v in inc_map.items()}
+        already_grouped_ids: list[str] = []
+        for pg in prev_groups:
+            ids_json = pg[0] if pg[0] else []
+            for uid in ids_json:
+                short = uuid_to_short.get(uid)
+                if short:
+                    already_grouped_ids.append(short)
+        grouped_note = ""
+        if already_grouped_ids:
+            grouped_note = (
+                "NOTE: The following incidents are already part of existing groups "
+                "(they may form NEW groups with other incidents, but do not create "
+                "groups consisting solely of already-grouped incidents):\n"
+                + ", ".join(already_grouped_ids)
+                + "\n\n"
+            )
+
         # ── Build the prompt text ──
-        incidents_text = (
-            previous_categories_text + "\n" if previous_categories_text else ""
-        )
+        incidents_text = grouped_note
         for doc_name, incidents in doc_blocks:
             incidents_text += (
                 f"\n=== Document: {doc_name} ({len(incidents)} incidents) ===\n"
@@ -154,7 +160,7 @@ def b1_group_incidents(proyecto_id: str, incremental: bool = False) -> dict:
             logger.warning(
                 "B1: 0 groups in AI response. Keys: %s, raw (500 chars): %s",
                 list(response.keys())
-                if isinstance(response, dict)
+                if (hasattr(response, "keys") or isinstance(response, dict))
                 else type(response).__name__,
                 str(response)[:500],
             )

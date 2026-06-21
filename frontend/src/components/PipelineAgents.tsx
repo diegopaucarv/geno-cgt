@@ -7,11 +7,15 @@ import { useI18n } from "../i18n";
 
 interface PipelineAgentsProps {
   agentStatuses: Record<string, "pending" | "running" | "done" | "error">;
-  onRunAgent: (agentId: string) => void;
+  onRunAgent: (agentId: string) => void | Promise<void>;
   onStopAgent: (agentId: string) => void;
   pipelineRunning: boolean;
   completedAgents: Set<string>;
   iterations: Record<string, number>;
+  agentDocCounts: Record<string, { done: number; total: number }>;
+  /** Per-agent count of documents actually eligible (in the correct estado for this agent).
+   *  If 0, the agent button is disabled regardless of dependency status. */
+  eligibleDocCounts: Record<string, number>;
   stages?: StageDef[];
 }
 
@@ -52,6 +56,8 @@ export default function PipelineAgents({
   pipelineRunning,
   completedAgents,
   iterations,
+  agentDocCounts,
+  eligibleDocCounts,
   stages,
 }: PipelineAgentsProps) {
   const { t } = useI18n();
@@ -159,8 +165,16 @@ export default function PipelineAgents({
   );
 
   function renderAgent(agent: AgentDef) {
-    const status = agentStatuses[agent.id] || "pending";
-    const canRun = canRunAgent(agent.id, completedAgents) && !pipelineRunning;
+    const rawStatus = agentStatuses[agent.id] || "pending";
+    const docCount = agentDocCounts[agent.id];
+    const allDocsDone = docCount
+      ? docCount.done >= docCount.total && docCount.total > 0
+      : false;
+    // Agent only shows "done" when ALL docs have been processed through it
+    const status = rawStatus === "done" && !allDocsDone ? "pending" : rawStatus;
+    const depsMet = canRunAgent(agent.id, completedAgents);
+    const eligible = (eligibleDocCounts[agent.id] ?? 0) > 0;
+    const canRun = depsMet && eligible && !pipelineRunning;
     const isHovered = hoveredAgent === agent.id;
     const isRunning = status === "running";
     const tierColor = FAMILY_COLORS[agent.tier] || "#8B949E";
@@ -243,6 +257,18 @@ export default function PipelineAgents({
           }}
         >
           {t(agent.label)}
+          {agentDocCounts[agent.id] && (
+            <span
+              style={{
+                fontSize: 9,
+                color: "#484F58",
+                marginLeft: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {agentDocCounts[agent.id].done}/{agentDocCounts[agent.id].total}
+            </span>
+          )}
         </span>
 
         {/* Play/Pause button on hover */}

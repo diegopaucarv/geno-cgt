@@ -5,7 +5,7 @@ A1. POPULATION_CONTEXT_BUILDER — memoria de largo plazo
 A2. PROCESS_IDENTIFIER — memoria de corto plazo por documento
 A3. SENSE_MAKER — hipótesis emergentes (desde doc 3)
 
-Pipeline: A1 → A2 → (si doc_count ≥ 3) A3
+Pipeline: A1 → A2 → (si doc_count ≥ OPEN_CODING_BATCH_SIZE) A3
 
 Los prompts se cargan desde /app/prompts/. No están hardcodeados.
 El `population_assumption` (supuesto poblacional) viene del proyecto.
@@ -26,9 +26,12 @@ sys.path.insert(0, "/app")
 
 from algorithmic_checks import (
     check_output_references,
-    classify_segments_batch,
 )
+from context_utils import inject_chosen_context
 from database import SessionLocal
+from glaser_classifier import (
+    classify_document_with_validation,
+)
 from llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -140,6 +143,12 @@ app.conf.update(
 )
 llm = LLMClient()
 
+# ── Batch configuration (overridable via env var) ──
+# Controls how many documents form a batch for synthesis, pattern verification, etc.
+import os as _os_config
+
+OPEN_CODING_BATCH_SIZE = int(_os_config.getenv("GT_OPEN_CODING_BATCH_SIZE", "3"))
+
 
 def _get_population_assumption(session, proyecto_id: str) -> str:
     """Obtiene el supuesto poblacional del proyecto, o el default."""
@@ -186,7 +195,11 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
 
         segments = session.execute(
             text(
-                "SELECT texto FROM segmentos WHERE documento_id = :did ORDER BY posicion LIMIT 15"
+                # E6: Filter to baseline_data only — non-baseline segments (interviewer context,
+                # procedural talk, etc.) should not influence population context analysis.
+                "SELECT texto FROM segmentos WHERE documento_id = :did "
+                "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL) "
+                "ORDER BY posicion LIMIT 15"
             ),
             {"did": documento_id},
         ).fetchall()
@@ -200,13 +213,18 @@ def a1_build_population_context(documento_id: str, proyecto_id: str) -> dict:
 
         response = llm.run_agent(
             agent_id="fa_population_context",
-            variables={
-                "population_assumption": pop_assumption,
-                "existing_context": existing_context or "(sin contexto previo)",
-                "segments": "\n---\n".join(r[0] for r in segments)[:8000],
-                "object_of_study": object_of_study,
-                "operational_question": operational_question or "(not yet generated)",
-            },
+            variables=inject_chosen_context(
+                proyecto_id,
+                session,
+                {
+                    "population_assumption": pop_assumption,
+                    "existing_context": existing_context or "(sin contexto previo)",
+                    "segments": "\n---\n".join(r[0] for r in segments)[:8000],
+                    "object_of_study": object_of_study,
+                    "operational_question": operational_question
+                    or "(not yet generated)",
+                },
+            ),
             temperature=0.3,
         )
 
@@ -303,7 +321,10 @@ def a2_identify_process(documento_id: str, proyecto_id: str) -> dict:
 
         segments = session.execute(
             text(
-                "SELECT texto FROM segmentos WHERE documento_id = :did ORDER BY posicion LIMIT 8"
+                # E6: Filter to baseline_data only for process identification analysis.
+                "SELECT texto FROM segmentos WHERE documento_id = :did "
+                "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL) "
+                "ORDER BY posicion LIMIT 8"
             ),
             {"did": documento_id},
         ).fetchall()
@@ -560,6 +581,7 @@ def a3_make_sense(proyecto_id: str) -> dict:
 
 def _ensure_segmented(session, documento_id: str) -> None:
     """Verifica que el doc tenga segmentos. Lanza error si no."""
+    # E6: No baseline_data filter — we're just checking that segmentation exists at all.
     count = session.execute(
         text("SELECT COUNT(*) FROM segmentos WHERE documento_id = :did"),
         {"did": documento_id},
@@ -577,117 +599,74 @@ BATCH_SIZE = 25  # segments per AI call for large documents
 def _classify_glaser_types_for_doc(
     session, documento_id: str, use_llm_fallback: bool = True
 ) -> int:
-    """F2.1: Clasifica todos los segmentos de un documento via AI en batch.
+    """F2.1: Clasifica documento via 3-step Glaser classifier con validator loop.
 
-    Envía TODOS los segmentos en lotes de BATCH_SIZE a un modelo PRO.
-    La IA hace explication de texte: clasifica cada segmento y detecta
-    preguntas del autor (→ 'interviewer_context').
+    Delega en classify_document_with_validation() que ejecuta:
+    Step 1 (PRO): XML tag classification del texto completo
+    Step 2 (FLASH): Structure validator + algorithmic fallback
+    Step 3: Baseline selection
 
-    Sin capa algorítmica. Sin FLASH por segmento.
+    Con validator loop: validate → feedback → re-classify → ... hasta max 3 rounds.
 
-    Persiste en segmentos.tipo_dato_glaser.
+    Persiste:
+    - documentos.metadatos->>'texto_clasificado': XML-tagged full text
+    - documentos.metadatos->>'baseline_tags': baseline text segments
+    - segmentos.tipo_dato_glaser: per-segment Glaser type
 
     Returns:
         Número de segmentos clasificados.
     """
-    rows = session.execute(
-        text(
-            "SELECT id, texto, posicion FROM segmentos "
-            "WHERE documento_id = :did ORDER BY posicion"
-        ),
-        {"did": documento_id},
-    ).fetchall()
-
-    if not rows:
-        return 0
-
-    # Build segment list for the batch classifier
-    all_segments = [
-        {"id": str(r[0]), "text": r[1] or "", "posicion": r[2]} for r in rows
-    ]
-
-    # Check project config for interviewer flag
-    allow_interviewer = False
-    try:
-        proj = session.execute(
-            text(
-                "SELECT population_assumption FROM proyectos p "
-                "JOIN documentos d ON d.proyecto_id = p.id "
-                "WHERE d.id = :did"
-            ),
+    if not use_llm_fallback:
+        # Conservative fallback: mark all segments as baseline_data
+        # E6: No baseline_data filter — fallback operates on ALL segments (the classification
+        # itself will set tipo_dato_glaser on each segment).
+        result = session.execute(
+            text("SELECT id FROM segmentos WHERE documento_id = :did"),
             {"did": documento_id},
-        ).fetchone()
-        if proj and proj[0] and isinstance(proj[0], dict):
-            allow_interviewer = proj[0].get("allow_interviewer_as_baseline", False)
-    except Exception:
-        pass
+        ).fetchall()
+        for row in result:
+            session.execute(
+                text(
+                    "UPDATE segmentos SET tipo_dato_glaser = 'baseline_data' WHERE id = :sid"
+                ),
+                {"sid": str(row[0])},
+            )
+        session.commit()
+        return len(result)
 
-    classified = 0
-    total = len(all_segments)
-    batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+    # Get proyecto_id from document
+    proj_row = session.execute(
+        text("SELECT proyecto_id FROM documentos WHERE id = :did"),
+        {"did": documento_id},
+    ).fetchone()
+    if not proj_row:
+        return 0
+    proyecto_id = str(proj_row[0])
 
-    logger.info(
-        "Glaser batch classification: doc=%s, %d segments → %d batch(es) [BATCH_SIZE=%d]",
-        documento_id[:8],
-        total,
-        batches,
-        BATCH_SIZE,
+    # Run the 3-step classifier with validator loop
+    result = classify_document_with_validation(
+        documento_id=documento_id,
+        proyecto_id=proyecto_id,
+        session=session,
+        llm_client=llm,
+        max_validation_rounds=3,
     )
 
-    for batch_idx in range(batches):
-        start = batch_idx * BATCH_SIZE
-        end = min(start + BATCH_SIZE, total)
-        batch = all_segments[start:end]
-
-        logger.info(
-            "Glaser batch %d/%d: %d segments",
-            batch_idx + 1,
-            batches,
-            len(batch),
-        )
-
-        if not use_llm_fallback:
-            # Conservative default: everything baseline
-            for s in batch:
-                session.execute(
-                    text(
-                        "UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"
-                    ),
-                    {"tipo": "baseline_data", "sid": s["id"]},
-                )
-                classified += 1
-            continue
-
-        results = classify_segments_batch(
-            batch,
-            llm_client=llm,
-            allow_interviewer_as_baseline=allow_interviewer,
-        )
-
-        for r in results:
-            glaser_type = r.get("glaser_data_type")
-            if glaser_type:
-                session.execute(
-                    text(
-                        "UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"
-                    ),
-                    {"tipo": glaser_type, "sid": r["segment_id"]},
-                )
-                classified += 1
-
-    session.commit()
     logger.info(
-        "Glaser classification complete: %d/%d segments (doc=%s, batches=%d)",
-        classified,
-        total,
-        documento_id[:8],
-        batches,
+        "Glaser 3-step result: status=%s, rounds=%d, baseline_tags=%d, segments=%d",
+        result.get("status"),
+        result.get("validation_rounds", 0),
+        result.get("baseline_tags_count", 0),
+        result.get("segments_classified", 0),
     )
-    return classified
+
+    return result.get("segments_classified", 0)
 
 
 def _anchor_segments(session, documento_id: str, full_text: str) -> None:
     """A2: Calcula first_10, start_char, end_char para cada segmento."""
+    # E6: No baseline_data filter — anchor reconstruction needs ALL segments to properly
+    # map positions in the full text. Filtering would break start_char/end_char accuracy.
     import re as _re
     import sys as _sys
 
@@ -841,6 +820,7 @@ class AbortableTask(_CeleryTask):
         self._original_sigterm = None
 
     def __call__(self, *args, **kwargs):
+        self._aborted = False  # reset for each new task execution
         self._original_sigterm = _signal.getsignal(_signal.SIGTERM)
         _signal.signal(_signal.SIGTERM, self._handle_sigterm)
         try:
@@ -949,6 +929,12 @@ def process_document_agents_a(
             raise TaskCancelledError()
         if STEP not in completed:
             checkpoint(session, documento_id, STEP, "in_progress")
+            # Mark document as extracting incidents
+            session.execute(
+                text("UPDATE documentos SET estado = 'extrayendo' WHERE id = :did"),
+                {"did": documento_id},
+            )
+            session.commit()
             logger.info("F2.3: Extracting patterns & incidents doc %s", documento_id)
             try:
                 from pattern_extractor import (
@@ -972,7 +958,7 @@ def process_document_agents_a(
                 results["document_signals"] = {}
             checkpoint(session, documento_id, STEP, "completed")
 
-        # ── Step 0.7: F2.5 — Every 3 documents, verify pattern convergence (PRO) ──
+        # ── Step 0.7: F2.5 — Every OPEN_CODING_BATCH_SIZE docs, verify pattern convergence (PRO) ──
         if self._aborted:
             raise TaskCancelledError()
         doc_count = session.execute(
@@ -983,7 +969,10 @@ def process_document_agents_a(
             {"pid": proyecto_id},
         ).fetchone()[0]
 
-        if doc_count >= 3 and doc_count % 3 == 0:
+        if (
+            doc_count >= OPEN_CODING_BATCH_SIZE
+            and doc_count % OPEN_CODING_BATCH_SIZE == 0
+        ):
             logger.info(
                 "F2.5: Dispatching verify_core_pattern for project=%s (doc %d)",
                 proyecto_id[:8],
@@ -999,13 +988,6 @@ def process_document_agents_a(
             except Exception as e:
                 logger.warning("F2.5 verify_core_pattern dispatch failed: %s", e)
                 results["pattern_verification_dispatched"] = False
-
-        # ── Update estado → procesando ──
-        session.execute(
-            text("UPDATE documentos SET estado = 'procesando' WHERE id = :did"),
-            {"did": documento_id},
-        )
-        session.commit()
 
         # ── Step 1: A1 — Population Context ──
         STEP = "a1_population_context"
@@ -1049,7 +1031,7 @@ def process_document_agents_a(
             session,
             documento_id,
             proyecto_id,
-            "procesando",
+            "extrayendo",
             "process_document_agents_a",
             True,
         )
@@ -1066,7 +1048,7 @@ def process_document_agents_a(
             session,
             documento_id,
             proyecto_id,
-            "procesando",
+            "extrayendo",
             "process_document_agents_a",
             False,
         )
@@ -1079,11 +1061,8 @@ def process_document_agents_a(
 # Agentes B — wrappers Celery (F2.3: Comparator / Labeler / Critic)
 # ═══════════════════════════════════════════════════════════════════════
 
-# ── Legacy imports (deprecated — keep for reference) ──
 from agents_b import (
-    b1_distill_sampling,
     b2_5_assign_codes_to_segments,
-    b2_open_code,
     b3_generate_hypotheses,
     update_hypotheses_incremental,
 )
@@ -1096,25 +1075,7 @@ from label_critic import b3_critique_labels
 from labeler import b2_label_groups
 from synthesizer import synthesize_categories as _synthesize_categories
 
-# ── Legacy tasks (deprecated — kept for backward compatibility) ──
-
-
-@app.task(name="b1_distill_sampling")  # DEPRECATED: use b1_compare_incidents instead
-def task_b1_distill_sampling(proyecto_id: str) -> dict:
-    return b1_distill_sampling(proyecto_id)
-
-
-@app.task(name="b2_open_code")  # DEPRECATED: use b2_label_groups instead
-def task_b2_open_code(proyecto_id: str) -> dict:
-    return b2_open_code(proyecto_id)
-
-
-@app.task(name="b3_generate_hypotheses")  # DEPRECATED: use b3_critique_labels instead
-def task_b3_generate_hypotheses(proyecto_id: str) -> dict:
-    return b3_generate_hypotheses(proyecto_id)
-
-
-# ── New F2.3 tasks ──
+# ── F2.3 tasks ──
 
 
 @app.task(name="b1_compare_incidents")
@@ -1141,8 +1102,9 @@ def task_b3_critique_labels(groups_json: str, labels_json: str) -> dict:
 def task_synthesize_categories(
     proyecto_id: str, batch_start_doc_index: int = 1
 ) -> dict:
-    """Category synthesizer: merges new categories from the current 3-doc batch
-    with previous categories from earlier batches.
+    """Category synthesizer: merges new categories from the current batch
+    with previous categories from earlier batches. Batch size controlled by
+    GT_OPEN_CODING_BATCH_SIZE env var (default 3).
 
     Runs AFTER B2/B3 completes. Receives ALL categories, separates them into
     previous (docs < batch_start) and new (docs >= batch_start), and calls the
@@ -1151,9 +1113,9 @@ def task_synthesize_categories(
     Args:
             proyecto_id: Project UUID.
             batch_start_doc_index: 1-based index of the first doc in the current batch.
-                    Batch 1 (docs 1-3) → batch_start=1 (no previous, just records).
-                    Batch 2 (docs 4-6) → batch_start=4 (merges with docs 1-3).
-                    Batch 3 (docs 7-9) → batch_start=7 (merges with docs 1-6).
+                    Batch 1 (docs 1-N) → batch_start=1 (no previous, just records).
+                    Batch 2 (docs N+1-2N) → batch_start=N+1 (merges with docs 1-N).
+                    Batch 3 (docs 2N+1-3N) → batch_start=2N+1 (merges with docs 1-2N).
     """
     return _synthesize_categories(proyecto_id, batch_start_doc_index)
 
@@ -1161,7 +1123,8 @@ def task_synthesize_categories(
 @app.task(name="critique_configuration")
 def task_critique_configuration(proyecto_id: str, batch_start: int) -> dict:
     """Configuration Critic: reviews emerging theoretical configuration after every
-    3-doc batch (post-synthesizer). Evaluates concerns, population reconfigurations,
+    batch (post-synthesizer). Batch size controlled by GT_OPEN_CODING_BATCH_SIZE
+    env var (default 3). Evaluates concerns, population reconfigurations,
     and coding style adequacy.
 
     Dispatched from process_synthesis_agents_b after the synthesizer and
@@ -1253,34 +1216,6 @@ def task_update_hypotheses(proyecto_id: str) -> dict:
     cross-category relationships and stores the growing note in memos.
     """
     return update_hypotheses_incremental(proyecto_id)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# F2.3 — Pattern & Incident Extractor (replaces old per-segment extract_incident)
-# ═══════════════════════════════════════════════════════════════════════
-
-from pattern_extractor import extract_patterns_and_incidents as _extract_pi_impl
-
-
-@app.task(name="extract_incident")
-def task_extract_incident(segment_id: str, proyecto_id: str) -> dict:
-    """DEPRECATED: Use extract_patterns_and_incidents (unified PRO call per doc).
-    Kept for backward compatibility. Redirects to unified extractor."""
-    logger.warning(
-        "extract_incident called directly for seg=%s — redirecting to unified extractor",
-        segment_id[:8],
-    )
-    return {
-        "status": "deprecated",
-        "message": "Use extract_patterns_and_incidents instead",
-    }
-
-
-@app.task(name="extract_core_pattern")
-def task_extract_core_pattern(documento_id: str, proyecto_id: str) -> dict:
-    """DEPRECATED: Core pattern now extracted as part of extract_patterns_and_incidents.
-    Kept for backward compatibility."""
-    return _extract_pi_impl(documento_id, proyecto_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1400,6 +1335,16 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
 
     s = SessionLocal()
     _set_language_from_project(s, proyecto_id)
+
+    # Mark all listo/procesado docs as codificando
+    s.execute(
+        text(
+            "UPDATE documentos SET estado = 'codificando' WHERE proyecto_id = :pid AND estado IN ('incidentes_extraidos', 'procesado', 'listo')"
+        ),
+        {"pid": proyecto_id},
+    )
+    s.commit()
+
     try:
         _pipeline_log_to(proyecto_id)
         logger.info("🔗 Phase B iniciado — proyecto=%s", proyecto_id)
@@ -1450,14 +1395,20 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
 
         # ── Synthesizer: merge new categories with previous ones ──
         # Calculate batch_start_doc_index based on total document count.
-        # Batch 1: docs 1-3 (batch_start=1), Batch 2: docs 4-6 (batch_start=4), etc.
+        # Uses OPEN_CODING_BATCH_SIZE (default 3): batch_start is 1-based index of first doc in current batch.
+        # Batch 1: docs 1-N (batch_start=1), Batch 2: docs N+1-2N (batch_start=N+1), etc.
         batch_start = 1
         try:
             total_docs = s.execute(
                 text("SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid"),
                 {"pid": proyecto_id},
             ).fetchone()[0]
-            batch_start = ((total_docs - 1) // 3) * 3 + 1 if total_docs > 0 else 1
+            batch_start = (
+                ((total_docs - 1) // OPEN_CODING_BATCH_SIZE) * OPEN_CODING_BATCH_SIZE
+                + 1
+                if total_docs > 0
+                else 1
+            )
             logger.info(
                 "Dispatching synthesizer: project=%s batch_start=%d (total_docs=%d)",
                 proyecto_id[:8],
@@ -1501,8 +1452,41 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         except Exception:
             logger.exception("Failed to dispatch config_critic for %s", proyecto_id)
 
-        # ── Transition all docs: listo → sintetizado ──
-        _transition_docs_to_sintetizado(s, proyecto_id)
+        # ── Check if this is the last batch ──
+        # Count docs still waiting for open coding (not yet codificando or codificado)
+        remaining = s.execute(
+            text(
+                "SELECT COUNT(*) FROM documentos "
+                "WHERE proyecto_id = :pid AND estado IN ('incidentes_extraidos', 'procesado', 'listo')"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()[0]
+
+        if remaining == 0:
+            # Last batch: all docs have been coded → transition to codificado
+            s.execute(
+                text(
+                    "UPDATE documentos SET estado = 'codificado' "
+                    "WHERE proyecto_id = :pid AND estado = 'codificando'"
+                ),
+                {"pid": proyecto_id},
+            )
+            s.commit()
+            logger.info(
+                "Open coding COMPLETE: all docs now 'codificado' for project %s",
+                proyecto_id[:8],
+            )
+        else:
+            # More batches coming: keep docs in codificando
+            s.commit()
+            logger.info(
+                "Open coding batch done: %d docs still waiting for project %s",
+                remaining,
+                proyecto_id[:8],
+            )
+
+        # ── Finish open coding ──
+        _finish_open_coding(s, proyecto_id)
 
         return results
 
@@ -1540,25 +1524,62 @@ def _checkpoint_step(session, proyecto_id: str, step_name: str, status: str) -> 
         pass  # non-critical
 
 
-def _transition_docs_to_sintetizado(session, proyecto_id: str) -> int:
-    """Transiciona todos los docs 'listo' del proyecto a 'sintetizado'."""
+def _maturity_gate(session, proyecto_id: str) -> dict:
+    """Verifica condiciones para entrar a selective coding. Sin LLM."""
+    # Condición 1: ≥2 categorías relacionadas entre sí
+    related = session.execute(
+        text("""
+        SELECT COUNT(*) FROM categorias
+        WHERE proyecto_id = :pid AND es_central = true
+    """),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    # Condición 2: ≥2 hipótesis documentadas
+    hypotheses = session.execute(
+        text("""
+        SELECT COUNT(*) FROM hypotheses
+        WHERE project_id = :pid
+    """),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    conditions = {
+        "related_categories": related >= 2,
+        "documented_hypotheses": hypotheses >= 2,
+    }
+
+    passed = all(conditions.values())
+    missing = [k for k, v in conditions.items() if not v]
+
+    return {"passed": passed, "conditions": conditions, "missing": missing}
+
+
+def _finish_open_coding(session, proyecto_id: str) -> int:
+    """Verifica si open coding terminó completamente y dispara selective coding si corresponde."""
     from agents.transitions import _maybe_trigger_selective_coding
 
-    result = session.execute(
+    total = session.execute(
+        text("SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid"),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    codificado = session.execute(
         text(
-            "UPDATE documentos SET estado = 'sintetizado' "
-            "WHERE proyecto_id = :pid AND estado = 'listo'"
+            "SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid AND estado = 'codificado'"
         ),
         {"pid": proyecto_id},
-    )
-    session.commit()
-    count = result.rowcount
-    if count > 0:
+    ).fetchone()[0]
+
+    if codificado == total and total > 0:
         logger.info(
-            "Transitioned %d docs to 'sintetizado' for project %s", count, proyecto_id
+            "All %d docs codificados for project %s — triggering selective coding",
+            codificado,
+            proyecto_id[:8],
         )
         _maybe_trigger_selective_coding(session, proyecto_id)
-    return count
+
+    return codificado
 
 
 def _prepare_playground_for_project(proyecto_id: str) -> None:
@@ -2061,20 +2082,25 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
 
         response = llm.run_agent(
             "fc_main_concern_proposer",
-            variables={
-                "all_codes": all_codes,
-                "all_memos": all_memos,
-                "prime_movers_per_document": core_patterns_text,
-                "researcher_feedback": "",
-                "object_of_study": object_of_study,
-                "research_question": research_question or "",
-                "operational_question": operational_question or "(not yet generated)",
-                "coding_style_instruction": _get_coding_style_instruction(
-                    s, proyecto_id
-                ),
-                "processing_verb": processing_verb,
-                "processing_gerund": processing_gerund,
-            },
+            variables=inject_chosen_context(
+                proyecto_id,
+                s,
+                {
+                    "all_codes": all_codes,
+                    "all_memos": all_memos,
+                    "prime_movers_per_document": core_patterns_text,
+                    "researcher_feedback": "",
+                    "object_of_study": object_of_study,
+                    "research_question": research_question or "",
+                    "operational_question": operational_question
+                    or "(not yet generated)",
+                    "coding_style_instruction": _get_coding_style_instruction(
+                        s, proyecto_id
+                    ),
+                    "processing_verb": processing_verb,
+                    "processing_gerund": processing_gerund,
+                },
+            ),
         )
         return {
             "candidates": response.get("candidates", []),
@@ -2346,67 +2372,6 @@ def task_a04_group_constructs(proyecto_id: str) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Selective Elaboration — dispatches per-code elaboration
-# ═══════════════════════════════════════════════════════════════════════
-
-
-@app.task(name="trigger_selective_elaboration")
-def trigger_selective_elaboration(proyecto_id: str) -> dict:
-    """
-    ⚠️ DEPRECATED — Usar selective_coding_coordinator en su lugar.
-
-    Esta función viola R0.1 (sin HITL), R0.2 (ejecución paralela),
-    y R0.3 (mezcla open/selective coding). Se mantiene por
-    compatibilidad pero no debe usarse en nuevos flujos.
-    """
-    import warnings
-
-    warnings.warn(
-        "trigger_selective_elaboration is deprecated. "
-        "Use selective_coding_coordinator instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    s = SessionLocal()
-    try:
-        # Obtener todas las categorias del proyecto
-        codes = s.execute(
-            text(
-                "SELECT id, nombre, definicion FROM categorias WHERE proyecto_id = :pid"
-            ),
-            {"pid": proyecto_id},
-        ).fetchall()
-
-        if not codes:
-            return {"status": "no_codes", "project_id": proyecto_id}
-
-        elaborated = 0
-        errors = 0
-        for code_row in codes:
-            code_id = str(code_row[0])
-            try:
-                # Para cada categoria, ejecutamos la integracion paradigmatica
-                # que evalua si hay divergencia/expansion
-                result = task_a01_integrate_paradigm(code_id, proyecto_id)
-                if result and "error" not in result:
-                    elaborated += 1
-            except Exception as e:
-                logger.warning("Elaboration failed for code %s: %s", code_id, e)
-                errors += 1
-
-        s.commit()
-        return {
-            "status": "completed",
-            "project_id": proyecto_id,
-            "codes_total": len(codes),
-            "elaborated": elaborated,
-            "errors": errors,
-        }
-    finally:
-        s.close()
-
-
-# ═══════════════════════════════════════════════════════════════════════
 # B21: LangGraph StateGraph — invocacion desde Celery
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -2546,6 +2511,17 @@ def selective_coding_coordinator(self, proyecto_id: str) -> dict:
             current_state = "finding_cc"
 
         if current_state == "finding_cc":
+            # ── Maturity Gate: verify conditions before proposing core concern ──
+            gate = _maturity_gate(s, proyecto_id)
+            if not gate["passed"]:
+                _plog(proyecto_id, f"⏸ Maturity gate not passed: {gate['missing']}")
+                transition_project(s, proyecto_id, "coding", "checking_maturity")
+                return {
+                    "status": "paused",
+                    "reason": "maturity_gate",
+                    "missing": gate["missing"],
+                }
+
             result_a = task_main_concern_pipeline(proyecto_id)
             if result_a.get("status") != "completed":
                 return {"status": "paused", "phase": "A", "gate": "pattern_of_interest"}
@@ -2685,6 +2661,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
             )
 
         # ── Proposer ──
+        _checkpoint_step(s, proyecto_id, "main_concern_proposer", "in_progress")
         # F0.3.5: Leer object_of_study para parametrizar el tipo de patron
         oos_row = s.execute(
             text("SELECT object_of_study FROM proyectos WHERE id = :pid"),
@@ -2760,8 +2737,10 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "processing_gerund": processing_gerund,
             },
         )
+        _checkpoint_step(s, proyecto_id, "main_concern_proposer", "completed")
 
         # ── Critic (feedback only, no verdicts) ──
+        _checkpoint_step(s, proyecto_id, "main_concern_critic", "in_progress")
         # Build structured context from proposer output for better LLM evaluation
         candidates_raw = proposal.get("candidates", [])
         candidates_context_parts = []
@@ -2800,6 +2779,7 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
                 "coding_style_key": coding_style_key,
             },
         )
+        _checkpoint_step(s, proyecto_id, "main_concern_critic", "completed")
 
         # ── HITL gate ──
         from agents.transitions import hitl_gate
@@ -2817,6 +2797,60 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
         raise
     finally:
         s.close()
+
+
+@app.task(name="run_glaser_classifier", base=AbortableTask, bind=True)
+def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dict:
+    """Runs the 3-step Glaser classification on a single document.
+
+    Step 1 (PRO): XML tag classification of full document text.
+    Step 2 (FLASH): Structure validator + algorithmic fallback.
+    Step 3: Baseline selection.
+
+    Validator loop: validate -> feedback -> re-classify -> until correct (max 3 rounds).
+
+    Updates document estado to 'clasificado' on success.
+    """
+    if self._aborted:
+        raise TaskCancelledError()
+
+    session = SessionLocal()
+    try:
+        logger.info(
+            "run_glaser_classifier: doc=%s, project=%s",
+            documento_id[:8],
+            proyecto_id[:8],
+        )
+
+        result = classify_document_with_validation(
+            documento_id=documento_id,
+            proyecto_id=proyecto_id,
+            session=session,
+            llm_client=llm,
+            max_validation_rounds=3,
+        )
+
+        if result.get("status") in ("ok", "warning", "completed"):
+            session.execute(
+                text("UPDATE documentos SET estado = 'clasificado' WHERE id = :did"),
+                {"did": documento_id},
+            )
+            session.commit()
+            logger.info(
+                "run_glaser_classifier: doc=%s marked as 'clasificado'",
+                documento_id[:8],
+            )
+
+        return result
+
+    except TaskCancelledError:
+        logger.warning("run_glaser_classifier cancelled for doc=%s", documento_id)
+        return {"status": "cancelled", "documento_id": documento_id}
+    except Exception as e:
+        logger.exception("run_glaser_classifier failed for doc=%s", documento_id)
+        return {"status": "error", "documento_id": documento_id, "error": str(e)}
+    finally:
+        session.close()
 
 
 @app.task(
@@ -2933,6 +2967,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
         )
 
         # ── A3: Proposer (PRO) ──
+        _checkpoint_step(s, proyecto_id, "core_emergence_proposer", "in_progress")
         proposal = llm.run_agent(
             "fc_core_category_proposer",
             variables={
@@ -2944,8 +2979,10 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                 "operational_question": operational_question or "",
             },
         )
+        _checkpoint_step(s, proyecto_id, "core_emergence_proposer", "completed")
 
         # ── A4: Critic (FLASH — interchangeability) ──
+        _checkpoint_step(s, proyecto_id, "core_emergence_critic", "in_progress")
         candidates = proposal.get("core_category_candidates", [])
 
         # Build structured proposer context + fetch incidents from DIFFERENT docs
@@ -3031,6 +3068,7 @@ def task_core_emergence_pipeline(proyecto_id: str) -> dict:
                 "processing_verb": processing_verb,
             },
         )
+        _checkpoint_step(s, proyecto_id, "core_emergence_critic", "completed")
 
         from agents.transitions import hitl_gate
 
@@ -3130,6 +3168,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
             else "(no existing categories yet)"
         )
 
+        _checkpoint_step(s, proyecto_id, "selective_reduction_proposer", "in_progress")
         proposal = llm.run_agent(
             "fd_selective_reduction_proposer",
             variables={
@@ -3141,6 +3180,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
                 "processing_verb": processing_verb,
             },
         )
+        _checkpoint_step(s, proyecto_id, "selective_reduction_proposer", "completed")
 
         # ── Build structured context for critic ──
         reduced_codes = proposal.get("reduced_codes", [])
@@ -3184,6 +3224,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
                 f"definition={f.get('definition', '')[:150]}\n"
             )
 
+        _checkpoint_step(s, proyecto_id, "selective_reduction_critic", "in_progress")
         critic = llm.run_agent(
             "fd_selective_reduction_critic",
             variables={
@@ -3198,6 +3239,7 @@ def task_selective_reduction_pipeline(proyecto_id: str) -> dict:
                 "processing_verb": processing_verb,
             },
         )
+        _checkpoint_step(s, proyecto_id, "selective_reduction_critic", "completed")
 
         from agents.transitions import hitl_gate
 
@@ -3228,7 +3270,9 @@ def _compute_saturation_panel(session, code_id: str, proyecto_id: str) -> dict:
     """
     Computa las 4 señales de saturación para una categoría.
 
-    Señal 1 — Matemática: rolling_std desde saturation_metrics.
+    Señal 1 — Conceptual Redundancy (E5: replaces flawed embedding rolling_std).
+              Counts how many paradigm properties are newly discovered vs repeated
+              across recent iterations. High redundancy = category saturated.
     Señal 2 — Cualitativa: ventana deslizante de 5 paradigm_states.
     Señal 3 — Cobertura: propiedades documentadas en paradigm_snapshot.
     Señal 4 — Integración: conceptual_relationships vinculados.
@@ -3249,27 +3293,56 @@ def _compute_saturation_panel(session, code_id: str, proyecto_id: str) -> dict:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # ── Señal 1: Matemática (rolling_std) ──
-    math_row = session.execute(
+    # ── Señal 1: Conceptual Redundancy (E5: replaces embedding-based rolling_std) ──
+    # Instead of comparing vector distances, count how many paradigm properties
+    # are newly discovered vs repeated across recent iterations.
+    # If most properties repeat (high redundancy) → category is conceptually saturated.
+    # This is a more valid measure than embedding similarity, which does not
+    # imply conceptual interchangeability.
+    #
+    # TODO: Full implementation would compare properties extracted from each NEW
+    # document against the existing property set via LLM, computing
+    # overlap_ratio = new_props_in_common / total_new_props.
+    # Current implementation uses paradigm_snapshot property tracking across
+    # recent iterations as a proxy for conceptual novelty decay.
+    snap_rows = session.execute(
         text(
-            "SELECT rolling_std, saturation_status FROM saturation_metrics "
-            "WHERE code_id = :cid"
+            "SELECT paradigm_snapshot FROM paradigm_states "
+            "WHERE code_id = :cid ORDER BY iteration DESC LIMIT 10"
         ),
         {"cid": code_id},
-    ).fetchone()
+    ).fetchall()
 
-    if math_row:
-        rolling_std = float(math_row[0]) if math_row[0] is not None else None
-        panel["matematica"]["rolling_std"] = (
-            round(rolling_std, 4) if rolling_std is not None else None
-        )
-        # stable = rolling_std <= 0.3 (baja variabilidad)
-        if rolling_std is not None and rolling_std <= 0.3:
+    seen_props: set = set()
+    total_new = 0
+    total_all = 0
+    for (snap,) in snap_rows:
+        if snap and isinstance(snap, dict):
+            props = set()
+            for key in ("dimensions", "conditions", "consequences", "strategies"):
+                arr = snap.get(key, [])
+                if isinstance(arr, list):
+                    for item in arr:
+                        if isinstance(item, str):
+                            props.add(item)
+                        elif isinstance(item, dict):
+                            props.add(item.get("name", str(item)))
+            new_in_iter = props - seen_props
+            total_new += len(new_in_iter)
+            total_all += len(props)
+            seen_props |= props
+
+    if snap_rows and total_all > 0:
+        novelty_ratio = total_new / total_all  # 0.0 = fully redundant, 1.0 = all new
+        redundancy = 1.0 - novelty_ratio
+        panel["matematica"]["rolling_std"] = round(redundancy, 4)
+        # Thresholds: >=0.7 redundancy = stable, >=0.4 = approaching, <0.4 = unstable
+        if redundancy >= 0.7:
             panel["matematica"]["status"] = "stable"
-        elif rolling_std is not None:
-            panel["matematica"]["status"] = "unstable"
+        elif redundancy >= 0.4:
+            panel["matematica"]["status"] = "approaching"
         else:
-            panel["matematica"]["status"] = "no_data"
+            panel["matematica"]["status"] = "unstable"
     else:
         panel["matematica"]["status"] = "no_data"
 
@@ -3387,7 +3460,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
     Antes de cada llamada LLM (Proposer→Critic) se evalúan 4 señales
     de saturación para decidir si la categoría ya está saturada:
 
-    1. Matemática (rolling_std) — SQL gratis
+    1. Conceptual Redundancy (E5: replaces rolling_std) — property repetition across iterations
     2. Cualitativa (paradigm window 5) — SQL barato
     3. Cobertura (propiedades del paradigma) — JSONB parse
     4. Integración (conceptual_relationships) — SQL COUNT
@@ -3401,19 +3474,19 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
 
     s = SessionLocal()
     try:
-        # ── Obtener categorías con score ≥ 4 ──
+        # ── Obtener categorías con score ≥ 2 (E3: lowered from ≥4) ──
         cats = s.execute(
             text(
                 "SELECT id, nombre, definicion, version, puntaje_relevancia "
                 "FROM categorias "
-                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) > 2 "
+                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) > 1 "
                 "ORDER BY puntaje_relevancia DESC"
             ),
             {"pid": proyecto_id},
         ).fetchall()
 
         if not cats:
-            logger.info("No categories with score ≥ 4 for project %s", proyecto_id)
+            logger.info("No categories with score ≥ 2 for project %s", proyecto_id)
             return {"status": "completed", "categories_processed": 0}
 
         # ── Obtener documentos ──
@@ -3680,6 +3753,15 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         cat_name,
                         no_expand_streak,
                     )
+                    # ── MemoMaker: generate saturation memo ──
+                    try:
+                        from workers.heavy.memo_maker import generate_saturation_memo
+
+                        generate_saturation_memo(str(cat_id), proyecto_id)
+                    except Exception as e:
+                        logger.warning(
+                            "MemoMaker failed for category %s: %s", cat_id, e
+                        )
                     break
 
             # Final panel update for this category
@@ -3810,7 +3892,7 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
             text(
                 "SELECT id, nombre, definicion, puntaje_relevancia "
                 "FROM categorias WHERE proyecto_id = :pid "
-                "AND COALESCE(puntaje_relevancia, 0) > 2 "
+                "AND COALESCE(puntaje_relevancia, 0) > 1 "
                 "ORDER BY puntaje_relevancia DESC"
             ),
             {"pid": proyecto_id},
@@ -3867,6 +3949,7 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
             else "(pending core_emergence HITL)"
         )
 
+        _checkpoint_step(s, proyecto_id, "database_a_proposer", "in_progress")
         proposal = llm.run_agent(
             "ff_database_a_proposer",
             variables={
@@ -3878,7 +3961,9 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
                 "processing_gerund": processing_gerund,
             },
         )
+        _checkpoint_step(s, proyecto_id, "database_a_proposer", "completed")
 
+        _checkpoint_step(s, proyecto_id, "database_a_critic", "in_progress")
         critic = llm.run_agent(
             "ff_database_a_critic",
             variables={
@@ -3891,6 +3976,7 @@ def task_database_a_pipeline(proyecto_id: str) -> dict:
                 "processing_gerund": processing_gerund,
             },
         )
+        _checkpoint_step(s, proyecto_id, "database_a_critic", "completed")
 
         from agents.transitions import hitl_gate
 
@@ -4030,6 +4116,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
         ).fetchone()
         core_concern = mc_row[0] if mc_row and mc_row[0] else "(not yet confirmed)"
 
+        _checkpoint_step(s, proyecto_id, "database_b_proposer", "in_progress")
         proposal = llm.run_agent(
             "ff_database_b_proposer",
             variables={
@@ -4042,6 +4129,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
                 "processing_verb": processing_verb,
             },
         )
+        _checkpoint_step(s, proyecto_id, "database_b_proposer", "completed")
 
         # ── Build structured edges context ──
         edges_raw = proposal.get("edges", [])
@@ -4069,6 +4157,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
             edges_context_parts.append("\n".join(edge_parts))
         edges_context = "\n\n".join(edges_context_parts)
 
+        _checkpoint_step(s, proyecto_id, "database_b_critic", "in_progress")
         critic = llm.run_agent(
             "ff_database_b_critic",
             variables={
@@ -4082,6 +4171,7 @@ def task_database_b_pipeline(proyecto_id: str) -> dict:
                 "processing_verb": processing_verb,
             },
         )
+        _checkpoint_step(s, proyecto_id, "database_b_critic", "completed")
 
         from agents.transitions import hitl_gate
 
@@ -4199,7 +4289,7 @@ def task_global_saturation_check(proyecto_id: str) -> dict:
     Fase E: Global Saturation Check.
 
     Verifica 3 condiciones:
-    1. Todas las categorías con score ≥ 4 están saturadas
+    1. Todas las categorías con score ≥ 2 están saturadas  (E3: lowered from ≥4)
     2. Relaciones inter-categoriales saturadas
     3. Buffer de residuos revisado
     """
@@ -4221,7 +4311,7 @@ def task_global_saturation_check(proyecto_id: str) -> dict:
         cats = s.execute(
             text(
                 "SELECT id, nombre FROM categorias "
-                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 4"
+                "WHERE proyecto_id = :pid AND COALESCE(puntaje_relevancia, 0) >= 2"
             ),
             {"pid": proyecto_id},
         ).fetchall()

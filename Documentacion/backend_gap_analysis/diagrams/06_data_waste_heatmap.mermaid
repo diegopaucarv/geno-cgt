@@ -1,0 +1,58 @@
+# Diagrama 6: Heatmap de Desperdicio de Datos Backend → Frontend
+# Muestra el % de campos de cada interfaz que son transferidos pero NUNCA usados
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+pie title Data Waste per API Response (fields downloaded but NEVER rendered)
+    "ProjectResponse (50% waste: 7/14 fields)" : 14
+    "Document[] (36% waste: 5/14 fields)" : 10
+    "DocPipelineLog (75% waste: steps.* + codes_count)" : 9
+    "Category[] in Project.tsx (83% waste)" : 5
+    "Segment[] (71% waste: 5/7 fields)" : 5
+    "EcosystemLayout (100% waste)" : 4
+    "TheoreticalCode[] (100% waste)" : 3
+    "PipelineStatus (100% waste: entire interface)" : 2
+    "Relationship detail (100% waste: discarded)" : 2
+    "ModelSummary (100% waste: never fetched)" : 1
+    "SaturationGaps (100% waste: never fetched)" : 1
+```
+
+```mermaid
+flowchart TB
+    subgraph HEATMAP["🔥 Data Waste Heatmap — Fields Downloaded vs Used"]
+        direction TB
+
+        subgraph SEVERE["🔴 SEVERE (>70% waste)"]
+            S1["DocPipelineLog.steps\n6 boolean fields (text_extracted,\npunctuation_fixed, segmented, coded,\nagents_done, synthesis_done)\n+ codes_count\n→ 75% waste, per-document payload\n→ MULTIPLIER: sent for EVERY document\n  in EVERY pipeline log response"]
+            S2["Category[] in Project.tsx\n6 fields fetched (nombre, definicion,\nestado_saturacion, es_central, etc.)\n→ Only cats.length displayed\n→ 83% waste\n→ MULTIPLIER: N categories"]
+            S3["Segment.parafrasis, .posicion,\n.conteo_tokens, .es_anomalia\n4 fields never rendered\n→ 71% waste\n→ MULTIPLIER: M segments per doc"]
+            S4["EcosystemLayout (entire object)\nblob_positions, ghost_positions,\nfog_zones, physics_params\n→ 100% waste\n→ Canvas recalculates positions\n  every render"]
+            S5["TheoreticalCode[] (entire array)\nFetched by PlaygroundContext\n→ Stored in state, never read\n→ 100% waste"]
+            S6["PipelineStatus (entire interface)\ngetPipelineStatus() never called\n→ getPipelineLog used instead\n→ 100% waste"]
+        end
+
+        subgraph HIGH["🟠 HIGH (30-70% waste)"]
+            H1["ProjectResponse\ncreador_id, creado_en, num_documentos,\nnum_categorias, config_segmentacion,\ncoding_style_instruction,\nconfig_mutation_policy\n→ 50% waste (7/14 fields)"]
+            H2["Document\nproyecto_id, tipo_de_fuente,\nsize_bytes, creado_en\n→ 36% waste (5/14 fields)"]
+            H3["Relationship detail from\ngetRelationship(id)\n→ Fetched in RelationshipTendril\n→ const detail = await getRel...\n  DISCARDED\n→ 100% waste per click"]
+        end
+
+        subgraph MEDIUM["🟡 MEDIUM (10-30% waste)"]
+            M1["Recommendation\ncategory_ids, suggested_code,\nimpact_score\n→ 43% waste (3/7 fields)"]
+            M2["HitlPendingItem\nid, proposal_summary,\ncritic_verdict, created_at\n→ HITLModal makes separate\n  getHitlDetail() call\n→ 80% waste"]
+            M3["PipelineLogError\ndocument_id, estado\n→ Only filename used\n→ 67% waste per error"]
+            M4["PipelineLog.summary\n.sintetizados\n→ Declared in TS, never read\n→ 8% waste"]
+        end
+    end
+
+    subgraph IMPACT["💰 Cumulative Impact"]
+        direction LR
+        I1["Per pipeline log refresh:\n~N docs × 9 wasted fields +\n~M categories × 5 wasted fields +\n4 layout fields\n→ ~50% of pipeline log\n  response is waste"]
+        I2["Per ecosystem refresh:\nTheoreticalCode array (100% waste)\n+ EcosystemLayout (100% waste)\n+ Relationship detail fetch\n  → ~30% of playground data\n    is dead"]
+        I3["Per Project page load:\n7 project fields never rendered\n+ 5 document fields per doc\n+ 5 segment fields per expanded doc\n→ ~40% of Project page API\n  payload is waste"]
+    end
+
+    SEVERE --> IMPACT
+    HIGH --> IMPACT
+    MEDIUM --> IMPACT
+```

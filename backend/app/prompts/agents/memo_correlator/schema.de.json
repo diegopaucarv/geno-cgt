@@ -1,0 +1,133 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "matrices",
+    "family_correlations",
+    "homeless_insights",
+    "debate_rationale"
+  ],
+  "properties": {
+    "matrices": {
+      "type": "array",
+      "description": "2×2-Matrizen, die zwei Paradigma-Dimensionen kreuzen. Jede Matrix definiert 4 Quadranten mit Typologien.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension_a", "dimension_b", "quadrants"],
+        "properties": {
+          "dimension_a": {
+            "type": "string",
+            "description": "Erste gekreuzte Dimension (z.B. 'Zeitliche Variation', 'Risikostufe')."
+          },
+          "dimension_b": {
+            "type": "string",
+            "description": "Zweite gekreuzte Dimension."
+          },
+          "quadrants": {
+            "type": "array",
+            "description": "Vier Quadranten des 2×2-Rasters. Jeder hat eine beschreibende Bezeichnung und die Eigenschaften, die hineinfallen.",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "properties"],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Beschreibende Bezeichnung für diesen Quadranten (z.B. 'Hohes Risiko / Schnelle Reaktion')."
+                },
+                "properties": {
+                  "type": "array",
+                  "description": "Eigenschaften aus den vereinfachten Tabellen, die in diesen Quadranten fallen.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "family_correlations": {
+      "type": "array",
+      "description": "Welche der 12 Glaser'schen theoretischen Familien auf dieses Memo zutreffen, mit Relevanzwerten.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "relevance", "rationale"],
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "Process",
+              "Causal",
+              "Opposition",
+              "Typology",
+              "Hierarchy",
+              "Matrix",
+              "Consequences",
+              "Strategy",
+              "Structural Condition",
+              "Contingency",
+              "Covariance",
+              "Interchangeability"
+            ],
+            "description": "Name der Glaser'schen theoretischen Familie."
+          },
+          "family_label": {
+            "type": "string",
+            "description": "Lesbare Bezeichnung für die Familie (z.B. 'Prozess / Sequenz', 'Kausal / Kette')."
+          },
+          "relevance": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Wie stark diese Familienlinse auf das Memo zutrifft. 0.0 = trifft nicht zu, 1.0 = trifft stark zu."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Warum diese Familie zutrifft: welche Muster im Memo enthüllt diese Linse?"
+          }
+        }
+      }
+    },
+    "homeless_insights": {
+      "type": "array",
+      "description": "Ideen aus dem Memo, die mit keiner anderen gesättigten Kategorie korrelieren. Mögliche neue emergente Codes oder Dimensionen.",
+      "items": {
+        "type": "string",
+        "description": "Eine heimatlose Einsicht: Idee, die allein steht und sich nicht mit anderen Kategorien verbindet."
+      }
+    },
+    "debate_rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_1_proposed", "agent_2_challenged", "agent_3_found", "consensus", "disagreements"],
+      "properties": {
+        "agent_1_proposed": {
+          "type": "string",
+          "description": "Zusammenfassung dessen, was der memo_generator vorgeschlagen hat (Schlüsselerkenntnisse aus dem narrativen Memo)."
+        },
+        "agent_2_challenged": {
+          "type": "string",
+          "description": "Was der memo_simplifier vereinfacht, entfernt oder als Spannung markiert hat."
+        },
+        "agent_3_found": {
+          "type": "string",
+          "description": "Welche memo-übergreifenden Muster dieser Korrelator mit den 12 Familien entdeckt hat."
+        },
+        "consensus": {
+          "type": "string",
+          "description": "Punkte, in denen alle 3 Agenten übereinstimmen."
+        },
+        "disagreements": {
+          "type": "string",
+          "description": "Punkte, in denen die Agenten abweichen und warum."
+        }
+      }
+    }
+  }
+}

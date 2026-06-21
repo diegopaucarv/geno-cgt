@@ -1,0 +1,363 @@
+# Diagrama 1: Esquema Entidad-Relación de la Base de Datos
+# Muestra las 46 tablas, sus columnas clave, y las relaciones FK
+
+```mermaid
+erDiagram
+    USUARIO {
+        uuid id PK
+        string nombre
+        string correo UK
+        string hashed_password
+        enum rol "INVESTIGADOR_PRINCIPAL|INVESTIGADOR_SECUNDARIO|ADMINISTRADOR"
+        enum plan "BASICO|PROFESIONAL|EMPRESARIAL"
+        int tokens_mensuales_usados
+        datetime creado_en
+        datetime actualizado_en
+    }
+
+    PROYECTO {
+        uuid id PK
+        uuid creador_id FK
+        string nombre
+        string ruta_de_codificacion "ABDUCTIVA_CGT"
+        string estado "collecting|coding|finding_cc|reducing|saturating|building_db|playground_ready|completed"
+        text supuesto_poblacional
+        jsonb config_segmentacion "window_size|similarity_threshold|max_tokens|reinert_micro"
+        jsonb population_assumption "object_of_study|temporal_frame|spatial_frame|population_description|gerundio_esperado|custom_label|coding_styles"
+        text coding_style_instruction
+        string object_of_study "concern|emotion|behavior|discourse|identity|custom|meaning"
+        string language "es|en|de|pt"
+        jsonb config_mutation_policy "auto|suggest|require_approval|locked per field"
+        int context_window_real
+        int batch_number
+        text chosen_concern
+        text chosen_population
+        string pause_mode "manual|auto"
+    }
+
+    DOCUMENTO {
+        uuid id PK
+        uuid proyecto_id FK
+        string original_filename
+        string tipo_de_fuente
+        string ruta_s3
+        string storage_key UK
+        string mime_type
+        int size_bytes
+        jsonb metadatos "texto_extraido|texto_preprocesado|texto_original|preprocess_warning"
+        float sort_order
+        string estado "crudo|preprocesando|preprocesado|segmentando|segmentado|procesando|listo|resumiendo|resumido|sintetizado"
+    }
+
+    SEGMENTO {
+        uuid id PK
+        uuid documento_id FK
+        string texto
+        string parafrasis
+        int posicion
+        int conteo_tokens
+        bool es_anomalia
+    }
+
+    CATEGORIA {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid parent_category_id FK "self-referential"
+        uuid source_memo_id FK
+        string nombre
+        text definicion
+        text limites
+        string estado_saturacion "ABIERTO|ESTABLE|SATURADO|REVISION_FORZADA"
+        int puntaje_relevancia
+        int version
+        bool es_central
+        vector embedding_centroide "pgvector(1024)"
+        jsonb saturation_docs
+        jsonb saturation_panel_json "matematica|cualitativa|cobertura|integracion"
+        string gerundio_label
+        string concern_label
+        string population_label
+    }
+
+    CODIGO_SEGMENTO {
+        uuid segmento_id PK_FK
+        uuid categoria_id PK_FK
+        int confianza
+        string fuente "IA|MANUAL"
+    }
+
+    DOC_CODE {
+        uuid documento_id PK_FK
+        uuid categoria_id PK_FK
+        string estado "presente|ausente|no_evaluado"
+        text resumen_evidencia
+    }
+
+    INCIDENTE {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid segmento_id FK
+        text descripcion
+        text contexto
+        int batch_number
+    }
+
+    INCIDENT_GROUP {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid code_id FK
+        string name
+        jsonb segment_summaries
+        int batch_number
+    }
+
+    CONCERN {
+        uuid id PK
+        uuid proyecto_id FK
+        string label
+        string tipo "MAIN_CONCERN|CORE_CATEGORY|EMERGENT"
+        string estado "PROPUESTO|ELEGIDO|RECHAZADO|MODIFICADO"
+        jsonb evidence_summary
+        jsonb critic_feedback
+    }
+
+    POPULATION_CONTEXT {
+        uuid id PK
+        uuid proyecto_id FK
+        int version_number
+        string generalized_population
+        string temporal_frame "present_continuous|retrospective|prospective|longitudinal"
+        string spatial_frame "cohabiting_group|sparse|high_diversity"
+        string object_of_study
+        string gerundio_esperado
+        float generalizer_confidence
+        text generalizer_rationale
+        jsonb key_dimensions
+        string research_question
+        string operational_question
+    }
+
+    SYNTHESIS_RESULT {
+        uuid id PK
+        uuid proyecto_id FK
+        string stage "open_coding|selective_coding|theoretical_coding"
+        jsonb output_data
+        int batch_number
+    }
+
+    HYPOTHESIS {
+        uuid id PK
+        uuid proyecto_id FK
+        string statement
+        string relationship_type
+        jsonb evidence
+        jsonb counter_evidence
+        string status "proposed|confirmed|rejected|split"
+        float confidence
+    }
+
+    PIPELINE_RUN {
+        uuid id PK
+        uuid proyecto_id FK
+        string stage
+        string status "running|completed|failed|aborted"
+        jsonb log_entries
+        datetime started_at
+        datetime completed_at
+    }
+
+    AGENT_OUTPUT {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid document_id FK "nullable"
+        string agent_id
+        string family "descriptive_data|inductive_data|inductive_concepts|elaborative|evaluative|structural"
+        string layer "CODIFICACION|CATEGORIZACION|HIPOTESIS|SINTESIS|TEORIZACION|ESCRITURA"
+        string entity_type "CATEGORIA|HIPOTESIS|PROPIEDAD|RELACION|METODOLOGICO|MUESTREO|TEORICO|DATABASE_NODE|DATABASE_EDGE|GENERAL"
+        jsonb data "flexible per family"
+        bool is_final
+        bool is_confidential
+        string content "markdown content for user-created memos"
+        string stage "pipeline stage when created"
+    }
+
+    HITL_DECISION {
+        uuid id PK
+        uuid proyecto_id FK
+        string gate_name "pattern_of_interest|core_category|selective_reduction|core_saturation|database_a|database_b|global_saturation"
+        string decision "SAT|MOD|FORCED|AGREE|DISAGREE"
+        text user_note
+        text user_feedback
+        jsonb proposal_data
+        jsonb critic_analysis
+    }
+
+    ECOSYSTEM_LAYOUT {
+        uuid id PK
+        uuid proyecto_id FK
+        jsonb blob_positions
+        jsonb ghost_positions
+        jsonb fog_zones
+        jsonb physics_params
+    }
+
+    THEORETICAL_CODE {
+        uuid id PK
+        uuid proyecto_id FK
+        string name
+        string definition
+        string code_type
+        jsonb relationships
+        int version
+    }
+
+    RELATIONSHIP {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid category_a_id FK
+        uuid category_b_id FK
+        string relation_type
+        string status "converging|diverging|stable|exploring"
+        float fit
+        int layer
+        float tension
+        jsonb elaboration_history
+        bool diverging
+    }
+
+    GHOST {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid memo_id FK
+        string type
+        jsonb content
+        string status "pending|absorbed|dismissed"
+    }
+
+    CANVAS {
+        uuid id PK
+        uuid proyecto_id FK
+        jsonb state_snapshot
+    }
+
+    DEFINITION_VERSION {
+        uuid id PK
+        uuid categoria_id FK
+        string old_definition
+        string new_definition
+        string change_rationale
+        string triggered_by
+        int version
+    }
+
+    RENAME_SUGGESTION {
+        uuid id PK
+        uuid categoria_id FK
+        string name
+        string level
+        string what_it_gains
+        text rationale
+        string in_vivo_inspiration
+        string status "pending|applied|dismissed"
+    }
+
+    RECOMMENDATION {
+        uuid id PK
+        uuid proyecto_id FK
+        string title
+        string description
+        string action_type
+        string category
+        jsonb category_ids
+        string suggested_code
+        float impact_score
+    }
+
+    MEMO {
+        uuid id PK
+        uuid proyecto_id FK
+        uuid user_id FK "nullable"
+        string tipo "CATEGORIA|HIPOTESIS|PROPIEDAD|RELACION|METODOLOGICO|MUESTREO|TEORICO|DATABASE_NODE|DATABASE_EDGE|GENERAL"
+        text contenido
+        bool es_confidencial
+        string created_by "USER|AGENT"
+    }
+
+    PROJECT_CONFIG_HISTORY {
+        uuid id PK
+        uuid proyecto_id FK
+        string field
+        string old_value
+        string new_value
+        string triggered_by
+        uuid agent_run_id FK "nullable"
+        string mutation_level "auto|suggest|require_approval|locked"
+        text rationale
+        float confidence
+        jsonb context
+    }
+
+    AGENT_LOOP_LOG {
+        uuid id PK
+        uuid proyecto_id FK
+        string agent_id
+        int iteration
+        text prompt_sent
+        text llm_response
+        text schema_sent
+        int prompt_tokens
+        int completion_tokens
+        int total_tokens
+        string status "success|error|timeout"
+    }
+
+    DOCUMENT_PROCESS {
+        uuid id PK
+        uuid documento_id FK
+        string stage
+        string status "pending|running|completed|failed"
+        jsonb result_data
+    }
+
+    USUARIO ||--o{ PROYECTO : "crea (creador_id)"
+    PROYECTO ||--o{ DOCUMENTO : "contiene (cascade)"
+    PROYECTO ||--o{ CATEGORIA : "contiene (cascade)"
+    PROYECTO ||--o{ AGENT_OUTPUT : "contiene (cascade)"
+    PROYECTO ||--o{ HITL_DECISION : "contiene (cascade)"
+    PROYECTO ||--|| ECOSYSTEM_LAYOUT : "tiene (cascade)"
+    PROYECTO ||--o{ CONCERN : "contiene (cascade)"
+    PROYECTO ||--o{ POPULATION_CONTEXT : "contiene (cascade)"
+    PROYECTO ||--o{ SYNTHESIS_RESULT : "contiene"
+    PROYECTO ||--o{ HYPOTHESIS : "contiene"
+    PROYECTO ||--o{ PIPELINE_RUN : "contiene"
+    PROYECTO ||--o{ THEORETICAL_CODE : "contiene"
+    PROYECTO ||--o{ RELATIONSHIP : "contiene"
+    PROYECTO ||--o{ GHOST : "contiene"
+    PROYECTO ||--o{ CANVAS : "contiene"
+    PROYECTO ||--o{ PROJECT_CONFIG_HISTORY : "tiene historial"
+    PROYECTO ||--o{ RECOMMENDATION : "tiene"
+    PROYECTO ||--o{ MEMO : "contiene"
+    PROYECTO ||--o{ AGENT_LOOP_LOG : "tiene logs"
+    PROYECTO ||--o{ INCIDENTE : "contiene"
+    PROYECTO ||--o{ INCIDENT_GROUP : "contiene"
+
+    DOCUMENTO ||--o{ SEGMENTO : "segmentado en (cascade)"
+    DOCUMENTO ||--o{ DOCUMENT_PROCESS : "procesado por (cascade)"
+    DOCUMENTO ||--o{ AGENT_OUTPUT : "referenciado por"
+    DOCUMENTO ||--o{ INCIDENTE : "contiene"
+
+    SEGMENTO ||--o{ CODIGO_SEGMENTO : "codificado como"
+    CATEGORIA ||--o{ CODIGO_SEGMENTO : "asignada a"
+    CATEGORIA ||--o{ DOC_CODE : "presente en documento"
+    CATEGORIA ||--o{ DEFINITION_VERSION : "historial de"
+    CATEGORIA ||--o{ RENAME_SUGGESTION : "sugerencias de"
+    CATEGORIA ||--o{ CATEGORIA : "jerarquia (parent_category_id)"
+
+    CATEGORIA ||--o{ RELATIONSHIP : "relacionada (category_a_id/category_b_id)"
+    RELATIONSHIP ||--o{ RELATIONSHIP : "elaboration_history (self-ref)"
+
+    GHOST ||--|| MEMO : "originado de (memo_id)"
+    MEMO ||--o{ CATEGORIA : "origen de categoria manual (source_memo_id)"
+
+    AGENT_OUTPUT ||--o{ AGENT_OUTPUT : "version chain"
+```

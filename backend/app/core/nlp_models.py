@@ -195,7 +195,7 @@ def warmup_language(language: str, progress_callback=None) -> None:
         if not ready["stanza_ready"]:
             _update(f"Downloading Stanza model for {language}...")
             os.makedirs(stanza_resources_dir, exist_ok=True)
-            stanza.download(language, dir=stanza_resources_dir)
+            stanza.download(language, model_dir=stanza_resources_dir)
             _update(f"Stanza model for {language} installed", step_delta=1)
         else:
             _update(f"Stanza model for {language} already present", step_delta=1)

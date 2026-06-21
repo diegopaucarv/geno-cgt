@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resolutions"],
+  "properties": {
+    "resolutions": {
+      "type": "array",
+      "description": "One resolution per conflicting group set investigated.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conflict_id", "resolution", "rationale", "affected_groups", "evidence_sources"],
+        "properties": {
+          "conflict_id": {
+            "type": "string",
+            "description": "The conflict_id from the input that this resolution addresses."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["MERGE", "SPLIT", "KEEP_SEPARATE"],
+            "description": "Resolved action. MERGE: combine groups into one. SPLIT: separate into distinct groups with different signals. KEEP_SEPARATE: keep as separate groups that are theoretically related."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Detailed justification (2-5 sentences) grounded in evidence observed through CWM tools or provided data. Reference specific incidents examined and the behavioral logic that supports this resolution."
+          },
+          "affected_groups": {
+            "type": "array",
+            "description": "The groups affected by this resolution, with their new disposition.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_batch", "original_signal", "action"],
+              "properties": {
+                "source_batch": {
+                  "type": "integer",
+                  "description": "Batch index of the original local group."
+                },
+                "original_signal": {
+                  "type": "string",
+                  "description": "Original signal from the local group."
+                },
+                "action": {
+                  "type": "string",
+                  "enum": ["merged_into", "split_to", "kept_as", "discarded"],
+                  "description": "What happens to this group. merged_into: combined with another group. split_to: separated into a distinct group. kept_as: retained with possibly renamed signal. discarded: removed."
+                },
+                "target_signal": {
+                  "type": "string",
+                  "description": "If merged_into or split_to: the signal of the target group. If kept_as: the new signal (may be unchanged). Empty string if discarded."
+                }
+              }
+            }
+          },
+          "evidence_sources": {
+            "type": "array",
+            "description": "List of tools called and evidence gathered during investigation.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tool", "query", "finding"],
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "enum": ["expand_incident", "search_related_segments", "get_document_context", "provided_data"],
+                  "description": "The CWM tool called, or 'provided_data' if evidence came from the input context."
+                },
+                "query": {
+                  "type": "string",
+                  "description": "What was queried (incident ID, search text, document ID)."
+                },
+                "finding": {
+                  "type": "string",
+                  "description": "Key observation from the tool output that informed the resolution (1-2 sentences)."
+                }
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"],
+            "description": "Confidence in this resolution. HIGH: clear evidence from multiple sources. MEDIUM: evidence supports but some ambiguity remains. LOW: weak evidence, decision is judgment-based. UNCERTAIN: tools unavailable or insufficient data, best-guess resolution."
+          },
+          "suggested_global_signal": {
+            "type": "string",
+            "description": "If resolution is MERGE or KEEP_SEPARATE: suggested signal for the resulting global group(s). If SPLIT: suggested signals for the separated groups, as a comma-separated string."
+          }
+        }
+      }
+    }
+  }
+}

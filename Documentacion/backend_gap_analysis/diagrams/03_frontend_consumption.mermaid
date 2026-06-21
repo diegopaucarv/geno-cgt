@@ -1,0 +1,100 @@
+# Diagrama 3: Consumo de Datos en el Frontend
+# Muestra qué datos del backend son EFECTIVAMENTE renderizados vs ignorados
+
+```mermaid
+flowchart TB
+    subgraph BACKEND["🔙 Backend API Responses"]
+        direction TB
+
+        subgraph PROJ_RESP["GET /projects/{id} → ProjectResponse"]
+            P_used["✅ nombre → navbar title (L1467)\n✅ ruta_de_codificacion → header (L1641)\n✅ estado → header + stale check (L1641,L254)\n✅ supuesto_poblacional → population panel (L1809)\n✅ object_of_study → experimental mode (L283)\n✅ population_assumption → full object used (L1839)"]
+            P_waste["❌ creador_id — NEVER rendered\n❌ creado_en — NEVER rendered\n❌ num_documentos — NEVER rendered (docs.length used)\n❌ num_categorias — NEVER rendered (cats.length used)\n❌ config_segmentacion — NEVER read by any component\n❌ coding_style_instruction — NEVER read by any component\n❌ config_mutation_policy — NEVER read by any component\n📊 WASTE: 50% of fields (7/14 unused)"]
+        end
+
+        subgraph DOC_RESP["GET /documents?proyecto_id= → Document[]"]
+            D_used["✅ original_filename → card title (L2559)\n✅ mime_type → badge via mimeLabel() (L2563)\n✅ estado → badge via getEstadoBadge() (L1347)\n✅ texto_extraido → textarea original view (L2928)\n✅ texto_preprocesado → textarea preprocessed view (L2925)\n✅ texto_original → textarea edited original (L2929)\n✅ preprocess_warning → warning badge (L2568)"]
+            D_waste["❌ proyecto_id — redundant (per-project query)\n❌ tipo_de_fuente — NEVER rendered\n❌ storage_key — internal, correct to ignore\n❌ size_bytes — NEVER rendered\n❌ creado_en — NEVER rendered\n📊 WASTE: 36% of fields (5/14 unused)"]
+        end
+
+        subgraph PIPELINE_LOG["GET /pipeline/log → PipelineLog"]
+            PL_used["✅ summary.total → stage derivation (L296)\n✅ summary.need_segment → pills + stage (L1645)\n✅ summary.need_agents → pills + stage (L1663)\n✅ summary.need_synthesis → continue check (L902)\n✅ summary.done → completion (L340)\n✅ summary.failed → error detection (L1047)\n✅ summary.failed_tasks → error detection (L1047)\n✅ summary.errors[].filename → error msg (L1049)\n✅ summary.project_state → stage + banner (L329)\n✅ summary.playground_ready → link enable (L1722)\n✅ documents[].document_id → getDocLog (L1274)\n✅ documents[].segments_count → hasSegments (L420)\n✅ documents[].next_action → continue logic (L914)"]
+            PL_waste["❌ summary.sintetizados — declared but NEVER read\n❌ documents[].filename — redundant (doc.original_filename used)\n❌ documents[].estado — redundant (doc.estado used)\n❌ documents[].steps.* (6 booleans) — COMPLETELY IGNORED\n❌ documents[].codes_count — NEVER read\n📊 WASTE: 75% of DocPipelineLog fields unused"]
+        end
+
+        subgraph CAT_RESP["GET /categories → Category[]"]
+            C_waste["⚠️ ENTIRE individual fields ignored in Project.tsx\n   Only cats.length displayed (L1481)\n   nombre, definicion, estado_saturacion, es_central — unused!\n   (Displayed in Playground via ecosystem API, not Category array)\n📊 WASTE: 83% of fields in Project.tsx context"]
+        end
+
+        subgraph SEG_RESP["GET /segments → Segment[]"]
+            S_used["✅ texto → displayed in segment view\n✅ id → list key (implicit)"]
+            S_waste["❌ documento_id — redundant per-doc query\n❌ parafrasis — NEVER rendered\n❌ posicion — NEVER rendered\n❌ conteo_tokens — NEVER rendered\n❌ es_anomalia — NEVER rendered\n📊 WASTE: 71% of fields unused"]
+        end
+
+        subgraph ECO_RESP["GET /ecosystem → EcosystemState"]
+            ECO_used["✅ blobs[] → CategoryBlob components\n✅ tendrils[] → RelationshipTendril components"]
+            ECO_waste["❌ layout (blob_positions, ghost_positions,\n   fog_zones, physics_params) — 100% IGNORED\n   Canvas calculates positions client-side\n📊 WASTE: 100% of EcosystemLayout"]
+        end
+
+        subgraph THEO["GET /theoretical/codes → TheoreticalCode[]"]
+            THEO_waste["❌ ENTIRE response fetched into PlaygroundContext (L63)\n   but ZERO components read pg.theoreticalCodes\n   Stored in state, garbage collected on unmount\n📊 WASTE: 100% — dead data round-trip"]
+        end
+
+        subgraph REL_DETAIL["GET /relationships/{id} → Relationship"]
+            REL_waste["❌ getRelationship() called in RelationshipTendril.tsx (L47)\n   const detail = await getRelationship(...) → DISCARDED\n📊 WASTE: 100% — unused HTTP call"]
+        end
+
+        subgraph DEAD_ENDPOINTS["☠️ Backend Endpoints NEVER Called"]
+            DEAD1["getPipelineStatus() → PipelineStatus interface 100% dead\n   (frontend uses getPipelineLog instead)"]
+            DEAD2["getTheoreticalModel() → ModelSummary endpoint exists, never called"]
+            DEAD3["getSaturationGaps() → endpoint exists, never called"]
+            DEAD4["saveEcosystemLayout() → endpoint exists, never called\n   (layout persistence not implemented)"]
+            DEAD5["19 unused client.ts functions\n   (createCategory, saveTaskSegments, stopWorker, etc.)"]
+        end
+    end
+
+    subgraph FRONTEND["🖥️ Frontend Rendering"]
+        direction TB
+
+        subgraph PROJECT_PAGE["Project.tsx (4166 lines)"]
+            PP1["Navbar: project.nombre, docs.length, cats.length, userName"]
+            PP2["Status Pills: docsNeedSegment count, docsNeedAgents count"]
+            PP3["Population Panel: supuesto_poblacional,\n  population_assumption.generalized_population,\n  generalizer_confidence bar, spatial/temporal frames"]
+            PP4["Experimental Mode: object_of_study dropdown,\n  custom_label input"]
+            PP5["Document Cards: filename, mime badge, estado badge,\n  preprocess_warning, expanded textarea\n  (original ↔ preprocessed ↔ segments toggle)"]
+            PP6["Pipeline Sidebar: stage circles + connectors,\n  agent list with dependencies, live log tail"]
+            PP7["Memo History: agent_memos through MemoHistory component\n  with family/entity_type filters"]
+        end
+
+        subgraph PLAYGROUND["Playground.tsx"]
+            PG1["EcosystemCanvas: blobs (CategoryBlob) + tendrils (RelationshipTendril)\n  + ghosts (GhostBlob)"]
+            PG2["RecommendationGuide: recommendations list\n  (title, description, action_type)"]
+            PG3["ElaborationPanel: blob detail (name, definition, saturation)\n  + tendril detail (fit, layer, tension)"]
+            PG4["PlaygroundDataPanel: pipeline decisions + saturation metrics"]
+            PG5["⚠️ NOT DISPLAYED: theoreticalCodes, saved layout positions,\n  saturation gaps report, theoretical model summary"]
+        end
+    end
+
+    P_used --> PP1
+    P_used --> PP2
+    P_used --> PP3
+    P_used --> PP4
+    D_used --> PP5
+    PL_used --> PP2
+    PL_used --> PP6
+    ECO_used --> PG1
+    ECO_used --> PG3
+
+    P_waste -.->|"DATA WASTE (50%)"| TRASH["🗑️ Downloaded but unused"]
+    D_waste -.->|"DATA WASTE (36%)"| TRASH
+    PL_waste -.->|"DATA WASTE (75% of DocPipelineLog)"| TRASH
+    C_waste -.->|"DATA WASTE (83%)"| TRASH
+    S_waste -.->|"DATA WASTE (71%)"| TRASH
+    ECO_waste -.->|"DATA WASTE (100% of layout)"| TRASH
+    THEO_waste -.->|"DATA WASTE (100%)"| TRASH
+    REL_waste -.->|"DATA WASTE (100%)"| TRASH
+    DEAD1 -.-> TRASH
+    DEAD2 -.-> TRASH
+    DEAD3 -.-> TRASH
+    DEAD4 -.-> TRASH
+    DEAD5 -.-> TRASH
+```

@@ -73,6 +73,11 @@ For each {object_of_study} candidate, issue a verdict:
 [RESEARCHER FEEDBACK — modifications requested]
 {researcher_feedback}
 
+[CHOSEN CONCERN — if defined]
+{chosen_concern}
+
+If a concern has been chosen, evaluate candidates against it. If empty, proceed without concern guidance.
+
 [PROPOSER OUTPUT — CANDIDATES TO EVALUATE]
 {candidates_context}
 

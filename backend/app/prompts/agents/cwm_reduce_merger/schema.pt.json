@@ -1,0 +1,99 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global_groups", "merge_summary"],
+  "properties": {
+    "global_groups": {
+      "type": "array",
+      "description": "Grupos globais consolidados após deduplicação e fusão de todos os lotes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "merged_from_batches", "confidence"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Sinal sintetizado (1-6 palavras) que captura o padrão comportamental comum em todos os grupos locais fundidos. Pode ser um dos sinais locais existentes ou uma nova síntese."
+          },
+          "incident_ids": {
+            "type": "array",
+            "minItems": 2,
+            "items": {"type": "string"},
+            "description": "União de todos os IDs de incidentes dos grupos locais fundidos, deduplicados. Mínimo 2. Usar IDs EXATOS da entrada."
+          },
+          "merged_from_batches": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "integer", "minimum": 0},
+            "description": "Índices (baseados em 0) dos lotes cujos grupos locais foram fundidos neste grupo global. Mínimo 1."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Confiança nesta fusão. HIGH: claramente o mesmo processo comportamental entre lotes, as justificativas convergem. MEDIUM: provavelmente o mesmo processo mas confirmado apenas em um lote, ou divergência menor nas justificativas. LOW: fusão forçada por sinais superficiais semelhantes, mas as justificativas descrevem processos possivelmente diferentes."
+          },
+          "original_signals": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Os sinais originais dos grupos locais que foram fundidos para formar este grupo global. Fornece rastreabilidade aos lotes de origem."
+          },
+          "conflict_note": {
+            "type": "string",
+            "description": "Se esta fusão envolveu resolução de conflitos (decisão SPLIT, incidentes sobrepostos, subconjunto/superconjunto), descreva o conflito e como foi resolvido. String vazia se não houver conflito."
+          }
+        }
+      }
+    },
+    "merge_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_local_groups_received", "total_global_groups_produced", "merges_performed", "splits_performed", "low_confidence_count"],
+      "properties": {
+        "total_local_groups_received": {
+          "type": "integer",
+          "description": "Número total de grupos locais recebidos de todos os lotes."
+        },
+        "total_global_groups_produced": {
+          "type": "integer",
+          "description": "Número total de grupos globais após fusão e deduplicação."
+        },
+        "merges_performed": {
+          "type": "integer",
+          "description": "Número de operações de fusão realizadas (dois ou mais grupos locais combinados em um grupo global)."
+        },
+        "splits_performed": {
+          "type": "integer",
+          "description": "Número de operações de divisão realizadas (grupos locais com o mesmo sinal separados em grupos globais diferentes devido a justificativas divergentes)."
+        },
+        "low_confidence_count": {
+          "type": "integer",
+          "description": "Número de grupos globais com confidence=LOW. Estes são candidatos para exploração ReAct."
+        },
+        "divergences_for_react": {
+          "type": "array",
+          "description": "Grupos marcados para possível exploração ReAct. Vazio se não houver divergências.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["global_group_signal", "reason"],
+            "properties": {
+              "global_group_signal": {
+                "type": "string",
+                "description": "Sinal do grupo global com divergência não resolvida."
+              },
+              "reason": {
+                "type": "string",
+                "enum": ["LOW_CONFIDENCE_MERGE", "CONFLICTING_RATIONALES", "SAME_SIGNAL_DIFFERENT_PROCESS", "OVERLAPPING_INCIDENTS_UNRESOLVED"],
+                "description": "Razão pela qual esta divergência precisa de exploração ReAct."
+              },
+              "detail": {
+                "type": "string",
+                "description": "Descrição específica da divergência: quais sinais estão em conflito, quais lotes discordam, o que torna a resolução ambígua."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

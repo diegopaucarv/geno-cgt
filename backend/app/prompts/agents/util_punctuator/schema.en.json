@@ -3,7 +3,8 @@
   "additionalProperties": false,
   "required": [
     "punctuated_text",
-    "changes_made"
+    "changes_made",
+    "_self_evaluation"
   ],
   "properties": {
     "punctuated_text": {
@@ -13,6 +14,25 @@
     "changes_made": {
       "type": "boolean",
       "description": "true if at least one character was modified."
+    },
+    "_self_evaluation": {
+      "type": "object",
+      "properties": {
+        "needs_retry": {
+          "type": "boolean",
+          "description": "true if you consider your output is incomplete, low quality, or requires additional refinement"
+        },
+        "retry_reason": {
+          "type": ["string", "null"],
+          "description": "ONLY if needs_retry=true. CONCRETE and ACTIONABLE instruction on what to improve in the next attempt. E.g.: 'Label too generic — specify distinctive properties', 'Missing evidence from segment 47', 'Definition mixes two different concepts — separate'"
+        },
+        "suggested_action": {
+          "type": "string",
+          "enum": ["proceed", "retry", "escalate_to_hitl", "skip", "abort"],
+          "description": "Recommended action: proceed (output correct, continue), retry (retry with feedback), escalate_to_hitl (human decision needed), skip (skip this agent, not relevant), abort (unrecoverable error, stop everything)"
+        }
+      },
+      "required": ["needs_retry", "suggested_action"]
     }
   }
 }

@@ -72,6 +72,11 @@ Which {object_of_study} has the most explanatory power across the data?
 [RESEARCHER FEEDBACK]
 {researcher_feedback}
 
+[CHOSEN CONCERN — if defined]
+{chosen_concern}
+
+If a concern has been chosen, prioritize/align with it. If empty, proceed without concern guidance.
+
 [ALL CODES WITH DEFINITIONS]
 {all_codes}
 

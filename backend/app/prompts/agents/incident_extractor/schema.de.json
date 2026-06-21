@@ -1,43 +1,48 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "extracted_incidents"
-  ],
+  "required": ["extracted_incidents"],
   "properties": {
     "extracted_incidents": {
       "type": "array",
-      "description": "Im Dokument gefundene Incidente der Kategorie. Leeres Array wenn die Kategorie nicht vorkommt.",
+      "description": "Im Dokument gefundene Incidente der Zielkategorie. Leeres Array wenn die Kategorie nicht vorkommt.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "exact_quote",
-          "proposed_property",
-          "paradigm_element"
+          "contextual_meaning",
+          "revealed_property",
+          "incident_summary",
+          "exact_quotes",
+          "classification",
+          "classification_rationale"
         ],
         "properties": {
-          "exact_quote": {
+          "contextual_meaning": {
             "type": "string",
-            "description": "Exaktes wörtliches Zitat aus dem Dokument. Nicht paraphrasieren. Zwischen 10 und 300 Wörtern."
+            "description": "Schritte 1 & 2: Kritische Analyse dessen, was diese Manifestation in ihrem textuellen Kontext bedeutet, ohne etwas auszulassen."
           },
-          "proposed_property": {
+          "revealed_property": {
             "type": "string",
-            "description": "Kategorieeigenschaft, die dieser Incident offenbart (z.B. 'hohe Intensität', 'Arbeitskontext')."
+            "description": "Schritt 3: Die spezifische Eigenschaft oder das Merkmal der Kategorie, das dieser Incident offenbart."
           },
-          "paradigm_element": {
+          "incident_summary": {
             "type": "string",
-            "enum": [
-              "dimension",
-              "condition",
-              "consequence",
-              "strategy"
-            ],
-            "description": "CGT-Paradigmaelement: dimension (variierende Eigenschaft), condition (Umstand), consequence (Ergebnis), strategy (Handlung)."
+            "description": "Schritt 4: Eine kompakte, präzise Ein-Satz-Zusammenfassung des Incidents in einfacher Sprache, ohne akademischen Jargon."
           },
-          "ambiguity_note": {
+          "exact_quotes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Schritt 5: Exakte, wörtliche Zitate aus dem Text, die zeigen, wie der Incident im echten Leben erscheint. Nicht paraphrasieren."
+          },
+          "classification": {
             "type": "string",
-            "description": "Wenn der Incident zu einer anderen Kategorie gehören könnte, hier notieren. Leerer String wenn keine Mehrdeutigkeit."
+            "enum": ["WIDERSPRICHT", "ERWEITERT", "BESTÄTIGT"],
+            "description": "Schritt 6: Klassifikation, wie der Incident sich zur aktuellen Definition der Kategorie verhält."
+          },
+          "classification_rationale": {
+            "type": "string",
+            "description": "Schritt 6: Eine kurze Begründung, die die Klassifikation mit der Bedeutung der Kategorie verbindet."
           }
         }
       }

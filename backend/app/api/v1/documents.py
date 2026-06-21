@@ -229,8 +229,12 @@ async def segment_document(
         task = celery_app.send_task(
             "segmentar_documento",
             args=[texto, 1024],
+            kwargs={"documento_id": str(document_id)},
             queue="nlp",
         )
+        # Mark as segmenting
+        doc.estado = "segmentando"
+        await db.commit()
         return {"status": "dispatched", "task_id": task.id}
 
     # Default: spaCy (via model manager)
@@ -283,6 +287,7 @@ async def list_documents(
                     "texto_preprocesado", ""
                 ),
                 "texto_original": (doc.metadatos or {}).get("texto_original", ""),
+                "texto_clasificado": (doc.metadatos or {}).get("texto_clasificado", ""),
                 "preprocess_warning": (doc.metadatos or {}).get(
                     "preprocess_warning", ""
                 ),
@@ -361,14 +366,7 @@ async def punctuate_document(
     if not texto:
         raise HTTPException(400, "No hay texto extraído para puntuar")
 
-    needs_punct = _needs_punctuation(texto)
-    if not needs_punct:
-        return {
-            "status": "ok",
-            "punctuation_fix": False,
-            "message": "El texto ya tiene buena puntuación",
-        }
-
+    # Always dispatch to worker — it handles both "changed" and "no changes" consistently
     from app.core.celery_app import celery_app
 
     task = celery_app.send_task(
@@ -529,6 +527,20 @@ async def delete_document(
         {"did": document_id},
     )
     await db.execute(
+        text(
+            "DELETE FROM extracted_incidents WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id = :did)"
+        ),
+        {"did": document_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM codigos_segmento WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id = :did)"
+        ),
+        {"did": document_id},
+    )
+    await db.execute(
         text("DELETE FROM segmentos WHERE documento_id = :did"),
         {"did": document_id},
     )
@@ -546,6 +558,22 @@ async def delete_all_segments(
     """Elimina todos los segmentos de un proyecto y resetea docs a crudo."""
     from sqlalchemy import text
 
+    await db.execute(
+        text(
+            "DELETE FROM extracted_incidents WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
+        ),
+        {"pid": project_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM codigos_segmento WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id IN "
+            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
+        ),
+        {"pid": project_id},
+    )
     await db.execute(
         text(
             "DELETE FROM segmentos WHERE documento_id IN (SELECT id FROM documentos WHERE proyecto_id = :pid)"
@@ -603,6 +631,21 @@ async def restore_document_original(
         {"did": document_id},
     )
     # Also delete segments so the doc really goes back to raw
+    # Delete FK dependencies first
+    await db.execute(
+        text(
+            "DELETE FROM extracted_incidents WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id = :did)"
+        ),
+        {"did": document_id},
+    )
+    await db.execute(
+        text(
+            "DELETE FROM codigos_segmento WHERE segmento_id IN "
+            "(SELECT id FROM segmentos WHERE documento_id = :did)"
+        ),
+        {"did": document_id},
+    )
     await db.execute(
         text("DELETE FROM segmentos WHERE documento_id = :did"),
         {"did": document_id},
@@ -656,3 +699,68 @@ async def reorder_documents(
         )
     await db.commit()
     return {"status": "ok", "count": len(items)}
+
+
+@router.post("/{document_id}/classify-glaser")
+async def classify_glaser_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Triggers the 3-step Glaser classification for a single document.
+
+    Dispatches task_run_glaser_classifier to the Celery 'heavy' queue.
+    The task executes:
+      Step 1 (PRO): XML tag classification of the full document text.
+      Step 2 (FLASH): Structure validator with algorithmic fallback.
+      Step 3: Baseline selection.
+
+    With validator loop: validate -> feedback -> re-classify -> ... (max 3 rounds).
+    """
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+
+    # Verify document belongs to user's project
+    # (get_current_user already ensures auth; cross-project access is handled by
+    #  the Celery task which validates internally)
+
+    # Check document has text to classify
+    meta = doc.metadatos or {}
+    texto = meta.get("texto_preprocesado") or meta.get("texto_extraido", "")
+    if not texto:
+        raise HTTPException(400, "El documento no tiene texto extraído para clasificar")
+
+    from app.core.celery_app import celery_app
+
+    task = celery_app.send_task(
+        "run_glaser_classifier",
+        args=[str(document_id), str(doc.proyecto_id)],
+        queue="heavy",
+    )
+
+    return {
+        "status": "dispatched",
+        "task_id": task.id,
+        "document_id": str(document_id),
+    }
+
+
+@router.delete("/{document_id}/classify-glaser")
+async def clear_glaser_classification(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Clears Glaser classification from a document. Resets estado to preprocesado."""
+    doc = await db.get(Documento, document_id)
+    if not doc:
+        raise HTTPException(404, "Documento no encontrado")
+    meta = doc.metadatos or {}
+    meta.pop("texto_clasificado", None)
+    meta.pop("baseline_tags", None)
+    doc.metadatos = meta
+    if doc.estado == "clasificado":
+        doc.estado = "preprocesado"
+    await db.commit()
+    return {"status": "cleared", "document_id": str(document_id)}

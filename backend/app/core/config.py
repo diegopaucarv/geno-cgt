@@ -83,6 +83,11 @@ NLP_CONCURRENCY = int(_cfg("NLP_CONCURRENCY"))
 DEFAULT_POPULATION_ASSUMPTION = _cfg("DEFAULT_POPULATION_ASSUMPTION")
 DEFAULT_OBJECT_OF_STUDY = _cfg("DEFAULT_OBJECT_OF_STUDY")
 
+# ── Glaser Classifier ────────────────────────────────────────────────
+GLASER_CLASSIFIER_PROMPT = os.getenv(
+    "GLASER_CLASSIFIER_PROMPT", ""
+)  # Overridable via env var for the 3-step classifier
+
 # ── System ───────────────────────────────────────────────────────────
 
 ENVIRONMENT = _cfg("ENVIRONMENT")

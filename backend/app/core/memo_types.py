@@ -13,24 +13,28 @@ META = {
         "icon": "💡",
         "color": "#D29922",
         "description": "Hipótesis emergente sobre relaciones entre conceptos",
+        "requires_agent": "fb_hypothesis_generator",
     },
     "CATEGORIA": {
         "label": "Categoría",
         "icon": "🏷️",
         "color": "#A371F7",
         "description": "Categoría de investigación. Se persiste en la tabla categorias.",
+        "requires_agent": "fd_category_synthesizer",
     },
     "PROPIEDAD": {
         "label": "Propiedad",
         "icon": "📐",
         "color": "#58A6FF",
         "description": "Propiedad o dimensión de una categoría existente",
+        "requires_agent": "fb_code_generator",
     },
     "RELACION": {
         "label": "Relación",
         "icon": "🔗",
         "color": "#3FB950",
         "description": "Relación conceptual entre categorías",
+        "requires_agent": "fd_category_synthesizer",
     },
     "METODOLOGICO": {
         "label": "Metodológico",
@@ -55,18 +59,21 @@ META = {
         "icon": "🔬",
         "color": "#FF6B35",
         "description": "Familia teórica personalizada (las 12 built-in no se tocan). Requiere structured_fields.",
+        "requires_agent": "fc_main_concern_proposer",
     },
     "DATABASE_NODE": {
         "label": "Nodo (DB A)",
         "icon": "🟦",
         "color": "#79C0FF",
         "description": "Nodo del modelo teórico plano. Requiere entity_type.",
+        "requires_agent": "ff_database_a_proposer",
     },
     "DATABASE_EDGE": {
         "label": "Edge (DB B)",
         "icon": "➡️",
         "color": "#3FB950",
         "description": "Relación del modelo teórico. Requiere source/target + relationship_type.",
+        "requires_agent": "ff_database_b_proposer",
     },
 }
 

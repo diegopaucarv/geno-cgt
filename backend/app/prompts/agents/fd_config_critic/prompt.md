@@ -36,6 +36,9 @@ The researcher is investigating: **{object_of_study}**
 [OPERATIONAL QUESTION — what to observe operationally]
 {operational_question}
 
+[OBJETIVO]
+Review the emerging theoretical configuration after each synthesis batch — evaluating concerns, units of analysis, research problems, and coding style adequacy — to provide actionable methodological feedback that guides the next iteration of analysis.
+
 [PROTOCOL]
 1. **Concern Analysis**: Review the categories and hypotheses. What {label_name} concerns
    (underlying processes the population seems to be continuously trying to resolve)
@@ -76,6 +79,13 @@ The researcher is investigating: **{object_of_study}**
 - If the style is adequate: recommendation = "keep"
 - If a different style would better capture patterns: recommendation = "change_to:X"
 - Identify patterns the current style MIGHT MISS.
+
+[RESTRICCIONES]
+- Concerns must be grounded in the data through specific categories and incidents — never imposed externally.
+- Labels must be {label_name}s, never abstract nouns or theoretical jargon.
+- All evaluations must reference concrete evidence from the provided categories and hypotheses.
+- When suggesting changes, provide actionable recommendations with rationale tied to the data.
+- Output must be valid JSON conforming to the schema exactly.
 
 ## User
 

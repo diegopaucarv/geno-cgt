@@ -26,6 +26,7 @@ import {
   updateProject,
   updatePopulationAssumption,
   generatePopulationGeneralization,
+  getStaleUserEntities,
   Project,
   Document,
   Category,
@@ -77,6 +78,54 @@ export default function ProjectDetail() {
   const [punctStatus, setPunctStatus] = useState<Record<string, string>>({});
   const [punctRunning, setPunctRunning] = useState<string | null>(null);
   const punctTaskRef = useRef<string | null>(null);
+  const runningOp = useRef<{
+    docId: string;
+    op: "punctuate" | "classify" | "segment";
+  } | null>(null);
+
+  // ── Modular cancel: each operation reverts ONLY its own step ──
+  // punctuate: restore → crudo
+  // classify:  clear classified text → preprocesado
+  // segment:   delete segs → clasificado
+  const OP_ROLLBACK: Record<
+    string,
+    Array<"restore" | "deleteSegs" | "clearClassified">
+  > = {
+    punctuate: ["restore"],
+    classify: ["clearClassified"],
+    segment: ["deleteSegs"],
+  };
+  async function cancelRunningOp(docId: string) {
+    const op = runningOp.current;
+    if (!op || op.docId !== docId) return;
+    const token = `Bearer ${localStorage.getItem("access_token")}`;
+    runningOp.current = null;
+    abortRef.current = true;
+    const t = punctTaskRef.current;
+    setPunctRunning(null);
+    punctTaskRef.current = null;
+    if (t) {
+      await fetch(`/api/v1/admin/tasks/${t}/cancel`, {
+        method: "POST",
+        headers: { Authorization: token },
+      }).catch(() => {});
+    }
+    const rollbacks = OP_ROLLBACK[op.op] || [];
+    for (const rb of rollbacks) {
+      if (rb === "restore")
+        await restoreDocumentOriginal(docId).catch(() => {});
+      if (rb === "deleteSegs")
+        await deleteDocumentSegments(docId).catch(() => {});
+      if (rb === "clearClassified") {
+        await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
+          method: "DELETE",
+          headers: { Authorization: token },
+        }).catch(() => {});
+      }
+    }
+    refreshDocs();
+  }
+
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
@@ -139,6 +188,13 @@ export default function ProjectDetail() {
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
 
+  // ── Stale entities warning (FIX 4) ──
+  const [staleWarning, setStaleWarning] = useState<{
+    count: number;
+    affected_stages: string[];
+    earliest_stage: string | null;
+  } | null>(null);
+
   // ── Agent monitoring ──
   const [sidebarViewMode, setSidebarViewMode] = useState<
     "stages" | "agents" | "logs"
@@ -164,33 +220,53 @@ export default function ProjectDetail() {
   const [selectedOOS, setSelectedOOS] = useState<string>("");
   const [customLabel, setCustomLabel] = useState("");
 
-  // ── Preprocessing toggle ──
-  const [preprocessDisabled, setPreprocessDisabled] = useState<Set<string>>(
-    () => {
-      try {
-        const raw = localStorage.getItem("gt_preprocess_disabled");
-        return raw ? new Set(JSON.parse(raw)) : new Set<string>();
-      } catch {
-        return new Set<string>();
-      }
-    },
-  );
-
   // ── Text editing state ──
   const [textEdits, setTextEdits] = useState<Record<string, string>>({});
   const [textSaving, setTextSaving] = useState<Record<string, boolean>>({});
+
+  // ── Per-document error state (for routing retries) ──
+  const [docError, setDocError] = useState<
+    Record<string, { action: string; message: string }>
+  >({});
 
   // ── Drag-and-drop state ──
   const dragDoc = useRef<string | null>(null);
 
   // ── Agent execution state ──
-  const [completedAgents, setCompletedAgents] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [iterations, setIterations] = useState<Record<string, number>>({});
+  const [completedAgents, setCompletedAgents] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("gt_completed_agents");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const runningTaskRef = useRef<string | null>(null);
+  const [iterations, setIterations] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem("gt_iterations");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
 
-  // ── Text comparison toggle (crudo vs preprocesado) ──
-  const [showPreprocessed, setShowPreprocessed] = useState(false);
+  // Persist completed agents to localStorage
+  useEffect(() => {
+    localStorage.setItem(
+      "gt_completed_agents",
+      JSON.stringify([...completedAgents]),
+    );
+  }, [completedAgents]);
+
+  useEffect(() => {
+    localStorage.setItem("gt_iterations", JSON.stringify(iterations));
+  }, [iterations]);
+
+  // ── Text view mode (original / preprocesado / clasificado / segmented / incidents) ──
+  const [textViewMode, setTextViewMode] = useState<
+    "original" | "preprocessed" | "classified" | "segmented" | "incidents"
+  >("original");
 
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -215,7 +291,15 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     if (!id) return;
-    getProject(id).then(setProject).catch(console.error);
+    getProject(id)
+      .then((p) => {
+        setProject(p);
+        // FIX 4: check for stale user entities after pipeline advances
+        getStaleUserEntities(id, p.estado)
+          .then(setStaleWarning)
+          .catch(() => {});
+      })
+      .catch(console.error);
     refreshDocs();
     listCategories(id).then(setCats).catch(console.error);
     ping()
@@ -307,6 +391,64 @@ export default function ProjectDetail() {
       return next;
     });
   }, [pipelineLog, pipelineRunning]);
+
+  // Sync per-doc agent statuses from document states
+  useEffect(() => {
+    setAgentStatuses((prev) => {
+      const next = { ...prev };
+      const punctTotal = docs.filter(
+        (d) => !!((d as any).texto_original || d.texto_extraido),
+      ).length;
+      const punctDone = docs.filter(
+        (d) =>
+          d.estado !== "crudo" ||
+          !((d as any).texto_original || d.texto_extraido),
+      ).length;
+      if (
+        punctTotal > 0 &&
+        punctDone === punctTotal &&
+        (!next["util_punctuator"] || next["util_punctuator"] === "pending")
+      )
+        next["util_punctuator"] = "done";
+      const classTotal = docs.filter(
+        (d) =>
+          d.estado === "preprocesado" ||
+          d.estado === "clasificado" ||
+          d.estado === "segmentado" ||
+          d.estado === "listo",
+      ).length;
+      const classDone = docs.filter(
+        (d) =>
+          d.estado === "clasificado" ||
+          d.estado === "segmentado" ||
+          d.estado === "listo",
+      ).length;
+      if (
+        classTotal > 0 &&
+        classDone === classTotal &&
+        (!next["fa_glaser_data_classifier"] ||
+          next["fa_glaser_data_classifier"] === "pending")
+      )
+        next["fa_glaser_data_classifier"] = "done";
+      const segTotal = docs.filter(
+        (d) =>
+          d.estado === "clasificado" ||
+          d.estado === "segmentado" ||
+          d.estado === "listo",
+      ).length;
+      const segDone = docs.filter(
+        (d) => d.estado === "segmentado" || d.estado === "listo",
+      ).length;
+      if (
+        segTotal > 0 &&
+        segDone === segTotal &&
+        (!next["segmentar_documento"] ||
+          next["segmentar_documento"] === "pending")
+      )
+        next["segmentar_documento"] = "done";
+      return next;
+    });
+  }, [docs]);
 
   // ── HITL: mark relevant stage as "running" when HITL is pending ──
   useEffect(() => {
@@ -430,7 +572,9 @@ export default function ProjectDetail() {
       if (abortRef.current) return;
 
       if (res.status === "ok" && !res.task_id) {
-        // Backend determined no punctuation needed (already OK)
+        // Backend determined no punctuation needed — already well-punctuated.
+        // Backend now sets estado='preprocesado' even without changes.
+        refreshDocs();
         setPunctStatus((prev) => ({
           ...prev,
           [docId]: t("project.preprocessingOK"),
@@ -544,20 +688,12 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Preprocess all documents that are still 'crudo' or 'preprocesado' (raw) */
+  /** Preprocess all crudo documents that have text */
   async function handlePreprocessAll() {
     const toProcess = docs.filter(
       (d) =>
-        (d.estado === "crudo" || d.estado === "preprocesado") &&
-        !preprocessDisabled.has(d.id),
-    );
-    console.log(
-      "[preprocessAll] candidates:",
-      toProcess.length,
-      "of",
-      docs.length,
-      "docs. preprocessDisabled:",
-      [...preprocessDisabled],
+        d.estado === "crudo" &&
+        !!((d as any).texto_original || d.texto_extraido),
     );
     if (toProcess.length === 0) return;
 
@@ -612,6 +748,7 @@ export default function ProjectDetail() {
 
     abortRef.current = false;
     setPunctRunning(docId);
+    runningOp.current = { docId, op: "punctuate" };
     setPunctStatus((prev) => ({
       ...prev,
       [docId]: t("project.preprocessingStarting"),
@@ -619,8 +756,236 @@ export default function ProjectDetail() {
 
     try {
       await punctuateSingleDoc(docId);
+      setDocError((prev) => {
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
+    } catch (e: any) {
+      setDocError((prev) => ({
+        ...prev,
+        [docId]: {
+          action: "punctuate",
+          message: e.message || "Error desconocido",
+        },
+      }));
     } finally {
+      runningOp.current = null;
       setPunctRunning(null);
+    }
+  }
+
+  /** Render classified XML text: tags as tiny labels, content colored per type. */
+  function renderClassifiedText(xmlText: string): string {
+    if (!xmlText) return '<span style="color:#484F58">Sin clasificacion</span>';
+    var tagColors: Record<string, string> = {
+      baseline_data: "#3FB950",
+      interviewer_context: "#D29922",
+      processual_data: "#58A6FF",
+      contextual_data: "#8B949E",
+    };
+    var escaped = xmlText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    var tagNames = Object.keys(tagColors);
+    for (var i = 0; i < tagNames.length; i++) {
+      var tag = tagNames[i];
+      var color = tagColors[tag];
+      var openTag = "&lt;" + tag + "&gt;";
+      var closeTag = "&lt;/" + tag + "&gt;";
+      var tagLabel =
+        '<span style="font-size:9px;color:' +
+        color +
+        ';opacity:0.6;font-weight:600">' +
+        tag +
+        "</span>";
+      var parts = escaped.split(openTag);
+      var result2 = parts[0];
+      for (var j = 1; j < parts.length; j++) {
+        var closeIdx = parts[j].indexOf(closeTag);
+        if (closeIdx >= 0) {
+          var inner = parts[j].substring(0, closeIdx);
+          var after = parts[j].substring(closeIdx + closeTag.length);
+          result2 +=
+            '<div style="margin:6px 0;padding:6px 8px;border-left:3px solid ' +
+            color +
+            ";background:" +
+            color +
+            '11;border-radius:0 4px 4px 0">' +
+            '<div style="margin-bottom:3px">' +
+            tagLabel +
+            "</div>" +
+            '<span style="color:' +
+            color +
+            ';line-height:1.6">' +
+            inner +
+            "</span>" +
+            "</div>" +
+            after;
+        } else {
+          result2 += openTag + parts[j];
+        }
+      }
+      escaped = result2;
+    }
+    return escaped;
+  }
+
+  /** Classify a single document via Glaser classifier (3-step + validator loop) */
+  async function handleClassify(docId: string) {
+    if (punctRunning === docId) {
+      // Cancel: abort polling + revoke Celery task
+      abortRef.current = true;
+      setPunctRunning(null);
+      const taskId = punctTaskRef.current;
+      punctTaskRef.current = null;
+      if (taskId) {
+        fetch(`/api/v1/admin/tasks/${taskId}/cancel`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        })
+          .then(() => refreshDocs())
+          .catch(() => {});
+      }
+      return;
+    }
+
+    abortRef.current = false;
+    setPunctRunning(docId);
+    runningOp.current = { docId, op: "classify" };
+    try {
+      const token = `Bearer ${localStorage.getItem("access_token")}`;
+      const res = await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
+        method: "POST",
+        headers: { Authorization: token },
+      }).then((r) => r.json());
+
+      if (res.task_id) {
+        punctTaskRef.current = res.task_id;
+        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const ts = await getTaskStatus(res.task_id);
+            if (ts.status === "SUCCESS") {
+              refreshDocs();
+              return;
+            }
+            if (ts.status === "FAILURE") return;
+          } catch {}
+        }
+        if (!abortRef.current) {
+          showErrorToast("Timeout: clasificación no respondió en 120s");
+        }
+      } else {
+        refreshDocs();
+      }
+    } catch (e: any) {
+      if (!abortRef.current) {
+        showErrorToast("Error: " + (e.message || ""));
+      }
+    } finally {
+      runningOp.current = null;
+      setPunctRunning(null);
+    }
+  }
+
+  /** Route action based on doc estado */
+  async function handleDocAction(docId: string) {
+    const d = docs.find((x) => x.id === docId);
+    if (!d) return;
+
+    // Error retry
+    const err = docError[docId];
+    if (err) {
+      setDocError((prev) => {
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
+      if (err.action === "punctuate") return handlePunctuate(docId);
+      if (err.action === "classify") return handleClassify(docId);
+      return;
+    }
+
+    // Cancel running operation (modular)
+    if (punctRunning === docId) {
+      await cancelRunningOp(docId);
+      return;
+    }
+
+    // Route action based on document estado
+    switch (d.estado) {
+      case "crudo":
+        return handlePunctuate(docId);
+      case "preprocesado":
+        return handleClassify(docId);
+      case "clasificado":
+        return handleSegment(docId);
+      default:
+        return;
+    }
+  }
+
+  /** Segment a single document */
+  async function handleSegment(docId: string) {
+    abortRef.current = false;
+    setPunctRunning(docId);
+    runningOp.current = { docId, op: "segment" };
+    try {
+      const token = `Bearer ${localStorage.getItem("access_token")}`;
+      const res = await fetch(`/api/v1/documents/${docId}/segment`, {
+        method: "POST",
+        headers: { Authorization: token },
+      }).then((r) => r.json());
+
+      if (res.task_id) {
+        punctTaskRef.current = res.task_id;
+        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const ts = await getTaskStatus(res.task_id);
+            if (ts.status === "SUCCESS") {
+              refreshDocs();
+              return;
+            }
+            if (ts.status === "FAILURE") return;
+          } catch {}
+        }
+      }
+    } catch (e: any) {
+      if (!abortRef.current) {
+        showErrorToast("Error: " + (e.message || ""));
+      }
+    } finally {
+      runningOp.current = null;
+      setPunctRunning(null);
+    }
+  }
+
+  /** Restore one step back based on current estado (same rollbacks as cancel) */
+  async function handleRestoreAll(docId: string) {
+    if (!(await safeConfirm(t("project.restoreOriginalConfirm")))) return;
+    try {
+      const doc = docs.find((d) => d.id === docId);
+      if (!doc) return;
+      const token = `Bearer ${localStorage.getItem("access_token")}`;
+      // Map estado → rollback op (inverse of the chain)
+      if (doc.estado === "clasificado") {
+        await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
+          method: "DELETE",
+          headers: { Authorization: token },
+        }).catch(() => {});
+      } else if (doc.estado === "segmentado") {
+        await deleteDocumentSegments(docId).catch(() => {});
+      } else {
+        await restoreDocumentOriginal(docId);
+      }
+      refreshDocs();
+    } catch (e: any) {
+      showErrorToast("Error: " + (e.message || ""));
     }
   }
 
@@ -764,7 +1129,9 @@ export default function ProjectDetail() {
     if (newText === undefined) return;
     setTextSaving((prev) => ({ ...prev, [docId]: true }));
     try {
-      const field = showPreprocessed ? "texto_preprocesado" : "texto_original";
+      var field = "texto_original";
+      if (textViewMode === "preprocessed") field = "texto_preprocesado";
+      else if (textViewMode === "classified") field = "texto_clasificado";
       await fetch(`/api/v1/documents/${docId}/text`, {
         method: "PATCH",
         headers: {
@@ -1288,23 +1655,20 @@ export default function ProjectDetail() {
     color: string;
     bg: string;
   } {
-    // Preprocessing actively running for this document
     if (punctRunning === doc.id) {
       return {
         text: t("project.statusPreprocessing"),
-        color: "#D29922",
-        bg: "#D2992222",
+        color: "#8B949E",
+        bg: "#8B949E22",
       };
     }
-    // Preprocessing resulting in error
-    if (punctStatus[doc.id]?.startsWith("❌")) {
+    if (punctStatus[doc.id]?.startsWith("\u274C")) {
       return {
         text: t("project.statusError"),
         color: "#F85149",
         bg: "#F8514922",
       };
     }
-    // Check document estado
     switch (doc.estado) {
       case "crudo":
         return {
@@ -1315,56 +1679,86 @@ export default function ProjectDetail() {
       case "preprocesando":
         return {
           text: t("project.statusPreprocessing"),
-          color: "#D29922",
-          bg: "#D2992222",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "preprocesado":
         return {
-          text: t("project.preprocessingOK"),
-          color: "#3FB950",
-          bg: "#3FB95022",
+          text: t("project.statusPreprocessed"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "clasificado":
+        return {
+          text: t("project.statusClassified"),
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "segmentando":
         return {
           text: t("project.statusSegmenting"),
-          color: "#A371F7",
-          bg: "#A371F722",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "segmentado":
         return {
           text: t("project.statusSegmented"),
-          color: "#D29922",
-          bg: "#D2992222",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
-      case "procesando":
+      case "extrayendo":
         return {
-          text: t("project.pipelineProcessing"),
-          color: "#A371F7",
-          bg: "#A371F722",
+          text: t("project.statusExtracting"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "incidentes_extraidos":
+        return {
+          text: t("project.statusIncidentsExtracted"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "procesado":
+        return {
+          text: t("project.statusIncidentsExtracted"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "codificando":
+        return {
+          text: t("project.statusCoding"),
+          color: "#8B949E",
+          bg: "#8B949E22",
+        };
+      case "codificado":
+        return {
+          text: t("project.statusCoded"),
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "listo":
         return {
           text: t("project.statusReady"),
-          color: "#3FB950",
-          bg: "#3FB95022",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "resumiendo":
         return {
           text: t("project.statusSummarizing"),
-          color: "#D29922",
-          bg: "#D2992222",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "resumido":
         return {
           text: t("project.statusSummarized"),
-          color: "#3FB950",
-          bg: "#3FB95022",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "sintetizado":
         return {
           text: t("project.statusSynthesized"),
-          color: "#58A6FF",
-          bg: "#58A6FF22",
+          color: "#8B949E",
+          bg: "#8B949E22",
         };
       case "error":
         return {
@@ -1492,6 +1886,36 @@ export default function ProjectDetail() {
               }}
             >
               {t("project.resolveButton")}
+            </button>
+          </div>
+        )}
+
+        {/* ── Stale User Entities Warning (FIX 4) ── */}
+        {staleWarning && staleWarning.count > 0 && (
+          <div
+            style={{
+              padding: "10px 16px",
+              marginBottom: 12,
+              borderRadius: 8,
+              background: "#D2992218",
+              border: "1px solid #D2992244",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#D29922" }}>
+              ⚠️{" "}
+              {t("project.staleEntitiesWarning", {
+                count: staleWarning.count,
+                stages: staleWarning.affected_stages.join(", "),
+              })}
+            </span>
+            <button
+              onClick={() => setStaleWarning(null)}
+              style={{ ...btnSmall, color: "#D29922" }}
+            >
+              {t("project.understoodButton")}
             </button>
           </div>
         )}
@@ -2361,6 +2785,17 @@ export default function ProjectDetail() {
                     onClick={async () => {
                       if (!(await safeConfirm(t("project.resetDocsConfirm"))))
                         return;
+                      // Also clear classified data for all docs
+                      await Promise.all(
+                        docs.map((doc) =>
+                          fetch(`/api/v1/documents/${doc.id}/classify-glaser`, {
+                            method: "DELETE",
+                            headers: {
+                              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                            },
+                          }).catch(() => {}),
+                        ),
+                      );
                       resetDocsToCrudo(id!).then(() => refreshDocs());
                     }}
                     style={{
@@ -2535,129 +2970,63 @@ export default function ProjectDetail() {
                     <div
                       style={{ display: "flex", gap: 6, alignItems: "center" }}
                     >
-                      {/* Preprocess toggle switch */}
-                      {d.estado === "crudo" && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <span style={{ fontSize: 10, color: "#8B949E" }}>
-                            {t("project.preprocessSwitchLabel")}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setPreprocessDisabled((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(d.id)) next.delete(d.id);
-                                else next.add(d.id);
-                                localStorage.setItem(
-                                  "gt_preprocess_disabled",
-                                  JSON.stringify([...next]),
-                                );
-                                return next;
-                              });
-                            }}
-                            title={
-                              preprocessDisabled.has(d.id)
-                                ? t("project.preprocessOffTitle")
-                                : t("project.preprocessOnTitle")
-                            }
-                            style={{
-                              width: 28,
-                              height: 16,
-                              borderRadius: 8,
-                              border: "none",
-                              flexShrink: 0,
-                              cursor: "pointer",
-                              position: "relative",
-                              transition: "background 0.2s",
-                              background: preprocessDisabled.has(d.id)
-                                ? "#30363D"
-                                : "#A371F7",
-                            }}
-                          >
-                            <span
-                              style={{
-                                position: "absolute",
-                                top: 1,
-                                left: preprocessDisabled.has(d.id) ? 1 : 13,
-                                width: 14,
-                                height: 14,
-                                borderRadius: "50%",
-                                background: "#FFF",
-                                transition: "left 0.2s",
-                              }}
-                            />
-                          </button>
-                        </div>
-                      )}
-                      {/* Unified preprocess button — 4 estados */}
+                      {/* Unified per-document action button */}
                       {(() => {
                         const isRunning = punctRunning === d.id;
-                        const isCrudo = d.estado === "crudo";
-                        const isSwitchOff =
-                          isCrudo && preprocessDisabled.has(d.id);
-                        const label = isRunning
-                          ? t("project.cancelPreprocess")
-                          : isCrudo
-                            ? isSwitchOff
+                        const estado = d.estado;
+                        const err = docError[d.id];
+                        const hasText = !!(
+                          (d as any).texto_original || d.texto_extraido
+                        );
+                        const isCrudo = estado === "crudo";
+                        const isProcesado =
+                          estado === "incidentes_extraidos" ||
+                          estado === "procesado" ||
+                          estado === "listo";
+                        const isCodificado = estado === "codificado";
+
+                        const label = err
+                          ? "\u26A0 Reintentar"
+                          : isRunning
+                            ? t("project.cancelPreprocess")
+                            : isCrudo
                               ? t("project.preprocessButton")
-                              : t("project.preprocessButton")
-                            : t("project.restoreOriginalButton");
-                        const bg = isRunning
+                              : estado === "preprocesado"
+                                ? "Clasificar"
+                                : estado === "clasificado"
+                                  ? "Segmentar"
+                                  : isProcesado
+                                    ? "\u2713 Incidentes extra\u00eddos"
+                                    : isCodificado
+                                      ? "\u2713 Codificado"
+                                      : "\u2713 Completo";
+                        const bg = err
                           ? "#F85149"
-                          : isCrudo
-                            ? isSwitchOff
-                              ? "#30363D"
-                              : "#A371F7"
-                            : "#D29922";
-                        const fg = isCrudo && isSwitchOff ? "#484F58" : "#FFF";
-                        const disabled = isCrudo && isSwitchOff && !isRunning;
-                        const action = isRunning
-                          ? () => handlePunctuate(d.id)
-                          : isCrudo && !isSwitchOff
-                            ? () => handlePunctuate(d.id)
-                            : isCrudo && isSwitchOff
-                              ? undefined
-                              : async () => {
-                                  if (
-                                    !(await safeConfirm(
-                                      t("project.restoreOriginalConfirm"),
-                                    ))
-                                  )
-                                    return;
-                                  try {
-                                    await restoreDocumentOriginal(d.id);
-                                    refreshDocs();
-                                  } catch (e: any) {
-                                    showErrorToast(
-                                      "Error al restaurar: " +
-                                        (e.message || ""),
-                                    );
-                                  }
-                                };
+                          : isRunning
+                            ? "#F85149"
+                            : isCrudo
+                              ? hasText
+                                ? "#A371F7"
+                                : "#30363D"
+                              : estado === "preprocesado"
+                                ? "#3FB950"
+                                : estado === "clasificado"
+                                  ? "#58A6FF"
+                                  : "#3FB950";
+                        const disabled =
+                          !err &&
+                          ((isCrudo && !hasText && !isRunning) ||
+                            isProcesado ||
+                            isCodificado);
+
                         return (
                           <button
-                            onClick={action}
+                            onClick={() => handleDocAction(d.id)}
                             disabled={disabled}
-                            title={
-                              isRunning
-                                ? "Cancelar preprocesamiento"
-                                : isCrudo && isSwitchOff
-                                  ? "Preprocesado desactivado (switch OFF)"
-                                  : isCrudo
-                                    ? t("project.improvePunctuation")
-                                    : t("project.restoreOriginalTitle") ||
-                                      "Restaurar original"
-                            }
                             style={{
                               ...btnSmall,
                               background: bg,
-                              color: fg,
+                              color: "#FFF",
                               border: "none",
                               cursor: disabled ? "not-allowed" : "pointer",
                             }}
@@ -2666,6 +3035,27 @@ export default function ProjectDetail() {
                           </button>
                         );
                       })()}
+                      {/* Restore: hidden while running; same rollback as cancel but at rest */}
+                      {d.estado !== "crudo" && punctRunning !== d.id && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleRestoreAll(d.id);
+                          }}
+                          title="Restaurar a estado original"
+                          style={{
+                            ...btnSmall,
+                            background: "transparent",
+                            color: "#D29922",
+                            border: "1px solid #D2992244",
+                            fontSize: 14,
+                            padding: "2px 8px",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {"\u21BB"}
+                        </button>
+                      )}
                       {/*{punctRunning !== d.id && originalTexts.current[d.id] && (
                         <button
                           onClick={async () => {
@@ -2836,66 +3226,147 @@ export default function ProjectDetail() {
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPreprocessed((p) => !p);
                           }}
-                          style={{
-                            fontSize: 10,
-                            color: "#8B949E",
-                            marginBottom: 4,
-                            cursor: "pointer",
-                            userSelect: "none",
-                          }}
-                          title="Click para alternar entre original y preprocesado"
+                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
                         >
-                          {showPreprocessed
-                            ? (d as any).texto_preprocesado
-                              ? "📝 Preprocesado"
-                              : "📝 Preprocesado (sin cambios)"
-                            : (d as any).texto_original &&
-                                (d as any).texto_original !== d.texto_extraido
-                              ? "📄 Original (editado)"
-                              : "📄 Original"}
-                          {textEdits[d.id] !== undefined && " · sin guardar"}
+                          {(
+                            [
+                              "original",
+                              "preprocessed",
+                              "classified",
+                              "segmented",
+                              "incidents",
+                            ] as const
+                          ).map((mode) => {
+                            const hasIt =
+                              mode === "original"
+                                ? true
+                                : mode === "preprocessed"
+                                  ? !!(d as any).texto_preprocesado
+                                  : mode === "classified"
+                                    ? !!(d as any).texto_clasificado
+                                    : mode === "segmented"
+                                      ? !!(
+                                          segments[d.id] &&
+                                          segments[d.id].length > 0
+                                        )
+                                      : !!(
+                                          (d as any).metadatos &&
+                                          (d as any).metadatos.document_signals
+                                        );
+                            const isActive = textViewMode === mode;
+                            const lbl =
+                              mode === "original"
+                                ? "\uD83D\uDCC4 Original"
+                                : mode === "preprocessed"
+                                  ? "\uD83D\uDCDD Preprocesado"
+                                  : mode === "classified"
+                                    ? "\uD83C\uDFF7\uFE0F Clasificado"
+                                    : mode === "segmented"
+                                      ? "\u2702\uFE0F Segmentado"
+                                      : "\uD83D\uDD0D Incidentes";
+                            return (
+                              <span
+                                key={mode}
+                                onClick={() => hasIt && setTextViewMode(mode)}
+                                style={{
+                                  fontSize: 10,
+                                  padding: "2px 8px",
+                                  borderRadius: 10,
+                                  cursor: hasIt ? "pointer" : "not-allowed",
+                                  background: isActive ? "#A371F7" : "#1C2333",
+                                  color: isActive
+                                    ? "#FFF"
+                                    : hasIt
+                                      ? "#8B949E"
+                                      : "#484F58",
+                                  border:
+                                    "1px solid " +
+                                    (isActive ? "#A371F7" : "#30363D"),
+                                  opacity: hasIt ? 1 : 0.4,
+                                  userSelect: "none",
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                {lbl}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
-                      <textarea
-                        disabled={punctRunning === d.id}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setTextEdits((prev) => ({
-                            ...prev,
-                            [d.id]: e.target.value,
-                          }))
-                        }
-                        style={{
-                          width: "100%",
-                          minHeight: 150,
-                          fontFamily: "monospace",
-                          fontSize: 13,
-                          background: "#0D1117",
-                          color: "#E6EDF3",
-                          border: `1px solid ${textEdits[d.id] !== undefined ? "#D29922" : "#21262D"}`,
-                          borderRadius: 6,
-                          padding: 8,
-                          resize: "vertical",
-                        }}
-                        value={
-                          textEdits[d.id] !== undefined
-                            ? textEdits[d.id]
-                            : currentView === "segmented" &&
-                                segments[d.id]?.length
-                              ? segments[d.id]!.map(
-                                  (s) => `[${s.posicion}] ${s.texto}`,
-                                ).join("\n\n")
-                              : showPreprocessed
-                                ? (d as any).texto_preprocesado ||
-                                  d.texto_extraido ||
-                                  ""
-                                : (d as any).texto_original ||
-                                  d.texto_extraido ||
-                                  ""
-                        }
-                      />
+                      {/* Classified mode: colorized div with XML tags */}
+                      {textViewMode === "classified" &&
+                      textEdits[d.id] === undefined ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: "100%",
+                            minHeight: 150,
+                            fontFamily: "monospace",
+                            fontSize: 13,
+                            background: "#0D1117",
+                            color: "#E6EDF3",
+                            border: "1px solid #21262D",
+                            borderRadius: 6,
+                            padding: 8,
+                            overflow: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: renderClassifiedText(
+                              (d as any).texto_clasificado ||
+                                ((d as any).metadatos &&
+                                  (d as any).metadatos.texto_clasificado) ||
+                                "",
+                            ),
+                          }}
+                        />
+                      ) : (
+                        <textarea
+                          disabled={punctRunning === d.id}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            setTextEdits((prev) => ({
+                              ...prev,
+                              [d.id]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            width: "100%",
+                            minHeight: 150,
+                            fontFamily: "monospace",
+                            fontSize: 13,
+                            background: "#0D1117",
+                            color: "#E6EDF3",
+                            border: `1px solid ${textEdits[d.id] !== undefined ? "#D29922" : "#21262D"}`,
+                            borderRadius: 6,
+                            padding: 8,
+                            resize: "vertical",
+                          }}
+                          value={
+                            textEdits[d.id] !== undefined
+                              ? textEdits[d.id]
+                              : textViewMode === "segmented" &&
+                                  segments[d.id]?.length
+                                ? segments[d.id]!.map(
+                                    (s) => `[${s.posicion}] ${s.texto}`,
+                                  ).join("\n\n")
+                                : textViewMode === "classified"
+                                  ? (d as any).texto_clasificado ||
+                                    ((d as any).metadatos &&
+                                      (d as any).metadatos.texto_clasificado) ||
+                                    "Sin clasificación"
+                                  : textViewMode === "preprocessed"
+                                    ? (d as any).texto_preprocesado ||
+                                      d.texto_extraido ||
+                                      ""
+                                    : (d as any).texto_original ||
+                                      d.texto_extraido ||
+                                      ""
+                          }
+                        />
+                      )}
                       {textEdits[d.id] !== undefined && (
                         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                           <button
@@ -3075,7 +3546,7 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* ── End Left Column ── */}
+        {/* ── End Right Column ── */}
       </div>
 
       {/* ── Left: Pipeline Flow Panel ── */}
@@ -3343,22 +3814,328 @@ export default function ProjectDetail() {
           ) : sidebarViewMode === "agents" ? (
             <PipelineAgents
               agentStatuses={agentStatuses}
-              onRunAgent={(agentId) => {
+              onRunAgent={async (agentId) => {
                 console.log("[PipelineAgents] run", agentId);
                 const auth = `Bearer ${localStorage.getItem("access_token")}`;
-                fetch(`/api/v1/projects/${id}/pipeline/run-agent/${agentId}`, {
-                  method: "POST",
-                  headers: { Authorization: auth },
-                }).catch((e) =>
-                  showErrorToast("Error al ejecutar agente: " + e.message),
-                );
+                const perDocAgents = new Set([
+                  "util_punctuator",
+                  "fa_glaser_data_classifier",
+                  "segmentar_documento",
+                ]);
+                if (perDocAgents.has(agentId)) {
+                  // ── Helper: clear previous work and restart ──
+                  const clearAndRestart = async (agent: string) => {
+                    // Clear HITL
+                    await fetch(`/api/v1/projects/${id}/hitl/reset`, {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                      },
+                    }).catch(() => {});
+                    // Preprocessor: revert all preprocessed docs BEFORE filtering
+                    if (agent === "util_punctuator") {
+                      const preprocessed = docs.filter(
+                        (d) => d.estado === "preprocesado",
+                      );
+                      for (const d of preprocessed) {
+                        await fetch(
+                          `/api/v1/documents/${d.id}/restore-original`,
+                          {
+                            method: "POST",
+                            headers: {
+                              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                            },
+                          },
+                        ).catch(() => {});
+                      }
+                    }
+                    // Delete segments if segmenter or downstream
+                    if (agent !== "util_punctuator") {
+                      await fetch(`/api/v1/documents/project/${id}/segments`, {
+                        method: "DELETE",
+                        headers: {
+                          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                        },
+                      }).catch(() => {});
+                    }
+                    // Fresh docs AFTER reverts
+                    const freshDocs = await listDocuments(id!).catch(
+                      () => docs,
+                    );
+                    setDocs(freshDocs);
+                    setCompletedAgents((prev) => {
+                      const next = new Set(prev);
+                      next.delete(agent);
+                      // Also clear downstream agents
+                      const agentOrder = [
+                        "util_punctuator",
+                        "fa_glaser_data_classifier",
+                        "segmentar_documento",
+                      ];
+                      const idx = agentOrder.indexOf(agent);
+                      if (idx >= 0) {
+                        for (let i = idx; i < agentOrder.length; i++) {
+                          next.delete(agentOrder[i]);
+                        }
+                      }
+                      return next;
+                    });
+                    // Re-filter (no switch for re-run)
+                    const resetEligible = freshDocs.filter((d) => {
+                      const hasText = !!(
+                        (d as any).texto_preprocesado ||
+                        (d as any).texto_original ||
+                        d.texto_extraido
+                      );
+                      return hasText && d.estado === "crudo";
+                    });
+                    dispatchAgentLoop(resetEligible);
+                  };
+
+                  // Determine which docs are eligible for this specific agent
+                  const eligible = docs.filter((d) => {
+                    const hasText = !!(
+                      (d as any).texto_preprocesado ||
+                      (d as any).texto_original ||
+                      d.texto_extraido
+                    );
+                    switch (agentId) {
+                      case "util_punctuator":
+                        return hasText && d.estado === "crudo";
+                      case "fa_glaser_data_classifier":
+                        return hasText && d.estado === "preprocesado";
+                      case "segmentar_documento":
+                        return hasText && d.estado === "clasificado";
+                      default:
+                        return d.estado === "crudo";
+                    }
+                  });
+                  if (eligible.length === 0) {
+                    showErrorToast(
+                      "No hay documentos elegibles para " +
+                        agentId +
+                        ". Verificá los switches ON/OFF.",
+                    );
+                    return;
+                  }
+                  if (eligible.length < docs.length) {
+                    const ok = await safeConfirm(
+                      "\u00bfDesea procesar " +
+                        eligible.length +
+                        " documento(s) de " +
+                        docs.length +
+                        "?",
+                    );
+                    if (!ok) return;
+                  }
+                  // Confirm if re-running on already-processed docs
+                  const stateOrder = [
+                    "crudo",
+                    "preprocesado",
+                    "segmentado",
+                    "listo",
+                  ];
+                  const agentMinState: Record<string, string> = {
+                    util_punctuator: "preprocesado",
+                    fa_glaser_data_classifier: "clasificado",
+                    segmentar_documento: "segmentado",
+                  };
+                  const minState = agentMinState[agentId] || "listo";
+                  const minIdx = stateOrder.indexOf(minState);
+                  const hasExistingWork =
+                    completedAgents.has(agentId) ||
+                    docs.some((d) => {
+                      const docIdx = stateOrder.indexOf(d.estado);
+                      return docIdx >= minIdx && docIdx > 0;
+                    });
+                  if (hasExistingWork) {
+                    const ok = await new Promise<boolean>((resolve) => {
+                      confirmResolve.current = resolve;
+                      setConfirmMsg(
+                        "¿Deseas procesar todo nuevamente? Se eliminarán los resultados anteriores.",
+                      );
+                    });
+                    if (!ok) return;
+                    await clearAndRestart(agentId);
+                    return;
+                  }
+                  dispatchAgentLoop(eligible);
+
+                  async function dispatchAgentLoop(
+                    docsToProcess: typeof eligible,
+                  ) {
+                    abortRef.current = false;
+                    setAgentStatuses((prev) => ({
+                      ...prev,
+                      [agentId]: "running",
+                    }));
+                    for (const doc of docsToProcess) {
+                      if (abortRef.current) break;
+                      try {
+                        const res = await fetch(
+                          `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: auth,
+                            },
+                            body: JSON.stringify({ document_id: doc.id }),
+                          },
+                        ).then((r) => r.json());
+                        const taskId = res.task_id;
+                        runningTaskRef.current = taskId;
+                        // Refresh immediately so badge shows "preprocesando"
+                        refreshDocs();
+                        if (taskId) {
+                          for (let p = 0; p < 60 && !abortRef.current; p++) {
+                            await new Promise((r) => setTimeout(r, 2000));
+                            try {
+                              const ts = await fetch(
+                                `/api/v1/documents/tasks/${taskId}`,
+                                { headers: { Authorization: auth } },
+                              ).then((r) => r.json());
+                              if (
+                                ts.status === "SUCCESS" ||
+                                ts.status === "FAILURE"
+                              )
+                                break;
+                            } catch {}
+                          }
+                        }
+                      } catch {}
+                      // Refresh after EACH doc completes so badges update immediately
+                      refreshDocs();
+                    }
+                    // Final refresh after all docs
+                    refreshDocs();
+                    runningTaskRef.current = null;
+                    if (!abortRef.current) {
+                      setAgentStatuses((prev) => ({
+                        ...prev,
+                        [agentId]: "done",
+                      }));
+                      setCompletedAgents((prev) => new Set([...prev, agentId]));
+                    }
+                  }
+                } else {
+                  // Project-level agent
+                  setAgentStatuses((prev) => ({
+                    ...prev,
+                    [agentId]: "running",
+                  }));
+                  fetch(
+                    `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: auth,
+                      },
+                      body: JSON.stringify({}),
+                    },
+                  )
+                    .then(() => {
+                      setAgentStatuses((prev) => ({
+                        ...prev,
+                        [agentId]: "done",
+                      }));
+                      setCompletedAgents((prev) => new Set([...prev, agentId]));
+                    })
+                    .catch((e) =>
+                      showErrorToast("Error al ejecutar agente: " + e.message),
+                    );
+                }
               }}
               onStopAgent={(agentId) => {
                 console.log("[PipelineAgents] stop", agentId);
+                abortRef.current = true;
+                runningTaskRef.current = null;
+                // Single robust stop: kills all tasks + rolls back estados
+                fetch(`/api/v1/admin/projects/${id}/stop`, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                  },
+                })
+                  .then(() => refreshDocs())
+                  .catch(() => {});
+                setAgentStatuses((prev) => ({ ...prev, [agentId]: "pending" }));
               }}
               pipelineRunning={pipelineRunning}
               completedAgents={completedAgents}
               iterations={iterations}
+              agentDocCounts={{
+                util_punctuator: {
+                  done: docs.filter(
+                    (d) =>
+                      d.estado === "preprocesado" ||
+                      d.estado === "clasificado" ||
+                      d.estado === "segmentado" ||
+                      d.estado === "listo",
+                  ).length,
+                  total: docs.filter(
+                    (d) =>
+                      !!(
+                        (d as any).texto_preprocesado ||
+                        (d as any).texto_original ||
+                        d.texto_extraido
+                      ),
+                  ).length,
+                },
+                fa_glaser_data_classifier: {
+                  done: docs.filter(
+                    (d) =>
+                      d.estado === "clasificado" ||
+                      d.estado === "segmentado" ||
+                      d.estado === "listo",
+                  ).length,
+                  total: docs.filter(
+                    (d) =>
+                      d.estado === "crudo" ||
+                      d.estado === "preprocesado" ||
+                      d.estado === "clasificado" ||
+                      d.estado === "segmentado" ||
+                      d.estado === "listo",
+                  ).length,
+                },
+                segmentar_documento: {
+                  done: docs.filter(
+                    (d) => d.estado === "segmentado" || d.estado === "listo",
+                  ).length,
+                  total: docs.filter(
+                    (d) =>
+                      d.estado === "clasificado" ||
+                      d.estado === "segmentado" ||
+                      d.estado === "listo",
+                  ).length,
+                },
+              }}
+              eligibleDocCounts={{
+                util_punctuator: docs.filter(
+                  (d) =>
+                    d.estado === "crudo" &&
+                    !!((d as any).texto_original || d.texto_extraido),
+                ).length,
+                fa_glaser_data_classifier: docs.filter(
+                  (d) => d.estado === "preprocesado",
+                ).length,
+                segmentar_documento: docs.filter(
+                  (d) => d.estado === "clasificado",
+                ).length,
+                fa_population_context: docs.filter(
+                  (d) =>
+                    d.estado === "incidentes_extraidos" ||
+                    d.estado === "procesado" ||
+                    d.estado === "listo",
+                ).length,
+                fb_incident_grouper: docs.filter(
+                  (d) =>
+                    d.estado === "incidentes_extraidos" ||
+                    d.estado === "procesado" ||
+                    d.estado === "listo",
+                ).length,
+              }}
               stages={PIPELINE_STAGES}
             />
           ) : (
@@ -3718,6 +4495,7 @@ export default function ProjectDetail() {
               })}
             </>
           )}
+          <div style={{ padding: 12 }}> </div>
         </div>
       </div>
       <Toast

@@ -1,0 +1,99 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global_groups", "merge_summary"],
+  "properties": {
+    "global_groups": {
+      "type": "array",
+      "description": "Consolidated global groups after deduplication and merging across all batches.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "incident_ids", "merged_from_batches", "confidence"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "description": "Synthesized signal (1-6 words) capturing the common behavioral pattern across all merged local groups. May be one of the existing local signals or a new synthesis."
+          },
+          "incident_ids": {
+            "type": "array",
+            "minItems": 2,
+            "items": {"type": "string"},
+            "description": "Union of all incident IDs from merged local groups, deduplicated. At least 2. Use EXACT IDs from input."
+          },
+          "merged_from_batches": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "integer", "minimum": 0},
+            "description": "Indices (0-based) of the batches whose local groups were merged into this global group. At least 1."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Confidence in this merge. HIGH: clearly the same behavioral process across batches, rationales converge. MEDIUM: likely the same process but only confirmed in one batch, or minor divergence in rationales. LOW: forced merge due to similar surface signals but rationales describe possibly different processes."
+          },
+          "original_signals": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "The original local group signals that were merged to form this global group. Provides traceability back to source batches."
+          },
+          "conflict_note": {
+            "type": "string",
+            "description": "If this merge involved conflict resolution (SPLIT decision, overlapping incidents, subset/superset), describe the conflict and how it was resolved. Empty string if no conflict."
+          }
+        }
+      }
+    },
+    "merge_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_local_groups_received", "total_global_groups_produced", "merges_performed", "splits_performed", "low_confidence_count"],
+      "properties": {
+        "total_local_groups_received": {
+          "type": "integer",
+          "description": "Total number of local groups received across all batches."
+        },
+        "total_global_groups_produced": {
+          "type": "integer",
+          "description": "Total number of global groups after merging and deduplication."
+        },
+        "merges_performed": {
+          "type": "integer",
+          "description": "Number of merge operations performed (two or more local groups combined into one global group)."
+        },
+        "splits_performed": {
+          "type": "integer",
+          "description": "Number of split operations performed (local groups with same signal separated into different global groups due to divergent rationales)."
+        },
+        "low_confidence_count": {
+          "type": "integer",
+          "description": "Number of global groups with confidence=LOW. These are candidates for ReAct exploration."
+        },
+        "divergences_for_react": {
+          "type": "array",
+          "description": "Groups flagged for potential ReAct exploration. Empty if no divergences.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["global_group_signal", "reason"],
+            "properties": {
+              "global_group_signal": {
+                "type": "string",
+                "description": "Signal of the global group with unresolved divergence."
+              },
+              "reason": {
+                "type": "string",
+                "enum": ["LOW_CONFIDENCE_MERGE", "CONFLICTING_RATIONALES", "SAME_SIGNAL_DIFFERENT_PROCESS", "OVERLAPPING_INCIDENTS_UNRESOLVED"],
+                "description": "Reason this divergence needs ReAct exploration."
+              },
+              "detail": {
+                "type": "string",
+                "description": "Specific description of the divergence: which signals conflict, which batches disagree, what makes resolution ambiguous."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

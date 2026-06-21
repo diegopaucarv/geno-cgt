@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spatial_frame", "temporal_frame", "generalized_population"],
+  "properties": {
+    "spatial_frame": {
+      "type": "string",
+      "enum": ["cohabiting_group", "sparse", "high_diversity"],
+      "description": "Como os membros da população estão distribuídos espacialmente."
+    },
+    "temporal_frame": {
+      "type": "string",
+      "enum": ["present_continuous", "retrospective", "prospective", "longitudinal"],
+      "description": "Quadro temporal da população em estudo."
+    },
+    "generalized_population": {
+      "type": "string",
+      "description": "Generalização abstrata de 2-3 frases da população, sem locais/nomes/números específicos."
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Breve justificativa para os frames escolhidos."
+    }
+  }
+}

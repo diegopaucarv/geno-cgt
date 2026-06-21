@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resolutions"],
+  "properties": {
+    "resolutions": {
+      "type": "array",
+      "description": "Uma resolução por cada conjunto de grupos conflitantes investigado.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["conflict_id", "resolution", "rationale", "affected_groups", "evidence_sources"],
+        "properties": {
+          "conflict_id": {
+            "type": "string",
+            "description": "O conflict_id da entrada que esta resolução aborda."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["MERGE", "SPLIT", "KEEP_SEPARATE"],
+            "description": "Ação resolvida. MERGE: combinar grupos em um. SPLIT: separar em grupos distintos com sinais diferentes. KEEP_SEPARATE: manter como grupos separados teoricamente relacionados."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Justificativa detalhada (2-5 frases) baseada em evidências observadas através das ferramentas CWM ou dados fornecidos. Referenciar incidentes específicos examinados e a lógica comportamental que apoia esta resolução."
+          },
+          "affected_groups": {
+            "type": "array",
+            "description": "Os grupos afetados por esta resolução, com sua nova disposição.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_batch", "original_signal", "action"],
+              "properties": {
+                "source_batch": {
+                  "type": "integer",
+                  "description": "Índice do lote do grupo local original."
+                },
+                "original_signal": {
+                  "type": "string",
+                  "description": "Sinal original do grupo local."
+                },
+                "action": {
+                  "type": "string",
+                  "enum": ["merged_into", "split_to", "kept_as", "discarded"],
+                  "description": "O que acontece com este grupo. merged_into: combinado com outro grupo. split_to: separado em um grupo distinto. kept_as: mantido com sinal possivelmente renomeado. discarded: removido."
+                },
+                "target_signal": {
+                  "type": "string",
+                  "description": "Se merged_into ou split_to: o sinal do grupo alvo. Se kept_as: o novo sinal (pode ser inalterado). String vazia se discarded."
+                }
+              }
+            }
+          },
+          "evidence_sources": {
+            "type": "array",
+            "description": "Lista de ferramentas chamadas e evidências coletadas durante a investigação.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tool", "query", "finding"],
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "enum": ["expand_incident", "search_related_segments", "get_document_context", "provided_data"],
+                  "description": "A ferramenta CWM chamada, ou 'provided_data' se a evidência veio do contexto de entrada."
+                },
+                "query": {
+                  "type": "string",
+                  "description": "O que foi consultado (ID do incidente, texto de busca, ID do documento)."
+                },
+                "finding": {
+                  "type": "string",
+                  "description": "Observação chave do resultado da ferramenta que informou a resolução (1-2 frases)."
+                }
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW", "UNCERTAIN"],
+            "description": "Confiança nesta resolução. HIGH: evidência clara de múltiplas fontes. MEDIUM: evidência apoia mas alguma ambiguidade permanece. LOW: evidência fraca, decisão baseada em julgamento. UNCERTAIN: ferramentas indisponíveis ou dados insuficientes, melhor estimativa."
+          },
+          "suggested_global_signal": {
+            "type": "string",
+            "description": "Se a resolução for MERGE ou KEEP_SEPARATE: sinal sugerido para o(s) grupo(s) global(is) resultante(s). Se SPLIT: sinais sugeridos para os grupos separados, como string separada por vírgulas."
+          }
+        }
+      }
+    }
+  }
+}

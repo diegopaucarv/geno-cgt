@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "descriptive_memo",
+    "what_emerged",
+    "what_remains_open",
+    "evolution_narrative",
+    "representative_incidents"
+  ],
+  "properties": {
+    "descriptive_memo": {
+      "type": "string",
+      "description": "Narrativa de 400-800 palabras describiendo lo que LOS DATOS MUESTRAN. Escribe en presente conceptual usando gerundios. Usa el lenguaje de los participantes. Incluye variación: 'en unos casos... en otros...'. No fuerces una estructura de condiciones/consecuencias si los datos no la respaldan."
+    },
+    "what_emerged": {
+      "type": "array",
+      "description": "3-5 hallazgos clave consolidados a través de las iteraciones del paradigma. Cada entrada describe un patrón que se solidificó, incluyendo cuándo apareció y qué incidentes lo respaldan.",
+      "items": {
+        "type": "string",
+        "description": "Un hallazgo: 'Hallazgo N — patrón consolidado a través de iteraciones, con nota de evidencia.'"
+      },
+      "minItems": 1
+    },
+    "what_remains_open": {
+      "type": "array",
+      "description": "Preguntas sin resolver — propiedades o dimensiones que necesitan más evidencia para ser completamente documentadas.",
+      "items": {
+        "type": "string",
+        "description": "Una pregunta abierta: 'Pregunta abierta — qué falta documentar y por qué.'"
+      }
+    },
+    "evolution_narrative": {
+      "type": "string",
+      "description": "Cómo evolucionó la definición de la categoría a través de las iteraciones del paradigma: versión 1 → versión 2 → ... → versión N. Describe qué cambió en cada iteración y por qué (qué incidente o expansión impulsó el cambio)."
+    },
+    "representative_incidents": {
+      "type": "array",
+      "description": "Máximo 3 incidentes que mejor representan la categoría. Selecciona incidentes que muestren variación o puntos de inflexión críticos.",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "document", "why"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "El texto del incidente (cita textual o paráfrasis cercana del segmento)."
+          },
+          "document": {
+            "type": "string",
+            "description": "Nombre del documento fuente (original_filename)."
+          },
+          "why": {
+            "type": "string",
+            "description": "Por qué este incidente es representativo: qué patrón, dimensión o variación ejemplifica."
+          }
+        }
+      }
+    }
+  }
+}

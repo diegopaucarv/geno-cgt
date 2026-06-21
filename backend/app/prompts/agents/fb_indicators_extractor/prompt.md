@@ -32,7 +32,7 @@ Segment: "when I see there's a lot of traffic I better take the back streets, so
 Output: {"indicators": [{"segment_index": 0, "key_phrases": ["when I see there's a lot of traffic", "I take the back streets", "so I don't waste time"], "suggested_pattern": "Evaluates environmental conditions and modifies route to optimize time"}]}
 
 Segment: "I would arrive at 5 in the morning, start separating plastic from cardboard, every day like that, you had to get up early because otherwise others would take it"
-Output: {"indicators": [{"segment_index": 0, "key_phrases": ["arrive at 5 in the morning", "start separating plastic from cardboard", "you had to get up early because otherwise others would take it"], "suggested_pattern": "Competes for early access to recyclable materials through systematic early rising"}]}
+Output: {"indicators": [{"segment_index": 0, "key_phrases": ["you had to get up early because otherwise others would take it"], "suggested_pattern": "Competes for early access to recyclable materials through systematic early rising"}]}
 
 ## Task
 

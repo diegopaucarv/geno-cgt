@@ -16,6 +16,7 @@ from app.core.config import (
     DEFAULT_OBJECT_OF_STUDY,
     DEFAULT_POPULATION_ASSUMPTION,
     ENVIRONMENT,
+    GLASER_CLASSIFIER_PROMPT,
     MODEL_FLASH,
     MODEL_FLASH_MAX_TOKENS,
     MODEL_FLASH_REPETITION_PENALTY,
@@ -77,6 +78,7 @@ class CGTConfig(BaseModel):
     population_assumption: str = ""
     object_of_study: str = "concern"
     coding_styles: list[str] = ["gerundio", "in_vivo"]
+    glaser_classifier_prompt: str = ""  # Custom prompt for 3-step Glaser classifier
 
 
 class SystemConfig(BaseModel):
@@ -139,6 +141,8 @@ async def get_config():
             "object_of_study": DEFAULT_OBJECT_OF_STUDY,
             "coding_styles": active_styles,
             "available_styles": all_styles,
+            "glaser_classifier_prompt": GLASER_CLASSIFIER_PROMPT
+            or "(using built-in default)",
             "env_overrides": _env_overrides_section("cgt"),
         },
         "system": {
@@ -200,6 +204,7 @@ async def save_config(
                 "DEFAULT_POPULATION_ASSUMPTION": body.cgt.population_assumption,
                 "DEFAULT_OBJECT_OF_STUDY": body.cgt.object_of_study,
                 "CODING_STYLES": body.cgt.coding_styles,
+                "GLASER_CLASSIFIER_PROMPT": body.cgt.glaser_classifier_prompt,
             }
         )
 
@@ -260,6 +265,7 @@ def _env_overrides_section(section: str) -> dict[str, str]:
         "cgt": [
             "DEFAULT_POPULATION_ASSUMPTION",
             "DEFAULT_OBJECT_OF_STUDY",
+            "GLASER_CLASSIFIER_PROMPT",
         ],
         "system": [
             "ENVIRONMENT",

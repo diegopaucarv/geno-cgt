@@ -39,6 +39,7 @@ class ReactRunner(BaseAgent):
         super().__init__(agent_id, llm_client, max_iterations, timeout_seconds)
         self.tools = tool_registry
         self.use_native_fc = use_native_fc
+        self._conversation: list[dict[str, Any]] = []
 
     def _build_system_prompt(self, **kwargs) -> str:
         tools_schema = self.tools.get_schema_for_prompt()
@@ -127,6 +128,92 @@ FinalAnswer: {{...}}
 
     def _extract_result(self, step_result: dict) -> dict:
         return step_result.get("output", {})
+
+    # ── Override run() to capture conversation history ─────────────
+
+    def run(self, project_id: str, **kwargs) -> AgentResult:
+        """Override BaseAgent.run() to capture full conversation history.
+
+        Returns:
+            AgentResult with data._conversation containing all messages.
+        """
+        import time as _time
+
+        started_at = _time.time()
+        self._conversation = []
+        trace: list[dict[str, Any]] = []
+        total_tokens = 0
+        had_reasoning = False
+
+        # Build system prompt
+        system_content = self._build_system_prompt(**kwargs)
+        history: list[dict[str, Any]] = [
+            {"role": "system", "content": system_content}
+        ]
+        self._conversation.append({"role": "system", "content": system_content})
+
+        for iteration in range(1, self.max_iterations + 1):
+            if _time.time() - started_at > self.timeout_seconds:
+                return AgentResult(
+                    success=False,
+                    error=f"Timeout after {self.timeout_seconds}s",
+                    iterations=iteration,
+                    total_tokens=total_tokens,
+                    had_reasoning=had_reasoning,
+                    trace=trace,
+                )
+
+            try:
+                # Track user prompt (passed inline by _step to LLM)
+                user_prompt = {"role": "user", "content": "Cual es el siguiente paso?"}
+                self._conversation.append(user_prompt)
+
+                # Remember history length before step
+                hist_len_before = len(history)
+
+                step_result = self._step(history, iteration, **kwargs)
+                trace.append(step_result)
+                total_tokens += step_result.get("tokens", 0)
+                if step_result.get("had_reasoning"):
+                    had_reasoning = True
+
+                # Capture new messages added to history by _step
+                new_messages = history[hist_len_before:]
+                self._conversation.extend(new_messages)
+
+                if self._should_stop(step_result):
+                    result = AgentResult(
+                        success=True,
+                        data=self._extract_result(step_result),
+                        iterations=iteration,
+                        total_tokens=total_tokens,
+                        had_reasoning=had_reasoning,
+                        trace=trace,
+                    )
+                    # Attach conversation to result data
+                    result.data["_conversation"] = list(self._conversation)
+                    return result
+            except Exception as e:
+                logger.error(
+                    "Agent %s iteration %d failed: %s", self.agent_id, iteration, e
+                )
+                return AgentResult(
+                    success=False,
+                    error=str(e),
+                    iterations=iteration,
+                    total_tokens=total_tokens,
+                    had_reasoning=had_reasoning,
+                    trace=trace,
+                )
+
+        return AgentResult(
+            success=False,
+            error=f"Max iterations ({self.max_iterations}) reached without convergence",
+            iterations=self.max_iterations,
+            total_tokens=total_tokens,
+            had_reasoning=had_reasoning,
+            trace=trace,
+        )
 
     # ── Parsing ──────────────────────────────────────────────────
 

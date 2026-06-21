@@ -5,6 +5,8 @@ import {
   createProject,
   deleteProject,
   previewResearchQuestionStandalone,
+  clearToken,
+  ping,
   Project,
 } from "../api/client";
 import { useI18n } from "../i18n";
@@ -49,6 +51,7 @@ export default function Projects() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [rqPreview, setRqPreview] = useState<any>(null);
   const [rqError, setRqError] = useState(false);
+  const [userName, setUserName] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,6 +59,9 @@ export default function Projects() {
       .then(setProjects)
       .catch(console.error)
       .finally(() => setLoading(false));
+    ping()
+      .then((p) => setUserName(p.user_id.slice(0, 8)))
+      .catch(() => {});
   }, []);
 
   // Debounced backend preview using spaCy conjugation
@@ -153,16 +159,58 @@ export default function Projects() {
     outline: "none",
   };
 
+  function handleLogout() {
+    clearToken();
+    navigate("/login");
+  }
+
   return (
-    <div
-      style={{
-        maxWidth: 1100,
-        margin: "40px auto",
-        padding: "0 24px",
-        display: "flex",
-        gap: 32,
-      }}
-    >
+    <div style={{ minHeight: "100vh", background: "#0D1117" }}>
+      {/* ── Top Bar ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 24px",
+          background: "#161B22",
+          borderBottom: "1px solid #21262D",
+        }}
+      >
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#E6EDF3" }}>
+          GT · Grounded Theory
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {userName && (
+            <span style={{ fontSize: 11, color: "#8B949E" }}>{userName}</span>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 6,
+              border: "1px solid #21262D",
+              background: "#1C2333",
+              color: "#E6EDF3",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            {t("project.signOut")}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div
+        style={{
+          maxWidth: 1100,
+          margin: "40px auto",
+          padding: "0 24px",
+          display: "flex",
+          gap: 32,
+        }}
+      >
       {/* ── Left: Create Project Form ── */}
       <div style={{ flex: "0 0 420px", minWidth: 0 }}>
         <h2 style={{ color: "#E6EDF3", marginTop: 0 }}>
@@ -616,6 +664,7 @@ export default function Projects() {
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

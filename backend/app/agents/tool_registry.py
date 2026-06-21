@@ -164,6 +164,25 @@ class ToolRegistry:
             )
         return tools
 
+    def register_all_defaults(self) -> int:
+        """Registra todas las tools default del sistema (DB, CWM, etc.).
+
+        Escanea los módulos en app.agents.tools y registra todas las
+        funciones decoradas con @tool. Útil para inicializar un
+        ToolRegistry completo sin registro manual.
+
+        Returns:
+            Número total de tools registradas.
+        """
+        count = 0
+        try:
+            from app.agents.tools import context_window as _cw
+
+            count += self.register_from_module(_cw)
+        except ImportError as e:
+            logger.warning("register_all_defaults: no se pudo cargar CWM tools: %s", e)
+        return count
+
     @property
     def tool_names(self) -> list[str]:
         return list(self._tools.keys())

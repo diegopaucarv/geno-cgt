@@ -1,0 +1,175 @@
+# Diagrama 5: Mapa Completo API Endpoints → Frontend
+# Visualiza los 117 endpoints agrupados por dominio y su estado de consumo
+
+```mermaid
+flowchart TB
+    subgraph DOMAIN["📡 API v1 Endpoints — 117 total | 58 consumidos | 55 sin consumir"]
+        direction TB
+
+        subgraph PROJ["Projects (15 endpoints)"]
+            P1["✅ GET /projects → list_projects"]
+            P2["✅ POST /projects → create_project"]
+            P3["✅ GET /projects/{id} → get_project"]
+            P4["✅ PUT /projects/{id} → update_project"]
+            P5["✅ DELETE /projects/{id} → delete_project"]
+            P6["✅ DELETE /projects/{id}/documents → delete_all_docs"]
+            P7["✅ PUT .../population-assumption → update_pop"]
+            P8["✅ POST .../generalize → generalize_pop"]
+            P9["❌ POST /research-question/preview → standalone RQ"]
+            P10["❌ POST /{id}/research-question/preview → project RQ"]
+            P11["❌ PUT /{id}/research-question → update RQ"]
+            P12["❌ GET /{id}/research-question → get RQ"]
+            P13["✅ GET /{id}/config → get_config"]
+            P14["✅ GET /{id}/config/history → get_history"]
+            P15["✅ PUT /{id}/config/mutation-policy → update_policy"]
+        end
+
+        subgraph DOCS["Documents (12 endpoints)"]
+            D1["✅ GET /documents?proyecto_id= → list_docs"]
+            D2["✅ POST /documents/upload/{id} → upload"]
+            D3["❌ GET /documents/download/{id} → download"]
+            D4["❌ GET /documents/presigned/{id} → presigned_url"]
+            D5["✅ POST /{id}/punctuate → punctuate"]
+            D6["❌ POST /{id}/undo-punctuate → undo"]
+            D7["✅ POST /{id}/segment → segment"]
+            D8["❌ POST /{id}/process → process_doc"]
+            D9["❌ POST /{id}/segments-from-task → save_segs"]
+            D10["❌ POST /project/{id}/reorder → reorder"]
+            D11["❌ DELETE /project/{id}/segments → delete_all_segs"]
+            D12["❌ PATCH /{id}/text → patch_text"]
+        end
+
+        subgraph SEGS["Segments (2 endpoints)"]
+            S1["✅ GET /documents/{id}/segments → list_segs"]
+            S2["✅ DELETE /documents/{id}/segments → delete_segs"]
+        end
+
+        subgraph TASKS["Tasks (2 endpoints)"]
+            T1["✅ GET /documents/tasks/{id} → task_status"]
+            T2["✅ POST /admin/tasks/{id}/cancel → cancel"]
+        end
+
+        subgraph CATS["Categories (2 endpoints)"]
+            C1["✅ GET /categories?proyecto_id= → list_cats"]
+            C2["❌ POST /categories → create_cat"]
+        end
+
+        subgraph CODES["Code Assignments (2 endpoints)"]
+            CA1["❌ POST /code-assignments → assign_code"]
+            CA2["❌ GET /segments/{id}/recommendations → recommend"]
+        end
+
+        subgraph PIPELINE["Pipeline (8 endpoints)"]
+            PL1["✅ POST /{id}/pipeline/run → run_orchestrated"]
+            PL2["❌ POST /{id}/pipeline/run-stage/{stage} → run_stage"]
+            PL3["❌ GET /{id}/pipeline/status → pipeline_status"]
+            PL4["✅ GET /{id}/pipeline/log → pipeline_log"]
+            PL5["✅ GET /{id}/pipeline/tail → tail_logs"]
+            PL6["❌ POST /{id}/pipeline/run-agent/{agent} → run_agent"]
+            PL7["❌ PATCH /{id}/pipeline/pause-config → pause_config"]
+            PL8["❌ PATCH /{id}/pipeline/context-window → ctx_window"]
+        end
+
+        subgraph AGENTS["Agent Outputs (4 endpoints)"]
+            AO1["✅ GET /{id}/agent-memos → get_memos"]
+            AO2["✅ GET /{id}/agent-logs → get_logs"]
+            AO3["❌ DELETE /agent-outputs/{memo_id} → delete_output"]
+            AO4["❌ PATCH /agent-outputs/{memo_id} → patch_output"]
+        end
+
+        subgraph HITL["HITL (5 endpoints)"]
+            H1["✅ GET /{id}/hitl/pending → pending_hitl"]
+            H2["✅ GET /{id}/hitl/{gate}/detail → hitl_detail"]
+            H3["✅ POST /{id}/hitl/{gate}/decide → decide_hitl"]
+            H4["❌ POST /{id}/hitl/reset → reset_hitl"]
+            H5["❌ GET /{id}/hitl/open-coding/status → oc_status"]
+        end
+
+        subgraph MEMOS["Memos (5 endpoints)"]
+            M1["✅ POST /{id}/memos → create_memo"]
+            M2["✅ DELETE /{id}/memos?tipo= → delete_by_type"]
+            M3["❌ PATCH /{id}/memos/{memo_id} → patch_memo"]
+            M4["❌ DELETE /{id}/memos/{memo_id} → delete_memo"]
+            M5["✅ GET /{id}/available-memo-types → memo_types"]
+        end
+
+        subgraph THEORY["Theoretical (4 endpoints)"]
+            TH1["✅ GET /{id}/theoretical/codes → list_codes"]
+            TH2["✅ POST /{id}/theoretical/codes → create_code"]
+            TH3["❌ GET /{id}/theoretical/codes/{code_id} → get_code"]
+            TH4["❌ PUT /{id}/theoretical/codes/{code_id} → update_code"]
+        end
+
+        subgraph ELAB["Elaboration (12 endpoints)"]
+            E1["✅ GET /{id}/elaboration/ecosystem → ecosystem"]
+            E2["✅ PUT /{id}/elaboration/ecosystem/layout → save_layout"]
+            E3["✅ GET /{id}/elaboration/relationships → list_rels"]
+            E4["✅ GET /{id}/elaboration/relationships/{id} → get_rel"]
+            E5["✅ POST /{id}/elaboration/relationships → elaborate"]
+            E6["✅ PUT /.../{id}/diverge → resolve_divergence"]
+            E7["✅ GET /{id}/elaboration/ghosts → list_ghosts"]
+            E8["✅ POST /.../{memo_id}/absorb → absorb_ghost"]
+            E9["✅ GET /.../rename-suggestions/{id} → renames"]
+            E10["✅ POST /{id}/elaboration/rename → apply_rename"]
+            E11["✅ GET /.../definition-history → def_history"]
+            E12["✅ GET /{id}/elaboration/recommendations → recs"]
+        end
+
+        subgraph ANALYSIS["Analysis (2 endpoints)"]
+            AN1["❌ GET /{id}/analysis/saturation-gaps → sat_gaps"]
+            AN2["❌ POST /.../saturation-gaps/refresh → refresh_sat"]
+        end
+
+        subgraph ADMIN["Admin (8 endpoints)"]
+            AD1["✅ POST /admin/workers/nlp/start → start_nlp"]
+            AD2["✅ POST /admin/workers/heavy/start → start_heavy"]
+            AD3["✅ POST /admin/workers/{name}/stop → stop_worker"]
+            AD4["✅ POST /admin/workers/kill-all → kill_all"]
+            AD5["✅ POST /admin/projects/{id}/stop → stop_project"]
+            AD6["✅ POST /.../pipeline/restart-failed → restart"]
+            AD7["❌ GET /admin/workers/status → worker_status"]
+            AD8["❌ POST /admin/workers/{w}/stop → docker_stop"]
+        end
+
+        subgraph OTHER["Other (7 endpoints)"]
+            O1["✅ GET /ping → ping"]
+            O2["❌ POST /auth/register → register"]
+            O3["❌ POST /auth/login → login"]
+            O4["❌ POST /auth/refresh → refresh"]
+            O5["❌ GET /rag/search → search_segments"]
+            O6["❌ GET /rag/context/{code_id} → code_context"]
+            O7["❌ GET /events/stream → SSE stream"]
+        end
+
+        subgraph CONFIG["Config & Setup (8 endpoints)"]
+            CF1["❌ GET /config → get_config"]
+            CF2["❌ PUT /config → save_config"]
+            CF3["✅ GET /setup/status → setup_status"]
+            CF4["✅ POST /setup/initialize → setup_init"]
+            CF5["✅ GET /setup/progress → setup_progress"]
+            CF6["❌ GET /entity-type-colors → entity_colors"]
+            CF7["❌ GET /population-context → pop_ctx"]
+            CF8["❌ GET /population-context/versions → pop_versions"]
+        end
+
+        subgraph MOD["Modification (2 endpoints)"]
+            MOD1["❌ POST /{id}/modification/request → request_mod"]
+            MOD2["❌ POST /{id}/modification/apply → apply_mod"]
+        end
+
+        subgraph HYP["Hypotheses (6 endpoints)"]
+            HY1["❌ GET /hypotheses/candidates → list_candidates"]
+            HY2["❌ POST /hypotheses/{id}/accept → accept"]
+            HY3["❌ POST /hypotheses/{id}/modify → modify"]
+            HY4["❌ POST /hypotheses/{id}/reject → reject"]
+            HY5["❌ POST /hypotheses/{id}/split → split"]
+            HY6["❌ ... decode_hypothesis (internal)"]
+        end
+    end
+
+    subgraph LEGEND["📊 Legend"]
+        L1["✅ CONSUMED — has frontend caller"]
+        L2["❌ NOT CONSUMED — no known frontend caller"]
+        L3["⚠️ 55/117 endpoints (47%) have NO frontend consumer"]
+    end
+```

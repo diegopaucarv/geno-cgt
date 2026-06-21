@@ -3,7 +3,7 @@ import uuid
 
 from app.core.config import DEFAULT_POPULATION_ASSUMPTION
 from app.models.base import Base, TimestampMixin
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -94,6 +94,29 @@ class Proyecto(Base, TimestampMixin):
         "segmentation_config": "auto"
     }
     """
+
+    # ── Context window (configurable por proyecto) ──
+    context_window_real: Mapped[int] = mapped_column(
+        Integer, default=150_000, nullable=False
+    )
+    """Ventana de contexto real para datos del proyecto (tokens).
+    El usuario puede disminuirla, nunca aumentarla por encima del default."""
+
+    # ── Pipeline batch & HITL gate ──
+    batch_number: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    """Número de batch de open coding actual (cuántas veces se ha ejecutado
+    el ciclo cada-3-docs)."""
+
+    chosen_concern: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Label del concern elegido por el investigador en el HITL gate
+    (ej. "Negotiating permanence")."""
+
+    chosen_population: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Descripción de población elegida por el investigador en el HITL gate."""
+
+    pause_mode: Mapped[str] = mapped_column(String(20), default="manual")
+    """Modo de pausa del pipeline: "auto" (pausa automática cada 3 docs)
+    o "manual" (el usuario decide cuándo pausar)."""
 
     creador_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuarios.id"))
 

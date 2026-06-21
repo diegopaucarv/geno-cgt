@@ -1,0 +1,133 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "matrices",
+    "family_correlations",
+    "homeless_insights",
+    "debate_rationale"
+  ],
+  "properties": {
+    "matrices": {
+      "type": "array",
+      "description": "2×2 matrices crossing two paradigm dimensions. Each matrix defines 4 quadrants with typologies.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension_a", "dimension_b", "quadrants"],
+        "properties": {
+          "dimension_a": {
+            "type": "string",
+            "description": "First dimension being crossed (e.g. 'Temporal variation', 'Risk level')."
+          },
+          "dimension_b": {
+            "type": "string",
+            "description": "Second dimension being crossed."
+          },
+          "quadrants": {
+            "type": "array",
+            "description": "Four quadrants of the 2×2 grid. Each has a descriptive label and the properties that fall into it.",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "properties"],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Descriptive label for this quadrant (e.g. 'High Risk / Rapid Response')."
+                },
+                "properties": {
+                  "type": "array",
+                  "description": "Properties from the simplified tables that fall into this quadrant.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "family_correlations": {
+      "type": "array",
+      "description": "Which of the 12 Glaserian theoretical families apply to this memo, with relevance scores.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "relevance", "rationale"],
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "Process",
+              "Causal",
+              "Opposition",
+              "Typology",
+              "Hierarchy",
+              "Matrix",
+              "Consequences",
+              "Strategy",
+              "Structural Condition",
+              "Contingency",
+              "Covariance",
+              "Interchangeability"
+            ],
+            "description": "Name of the Glaserian theoretical family."
+          },
+          "family_label": {
+            "type": "string",
+            "description": "Human-readable label for the family (e.g. 'Proceso / Secuencia', 'Causal / Cadena')."
+          },
+          "relevance": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "How strongly this family lens applies to the memo. 0.0 = not applicable, 1.0 = strongly applicable."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this family applies: what patterns in the memo does this lens reveal?"
+          }
+        }
+      }
+    },
+    "homeless_insights": {
+      "type": "array",
+      "description": "Ideas from the memo that do not correlate with any other saturated category. Possible new emergent codes or dimensions.",
+      "items": {
+        "type": "string",
+        "description": "A homeless insight: idea that stands alone, not linking to other categories."
+      }
+    },
+    "debate_rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_1_proposed", "agent_2_challenged", "agent_3_found", "consensus", "disagreements"],
+      "properties": {
+        "agent_1_proposed": {
+          "type": "string",
+          "description": "Summary of what the memo_generator proposed (key findings from the narrative memo)."
+        },
+        "agent_2_challenged": {
+          "type": "string",
+          "description": "What the memo_simplifier simplified, removed, or flagged as a tension."
+        },
+        "agent_3_found": {
+          "type": "string",
+          "description": "What cross-memo patterns this correlator discovered using the 12 families."
+        },
+        "consensus": {
+          "type": "string",
+          "description": "Points on which all 3 agents agree."
+        },
+        "disagreements": {
+          "type": "string",
+          "description": "Points on which the agents differ and why."
+        }
+      }
+    }
+  }
+}

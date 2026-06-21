@@ -1,0 +1,148 @@
+# Diagrama 4: Matriz de Gaps Backend ↔ Frontend
+# Cruza cada dominio: DB → Backend API → Frontend Display
+
+```mermaid
+flowchart LR
+    subgraph DB["🗄️ DATABASE (46 tables)"]
+        direction TB
+        D1["proyectos\n(19 columns)"]
+        D2["documentos\n(13 columns + metadatos JSONB)"]
+        D3["segmentos\n(7 columns)"]
+        D4["categorias\n(19 columns + pgvector)"]
+        D5["codigos_segmento\n(4 columns)"]
+        D6["doc_codes\n(6 columns)"]
+        D7["hypotheses\n(7 columns)"]
+        D8["concerns\n(7 columns)"]
+        D9["population_context\n(12 columns)"]
+        D10["relationships\n(11 columns)"]
+        D11["ghosts\n(5 columns)"]
+        D12["recommendations\n(8 columns)"]
+        D13["definition_versions\n(6 columns)"]
+        D14["rename_suggestions\n(7 columns)"]
+        D15["synthesis_results\n(5 columns)"]
+        D16["saturation_metrics\n(various)"]
+        D17["theoretical_codes\n(7 columns)"]
+        D18["incidentes + groups\n(8 + 7 columns)"]
+        D19["agent_outputs / memos\n(15+ columns)"]
+        D20["hitl_decisions\n(7 columns)"]
+        D21["ecosystem_layout\n(5 columns)"]
+        D22["canvas\n(3 columns)"]
+        D23["project_config_history\n(10 columns)"]
+        D24["pipeline_run + loop_log\n(7 + 10 columns)"]
+    end
+
+    subgraph API["🔌 BACKEND API (117 endpoints)"]
+        direction TB
+        subgraph API_CONSUMED["✅ CONSUMED (58 endpoints)"]
+            A1["GET/PUT projects/{id}"]
+            A2["GET/DELETE documents"]
+            A3["GET/DELETE segments"]
+            A4["GET categories"]
+            A5["GET pipeline/log + tail"]
+            A6["GET agent-memos + agent-logs"]
+            A7["POST pipeline/run + run-agent"]
+            A8["GET/POST hitl/*"]
+            A9["POST/PUT config/*"]
+            A10["GET elaboration/ecosystem"]
+            A11["GET recommendations"]
+            A12["GET ghosts + rename-suggestions"]
+        end
+
+        subgraph API_UNUSED["❌ NOT CONSUMED (55 endpoints)"]
+            U1["GET pipeline/status → PipelineStatus\n(replaced by getPipelineLog)"]
+            U2["GET elaboration/model → ModelSummary\n(endpoint exists, never called)"]
+            U3["GET/POST saturation-gaps\n(endpoints exist, never called)"]
+            U4["PUT ecosystem/layout\n(layout NOT persisted)"]
+            U5["POST documents/process\n(individual doc processing)"]
+            U6["GET/PUT theoretical/codes/{id}\n(individual CRUD)"]
+            U7["GET population-context*\n(standalone endpoint unused)"]
+            U8["GET coding-styles\n(config endpoint unused)"]
+            U9["POST/PATCH memos/{id}\n(individual memo CRUD)"]
+            U10["GET/POST hypotheses/*\n(hypothesis CRUD unused)"]
+            U11["POST hitl/reset + open-coding/*\n(admin hitl endpoints)"]
+            U12["GET/POST RAG/*\n(RAG search endpoints)"]
+            U13["POST modification/*\n(P5 modification flow)"]
+            U14["POST research-question/*\n(RQ preview/generate)"]
+        end
+    end
+
+    subgraph UI["🖥️ FRONTEND UI"]
+        direction TB
+        UI1["Project.tsx\n• project metadata (nombre, estado, ruta)\n• document list (filename, mime, estado)\n• population config (supuesto, frames, confidence)\n• experimental mode (object_of_study)\n• pipeline sidebar (stages, agents, live logs)\n• memo history (filtered agent_memos)\n• HITL banner + modal"]
+        UI2["Playground.tsx\n• EcosystemCanvas (blobs, tendrils, ghosts)\n• RecommendationGuide\n• ElaborationPanel\n• PlaygroundDataPanel\n• CategoryEvolutionPanel"]
+        UI3["ProjectConfigPanel.tsx\n• 5 tabs: preprocess, config, history,\n  suggestions, policy"]
+        UI4["HITLModal.tsx\n• Proposal review + decision UI"]
+        UI5["AddMemoModal.tsx\n• Structured memo creation"]
+    end
+
+    %% GAP ANNOTATIONS
+    subgraph GAPS["🚨 IDENTIFIED GAPS"]
+        direction TB
+
+        G1["GAP-1: CRITICAL\nCategory individual fields not shown in Project.tsx\n→ Backend returns 6 fields per category\n→ Only cats.length is displayed\n→ nombres, definiciones, es_central ignored\n→ FIX: Add category list/tree in Project page sidebar"]
+
+        G2["GAP-2: HIGH\nDocPipelineLog.steps (6 booleans) completely ignored\n→ text_extracted, punctuation_fixed, segmented,\n  coded, agents_done, synthesis_done NEVER read\n→ 75% of DocPipelineLog is waste\n→ FIX: Add step-progress indicator per document\n  OR remove from API response"]
+
+        G3["GAP-3: HIGH\nEcosystemLayout persistence not implemented\n→ blob_positions, ghost_positions, fog_zones saved\n  but frontend calculates positions client-side\n→ saveEcosystemLayout() never called\n→ User layout lost on page refresh\n→ FIX: Load saved positions on mount,\n  save on drag-end"]
+
+        G4["GAP-4: HIGH\nTheoreticalCode[] fetched but never displayed\n→ PlaygroundContext stores in pg.theoreticalCodes\n→ Zero components read this state\n→ Dead data round-trip every ecosystem refresh\n→ FIX: Add TheoreticalCodesPanel component\n  OR remove from context refresh"]
+
+        G5["GAP-5: MEDIUM\nSegment detail fields ignored\n→ parafrasis, posicion, conteo_tokens, es_anomalia\n  never rendered (71% waste)\n→ FIX: Add tooltip/expand showing paraphrase,\n  anomaly flag in segment list"]
+
+        G6["GAP-6: MEDIUM\nSaturation gaps & theoretical model not consumed\n→ getSaturationGaps() + getTheoreticalModel() exist\n→ Backend endpoints ready, frontend never calls\n→ FIX: Add SaturationPanel + ModelSummary\n  components to Playground"]
+
+        G7["GAP-7: MEDIUM\nRelationship detail discarded\n→ getRelationship(id) called in RelationshipTendril\n→ const detail = await getRelationship(...) DISCARDED\n→ FIX: Render detail in click handler modal"]
+
+        G8["GAP-8: LOW\n55 backend endpoints have NO frontend consumer\n→ Includes RAG search, hypothesis CRUD,\n  individual memo CRUD, population context,\n  coding styles, research question, modification\n→ Some are infra-only, some are dead code\n→ FIX: Audit and either implement UI or deprecate"]
+
+        G9["GAP-9: LOW\n19 client.ts functions are dead code\n→ Defined in API layer but NEVER called\n→ Includes createCategory, segmentDocument,\n  saveTaskSegments, stopWorker, killAllWorkers,\n  absorbGhost, resolveDivergence, etc.\n→ FIX: Remove or mark as planned"]
+
+        G10["GAP-10: INFO\nTypeScript interfaces over-declare fields\n→ Project has 3 config fields never consumed\n  (config_segmentacion, coding_style_instruction,\n   config_mutation_policy)\n→ Document has 4 fields never rendered\n  (proyecto_id, tipo_de_fuente, size_bytes, creado_en)\n→ FIX: Split into BaseProject + ProjectDetail\n  interfaces, lazy-load config fields"]
+    end
+
+    DB --> API
+    API --> UI
+
+    D4 -->|"6 fields sent"| A4
+    A4 -->|"6 fields"| UI1
+    A4 -.->|"5 fields wasted"| G1
+
+    D2 -->|"ALL fields"| A2
+    A2 -->|"DocPipelineLog"| UI1
+    A2 -.->|"steps.* (6 fields) wasted"| G2
+
+    D21 -->|"layout data"| A10
+    A10 -->|"layout included"| UI2
+    A10 -.->|"100% ignored"| G3
+
+    D17 -->|"all codes"| A10
+    A10 -.->|"stored, never rendered"| G4
+
+    D3 -->|"7 fields"| A3
+    A3 -->|"7 fields"| UI1
+    A3 -.->|"5 fields wasted"| G5
+
+    D16 --> U3
+    U3 -.->|"never called"| G6
+    D17 --> U2
+    U2 -.->|"never called"| G6
+
+    D10 -->|"detail"| A11
+    A11 -.->|"fetched, discarded"| G7
+
+    U1 --> G8
+    U4 --> G8
+    U5 --> G8
+    U6 --> G8
+    U7 --> G8
+    U8 --> G8
+    U9 --> G8
+    U10 --> G8
+    U11 --> G8
+    U12 --> G8
+    U13 --> G8
+    U14 --> G8
+
+    G9 -.-> G8
+    G10 -.-> G8
+```

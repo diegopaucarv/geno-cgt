@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 
+from context_utils import inject_chosen_context
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -306,16 +307,21 @@ def critique_configuration(
 
         response = llm.run_agent(
             "fd_config_critic",
-            variables={
-                "categories_summary": categories_summary,
-                "hypotheses_summary": hypotheses_summary,
-                "baseline_segments": baseline_segments,
-                "current_population": current_population,
-                "current_concerns": current_concerns,
-                "current_coding_style": current_coding_style,
-                "operational_question": operational_question or "(not yet generated)",
-                "object_of_study": object_of_study,
-            },
+            variables=inject_chosen_context(
+                proyecto_id,
+                session,
+                {
+                    "categories_summary": categories_summary,
+                    "hypotheses_summary": hypotheses_summary,
+                    "baseline_segments": baseline_segments,
+                    "current_population": current_population,
+                    "current_concerns": current_concerns,
+                    "current_coding_style": current_coding_style,
+                    "operational_question": operational_question
+                    or "(not yet generated)",
+                    "object_of_study": object_of_study,
+                },
+            ),
             temperature=0.3,
         )
 

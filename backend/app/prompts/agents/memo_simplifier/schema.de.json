@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tables",
+    "simplified_memo",
+    "core_statements",
+    "tensions_flagged",
+    "simplifier_note"
+  ],
+  "properties": {
+    "tables": {
+      "type": "array",
+      "description": "Doppeleintrag-Analysetabellen. Eine Tabelle pro Paradigma-Dimension.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "rows"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "description": "Name der Paradigma-Dimension: z.B. 'Bedingungen', 'Konsequenzen', 'Strategien', 'Eigenschaften'."
+          },
+          "rows": {
+            "type": "array",
+            "description": "Zeilen, die jede Eigenschaft auf Evidenz pro Dokument/Vorfall abbilden.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["property", "documents"],
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "description": "Der Eigenschaftsname (z.B. 'Zeitliche Variation', 'Risikokalibrierung')."
+                },
+                "documents": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Zuordnung von Dokumentname → Evidenztext aus diesem Dokument, der diese Eigenschaft stützt."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "simplified_memo": {
+      "type": "string",
+      "description": "150-250 Wörter kondensierte Version des beschreibenden Memos. Redundanz eliminieren unter Beibehaltung von Essenz, Variation und Kernerkenntnissen. In konzeptueller Gegenwart schreiben."
+    },
+    "core_statements": {
+      "type": "array",
+      "description": "3-5 Aussagen darüber, was die Daten konsistent zeigen, jeweils gestützt durch spezifische Evidenz.",
+      "items": {
+        "type": "string",
+        "description": "Eine Kernaussage: 'Aussage — was die Daten zeigen, mit Evidenzreferenz.'"
+      },
+      "minItems": 1
+    },
+    "tensions_flagged": {
+      "type": "array",
+      "description": "Widersprüche oder Paradoxien zwischen Erkenntnissen, die auf eine nicht erfasste Dimension hindeuten.",
+      "items": {
+        "type": "string",
+        "description": "Eine Spannung: 'Spannung zwischen Erkenntnis X und Erkenntnis Y — mögliches Paradox oder nicht erfasste Dimension.'"
+      }
+    },
+    "simplifier_note": {
+      "type": "string",
+      "description": "Methodologische Transparenz: was entfernt, kondensiert oder umstrukturiert wurde und warum."
+    }
+  }
+}

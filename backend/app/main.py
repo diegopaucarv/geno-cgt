@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from app.api.v1 import (
     admin,
     analysis,
     auth,
+    chain_runs,
     coding,
     config_info,
     documents,
@@ -28,6 +30,45 @@ from app.db.database import engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ── 0. Run pending DB migrations BEFORE anything else ──
+    _log_startup = __import__("logging").getLogger("uvicorn")
+    try:
+        from alembic import command as alembic_command
+        from alembic.config import Config as AlembicConfig
+
+        alembic_ini = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
+        if os.path.exists(alembic_ini):
+            alembic_cfg = AlembicConfig(alembic_ini)
+            alembic_command.upgrade(alembic_cfg, "head")
+            _log_startup.info("✅ Migraciones aplicadas — schema up-to-date")
+    except Exception as e:
+        _log_startup.warning(f"⚠️  No se pudieron ejecutar migraciones: {e}")
+
+    # ── 1. Validate schema — detecta drift entre modelos y DB ──
+    try:
+        from app.core.schema_guard import validate_schema
+
+        issues = validate_schema()
+        drift_issues = [i for i in issues if i.startswith("🚨")]
+        warn_issues = [i for i in issues if i.startswith("⚠️")]
+
+        if drift_issues:
+            _log_startup.error(
+                f"🚨 SCHEMA DRIFT ({len(drift_issues)} breaking issues):\n"
+                + "\n".join(f"  • {i}" for i in drift_issues[:10])
+            )
+            if len(drift_issues) > 10:
+                _log_startup.error(f"  ... y {len(drift_issues) - 10} más")
+        else:
+            _log_startup.info("✅ Schema validado — sin drift bloqueante")
+
+        if warn_issues:
+            _log_startup.info(
+                f"ℹ️  {len(warn_issues)} advertencias no-bloqueantes (columnas legacy, tipos)"
+            )
+    except Exception as e:
+        _log_startup.warning(f"⚠️  Schema validation skipped: {e}")
+
     await minio_client.ensure_bucket_exists()
     # Seed theoretical codes al iniciar (usa psycopg2 sync, no asyncpg)
     try:
@@ -79,6 +120,7 @@ app.add_middleware(
 
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(chain_runs.router)
 app.include_router(coding.router)
 app.include_router(documents.router)
 app.include_router(hypotheses.router)

@@ -1,0 +1,308 @@
+%% ─────────────────────────────────────────────────────────────────
+%% DIAGRAMA DE CLASES/DEPENDENCIAS — Sistema CGT (Classic Grounded Theory)
+%%
+%% Fuente: AGENTES.md, kb.md, código en workers/ y backend/app/
+%% Última actualización: 2026-06-19
+%% ─────────────────────────────────────────────────────────────────
+
+flowchart TB
+    %% ═══════════════════════════════════════════════════════════════
+    %% LEYENDA
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph LEGEND["📖 LEYENDA"]
+        direction LR
+        L1["🟣 PRO = razonamiento profundo"]
+        L2["🟡 FLASH = modelo rápido"]
+        L3["⚙️ NLP/ALG = algorítmico"]
+        L4["──▶ = dependencia directa (output→input)"]
+        L5["- -▶ = dependencia condicional (solo si chosen_concern/population set)"]
+        L6["💾 = escribe en DB"]
+        L7["👁️ = solo evalúa, no escribe DB"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% FASE: DATA MANAGEMENT (Pre-procesamiento y segmentación)
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph DM["🟢 DATA MANAGEMENT — Fase 0-1"]
+        direction TB
+
+        UTIL_PUNCT["⚙️ util_punctuator<br/>📥 texto crudo<br/>📤 texto_puntuado<br/>💾 documentos.metadatos"]
+
+        GLASER["🟡 fa_glaser_data_classifier<br/>📥 segmento.texto, interview_type<br/>📤 data_type, rationale, confidence<br/>💾 segmentos.tipo_dato_glaser"]
+
+        SEGMENT["⚙️ segmentar_documento<br/>📥 texto_preprocesado, max_tokens<br/>📤 segmentos[], embeddings<br/>💾 segmentos, documentos.estado"]
+
+        PRIME_MOVER["🟣 fa_prime_mover_extractor<br/>📥 segmentos[baseline] del doc<br/>📤 prime_mover, confidence<br/>💾 document_processes.prime_mover"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% FASE: OPEN CODING
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph OC["🔵 OPEN CODING — Fase A+B"]
+        direction TB
+
+        POP_CTX["🟣 fa_population_context<br/>📥 segmentos del doc, pop_ctx anterior, ✦chosen_population<br/>📤 surprising_details, language_patterns, data_production_context<br/>💾 population_contexts"]
+
+        INC_GROUP["🟣 fb_incident_grouper<br/>📥 extracted_incidents[] de TODOS los docs<br/>📤 groups[] con signal, rationale<br/>💾 incident_groups"]
+
+        CODE_GEN["🟣 fb_code_generator<br/>📥 incident_groups[], object_of_study, ✦chosen_concern<br/>📤 proposed_labels[], definitions[]<br/>💾 categorias, codigos_segmento"]
+
+        LABEL_CRITIC["🟡 fb_label_critic<br/>📥 proposed_labels[] + incidentes fuente<br/>📤 evaluations[] (verdict, rationale, improvement)<br/>👁️ solo evalúa"]
+
+        CAT_SYNTH["🟣 fd_category_synthesizer<br/>📥 categorias[] (previas + nuevas), ✦chosen_concern<br/>📤 merged[], deduplicated[]<br/>💾 categorias (merge), doc_codes"]
+
+        HYP_GEN["🟣 fb_hypothesis_generator<br/>📥 categorias[], memos[], ✦chosen_concern<br/>📤 hypotheses[] (text, level, confidence)<br/>💾 hypotheses"]
+
+        EVID_CLASS["🟡 fb_evidence_classifier<br/>📥 categorias[] + segmentos fuente<br/>📤 evidence_summaries[]<br/>👁️ solo evalúa"]
+
+        HYP_SYNTH["🟣 fd_hypothesis_synthesizer<br/>📥 hypotheses[] previas + nuevas, ✦chosen_concern, ✦chosen_population<br/>📤 merged_hypotheses[]<br/>💾 hypotheses (merge)"]
+
+        CONFIG_CRITIC["🟣 fd_config_critic<br/>📥 project_config, population_assumption, ✦chosen_concern, ✦chosen_population<br/>📤 evaluations[], suggestions[]<br/>👁️ solo evalúa"]
+
+        MC_PROPOSER["🟣 fc_main_concern_proposer<br/>📥 categorias[], memos[], population_context, ✦chosen_concern<br/>📤 candidates[] (gerundio, rationale, supporting_codes)<br/>💾 concerns 🛑HITL"]
+
+        MC_CRITIC["🟣 fc_main_concern_critic<br/>📥 candidates[] del proposer<br/>📤 evaluations[] (verdict SAT|MOD|FORCED, grounding, coverage)<br/>👁️ solo evalúa 🛑HITL"]
+
+        POP_GEN["🟡 population_generalizer<br/>📥 chosen_population (HITL), population_contexts[], object_of_study<br/>📤 spatial_frame, temporal_frame, generalized_population<br/>💾 proyectos.population_assumption ⛓️condicional"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% FASE: SELECTIVE CODING (cadena proposer→critic)
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph SC["🟠 SELECTIVE CODING — Fase 5b"]
+        direction LR
+
+        CC_PROP["🟣 fc_core_category_proposer<br/>📥 categorias[] saturadas, hypotheses[], pattern_of_interest<br/>📤 candidates[]<br/>💾 🛑HITL gate"]
+
+        CC_CRIT["🟡 fc_core_emergence_critic<br/>📥 candidates[] + incidentes fuente<br/>📤 evaluations[] (valid|refine|split)<br/>👁️ solo evalúa 🛑HITL"]
+
+        SR_PROP["🟣 fd_selective_reduction_proposer<br/>📥 categorias[], pattern_of_interest<br/>📤 kept[], merged[], discarded[]<br/>💾 🛑HITL gate"]
+
+        SR_CRIT["🟣 fd_selective_reduction_critic<br/>📥 reduction_plan del proposer<br/>📤 evaluations[] (false_positives, false_negatives)<br/>👁️ solo evalúa 🛑HITL"]
+
+        CS_PROP["🟣 fe_core_saturation_proposer<br/>📥 categoria.paradigm_state, incidentes_nuevos[]<br/>📤 expansions[]<br/>💾 paradigm_states, saturation_metrics"]
+
+        CS_CRIT["🟡 fe_core_saturation_critic<br/>📥 expansions[] + paradigm_state actual<br/>📤 verdict SAT|MOD|FORCED, did_state_expand<br/>👁️ solo evalúa"]
+
+        DBA_PROP["🟣 ff_database_a_proposer<br/>📥 categorias[] saturadas, core_category<br/>📤 nodes[] (label, entity_type, definition, is_core)<br/>💾 database_nodes 🛑HITL"]
+
+        DBA_CRIT["🟣 ff_database_a_critic<br/>📥 nodes[] del proposer<br/>📤 verdict, issues[]<br/>👁️ solo evalúa 🛑HITL"]
+
+        DBB_PROP["🟣 ff_database_b_proposer<br/>📥 nodes[], conceptual_relationships[], hypotheses[]<br/>📤 edges[] (source, target, relationship_type, evidence)<br/>💾 database_edges 🛑HITL"]
+
+        DBB_CRIT["🟣 ff_database_b_critic<br/>📥 edges[] del proposer<br/>📤 verdict, issues[]<br/>👁️ solo evalúa 🛑HITL"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% FASE: THEORETICAL CODING
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph TC["🟣 THEORETICAL CODING — Fase 6b (Playground)"]
+        direction TB
+
+        CONC_ELAB["🟣 conceptual_elaborator<br/>📥 blob_a, blob_b, theoretical_code<br/>📤 converging_evidence[], diverging_evidence[], relationship<br/>💾 conceptual_relationships, elaboration_memos"]
+
+        MEMO_TAG["🟡 memo_theoretical_tagger<br/>📥 memo.contenido<br/>📤 family_affinities[{family, score}]<br/>💾 memos.metadata"]
+
+        CROSS_FAM["🟣 cross_family_synthesizer<br/>📥 sorting_attempts[]<br/>📤 integrated_families, recommendation<br/>💾 sorting tables"]
+
+        GHOST["🟣 ghost_blob_mapper<br/>📥 memo, categorias[]<br/>📤 suggested_category, confidence<br/>💾 elaboration_memos"]
+
+        ECO_GAP["⚙️ ecosystem_gap_detector<br/>📥 blobs[], tendrils[]<br/>📤 gaps[{type, detail}]<br/>💾 ecosystem_layouts"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% FASE: WRITING & FINALIZATION
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph WR["🔴 WRITING & FINALIZATION — Fases 6a, 6c, 6d"]
+        direction TB
+
+        NAT_WRITER["🟣 natural_writer<br/>📥 memos[] ordenados (sorting group)<br/>📤 draft, citations[], concepts[]<br/>👁️ output → Redis 🛑HITL"]
+
+        WRIT_CRIT["🟣 writing_critic<br/>📥 draft, memos[] fuente<br/>📤 verdict SAT|MOD|FORCED, issues[]<br/>👁️ solo evalúa 🛑HITL"]
+
+        GAP_FEEL["🟡 gap_feeler<br/>📥 draft, project_id<br/>📤 gaps[{type, description, severity}]<br/>👁️ solo evalúa"]
+
+        LIT_COMP["🟣 literature_comparer<br/>📥 teoría completa, literature_fragments[]<br/>📤 comparison_table[{extends, modifies, integrates, transcends}]<br/>💾 literature_dialogues"]
+
+        LIT_CRIT["🟣 literature_critic<br/>📥 comparison_table + teoría<br/>📤 verdict, issues[]<br/>👁️ solo evalúa 🛑HITL"]
+
+        APPL_ENG["🟣 applicability_engine<br/>📥 teoría completa<br/>📤 control_variables[], access_variables[], guidelines[], implications[]<br/>💾 applicability_guidelines 🛑HITL"]
+
+        APPL_CRIT["🟣 applicability_critic<br/>📥 guidelines[], teoría<br/>📤 verdict, issues[]<br/>👁️ solo evalúa 🛑HITL"]
+
+        FINAL_REPORT["🟣 final_report<br/>📥 TODOS los artefactos del proyecto<br/>📤 report completo<br/>💾 final_reports 🛑HITL"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% TRANSVERSALES
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph TV["🔷 TRANSVERSALES"]
+        direction LR
+
+        RESPEC["🟣 ReSpecAgent<br/>📥 signals: incidentes ambiguos, etiquetas rechazadas, divergencias, memos huérfanos<br/>📤 suggestions[{level, direction, detail, severity}]<br/>💾 monitorea, no escribe DB"]
+
+        HITL_MOD["🟡+🟣 HITLModificationAgent<br/>📥 user edit request<br/>📤 modified artifacts<br/>💾 propaga cambios en cascada"]
+
+        MEMO_MAKER["🟣 MemoMaker<br/>📥 categoria saturada, paradigm_state, incidentes<br/>📤 memo (generate→simplify→correlate)<br/>💾 memos, memos.structured_fields"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% TABLAS DE BASE DE DATOS
+    %% ═══════════════════════════════════════════════════════════════
+    subgraph DB["🗄️ BASE DE DATOS — PostgreSQL"]
+        direction LR
+
+        TBL_DOC["📄 documentos<br/>(metadatos JSONB, estado)"]
+        TBL_SEG["📝 segmentos<br/>(texto, tipo_dato_glaser, embedding)"]
+        TBL_DOCPROC["🔗 document_processes<br/>(process_description, prime_mover)"]
+        TBL_POPCTX["👥 population_contexts<br/>(surprising_details, language_patterns)"]
+        TBL_INCGRP["📊 incident_groups<br/>(label, definition, incident_ids_json)"]
+        TBL_CAT["🏷️ categorias<br/>(nombre, definicion, estado_saturacion, gerundio_label)"]
+        TBL_CODSEG["🔢 codigos_segmento<br/>(segmento↔categoria, confianza, origen)"]
+        TBL_DCODES["📋 doc_codes<br/>(documento↔categoria, estado, resumen_evidencia)"]
+        TBL_HYP["💡 hypotheses<br/>(text, level, confidence, concern_labels)"]
+        TBL_CONCERN["🎯 concerns<br/>(label, description, status)"]
+        TBL_PARADIGM["🔄 paradigm_states<br/>(did_state_expand, paradigm_snapshot)"]
+        TBL_SATMET["📈 saturation_metrics<br/>(rolling_std, saturation_status)"]
+        TBL_DBNODE["🔵 database_nodes<br/>(label, entity_type, definition, is_core)"]
+        TBL_DBEDGE["🔗 database_edges<br/>(source↔target, relationship_type, evidence)"]
+        TBL_CONCREL["🔷 conceptual_relationships<br/>(converging[], diverging[], elaboration_status)"]
+        TBL_ELABMEMO["📝 elaboration_memos<br/>(elaboration_type, content, ecosystem_snapshot)"]
+        TBL_ECOLAYOUT["🗺️ ecosystem_layouts<br/>(blob_positions, ghost_positions, fog_zones)"]
+        TBL_MEMO["📌 memos<br/>(tipo, contenido, structured_fields, version)"]
+        TBL_SORTING["📚 sorting tables<br/>(memo_sorting_groups, attempts)"]
+        TBL_LIT["📖 literature_dialogues<br/>(comparison_table)"]
+        TBL_APPL["🎯 applicability_guidelines<br/>(guidelines, control_variables)"]
+        TBL_FINAL["📜 final_reports<br/>(content JSONB)"]
+        TBL_HITL["🛑 hitl_decisions<br/>(gate_name, proposal, critic_verdict, status)"]
+    end
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% DEPENDENCIAS — Flechas entre agentes
+    %% ═══════════════════════════════════════════════════════════════
+
+    %% ── DATA MANAGEMENT ──
+    UTIL_PUNCT --> SEGMENT
+    GLASER --> SEGMENT
+    SEGMENT --> PRIME_MOVER
+    SEGMENT --> POP_CTX
+
+    %% ── OPEN CODING ──
+    PRIME_MOVER --> INC_GROUP
+    POP_CTX --> CODE_GEN
+    INC_GROUP --> CODE_GEN
+    CODE_GEN --> LABEL_CRITIC
+    CODE_GEN --> CAT_SYNTH
+    INC_GROUP --> CAT_SYNTH
+    CAT_SYNTH --> HYP_GEN
+    CODE_GEN --> HYP_GEN
+    HYP_GEN --> EVID_CLASS
+    CAT_SYNTH --> HYP_SYNTH
+    HYP_GEN --> HYP_SYNTH
+    HYP_SYNTH --> CONFIG_CRITIC
+    CAT_SYNTH --> MC_PROPOSER
+    HYP_SYNTH --> MC_PROPOSER
+    MC_PROPOSER --> MC_CRITIC
+    MC_CRITIC -.-> POP_GEN
+
+    %% ── SELECTIVE CODING (cadena) ──
+    MC_PROPOSER -.-> CC_PROP
+    MC_CRITIC -.-> CC_PROP
+    CC_PROP --> CC_CRIT
+    CC_CRIT --> SR_PROP
+    SR_PROP --> SR_CRIT
+    SR_CRIT --> CS_PROP
+    CS_PROP --> CS_CRIT
+    CS_CRIT --> DBA_PROP
+    DBA_PROP --> DBA_CRIT
+    DBA_CRIT --> DBB_PROP
+    DBB_PROP --> DBB_CRIT
+
+    %% ── THEORETICAL CODING ──
+    DBB_CRIT --> CONC_ELAB
+    DBB_CRIT --> MEMO_TAG
+    MEMO_TAG --> CROSS_FAM
+    CONC_ELAB --> CROSS_FAM
+    CONC_ELAB --> GHOST
+    GHOST --> ECO_GAP
+    CONC_ELAB --> ECO_GAP
+
+    %% ── WRITING ──
+    CROSS_FAM --> NAT_WRITER
+    MEMO_MAKER --> NAT_WRITER
+    NAT_WRITER --> WRIT_CRIT
+    NAT_WRITER --> GAP_FEEL
+    DBB_CRIT --> LIT_COMP
+    LIT_COMP --> LIT_CRIT
+    DBB_CRIT --> APPL_ENG
+    APPL_ENG --> APPL_CRIT
+    WRIT_CRIT --> FINAL_REPORT
+    LIT_CRIT --> FINAL_REPORT
+    APPL_CRIT --> FINAL_REPORT
+
+    %% ── TRANSVERSALES ──
+    RESPEC -.-> CODE_GEN
+    RESPEC -.-> LABEL_CRITIC
+    RESPEC -.-> CONC_ELAB
+    HITL_MOD -.-> MC_PROPOSER
+    HITL_MOD -.-> CC_PROP
+    CS_PROP --> MEMO_MAKER
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% DEPENDENCIAS — Flechas hacia tablas DB (escribe)
+    %% ═══════════════════════════════════════════════════════════════
+
+    UTIL_PUNCT -.-> TBL_DOC
+    GLASER -.-> TBL_SEG
+    SEGMENT -.-> TBL_SEG
+    SEGMENT -.-> TBL_DOC
+    PRIME_MOVER -.-> TBL_DOCPROC
+    POP_CTX -.-> TBL_POPCTX
+    INC_GROUP -.-> TBL_INCGRP
+    CODE_GEN -.-> TBL_CAT
+    CODE_GEN -.-> TBL_CODSEG
+    CAT_SYNTH -.-> TBL_CAT
+    CAT_SYNTH -.-> TBL_DCODES
+    HYP_GEN -.-> TBL_HYP
+    HYP_SYNTH -.-> TBL_HYP
+    MC_PROPOSER -.-> TBL_CONCERN
+    CS_PROP -.-> TBL_PARADIGM
+    CS_PROP -.-> TBL_SATMET
+    DBA_PROP -.-> TBL_DBNODE
+    DBB_PROP -.-> TBL_DBEDGE
+    CONC_ELAB -.-> TBL_CONCREL
+    CONC_ELAB -.-> TBL_ELABMEMO
+    GHOST -.-> TBL_ELABMEMO
+    ECO_GAP -.-> TBL_ECOLAYOUT
+    MEMO_MAKER -.-> TBL_MEMO
+    MEMO_TAG -.-> TBL_MEMO
+    CROSS_FAM -.-> TBL_SORTING
+    LIT_COMP -.-> TBL_LIT
+    APPL_ENG -.-> TBL_APPL
+    FINAL_REPORT -.-> TBL_FINAL
+    MC_PROPOSER -.-> TBL_HITL
+    CC_PROP -.-> TBL_HITL
+    SR_PROP -.-> TBL_HITL
+    DBA_PROP -.-> TBL_HITL
+    DBB_PROP -.-> TBL_HITL
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% ESTILOS — Colores por fase
+    %% ═══════════════════════════════════════════════════════════════
+    classDef dm fill:#d4edda,stroke:#28a745,color:#155724,stroke-width:2px
+    classDef oc fill:#dbeafe,stroke:#3b82f6,color:#1e40af,stroke-width:2px
+    classDef sc fill:#fef3c7,stroke:#d97706,color:#92400e,stroke-width:2px
+    classDef tc fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6,stroke-width:2px
+    classDef wr fill:#fce7f3,stroke:#ec4899,color:#9d174d,stroke-width:2px
+    classDef tv fill:#e0e7ff,stroke:#6366f1,color:#3730a3,stroke-width:2px
+    classDef db fill:#e2e8f0,stroke:#64748b,color:#334155,stroke-width:1px
+    classDef legend fill:#f8fafc,stroke:#94a3b8,color:#1e293b,stroke-width:1px
+
+    class UTIL_PUNCT,GLASER,SEGMENT,PRIME_MOVER dm
+    class POP_CTX,INC_GROUP,CODE_GEN,LABEL_CRITIC,CAT_SYNTH,HYP_GEN,EVID_CLASS,HYP_SYNTH,CONFIG_CRITIC,MC_PROPOSER,MC_CRITIC oc
+    class CC_PROP,CC_CRIT,SR_PROP,SR_CRIT,CS_PROP,CS_CRIT,DBA_PROP,DBA_CRIT,DBB_PROP,DBB_CRIT sc
+    class CONC_ELAB,MEMO_TAG,CROSS_FAM,GHOST,ECO_GAP tc
+    class NAT_WRITER,WRIT_CRIT,GAP_FEEL,LIT_COMP,LIT_CRIT,APPL_ENG,APPL_CRIT,FINAL_REPORT wr
+    class RESPEC,HITL_MOD,MEMO_MAKER tv
+    class TBL_DOC,TBL_SEG,TBL_DOCPROC,TBL_POPCTX,TBL_INCGRP,TBL_CAT,TBL_CODSEG,TBL_DCODES,TBL_HYP,TBL_CONCERN,TBL_PARADIGM,TBL_SATMET,TBL_DBNODE,TBL_DBEDGE,TBL_CONCREL,TBL_ELABMEMO,TBL_ECOLAYOUT,TBL_MEMO,TBL_SORTING,TBL_LIT,TBL_APPL,TBL_FINAL,TBL_HITL db
+    class L1,L2,L3,L4,L5,L6,L7 legend

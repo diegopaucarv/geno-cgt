@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "descriptive_memo",
+    "what_emerged",
+    "what_remains_open",
+    "evolution_narrative",
+    "representative_incidents"
+  ],
+  "properties": {
+    "descriptive_memo": {
+      "type": "string",
+      "description": "400-800 Wörter lange Erzählung, die beschreibt, was DIE DATEN ZEIGEN. Schreiben Sie in konzeptueller Gegenwart mit Gerundien. Verwenden Sie die Sprache der Teilnehmer. Variation einschließen: 'in manchen Fällen... in anderen...'. Erzwingen Sie keine Bedingungen/Konsequenzen-Struktur, wenn die Daten sie nicht stützen."
+    },
+    "what_emerged": {
+      "type": "array",
+      "description": "3-5 Schlüsselerkenntnisse, konsolidiert über die Paradigma-Iterationen. Jeder Eintrag beschreibt ein Muster, das sich verfestigt hat, einschließlich wann es auftauchte und welche Vorfälle es stützen.",
+      "items": {
+        "type": "string",
+        "description": "Eine Erkenntnis: 'Erkenntnis N — Muster über Iterationen konsolidiert, mit Evidenzvermerk.'"
+      },
+      "minItems": 1
+    },
+    "what_remains_open": {
+      "type": "array",
+      "description": "Ungelöste Fragen — Eigenschaften oder Dimensionen, die mehr Evidenz benötigen, um vollständig dokumentiert zu werden.",
+      "items": {
+        "type": "string",
+        "description": "Eine offene Frage: 'Offene Frage — was noch zu dokumentieren ist und warum.'"
+      }
+    },
+    "evolution_narrative": {
+      "type": "string",
+      "description": "Wie sich die Kategoriedefinition über die Paradigma-Iterationen entwickelt hat: Version 1 → Version 2 → ... → Version N. Beschreiben Sie, was sich bei jeder Iteration geändert hat und warum (welcher Vorfall oder welche Erweiterung die Änderung vorangetrieben hat)."
+    },
+    "representative_incidents": {
+      "type": "array",
+      "description": "Maximal 3 Vorfälle, die die Kategorie am besten repräsentieren. Wählen Sie Vorfälle, die Variation oder kritische Wendepunkte zeigen.",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "document", "why"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Der Vorfalltext (wörtliches Zitat oder enge Paraphrase aus dem Segment)."
+          },
+          "document": {
+            "type": "string",
+            "description": "Name des Quelldokuments (original_filename)."
+          },
+          "why": {
+            "type": "string",
+            "description": "Warum dieser Vorfall repräsentativ ist: welches Muster, welche Dimension oder Variation er veranschaulicht."
+          }
+        }
+      }
+    }
+  }
+}

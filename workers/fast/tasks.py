@@ -579,8 +579,8 @@ def punctuate_text(
                 f"Texto reducido al {len(final_text) / max(len(texto), 1) * 100:.0f}%% del original"
             )
 
-        # If we have a documento_id and changes were made, update the DB
-        if documento_id and result.get("changes_made"):
+        # Always persist — worker is the authority on estado transitions
+        if documento_id:
             logger.info(
                 "Punctuator: guardando. OUT muestra: %s", result["punctuated_text"][:80]
             )
@@ -644,3 +644,131 @@ def punctuate_text(
         raise
 
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# F0: Population Generalizer — ejecutado después del HITL gate de open coding
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.task(name="generalize_population", queue="fast")
+def generalize_population(proyecto_id: str):
+    """F0: Generaliza la población después del HITL gate de open coding.
+
+    Toma chosen_population (elegida por el investigador en el HITL gate)
+    y la research_question del proyecto, y produce:
+      - spatial_frame
+      - temporal_frame
+      - generalized_population
+
+    Guarda el resultado en proyectos.population_assumption (JSONB).
+    """
+    session = SessionLocal()
+    try:
+        # ── 1. Obtener chosen_population y research_question ──────────
+        row = session.execute(
+            text(
+                "SELECT chosen_population, supuesto_poblacional "
+                "FROM proyectos WHERE id = :pid"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        if not row:
+            logger.error("Project %s not found for generalize_population", proyecto_id)
+            return {"error": "Project not found", "proyecto_id": proyecto_id}
+
+        chosen_population = row[0]
+        research_question = row[1] or ""
+
+        if not chosen_population:
+            logger.info(
+                "No chosen_population for project %s, skipping population generalization",
+                proyecto_id,
+            )
+            return {
+                "status": "skipped",
+                "reason": "no chosen_population",
+                "proyecto_id": proyecto_id,
+            }
+
+        # ── 2. Llamar al LLM con el agente population_generalizer ─────
+        logger.info(
+            "Generalizing population for project=%s: %s",
+            proyecto_id,
+            chosen_population[:120],
+        )
+
+        response = llm.run_agent(
+            "population_generalizer",
+            variables={
+                "chosen_population": chosen_population,
+                "research_question": research_question,
+            },
+        )
+
+        spatial_frame = response.get("spatial_frame")
+        temporal_frame = response.get("temporal_frame")
+        generalized_population = response.get("generalized_population")
+        rationale = response.get("rationale", "")
+
+        if not spatial_frame or not temporal_frame or not generalized_population:
+            logger.warning(
+                "Incomplete population generalization for project=%s: %s",
+                proyecto_id,
+                response,
+            )
+
+        # ── 3. Leer population_assumption actual (si existe) ──────────
+        existing_row = session.execute(
+            text("SELECT population_assumption FROM proyectos WHERE id = :pid"),
+            {"pid": proyecto_id},
+        ).fetchone()
+
+        import json as _json
+
+        current_assumption = {}
+        if existing_row and existing_row[0]:
+            current_assumption = (
+                existing_row[0]
+                if isinstance(existing_row[0], dict)
+                else _json.loads(existing_row[0])
+            )
+
+        # ── 4. Merge y guardar ────────────────────────────────────────
+        current_assumption["spatial_frame"] = spatial_frame
+        current_assumption["temporal_frame"] = temporal_frame
+        current_assumption["generalized_population"] = generalized_population
+        if rationale:
+            current_assumption["population_generalization_rationale"] = rationale
+
+        session.execute(
+            text("UPDATE proyectos SET population_assumption = :pa WHERE id = :pid"),
+            {
+                "pa": _json.dumps(current_assumption),
+                "pid": proyecto_id,
+            },
+        )
+        session.commit()
+
+        logger.info(
+            "Population generalized for project=%s: spatial=%s temporal=%s",
+            proyecto_id,
+            spatial_frame,
+            temporal_frame,
+        )
+
+        return {
+            "status": "ok",
+            "proyecto_id": proyecto_id,
+            "spatial_frame": spatial_frame,
+            "temporal_frame": temporal_frame,
+            "generalized_population": generalized_population,
+        }
+
+    except Exception as e:
+        logger.error("generalize_population failed for project=%s: %s", proyecto_id, e)
+        session.rollback()
+        return {"error": str(e), "proyecto_id": proyecto_id}
+    finally:
+        session.close()

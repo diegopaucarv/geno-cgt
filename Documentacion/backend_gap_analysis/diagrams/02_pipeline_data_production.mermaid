@@ -1,0 +1,173 @@
+# Diagrama 2: Producción de Datos por Etapa del Pipeline
+# Muestra qué agentes producen qué datos y en qué tablas los escriben
+
+```mermaid
+flowchart TB
+    subgraph STAGE1["📥 STAGE 1: Data Management (per-document)"]
+        direction TB
+        A1["util_punctuator\n(PRO tier)\nPrompt: f0_punctuator.md"]
+        A2["fa_glaser_data_classifier\n(PRO tier)\nPrompt: f0_classifier.md"]
+        A3["segmentar_documento\n(NLP tier - spaCy/Stanza)\nNo LLM prompt"]
+        A4["fa_prime_mover_extractor\n(PRO tier)\nPrompt: f0_prime_mover.md"]
+
+        A1 -->|"WRITES: documento.metadatos.texto_preprocesado\nWRITES: documento.estado='preprocesado'"| DB_DOC
+        A2 -->|"WRITES: documento.metadatos (clasificación markdown)\nWRITES: documento.estado='clasificado'"| DB_DOC
+        A3 -->|"WRITES: segmentos (INSERT con texto,posicion,conteo_tokens)\nWRITES: documento.estado='segmentado'"| DB_SEG
+        A4 -->|"WRITES: documento.estado='listo'\nWRITES: incidentes (prime mover patterns)"| DB_DOC
+    end
+
+    subgraph STAGE2["🧠 STAGE 2: Open Coding (batch trigger each 3 docs)"]
+        direction TB
+        B0["fa_population_context\n(PRO, prompt: f0_population.md)"]
+        B1["fb_incident_grouper\n(PRO, prompt: b1_grouper.md)"]
+        B2["fb_code_generator\n(PRO, SelfRefinement, prompt: b2_generator.md)"]
+        B3["fb_label_critic\n(FLASH, prompt: b3_critic.md)"]
+        B4["fd_category_synthesizer\n(PRO, prompt: d1_synthesizer.md)"]
+        B5["fb_hypothesis_generator\n(PRO, prompt: b4_hypothesis.md)"]
+        B6["fb_evidence_classifier\n(FLASH, prompt: b5_evidence.md)"]
+        B7["fd_hypothesis_synthesizer\n(PRO, prompt: d2_hypothesis_synth.md)"]
+        B8["fd_config_critic\n(PRO, prompt: d3_config_critic.md)"]
+        B9["fc_main_concern_proposer\n(PRO, prompt: c1_concern.md)"]
+        B10["fc_main_concern_critic\n(PRO, prompt: c2_concern_critic.md)"]
+        B11["population_generalizer\n(FLASH, prompt: f0_generalizer.md)"]
+
+        B0 -->|"WRITES: population_context (generalized_population,\n  temporal_frame, spatial_frame, generalizer_confidence)"| DB_POP
+        B1 -->|"WRITES: incident_groups (name, segment_summaries)"| DB_INC
+        B2 -->|"WRITES: categories (nombre, definicion, gerundio_label)\n  via SelfRefinement → algorithmic + LLM critic"| DB_CAT
+        B3 -->|"READS: categories\nWRITES: categories (label refinements)"| DB_CAT
+        B4 -->|"WRITES: categories (merge, redefine)\nWRITES: synthesis_results (output_data)"| DB_CAT
+        B5 -->|"WRITES: hypotheses (statement, relationship_type, confidence)"| DB_HYP
+        B6 -->|"READS: segments + codes\nWRITES: hypotheses.evidence (classified)"| DB_HYP
+        B7 -->|"WRITES: hypotheses (merged, re-ranked)\nWRITES: synthesis_results"| DB_HYP
+        B8 -->|"WRITES: project_config_history (field mutations)\nWRITES: proyectos.population_assumption"| DB_CFG
+        B9 -->|"WRITES: concerns (label='PROPUESTO')\nWRITES: agent_outputs (memo)"| DB_CONCERN
+        B10 -->|"WRITES: concerns (critic_feedback)\nWRITES: agent_outputs (critic memo)"| DB_CONCERN
+
+        subgraph HITL1["🛑 HITL GATE: Main Concern"]
+            H1["User decides: ACCEPT / MODIFY / REJECT\nWRITES: hitl_decisions (decision, user_note)\nWRITES: concerns.estado='ELEGIDO/RECHAZADO/MODIFICADO'\nWRITES: proyectos.chosen_concern"]
+        end
+
+        B10 --> HITL1
+        HITL1 --> B11
+        B11 -->|"WRITES: population_context (generalized_population,\n  generalizer_confidence, generalizer_rationale)"| DB_POP
+    end
+
+    subgraph STAGE3["🎯 STAGE 3: Selective Coding"]
+        direction TB
+        C1["fc_core_category_proposer\n(PRO, prompt: c3_core_cat.md)"]
+        C2["fc_core_emergence_critic\n(FLASH, prompt: c4_emergence.md)"]
+        C3["fd_selective_reduction_proposer\n(PRO, prompt: d4_reduction.md)"]
+        C4["fd_selective_reduction_critic\n(PRO, prompt: d5_reduction_critic.md)"]
+        C5["fe_core_saturation_proposer\n(PRO, prompt: e1_saturation.md)"]
+        C6["fe_core_saturation_critic\n(FLASH, prompt: e2_saturation_critic.md)"]
+        C7["ff_database_a_proposer\n(PRO, prompt: f1_db_a.md)"]
+        C8["ff_database_a_critic\n(PRO, prompt: f2_db_a_critic.md)"]
+        C9["ff_database_b_proposer\n(PRO, prompt: f3_db_b.md)"]
+        C10["ff_database_b_critic\n(PRO, prompt: f4_db_b_critic.md)"]
+
+        C1 -->|"WRITES: concerns (core category candidate)"| DB_CONCERN
+        C2 -->|"WRITES: concerns (critic_feedback)"| DB_CONCERN
+        C3 -->|"WRITES: categories (puntaje_relevancia, limites updated)\nWRITES: doc_codes (estado='ausente' for discarded)"| DB_CAT
+        C4 -->|"READS: categories, doc_codes\nWRITES: synthesis_results"| DB_CAT
+        C5 -->|"WRITES: saturation_metrics\nWRITES: categories.saturation_docs (anti-join UUIDs)\nWRITES: categories.estado_saturacion='ESTABLE/SATURADO'"| DB_SAT
+        C6 -->|"READS: saturation_metrics\nWRITES: categories.saturation_panel_json"| DB_SAT
+        C7 -->|"WRITES: categories (database_a nodes: properties)\nWRITES: agent_outputs (DATABASE_NODE memos)"| DB_CAT
+        C8 -->|"READS: categories\nWRITES: agent_outputs (critic memos)"| DB_CAT
+        C9 -->|"WRITES: relationships (database_b edges)\nWRITES: agent_outputs (DATABASE_EDGE memos)"| DB_REL
+        C10 -->|"READS: relationships\nWRITES: agent_outputs (critic memos)"| DB_REL
+
+        subgraph HITL2["🛑 HITL GATES: Core Category, Selective Reduction, Saturation, DB-A, DB-B"]
+            H2a["Gate: core_category → hitl_decisions"]
+            H2b["Gate: selective_reduction → hitl_decisions"]
+            H2c["Gate: core_saturation → hitl_decisions"]
+            H2d["Gate: database_a → hitl_decisions"]
+            H2e["Gate: database_b → hitl_decisions"]
+        end
+
+        C2 --> HITL2
+    end
+
+    subgraph STAGE4["🎨 STAGE 4: Theoretical Coding"]
+        direction TB
+        D1["f6b_ghost_blob_mapper\n(PRO, prompt: f6b_ghost.md)"]
+        D2["f6b_memo_theoretical_tagger\n(FLASH, prompt: f6b_theo_tagger.md)"]
+        D3["f6b_ecosystem_gap_detector\n(PRO, prompt: f6b_gap.md)"]
+        D4["f6b_conceptual_elaborator\n(PRO, services/elaboration_engine.py)"]
+        D5["f6b_definition_writer\n(PRO, prompt: f6b_definition.md)"]
+        D6["f6b_incident_elaborator\n(PRO, prompt: f6b_incident_elab.md)"]
+
+        D1 -->|"WRITES: ghosts (type, content)\nWRITES: relationships (divergence paths)"| DB_GHOST
+        D2 -->|"WRITES: agent_outputs (THEORICO memos)\nREADS: existing memos → WRITES: updated family tags"| DB_MEMO
+        D3 -->|"WRITES: recommendations (title, description, action_type)\nWRITES: saturation_gap_analysis"| DB_REC
+        D4 -->|"WRITES: relationships.elaboration_history\nWRITES: elaboration_memos\nWRITES: categories.definicion (version bump)"| DB_REL
+        D5 -->|"WRITES: definition_versions (old_definition, new_definition)\nRUNS: SelectiveElaborator service"| DB_DEF
+        D6 -->|"WRITES: incidentes (elaboration context)\nREADS: segments → WRITES: elaborated incidents"| DB_INC
+    end
+
+    subgraph STAGE5["📝 STAGE 5: Writing"]
+        direction TB
+        E1["f6a_natural_writer\n(PRO, prompt: f6a_writer.md)"]
+        E2["f6a_writing_critic\n(PRO, prompt: f6a_critic.md)"]
+        E3["f6a_gap_feeler\n(FLASH, prompt: f6a_gap.md)"]
+
+        E1 -->|"WRITES: agent_outputs (final report drafts)\nWRITES: synthesis_results (output_data)"| DB_SYNTH
+        E2 -->|"READS: agent_outputs (drafts)\nWRITES: agent_outputs (critic memos)"| DB_SYNTH
+        E3 -->|"WRITES: recommendations (gap suggestions)\nREADS: saturation_metrics → WRITES: gap alerts"| DB_REC
+    end
+
+    subgraph SERVICES["⚙️ Backend Services (post-coding)"]
+        direction LR
+        S1["TheorySeeder\n→ WRITES: theoretical_codes (seed codes)\n→ WRITES: canvas (initial state)"]
+        S2["SelectiveElaborator\n→ WRITES: relationships (type, fit, layer, tension)\n→ WRITES: categories (re-categorization)"]
+        S3["ElaborationEngine\n→ WRITES: relationships.elaboration_history\n→ WRITES: elaboration_memos"]
+        S4["GhostConnector\n→ WRITES: ghosts (absorbed/dismissed)\n→ WRITES: relationships (ghost→blob connections)"]
+        S5["RenameDetector\n→ WRITES: rename_suggestions\n→ READ: categories.nombre → TEI embeddings → WRITE suggestions"]
+        S6["RecommendationEngine\n→ WRITES: recommendations\n→ READ: ghosts + saturation → WRITE: action items"]
+        S7["SaturationGapAnalyzer\n→ WRITES: saturation_metrics\n→ READ: categories.embedding_centroide + saturation_docs"]
+        S8["EmergentSampler\n→ WRITES: categories (TheoSampler ANTI-JOIN)\n→ READ: saturation_docs → WRITE: new sample docs"]
+    end
+
+    %% Database entities
+    subgraph DB["🗄️ Database Tables"]
+        DB_DOC["documentos\n(estado, metadatos)"]
+        DB_SEG["segmentos\n(texto, posicion, conteo_tokens)"]
+        DB_CAT["categorias\n(nombre, definicion, saturation, es_central)"]
+        DB_HYP["hypotheses\n(statement, evidence, confidence)"]
+        DB_CONCERN["concerns\n(label, estado, critic_feedback)"]
+        DB_POP["population_context\n(generalized_population, frames)"]
+        DB_INC["incidentes + incident_groups\n(descripcion, segment_summaries)"]
+        DB_SAT["saturation_metrics\n(saturation_panel_json, saturation_docs)"]
+        DB_REL["relationships\n(status, fit, layer, tension, diverging)"]
+        DB_GHOST["ghosts\n(type, content, status)"]
+        DB_REC["recommendations\n(title, action_type, impact_score)"]
+        DB_DEF["definition_versions\n(old_definition, new_definition)"]
+        DB_SYNTH["synthesis_results\n(stage, output_data)"]
+        DB_CFG["project_config_history\n(field, old_value, new_value)"]
+        DB_MEMO["agent_outputs + memos\n(family, layer, entity_type, data)"]
+        DB_HITL["hitl_decisions\n(gate_name, decision, user_note)"]
+    end
+
+    STAGE1 --> DB_DOC
+    STAGE1 --> DB_SEG
+    STAGE2 --> DB_CAT
+    STAGE2 --> DB_HYP
+    STAGE2 --> DB_CONCERN
+    STAGE2 --> DB_POP
+    STAGE2 --> DB_INC
+    STAGE2 --> DB_CFG
+    STAGE3 --> DB_CAT
+    STAGE3 --> DB_REL
+    STAGE3 --> DB_SAT
+    STAGE3 --> DB_HITL
+    STAGE4 --> DB_GHOST
+    STAGE4 --> DB_MEMO
+    STAGE4 --> DB_REC
+    STAGE4 --> DB_REL
+    STAGE4 --> DB_DEF
+    STAGE5 --> DB_SYNTH
+    STAGE5 --> DB_REC
+    SERVICES --> DB_CAT
+    SERVICES --> DB_REL
+    SERVICES --> DB_GHOST
+    SERVICES --> DB_REC
+```
