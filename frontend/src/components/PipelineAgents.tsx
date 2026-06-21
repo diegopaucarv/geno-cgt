@@ -165,15 +165,15 @@ export default function PipelineAgents({
   );
 
   function renderAgent(agent: AgentDef) {
-    const rawStatus = agentStatuses[agent.id] || "pending";
     const docCount = agentDocCounts[agent.id];
-    const allDocsDone = docCount
-      ? docCount.done >= docCount.total && docCount.total > 0
-      : false;
-    // Agent only shows "done" when ALL docs have been processed through it
-    const status = rawStatus === "done" && !allDocsDone ? "pending" : rawStatus;
-    const depsMet = canRunAgent(agent.id, completedAgents);
+    const totalDocs = docCount?.total ?? 0;
     const eligible = (eligibleDocCounts[agent.id] ?? 0) > 0;
+    // Agent shows ✓ only when NO docs remain to process AND all have passed this stage
+    const status =
+      totalDocs > 0 && docCount.done >= totalDocs && eligible === false
+        ? "done"
+        : agentStatuses[agent.id] || "pending";
+    const depsMet = canRunAgent(agent.id, completedAgents);
     const canRun = depsMet && eligible && !pipelineRunning;
     const isHovered = hoveredAgent === agent.id;
     const isRunning = status === "running";

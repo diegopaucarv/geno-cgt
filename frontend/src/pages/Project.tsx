@@ -95,6 +95,69 @@ export default function ProjectDetail() {
     classify: ["clearClassified"],
     segment: ["deleteSegs"],
   };
+
+  // ── Unified agent state definitions ──
+  // Each per-doc agent: input estado (what it consumes), output estado (what it produces).
+  // canRun = docs exist in input state. done = no docs in input state AND some docs at output+.
+  const PER_DOC_AGENTS = {
+    util_punctuator: { input: "crudo", output: "preprocesado" },
+    fa_glaser_data_classifier: { input: "preprocesado", output: "clasificado" },
+    segmentar_documento: { input: "clasificado", output: "segmentado" },
+  } as const;
+
+  /** All estados that are at or beyond a given output estado */
+  const BEYOND: Record<string, string[]> = {
+    crudo: [
+      "crudo",
+      "preprocesado",
+      "clasificado",
+      "segmentado",
+      "procesando",
+      "incidentes_extraidos",
+      "procesado",
+      "codificando",
+      "codificado",
+      "listo",
+    ],
+    preprocesado: [
+      "preprocesado",
+      "clasificado",
+      "segmentado",
+      "procesando",
+      "incidentes_extraidos",
+      "procesado",
+      "codificando",
+      "codificado",
+      "listo",
+    ],
+    clasificado: [
+      "clasificado",
+      "segmentado",
+      "procesando",
+      "incidentes_extraidos",
+      "procesado",
+      "codificando",
+      "codificado",
+      "listo",
+    ],
+    segmentado: [
+      "segmentado",
+      "procesando",
+      "incidentes_extraidos",
+      "procesado",
+      "codificando",
+      "codificado",
+      "listo",
+    ],
+    incidentes_extraidos: [
+      "incidentes_extraidos",
+      "procesado",
+      "codificando",
+      "codificado",
+      "listo",
+    ],
+    codificado: ["codificado", "listo"],
+  };
   async function cancelRunningOp(docId: string) {
     const op = runningOp.current;
     if (!op || op.docId !== docId) return;
@@ -392,60 +455,22 @@ export default function ProjectDetail() {
     });
   }, [pipelineLog, pipelineRunning]);
 
-  // Sync per-doc agent statuses from document states
+  // Sync per-doc agent statuses from document estados (unified)
   useEffect(() => {
     setAgentStatuses((prev) => {
       const next = { ...prev };
-      const punctTotal = docs.filter(
-        (d) => !!((d as any).texto_original || d.texto_extraido),
-      ).length;
-      const punctDone = docs.filter(
-        (d) =>
-          d.estado !== "crudo" ||
-          !((d as any).texto_original || d.texto_extraido),
-      ).length;
-      if (
-        punctTotal > 0 &&
-        punctDone === punctTotal &&
-        (!next["util_punctuator"] || next["util_punctuator"] === "pending")
-      )
-        next["util_punctuator"] = "done";
-      const classTotal = docs.filter(
-        (d) =>
-          d.estado === "preprocesado" ||
-          d.estado === "clasificado" ||
-          d.estado === "segmentado" ||
-          d.estado === "listo",
-      ).length;
-      const classDone = docs.filter(
-        (d) =>
-          d.estado === "clasificado" ||
-          d.estado === "segmentado" ||
-          d.estado === "listo",
-      ).length;
-      if (
-        classTotal > 0 &&
-        classDone === classTotal &&
-        (!next["fa_glaser_data_classifier"] ||
-          next["fa_glaser_data_classifier"] === "pending")
-      )
-        next["fa_glaser_data_classifier"] = "done";
-      const segTotal = docs.filter(
-        (d) =>
-          d.estado === "clasificado" ||
-          d.estado === "segmentado" ||
-          d.estado === "listo",
-      ).length;
-      const segDone = docs.filter(
-        (d) => d.estado === "segmentado" || d.estado === "listo",
-      ).length;
-      if (
-        segTotal > 0 &&
-        segDone === segTotal &&
-        (!next["segmentar_documento"] ||
-          next["segmentar_documento"] === "pending")
-      )
-        next["segmentar_documento"] = "done";
+      for (const [agentId, { input, output }] of Object.entries(
+        PER_DOC_AGENTS,
+      )) {
+        const inputCount = docs.filter((d) => d.estado === input).length;
+        const outputCount = docs.filter((d) =>
+          (BEYOND[output] || []).includes(d.estado),
+        ).length;
+        const totalRelevant = inputCount + outputCount;
+        if (totalRelevant > 0 && inputCount === 0) {
+          next[agentId] = "done";
+        }
+      }
       return next;
     });
   }, [docs]);
@@ -834,6 +859,8 @@ export default function ProjectDetail() {
 
   /** Classify a single document via Glaser classifier (3-step + validator loop) */
   async function handleClassify(docId: string) {
+    const doc = docs.find((x) => x.id === docId);
+    if (!doc || doc.estado !== "preprocesado") return;
     if (punctRunning === docId) {
       // Cancel: abort polling + revoke Celery task
       abortRef.current = true;
@@ -865,6 +892,8 @@ export default function ProjectDetail() {
 
       if (res.task_id) {
         punctTaskRef.current = res.task_id;
+        // Immediate refresh so badge shows "Clasificando..."
+        refreshDocs();
         for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
@@ -889,6 +918,7 @@ export default function ProjectDetail() {
     } finally {
       runningOp.current = null;
       setPunctRunning(null);
+      refreshDocs();
     }
   }
 
@@ -924,12 +954,59 @@ export default function ProjectDetail() {
         return handleClassify(docId);
       case "clasificado":
         return handleSegment(docId);
+      case "segmentado":
+        // Trigger incident extraction (F2.3) via the pipeline orchestrator
+        return handleExtractIncidents(docId);
       default:
         return;
     }
   }
 
-  /** Segment a single document */
+  /** Trigger F2.3: extract patterns & incidents from segmented document */
+  async function handleExtractIncidents(docId: string) {
+    abortRef.current = false;
+    setPunctRunning(docId);
+    runningOp.current = { docId, op: "segment" as const };
+    try {
+      const token = `Bearer ${localStorage.getItem("access_token")}`;
+      // Dispatch process_document_agents_a which runs F2.3 internally
+      const res = await fetch(
+        `/api/v1/projects/${id}/pipeline/run-agent/extract_patterns`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: token },
+          body: JSON.stringify({ document_id: docId }),
+        },
+      )
+        .then((r) => r.json())
+        .catch(() => ({}));
+      if (res.task_id) {
+        punctTaskRef.current = res.task_id;
+        refreshDocs();
+        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const ts = await getTaskStatus(res.task_id);
+            if (ts.status === "SUCCESS") {
+              refreshDocs();
+              return;
+            }
+            if (ts.status === "FAILURE") return;
+          } catch {}
+        }
+      }
+    } catch (e: any) {
+      if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
+    } finally {
+      runningOp.current = null;
+      setPunctRunning(null);
+    }
+  }
+
+  /** Segment a single document.
+   *  The backend `segmentar_documento` task reads from
+   *  `documentos.metadatos->>'texto_clasificado'` and only extracts
+   *  content within `<baseline_data>` tags for segmentation. */
   async function handleSegment(docId: string) {
     abortRef.current = false;
     setPunctRunning(docId);
@@ -965,7 +1042,9 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Restore one step back based on current estado (same rollbacks as cancel) */
+  /** Restore one step back based on current estado.
+   *  Chain: crudo -> preprocesado -> clasificado -> segmentado -> procesado -> codificado
+   *  Each step undoes exactly one layer. */
   async function handleRestoreAll(docId: string) {
     if (!(await safeConfirm(t("project.restoreOriginalConfirm")))) return;
     try {
@@ -2834,8 +2913,6 @@ export default function ProjectDetail() {
           </div>
           <ul style={{ listStyle: "none", padding: 0 }}>
             {docs.map((d) => {
-              const docHasSegs = hasSegments(d);
-              const currentView = docViewMode(d);
               return (
                 <li
                   key={d.id}
@@ -2995,11 +3072,13 @@ export default function ProjectDetail() {
                                 ? "Clasificar"
                                 : estado === "clasificado"
                                   ? "Segmentar"
-                                  : isProcesado
-                                    ? "\u2713 Incidentes extra\u00eddos"
-                                    : isCodificado
-                                      ? "\u2713 Codificado"
-                                      : "\u2713 Completo";
+                                  : estado === "segmentado"
+                                    ? "Extraer incidentes"
+                                    : isProcesado
+                                      ? "\u2713 Incidentes extra\u00eddos"
+                                      : isCodificado
+                                        ? "\u2713 Codificado"
+                                        : "\u2713 Completo";
                         const bg = err
                           ? "#F85149"
                           : isRunning
@@ -3012,7 +3091,9 @@ export default function ProjectDetail() {
                                 ? "#3FB950"
                                 : estado === "clasificado"
                                   ? "#58A6FF"
-                                  : "#3FB950";
+                                  : estado === "segmentado"
+                                    ? "#D29922"
+                                    : "#3FB950";
                         const disabled =
                           !err &&
                           ((isCrudo && !hasText && !isRunning) ||
@@ -3118,111 +3199,7 @@ export default function ProjectDetail() {
                   {/* ── Expanded text view ── */}
                   {expandedDoc === d.id && (
                     <div style={{ marginTop: 8 }}>
-                      {/* Per-doc view toggle + delete segments */}
-                      {docHasSegs && (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            marginBottom: 8,
-                          }}
-                        >
-                          <span style={{ fontSize: 11, color: "#8B949E" }}>
-                            {t("project.thisDocument")}
-                          </span>
-                          {/* Pill toggle: Original ↔ Segments */}
-                          <div
-                            style={{
-                              display: "flex",
-                              background: "#1C2333",
-                              borderRadius: 20,
-                              border: "1px solid #30363D",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <button
-                              onClick={() =>
-                                setViewModeOverride((prev) => ({
-                                  ...prev,
-                                  [d.id]: "original",
-                                }))
-                              }
-                              style={{
-                                padding: "3px 12px",
-                                border: "none",
-                                borderRadius: 20,
-                                background:
-                                  currentView === "original"
-                                    ? "#A371F7"
-                                    : "transparent",
-                                color: "#E6EDF3",
-                                fontSize: 11,
-                                cursor: "pointer",
-                                transition: "0.15s",
-                              }}
-                            >
-                              {t("project.original")}
-                            </button>
-                            <button
-                              onClick={() =>
-                                setViewModeOverride((prev) => ({
-                                  ...prev,
-                                  [d.id]: "segmented",
-                                }))
-                              }
-                              style={{
-                                padding: "3px 12px",
-                                border: "none",
-                                borderRadius: 20,
-                                background:
-                                  currentView === "segmented"
-                                    ? "#A371F7"
-                                    : "transparent",
-                                color: "#E6EDF3",
-                                fontSize: 11,
-                                cursor: "pointer",
-                                transition: "0.15s",
-                              }}
-                            >
-                              {t("project.segmentsCount", {
-                                n: segments[d.id]?.length || "?",
-                              })}
-                            </button>
-                          </div>
-
-                          <button
-                            onClick={async () => {
-                              if (
-                                !(await safeConfirm(
-                                  t("project.deleteSegmentsConfirm", {
-                                    n: segments[d.id]?.length || 0,
-                                  }),
-                                ))
-                              )
-                                return;
-                              deleteDocumentSegments(d.id)
-                                .then(() => refreshDocs())
-                                .catch((e) => console.error(e));
-                            }}
-                            title={t("project.deleteSegmentsTitle")}
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 4,
-                              border: "1px solid #F8514933",
-                              background: "#F8514910",
-                              color: "#F85149",
-                              fontSize: 10,
-                              cursor: "pointer",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {t("project.deleteSegmentsButton")}
-                          </button>
-                        </div>
-                      )}
-
-                      {currentView !== "segmented" && (
+                      {
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3293,36 +3270,9 @@ export default function ProjectDetail() {
                             );
                           })}
                         </div>
-                      )}
-                      {/* Classified mode: colorized div with XML tags */}
-                      {textViewMode === "classified" &&
-                      textEdits[d.id] === undefined ? (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            width: "100%",
-                            minHeight: 150,
-                            fontFamily: "monospace",
-                            fontSize: 13,
-                            background: "#0D1117",
-                            color: "#E6EDF3",
-                            border: "1px solid #21262D",
-                            borderRadius: 6,
-                            padding: 8,
-                            overflow: "auto",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: renderClassifiedText(
-                              (d as any).texto_clasificado ||
-                                ((d as any).metadatos &&
-                                  (d as any).metadatos.texto_clasificado) ||
-                                "",
-                            ),
-                          }}
-                        />
-                      ) : (
+                      }
+                      {/* Unified text viewer — same style for all modes */}
+                      {textEdits[d.id] !== undefined ? (
                         <textarea
                           disabled={punctRunning === d.id}
                           onClick={(e) => e.stopPropagation()}
@@ -3339,32 +3289,69 @@ export default function ProjectDetail() {
                             fontSize: 13,
                             background: "#0D1117",
                             color: "#E6EDF3",
-                            border: `1px solid ${textEdits[d.id] !== undefined ? "#D29922" : "#21262D"}`,
+                            border: "1px solid #D29922",
                             borderRadius: 6,
                             padding: 8,
                             resize: "vertical",
                           }}
-                          value={
-                            textEdits[d.id] !== undefined
-                              ? textEdits[d.id]
-                              : textViewMode === "segmented" &&
-                                  segments[d.id]?.length
-                                ? segments[d.id]!.map(
-                                    (s) => `[${s.posicion}] ${s.texto}`,
-                                  ).join("\n\n")
-                                : textViewMode === "classified"
-                                  ? (d as any).texto_clasificado ||
-                                    ((d as any).metadatos &&
-                                      (d as any).metadatos.texto_clasificado) ||
-                                    "Sin clasificación"
+                          value={textEdits[d.id]}
+                        />
+                      ) : (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: "100%",
+                            minHeight: 150,
+                            maxHeight: "55vh",
+                            fontFamily: "monospace",
+                            fontSize: 13,
+                            background: "#0D1117",
+                            color: "#E6EDF3",
+                            border: "1px solid #21262D",
+                            borderRadius: 6,
+                            padding: 8,
+                            overflow: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              textViewMode === "classified"
+                                ? renderClassifiedText(
+                                    (d as any).texto_clasificado ||
+                                      ((d as any).metadatos &&
+                                        (d as any).metadatos
+                                          .texto_clasificado) ||
+                                      "",
+                                  )
+                                : textViewMode === "segmented" &&
+                                    segments[d.id]?.length
+                                  ? segments[d.id]!.map(
+                                      (s) => `[${s.posicion}] ${s.texto}`,
+                                    )
+                                      .join("\n\n")
+                                      .replace(/&/g, "&amp;")
+                                      .replace(/</g, "&lt;")
+                                      .replace(/>/g, "&gt;")
                                   : textViewMode === "preprocessed"
-                                    ? (d as any).texto_preprocesado ||
-                                      d.texto_extraido ||
-                                      ""
-                                    : (d as any).texto_original ||
-                                      d.texto_extraido ||
-                                      ""
-                          }
+                                    ? (
+                                        (d as any).texto_preprocesado ||
+                                        d.texto_extraido ||
+                                        ""
+                                      )
+                                        .replace(/&/g, "&amp;")
+                                        .replace(/</g, "&lt;")
+                                        .replace(/>/g, "&gt;")
+                                    : (
+                                        (d as any).texto_original ||
+                                        d.texto_extraido ||
+                                        ""
+                                      )
+                                        .replace(/&/g, "&amp;")
+                                        .replace(/</g, "&lt;")
+                                        .replace(/>/g, "&gt;")
+                                        .replace(/\n/g, "<br>"),
+                          }}
                         />
                       )}
                       {textEdits[d.id] !== undefined && (
@@ -4019,32 +4006,13 @@ export default function ProjectDetail() {
                     }
                   }
                 } else {
-                  // Project-level agent
-                  setAgentStatuses((prev) => ({
-                    ...prev,
-                    [agentId]: "running",
-                  }));
-                  fetch(
-                    `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: auth,
-                      },
-                      body: JSON.stringify({}),
-                    },
-                  )
-                    .then(() => {
-                      setAgentStatuses((prev) => ({
-                        ...prev,
-                        [agentId]: "done",
-                      }));
-                      setCompletedAgents((prev) => new Set([...prev, agentId]));
-                    })
-                    .catch((e) =>
-                      showErrorToast("Error al ejecutar agente: " + e.message),
-                    );
+                  // Unknown agent — blocked. Only per-doc agents
+                  // (util_punctuator, fa_glaser_data_classifier, segmentar_documento)
+                  // can be run manually from this panel.
+                  // Project-level agents run via the pipeline only.
+                  showErrorToast(
+                    "Agente '" + agentId + "' no se ejecuta manualmente. Usa el pipeline.",
+                  );
                 }
               }}
               onStopAgent={(agentId) => {
@@ -4065,77 +4033,29 @@ export default function ProjectDetail() {
               pipelineRunning={pipelineRunning}
               completedAgents={completedAgents}
               iterations={iterations}
-              agentDocCounts={{
-                util_punctuator: {
-                  done: docs.filter(
-                    (d) =>
-                      d.estado === "preprocesado" ||
-                      d.estado === "clasificado" ||
-                      d.estado === "segmentado" ||
-                      d.estado === "listo",
-                  ).length,
-                  total: docs.filter(
-                    (d) =>
-                      !!(
-                        (d as any).texto_preprocesado ||
-                        (d as any).texto_original ||
-                        d.texto_extraido
-                      ),
-                  ).length,
-                },
-                fa_glaser_data_classifier: {
-                  done: docs.filter(
-                    (d) =>
-                      d.estado === "clasificado" ||
-                      d.estado === "segmentado" ||
-                      d.estado === "listo",
-                  ).length,
-                  total: docs.filter(
-                    (d) =>
-                      d.estado === "crudo" ||
-                      d.estado === "preprocesado" ||
-                      d.estado === "clasificado" ||
-                      d.estado === "segmentado" ||
-                      d.estado === "listo",
-                  ).length,
-                },
-                segmentar_documento: {
-                  done: docs.filter(
-                    (d) => d.estado === "segmentado" || d.estado === "listo",
-                  ).length,
-                  total: docs.filter(
-                    (d) =>
-                      d.estado === "clasificado" ||
-                      d.estado === "segmentado" ||
-                      d.estado === "listo",
-                  ).length,
-                },
-              }}
-              eligibleDocCounts={{
-                util_punctuator: docs.filter(
-                  (d) =>
-                    d.estado === "crudo" &&
-                    !!((d as any).texto_original || d.texto_extraido),
-                ).length,
-                fa_glaser_data_classifier: docs.filter(
-                  (d) => d.estado === "preprocesado",
-                ).length,
-                segmentar_documento: docs.filter(
-                  (d) => d.estado === "clasificado",
-                ).length,
-                fa_population_context: docs.filter(
-                  (d) =>
-                    d.estado === "incidentes_extraidos" ||
-                    d.estado === "procesado" ||
-                    d.estado === "listo",
-                ).length,
-                fb_incident_grouper: docs.filter(
-                  (d) =>
-                    d.estado === "incidentes_extraidos" ||
-                    d.estado === "procesado" ||
-                    d.estado === "listo",
-                ).length,
-              }}
+              agentDocCounts={Object.fromEntries(
+                Object.entries(PER_DOC_AGENTS).map(
+                  ([agentId, { input, output }]) => [
+                    agentId,
+                    {
+                      done: docs.filter((d) =>
+                        (BEYOND[output] || []).includes(d.estado),
+                      ).length,
+                      total: docs.filter(
+                        (d) =>
+                          d.estado === input ||
+                          (BEYOND[output] || []).includes(d.estado),
+                      ).length,
+                    },
+                  ],
+                ),
+              )}
+              eligibleDocCounts={Object.fromEntries(
+                Object.entries(PER_DOC_AGENTS).map(([agentId, { input }]) => [
+                  agentId,
+                  docs.filter((d) => d.estado === input).length,
+                ]),
+              )}
               stages={PIPELINE_STAGES}
             />
           ) : (

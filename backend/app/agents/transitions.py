@@ -40,9 +40,8 @@ NEXT: dict[str, tuple[str, str | None, str | None]] = {
     "clasificando": ("clasificado", None, None),
     "clasificado": ("segmentando", "segmentar_documento", "nlp"),
     "segmentando": ("segmentado", None, None),
-    # ── F2.3: Extractor unificado de patrones e incidentes ──
-    "segmentado": ("extrayendo", "extract_patterns_and_incidents", "heavy"),
-    "extrayendo": ("incidentes_extraidos", None, None),
+    # ── F2.3 runs inside process_document_agents_a, not as separate task ──
+    "segmentado": ("procesando", "process_document_agents_a", "heavy"),
     "incidentes_extraidos": (None, None, None),  # waits for batch trigger (3+ docs)
     # ── Stage 2: Open Coding (batch, cross-document) ──
     "codificando": ("codificado", None, None),
