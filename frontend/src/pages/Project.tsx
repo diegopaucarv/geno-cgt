@@ -196,6 +196,7 @@ export default function ProjectDetail() {
     endpoint: string,
     signal: { current: boolean },
   ): Promise<"success" | "failed" | "aborted" | "timeout"> {
+    console.log("[runDocTask] POST", endpoint, "docId:", docId);
     const token = `Bearer ${localStorage.getItem("access_token")}`;
     const res = await fetch(endpoint, {
       method: "POST",
@@ -1006,6 +1007,7 @@ export default function ProjectDetail() {
 
   /** Route action based on doc estado */
   async function handleDocAction(docId: string) {
+    console.log("[handleDocAction] docId:", docId, "estado:", docs.find((x) => x.id === docId)?.estado);
     const d = docs.find((x) => x.id === docId);
     if (!d) return;
 
@@ -1044,39 +1046,17 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Trigger F2.3: extract patterns & incidents from segmented document */
+  /** Trigger F2.3: extract patterns & incidents */
   async function handleExtractIncidents(docId: string) {
     abortRef.current = false;
     setPunctRunning(docId);
     runningOp.current = { docId, op: "segment" as const };
     try {
-      const token = `Bearer ${localStorage.getItem("access_token")}`;
-      // Dispatch process_document_agents_a which runs F2.3 internally
-      const res = await fetch(
+      await runDocTask(
+        docId,
         `/api/v1/projects/${id}/pipeline/run-agent/extract_patterns`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: token },
-          body: JSON.stringify({ document_id: docId }),
-        },
-      )
-        .then((r) => r.json())
-        .catch(() => ({}));
-      if (res.task_id) {
-        punctTaskRef.current = res.task_id;
-        refreshDocs();
-        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
-          await new Promise((r) => setTimeout(r, 2000));
-          try {
-            const ts = await getTaskStatus(res.task_id);
-            if (ts.status === "SUCCESS") {
-              refreshDocs();
-              return;
-            }
-            if (ts.status === "FAILURE") return;
-          } catch {}
-        }
-      }
+        abortRef,
+      );
     } catch (e: any) {
       if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
     } finally {
@@ -1085,48 +1065,29 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Segment a single document via the pipeline run-agent endpoint
-   *  (same endpoint the sidebar agent uses — unified). */
+  /** Segment a single document */
   async function handleSegment(docId: string) {
+    console.log("[handleSegment] dispatching for", docId);
     abortRef.current = false;
     setPunctRunning(docId);
+    setRunningAgentIds((prev) => new Set([...prev, "segmentar_documento"]));
     runningOp.current = { docId, op: "segment" };
     try {
-      const token = `Bearer ${localStorage.getItem("access_token")}`;
-      const res = await fetch(
+      await runDocTask(
+        docId,
         `/api/v1/projects/${id}/pipeline/run-agent/segmentar_documento`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token,
-          },
-          body: JSON.stringify({ document_id: docId }),
-        },
-      ).then((r) => r.json());
-
-      if (res.task_id) {
-        punctTaskRef.current = res.task_id;
-        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
-          await new Promise((r) => setTimeout(r, 2000));
-          try {
-            const ts = await getTaskStatus(res.task_id);
-            if (ts.status === "SUCCESS") {
-              markAgentDone("segmentado");
-              refreshDocs();
-              return;
-            }
-            if (ts.status === "FAILURE") return;
-          } catch {}
-        }
-      }
+        abortRef,
+      );
     } catch (e: any) {
-      if (!abortRef.current) {
-        showErrorToast("Error: " + (e.message || ""));
-      }
+      if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
     } finally {
       runningOp.current = null;
       setPunctRunning(null);
+      setRunningAgentIds((prev) => {
+        const next = new Set(prev);
+        next.delete("segmentar_documento");
+        return next;
+      });
     }
   }
 
@@ -3972,128 +3933,97 @@ export default function ProjectDetail() {
                       }
                       return next;
                     });
-                    // Re-filter (no switch for re-run)
+                    // Re-filter: all docs not yet at or beyond this agent's output
+                    const out = PER_DOC_AGENTS[agent].output;
                     const resetEligible = freshDocs.filter((d) => {
                       const hasText = !!(
                         (d as any).texto_preprocesado ||
                         (d as any).texto_original ||
                         d.texto_extraido
                       );
-                      return hasText && d.estado === "crudo";
+                      return (
+                        hasText &&
+                        !(BEYOND[out] || []).includes(d.estado)
+                      );
                     });
                     dispatchAgentLoop(resetEligible);
                   };
 
-                  // Determine which docs are eligible for this specific agent
+                  // Determine which docs are eligible = all docs not yet at or beyond output
                   const eligible = docs.filter((d) => {
-                    const hasText = !!(
-                      (d as any).texto_preprocesado ||
-                      (d as any).texto_original ||
-                      d.texto_extraido
+                    return !(BEYOND[PER_DOC_AGENTS[agentId].output] || []).includes(
+                      d.estado,
                     );
-                    switch (agentId) {
-                      case "util_punctuator":
-                        return hasText && d.estado === "crudo";
-                      case "fa_glaser_data_classifier":
-                        return hasText && d.estado === "preprocesado";
-                      case "segmentar_documento":
-                        return hasText && d.estado === "clasificado";
-                      default:
-                        return d.estado === "crudo";
-                    }
                   });
-                  if (eligible.length === 0) {
-                    showErrorToast(
-                      "No hay documentos elegibles para " +
-                        agentId +
-                        ". Verificá los switches ON/OFF.",
-                    );
-                    return;
-                  }
-                  if (eligible.length < docs.length) {
-                    const ok = await safeConfirm(
-                      "\u00bfDesea procesar " +
-                        eligible.length +
-                        " documento(s) de " +
-                        docs.length +
-                        "?",
-                    );
-                    if (!ok) return;
-                  }
-                  // Confirm if re-running on already-processed docs
-                  const stateOrder = [
-                    "crudo",
-                    "preprocesado",
-                    "clasificado",
-                    "segmentado",
-                    "listo",
-                  ];
-                  const agentMinState: Record<string, string> = {
-                    util_punctuator: "preprocesado",
-                    fa_glaser_data_classifier: "clasificado",
-                    segmentar_documento: "segmentado",
-                  };
-                  const minState = agentMinState[agentId] || "listo";
-                  const minIdx = stateOrder.indexOf(minState);
-                  const hasExistingWork = docs.some((d) => {
-                    const docIdx = stateOrder.indexOf(d.estado);
-                    return docIdx >= minIdx && docIdx > 0;
-                  });
-                  if (hasExistingWork) {
-                    const ok = await new Promise<boolean>((resolve) => {
-                      confirmResolve.current = resolve;
-                      setConfirmMsg(
-                        "¿Deseas procesar todo nuevamente? Se eliminarán los resultados anteriores.",
-                      );
-                    });
-                    if (!ok) return;
-                    await clearAndRestart(agentId);
-                    return;
-                  }
-                  dispatchAgentLoop(eligible);
 
-                  async function dispatchAgentLoop(
+                  // ── Build a single confirmation message ──
+                  // 1. What layers will be wiped?
+                  const agentOrder = [
+                    "util_punctuator",
+                    "fa_glaser_data_classifier",
+                    "segmentar_documento",
+                  ];
+                  const myIdx = agentOrder.indexOf(agentId);
+                  const wipedAgents =
+                    myIdx >= 0 ? agentOrder.slice(myIdx) : [];
+                  const wipeLabels: string[] = [];
+                  if (wipedAgents.includes("segmentar_documento"))
+                    wipeLabels.push("segmentos");
+                  if (wipedAgents.includes("fa_glaser_data_classifier"))
+                    wipeLabels.push("texto clasificado");
+                  if (wipedAgents.includes("util_punctuator"))
+                    wipeLabels.push("texto preprocesado");
+
+                  // 2. How many docs need the prerequisite?
+                  const missingPrereq = docs.filter(
+                    (d) => d.estado !== PER_DOC_AGENTS[agentId].input,
+                  ).length;
+
+                  // 3. Build message
+                  let confirmMsg2 = "";
+                  if (wipeLabels.length > 0) {
+                    confirmMsg2 +=
+                      "Se eliminaran: " + wipeLabels.join(", ") + ". ";
+                  }
+                  if (missingPrereq > 0) {
+                    const fallbackLabel =
+                      agentId === "fa_glaser_data_classifier"
+                        ? "texto original"
+                        : agentId === "segmentar_documento"
+                          ? "texto preprocesado u original"
+                          : "sin procesar";
+                    confirmMsg2 +=
+                      missingPrereq +
+                      " de " +
+                      docs.length +
+                      " docs no estan en estado '" +
+                      PER_DOC_AGENTS[agentId].input +
+                      "'. Se usara " +
+                      fallbackLabel +
+                      ". ";
+                  }
+                  confirmMsg2 +=
+                    "Se procesaran " +
+                    eligible.length +
+                    " documento(s). Continuar?";
+                  const ok = await safeConfirm(confirmMsg2);
+                  if (!ok) return;
+
+                  // ── Wipe downstream layers before running ──
+                  await clearAndRestart(agentId);
+
+async function dispatchAgentLoop(
                     docsToProcess: typeof eligible,
                   ) {
                     abortRef.current = false;
                     setRunningAgentIds((prev) => new Set([...prev, agentId]));
                     for (const doc of docsToProcess) {
                       if (abortRef.current) break;
-                      try {
-                        const res = await fetch(
-                          `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
-                          {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: auth,
-                            },
-                            body: JSON.stringify({ document_id: doc.id }),
-                          },
-                        ).then((r) => r.json());
-                        const taskId = res.task_id;
-                        runningTaskRef.current = taskId;
-                        // Refresh immediately so badge shows "preprocesando"
-                        refreshDocs();
-                        if (taskId) {
-                          for (let p = 0; p < 60 && !abortRef.current; p++) {
-                            await new Promise((r) => setTimeout(r, 2000));
-                            try {
-                              const ts = await fetch(
-                                `/api/v1/documents/tasks/${taskId}`,
-                                { headers: { Authorization: auth } },
-                              ).then((r) => r.json());
-                              if (
-                                ts.status === "SUCCESS" ||
-                                ts.status === "FAILURE"
-                              )
-                                break;
-                            } catch {}
-                          }
-                        }
-                      } catch {}
-                      // Refresh after EACH doc completes so badges update immediately
-                      refreshDocs();
+                      await runDocTask(
+                        doc.id,
+                        `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                        abortRef,
+                      );
                     }
                     // Per-doc agent finished its loop — clear running state.
                     // PipelineAgents will recompute canRun/done from docs[].estado.
@@ -4168,9 +4098,11 @@ export default function ProjectDetail() {
                 ),
               )}
               eligibleDocCounts={Object.fromEntries(
-                Object.entries(PER_DOC_AGENTS).map(([agentId, { input }]) => [
+                Object.entries(PER_DOC_AGENTS).map(([agentId, { output }]) => [
                   agentId,
-                  docs.filter((d) => d.estado === input).length,
+                  docs.filter(
+                    (d) => !(BEYOND[output] || []).includes(d.estado),
+                  ).length,
                 ]),
               )}
               upstreamDocCounts={Object.fromEntries(

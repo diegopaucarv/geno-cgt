@@ -291,7 +291,7 @@ export default function PipelineAgents({
           )}
         </span>
 
-        {/* Play button: only if canRun AND there's eligible work */}
+        {/* Play: canRun + eligible = run new docs. canRun + !eligible = re-run. */}
         {isHovered && !isRunning && canRun && eligible && (
           <button
             onClick={(e) => {
@@ -310,6 +310,27 @@ export default function PipelineAgents({
             title="Ejecutar agente"
           >
             ▶
+          </button>
+        )}
+        {/* Re-run: all done (nothing left to process) but user may want to redo */}
+        {isHovered && !isRunning && canRun && !eligible && allDone && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunAgent(agent.id);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#D29922",
+              cursor: "pointer",
+              fontSize: 11,
+              padding: "0 2px",
+              lineHeight: 1,
+            }}
+            title="Re-ejecutar agente"
+          >
+            ↻
           </button>
         )}
         {isHovered && isRunning && (
