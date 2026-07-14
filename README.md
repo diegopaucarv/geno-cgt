@@ -1,510 +1,173 @@
-README — ESPAÑOL
+# Geno – AI-Assisted Classic Grounded Theory featuring auto-segmenter and theoretical coding playground 
 
-# Geno: un sistema automatizado de teoría fundamentada
+Presented at ALAS 2026 – [Read the full paper](https://github.com/diegopaucarv/gt/blob/main/docs/ALAS26_paper.pdf)
 
-**Sistema automatizado para análisis cualitativo basado en la Teoría Fundamentada (CGT)**  
-*Presentado en ALAS 2026*
+Geno is a production‑grade system that automates the discovery of latent patterns in qualitative data. It orchestrates **96 specialised agents** across multiple LLMs and NLP workers, following the rigorous inductive logic of Classical Grounded Theory. The system proposes, critiques, and surfaces evidence – but the final theoretical decisions always remain with the human researcher.
 
-Geno orquesta agentes LLM (vía Together.ai) y workers especializados para procesar documentos, extraer incidentes, sintetizar patrones y generar teoría desde datos cualitativos, siguiendo el método de la Teoría Fundamentada de Barney Glaser.
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-green)
+![DeepSeek](https://img.shields.io/badge/DeepSeek-V4%20Pro-orange)
 
----
-
-## 📦 Flujo de alto nivel
-
-El sistema se organiza en fases secuenciales que reflejan el proceso glaseriano:
-
-1. **Configuración del proyecto** – Definición de población y objeto de estudio.
-2. **Open Coding** – Segmentación, clasificación de datos (oro/plata/bronce/anomalía), extracción de incidentes y patrones individuales por documento.
-3. **Síntesis Cross‑Document** – Comparación de incidentes entre documentos, etiquetado y recuperación de evidencia textual.
-4. **Detección de categoría central** – Identificación del patrón de interés y categorías emergentes.
-5. **Reducción selectiva** – Filtrado y fusión de categorías relevantes al patrón de interés.
-6. **Saturación** – Verificación de saturación teórica (cuatro señales) y generación de memos.
-7. **Playground teórico** – Clasificación de memos con 12 códigos teóricos, elaboración de relaciones y redacción natural.
-8. **Diálogo con la literatura** – Comparación con fuentes externas.
-9. **Aplicabilidad** – Generación de directrices de intervención.
-
-> El ritmo que atraviesa todo el proceso es: **PROPONER → CRITICAR → SINTETIZAR → VOLVER A CRITICAR → VOS DECIDÍS (HITL)**. Ese es el latido del sistema.
 
 ---
 
-## 🧠 Lo que hace Geno (y por qué)
+## 🧠 The Core Loop
 
-Geno no es un análisis temático ni una verificación de hipótesis. Es un sistema que **descubre** lo que no sabés que está ahí.
+Every theoretical decision in Geno follows the same rhythm:
 
-- **Comparación constante**: cada incidente se compara con cada otro incidente, una y otra vez, hasta que los patrones se revelan solos.
-- **Emergencia**: las categorías, propiedades y relaciones surgen de los datos, no de tu cabeza.
-- **Abstracción creciente**: empezás con incidentes concretos y terminás con conceptos abstractos.
-- **Guiado por vos**: el sistema propone, critica, muestra evidencia — pero la decisión final siempre es tuya.
+```text
+PROPOSE → CRITIQUE → HUMAN‑IN‑THE‑LOOP (HITL) → SYNTHESISE
+```
 
-### Tipos de datos que maneja
+- **Propose** – An LLM agent reads raw data *without* seeing any existing codebook, ensuring inductive freshness.
+- **Critique** – A separate agent evaluates the proposal against CGT criteria (fit, relevance, modifiability, workability).
+- **Decide** – The researcher reviews the proposal, the critique, and the supporting evidence, then accepts, rejects, or refines.
 
-Siguiendo a Glaser, Geno clasifica cada segmento antes de codificarlo:
-
-- **Oro (baseline_data)**: experiencia real, espontánea. Solo esto avanza a codificación.
-- **Plata (properline_data)**: lo que el participante cree que debe decir.
-- **Bronce (interpreted_data)**: opinión forzada por la pregunta del entrevistador.
-- **Anomalía (vague_data)**: evasión.
-
-> Si codificás properline data creyendo que es experiencia real, tu teoría va a describir normas sociales, no comportamiento real.
-
-### El patrón de interés
-
-No es lo que los participantes dicen que les preocupa — es lo que **hacen**, lo que **sienten**, cómo **actúan** cuando no están performando.  
-Ejemplo: "La inteligencia artificial en el periodismo" es un tema. "Manteniendo relevancia profesional ante la amenaza de obsolescencia" es un patrón de interés.
+This architecture is designed to prevent the "imposition" problem that Glaser identified in traditional CAQDAS tools – the tendency to force new data into pre‑existing categories.
 
 ---
 
-## ⚙️ Requisitos previos
+## 🤖 AI & ML Engineering
 
-- Docker y Docker Compose (recomendado)
-- Una clave de API de Together.ai (gratuita con créditos iniciales)
-- Python 3.10+ (opcional, solo para desarrollo local sin Docker)
+### Model Architecture
+
+Geno uses a **two‑tier model strategy** for cost‑effective, reliable operation:
+
+| Model | Role | Temperature | Tokens | Cost Ratio |
+|-------|------|-------------|--------|------------|
+| **PRO** (DeepSeek V4 Pro) | Generation – proposes incidents, categories, hypotheses, and theoretical sections | 0.3 | 8,192 | 10× |
+| **FLASH** (Nemotron 550B) | Verification – critiques labels, checks saturation, detects unsupported claims | 0.1 | 4,096 | 1× |
+
+The PRO model is used for creative, pattern‑seeking tasks where openness is valuable. FLASH handles repetitive verification tasks where consistency is paramount. This separation is both methodologically sound and economically viable for sustained research.
+
+### Agent Orchestration
+
+All agents are orchestrated using **LangGraph** state graphs, which enable:
+
+- **Loops** – Iterative reasoning until conditions are met.
+- **HITL interrupts** – Pause execution at defined gateways for human review.
+- **Conditional transitions** – Branching logic based on project state (e.g., saturation level, number of documents processed).
+
+### Prompt Engineering
+
+Every agent prompt is carefully engineered with:
+
+- **Explicit role definitions** – "You are a novice researcher with no prior knowledge of this domain."
+- **Structured output schemas** – All responses are constrained to JSON schemas, ensuring type‑safe, predictable outputs.
+- **Chain‑of‑thought reasoning** – Agents are instructed to show their reasoning before producing a final answer, improving traceability.
+- **Context isolation** – Proposing agents never see existing categories; critiquing agents evaluate only against the raw data.
+
+### Key AI Pipelines
+
+1. **Glaser Data Classification** – Each text segment is classified as *baseline* (real experience), *properline* (normative discourse), *interpreted* (interviewer‑primed), *vague* (evasion), or *conceptual* (metaphor/jargon). Only baseline data proceeds to coding – this prevents the theory from describing social norms instead of actual behaviour[reference:0].
+
+2. **Cross‑Document Synthesis** – Instead of pairwise comparisons (which scale quadratically), Geno groups all incidents from a batch in a **single LLM pass**. This is both faster and more coherent, as the model perceives patterns across documents holistically【11†L10-L15】.
+
+3. **Cascading Recalculation** – When a category is merged or split, the system recalculates only the dependent components (hypotheses, relationships) – not the entire knowledge graph. This makes iteration cheap and encourages continuous refinement【12†L28-L35】.
+
+4. **Saturation Detection** – A dedicated agent checks for four signals of theoretical saturation: no new properties, no new relationships, stable category definitions, and stable core category. The system pauses and alerts the researcher when saturation is approaching【17†L45-L48】.
+
+5. **Literature as Data** – Literature is *not* consulted during analysis. Only after the core theory has emerged does the system treat published papers as additional "incidents" for constant comparison – preserving the inductive priority of the raw data【18†L12-L16】.
 
 ---
 
-## 🔐 Configuración del entorno (`.env`)
+## 🏗️ Architecture Overview
 
-El sistema utiliza variables de entorno para secretos. **Nunca commitees tu `.env`** (ya está en `.gitignore`).
+```text
 
-Tu archivo `.env` debe contener **estas tres variables obligatorias**:
+┌─────────────────────────────────────────────────────────────────┐
+│ Frontend (React Dashboard) │
+│ Real‑time updates via Redis pub/sub │
+└─────────────────────────────────────────────────────────────────┘
+│
+┌─────────────────────────────────────────────────────────────────┐
+│ Backend API (FastAPI) │
+│ REST endpoints + WebSocket │
+└─────────────────────────────────────────────────────────────────┘
+│
+┌─────────────────────────────────────────────────────────────────┐
+│ Task Queue (Celery + Redis) │
+│ Orchestrates 96 agents across 8 chains │
+└─────────────────────────────────────────────────────────────────┘
+│
+┌─────────────────────────────────────────────────────────────────┐
+│ Model Tier (Together.ai) │
+│ ┌─────────────┐ ┌─────────────┐ ┌───────────────────┐ │
+│ │ PRO │ │ FLASH │ │ Embedding (ONNX) │ │
+│ │ (DeepSeek) │ │ (Nemotron) │ │ voyage-4-nano │ │
+│ └─────────────┘ └─────────────┘ └───────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+│
+┌─────────────────────────────────────────────────────────────────┐
+│ NLP Workers (spaCy + Stanza) │
+│ Text segmentation, coreference resolution │
+└─────────────────────────────────────────────────────────────────┘
+│
+┌─────────────────────────────────────────────────────────────────┐
+│ PostgreSQL (State + Audit) │
+│ 46 tables with foreign‑key chains for full traceability │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-JWT_SECRET=dev-jwt-secret-gt-local
-HMAC_SECRET=dev-celery-hmac-gt-local
-TOGETHER_API_KEY=xxxx
 
-### Explicación de cada variable
+### Agent Chains (8 Phases)
 
-| Variable | Propósito |
-|----------|-----------|
-| `JWT_SECRET` | Firma de sesiones JWT para autenticación. **En producción, cámbialo por un valor seguro**. |
-| `HMAC_SECRET` | Firma de tareas internas de Celery (workers). **Cámbialo en producción**. |
-| `TOGETHER_API_KEY` | Clave de API de Together.ai. Obtenela en https://api.together.ai/settings/api-keys |
+| Phase | Key Agents | Model Pattern |
+|-------|------------|---------------|
+| Data Preparation | Preprocessor, Glaser Classifier, NLP Segmenter | PRO → NLP → PRO → PRO |
+| Cross‑Document Synthesis | Incident Grouper, Labeler, Hypothesis Generator | PRO → PRO↔FLASH → PRO |
+| Core Emergence | Core Concern Proposer, Core Category Proposer | PRO → PRO → FLASH |
+| Selective Reduction | Reduction Proposer, Reduction Critic | PRO → PRO |
+| Saturation (loop) | Saturation Proposer, Saturation Critic, Memo Generator | PRO → FLASH → PRO |
+| Theoretical Playground | Ghost Mapper, Memo Labeler, Conceptual Elaborator | PRO → FLASH → PRO |
+| Literature Dialogue | Literature Comparator, Literature Critic | PRO → PRO |
+| Applicability | Applicability Engine, Applicability Critic | PRO → PRO |
 
-> El resto de la configuración (base de datos, MinIO, Redis, rutas) ya tiene valores por defecto en `config.py` y `docker-compose.yml`.
-
-### Pasos para crear tu `.env`
-
-1. Copia el ejemplo o crea el archivo: `cp .env.example .env`
-2. Abrí `.env` y pegá el contenido de arriba.
-3. Sustituí `xxxx` por tu `TOGETHER_API_KEY` real.
+Each chain follows the **Propose → Critique → HITL** rhythm with phase‑specific variations【17†L45-L48】【18†L1-L4】.
 
 ---
 
-## 🐳 Levantar el sistema con Docker (recomendado)
+## 📦 Quick Start
 
-Construir imágenes (solo la primera vez):
-docker-compose build
+```bash
+# Clone the repository
+git clone https://github.com/diegopaucarv/gt.git
+cd gt
 
-Levantar todos los servicios (API, workers, Redis, DB, MinIO):
+# Set up environment variables
+cp .env.example .env
+# Add your DEEPSEEK_API_KEY and other credentials
+
+# Build and run with Docker Compose
 docker-compose up -d
 
-Ver logs en tiempo real:
-docker-compose logs -f
+# Access the dashboard at http://localhost:3000
+```
 
-Detener los servicios:
-docker-compose down
+Running a Project
 
-Una vez levantado, la API estará disponible en `http://localhost:8000` (por defecto).
+    Create a project – Define your population and pattern type (concern, emotion, conduct, discourse, or identity).
 
----
+    Upload documents – Transcripts are processed automatically through the Glaser classification and incident extraction pipeline.
 
-## 💻 Desarrollo local (sin Docker)
+    Review at each pause – The system stops every 3 documents. Review categories, hypotheses, and candidate core concerns.
 
-Si preferís ejecutar sin Docker para depuración:
+    Confirm or refine – Accept proposals, merge categories, or redirect the analysis. The cascade recalculates only what changed.
 
-1. Crear y activar entorno virtual:
-   python -m venv venv
-   source venv/bin/activate      # Linux/Mac
-   venv\Scripts\activate         # Windows
+    Let saturation guide you – When the system signals saturation, move to selective coding and theoretical writing.
 
-2. Instalar dependencias:
-   pip install -r requirements.txt
+🧪 Methodology
 
-3. Asegurate de tener Redis y PostgreSQL corriendo localmente (o usá docker-compose solo para esos servicios).
+Geno implements Classical Grounded Theory as originally formulated by Barney Glaser and Anselm Strauss (1967), with later clarifications from Glaser (1978, 1995, 2010). Key methodological commitments:
 
-4. Exportar las variables de entorno (o cargar .env):
-   export JWT_SECRET=dev-jwt-secret-gt-local
-   export HMAC_SECRET=dev-celery-hmac-gt-local
-   export TOGETHER_API_KEY=xxxx
+    Inductive primacy – Theory emerges from data, not from pre‑existing hypotheses or literature.
 
-5. Ejecutar migraciones (si usás Django/Flask + ORM):
-   python manage.py migrate
+    Constant comparison – Every incident is compared with every other incident, iteratively, until patterns crystallise.
 
-6. Iniciar el servidor de desarrollo:
-   python manage.py runserver
+    Theoretical sampling – Data collection is guided by the emerging theory, not by a pre‑determined sample size.
 
----
+    Core category – The central pattern that explains how the population resolves its main concern.
 
-## 🧪 Comandos útiles
+    Saturation – The point at which no new properties, relationships, or categories emerge.
 
-- `make test` – Ejecutar suite de pruebas
-- `make lint` – Revisar estilo de código (flake8, black)
-- `docker-compose exec api bash` – Acceder al contenedor de la API
-- `docker-compose exec worker bash` – Acceder al contenedor del worker de Celery
-- `docker-compose logs -f worker` – Ver logs del worker en tiempo real
-
----
-
-## 📁 Documentación adicional
-
-- [`kb.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/kb.md) – Guía narrativa del proceso CGT glaseriano.
-- [`4-Patrones_de_desarrollo.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/4-Patrones_de_desarrollo.md) – Detalles técnicos (transiciones, checkpoints, cancelabilidad).
-- [`5-Adaptacion_Sistema_Agencial.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/5-Adaptacion_Sistema_Agencial.md) – Arquitectura de agentes y workers.
-
----
-
-## ⚠️ Consideraciones de seguridad
-
-- Los valores `dev-*` para JWT y HMAC son **solo para desarrollo local**.
-- Nunca expongas tu `TOGETHER_API_KEY` en logs o repositorios públicos.
-- El archivo `.env` ya está en `.gitignore`; verificá que no se haya commiteado.
-
----
-
-## 🆘 Soporte
-
-Si encontrás errores al levantar el sistema, verificá que:
-- Docker esté corriendo y tenga suficientes recursos (mínimo 4 GB de RAM recomendados).
-- Tu `TOGETHER_API_KEY` sea válida y tenga créditos disponibles.
-- Los puertos 8000, 5432, 6379 y 9000 no estén ocupados.
-
-README — ENGLISH
-
-# Geno: an automated grounded theory system
-
-**Automated qualitative analysis system based on Grounded Theory (CGT)**  
-*Presented at ALAS 2026*
-
-Geno orchestrates LLM agents (via Together.ai) and specialized workers to process documents, extract incidents, synthesize patterns, and generate theory from qualitative data, following Barney Glaser's Grounded Theory method.
-
----
-
-## 📦 High-level flow
-
-The system is organized into sequential phases that reflect the Glaserian process:
-
-1. **Project setup** – Definition of population and object of study.
-2. **Open Coding** – Segmentation, data classification (gold/silver/bronze/anomaly), incident extraction, and individual pattern detection per document.
-3. **Cross‑Document Synthesis** – Comparison of incidents across documents, labeling, and textual evidence retrieval.
-4. **Core category detection** – Identification of the pattern of interest and emerging categories.
-5. **Selective reduction** – Filtering and merging of categories relevant to the pattern of interest.
-6. **Saturation** – Theoretical saturation verification (four signals) and memo generation.
-7. **Theoretical playground** – Memo classification using 12 theoretical codes, relationship building, and natural writing.
-8. **Dialogue with the literature** – Comparison with external sources.
-9. **Applicability** – Generation of intervention guidelines.
-
-> The rhythm that runs through the entire process is: **PROPOSE → CRITIQUE → SYNTHESIZE → CRITIQUE AGAIN → YOU DECIDE (HITL)**. That is the system's heartbeat.
-
----
-
-## 🧠 What Geno does (and why)
-
-Geno is not a thematic analysis or a hypothesis test. It is a system that **discovers** what you don't know is there.
-
-- **Constant comparison**: each incident is compared with every other incident, again and again, until patterns reveal themselves.
-- **Emergence**: categories, properties, and relationships arise from the data, not from your head.
-- **Increasing abstraction**: you start with concrete incidents and end with abstract concepts.
-- **Guided by you**: the system proposes, critiques, shows evidence — but the final decision is always yours.
-
-### Data types it handles
-
-Following Glaser, Geno classifies each segment before coding it:
-
-- **Gold (baseline_data)**: real, spontaneous experience. Only this moves forward to coding.
-- **Silver (properline_data)**: what the participant believes they should say.
-- **Bronze (interpreted_data)**: opinion forced by the interviewer's question.
-- **Anomaly (vague_data)**: evasion.
-
-> If you code properline data thinking it's real experience, your theory will describe social norms, not actual behavior.
-
-### The pattern of interest
-
-It's not what participants say concerns them — it's what they **do**, what they **feel**, how they **act** when they're not performing.  
-Example: "Artificial intelligence in journalism" is a topic. "Maintaining professional relevance in the face of obsolescence threat" is a pattern of interest.
-
----
-
-## ⚙️ Prerequisites
-
-- Docker and Docker Compose (recommended)
-- A Together.ai API key (free with initial credits)
-- Python 3.10+ (optional, only for local development without Docker)
-
----
-
-## 🔐 Environment setup (`.env`)
-
-The system uses environment variables for secrets. **Never commit your `.env`** (it is already in `.gitignore`).
-
-Your `.env` file must contain **these three mandatory variables**:
-
-JWT_SECRET=dev-jwt-secret-gt-local
-HMAC_SECRET=dev-celery-hmac-gt-local
-TOGETHER_API_KEY=xxxx
-
-### Explanation of each variable
-
-| Variable | Purpose |
-|----------|---------|
-| `JWT_SECRET` | JWT session signing for authentication. **In production, replace with a secure value**. |
-| `HMAC_SECRET` | Internal Celery task signing (workers). **Change in production**. |
-| `TOGETHER_API_KEY` | Together.ai API key. Get it at https://api.together.ai/settings/api-keys |
-
-> The rest of the configuration (database, MinIO, Redis, paths) already has default values in `config.py` and `docker-compose.yml`.
-
-### Steps to create your `.env`
-
-1. Copy the example or create the file: `cp .env.example .env`
-2. Open `.env` and paste the content above.
-3. Replace `xxxx` with your actual `TOGETHER_API_KEY`.
-
----
-
-## 🐳 Running the system with Docker (recommended)
-
-Build images (only the first time):
-docker-compose build
-
-Start all services (API, workers, Redis, DB, MinIO):
-docker-compose up -d
-
-View logs in real time:
-docker-compose logs -f
-
-Stop services:
-docker-compose down
-
-Once started, the API will be available at `http://localhost:8000` (by default).
-
----
-
-## 💻 Local development (without Docker)
-
-If you prefer to run without Docker for debugging:
-
-1. Create and activate a virtual environment:
-   python -m venv venv
-   source venv/bin/activate      # Linux/Mac
-   venv\Scripts\activate         # Windows
-
-2. Install dependencies:
-   pip install -r requirements.txt
-
-3. Make sure Redis and PostgreSQL are running locally (or use docker-compose only for those services).
-
-4. Export the environment variables (or load .env):
-   export JWT_SECRET=dev-jwt-secret-gt-local
-   export HMAC_SECRET=dev-celery-hmac-gt-local
-   export TOGETHER_API_KEY=xxxx
-
-5. Run migrations (if using Django/Flask + ORM):
-   python manage.py migrate
-
-6. Start the development server:
-   python manage.py runserver
-
----
-
-## 🧪 Useful commands
-
-- `make test` – Run the test suite
-- `make lint` – Check code style (flake8, black)
-- `docker-compose exec api bash` – Access the API container
-- `docker-compose exec worker bash` – Access the Celery worker container
-- `docker-compose logs -f worker` – View worker logs in real time
-
----
-
-## 📁 Additional documentation
-
-- [`kb.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/kb.md) – Narrative guide to the Glaserian CGT process.
-- [`4-Patrones_de_desarrollo.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/4-Patrones_de_desarrollo.md) – Technical details (transitions, checkpoints, cancelability).
-- [`5-Adaptacion_Sistema_Agencial.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/5-Adaptacion_Sistema_Agencial.md) – Agent and worker architecture.
-
----
-
-## ⚠️ Security considerations
-
-- The `dev-*` values for JWT and HMAC are **for local development only**.
-- Never expose your `TOGETHER_API_KEY` in logs or public repositories.
-- The `.env` file is already in `.gitignore`; verify it hasn't been committed.
-
----
-
-## 🆘 Support
-
-If you encounter errors when starting the system, verify that:
-- Docker is running and has enough resources (at least 4 GB of RAM recommended).
-- Your `TOGETHER_API_KEY` is valid and has available credits.
-- Ports 8000, 5432, 6379, and 9000 are not occupied.
-
-README — PORTUGUÊS
-
-# Geno: um sistema automatizado de teoria fundamentada
-
-**Sistema automatizado para análise qualitativa baseado na Teoria Fundamentada (CGT)**  
-*Apresentado no ALAS 2026*
-
-Geno orquestra agentes LLM (via Together.ai) e workers especializados para processar documentos, extrair incidentes, sintetizar padrões e gerar teoria a partir de dados qualitativos, seguindo o método da Teoria Fundamentada de Barney Glaser.
-
----
-
-## 📦 Fluxo de alto nível
-
-O sistema é organizado em fases sequenciais que refletem o processo glaseriano:
-
-1. **Configuração do projeto** – Definição da população e objeto de estudo.
-2. **Codificação aberta (Open Coding)** – Segmentação, classificação de dados (ouro/prata/bronze/anomalia), extração de incidentes e padrões individuais por documento.
-3. **Síntese entre documentos** – Comparação de incidentes entre documentos, rotulagem e recuperação de evidência textual.
-4. **Detecção da categoria central** – Identificação do padrão de interesse e categorias emergentes.
-5. **Redução seletiva** – Filtragem e fusão de categorias relevantes ao padrão de interesse.
-6. **Saturação** – Verificação da saturação teórica (quatro sinais) e geração de memos.
-7. **Playground teórico** – Classificação de memos com 12 códigos teóricos, elaboração de relações e redação natural.
-8. **Diálogo com a literatura** – Comparação com fontes externas.
-9. **Aplicabilidade** – Geração de diretrizes de intervenção.
-
-> O ritmo que atravessa todo o processo é: **PROPOR → CRITICAR → SINTETIZAR → CRITICAR NOVAMENTE → VOCÊ DECIDE (HITL)**. Esse é o batimento do sistema.
-
----
-
-## 🧠 O que Geno faz (e por quê)
-
-Geno não é uma análise temática nem uma verificação de hipóteses. É um sistema que **descobre** o que você não sabe que está lá.
-
-- **Comparação constante**: cada incidente é comparado com cada outro incidente, repetidamente, até que os padrões se revelem.
-- **Emergência**: as categorias, propriedades e relações surgem dos dados, não da sua cabeça.
-- **Abstração crescente**: você começa com incidentes concretos e termina com conceitos abstratos.
-- **Guiado por você**: o sistema propõe, critica, mostra evidência — mas a decisão final é sempre sua.
-
-### Tipos de dados que ele manuseia
-
-Seguindo Glaser, Geno classifica cada segmento antes de codificá-lo:
-
-- **Ouro (baseline_data)**: experiência real, espontânea. Só isso avança para a codificação.
-- **Prata (properline_data)**: o que o participante acredita que deve dizer.
-- **Bronze (interpreted_data)**: opinião forçada pela pergunta do entrevistador.
-- **Anomalia (vague_data)**: evasão.
-
-> Se você codificar properline_data achando que é experiência real, sua teoria vai descrever normas sociais, não comportamento real.
-
-### O padrão de interesse
-
-Não é o que os participantes dizem que os preocupa — é o que eles **fazem**, o que **sentem**, como **agem** quando não estão performando.  
-Exemplo: "A inteligência artificial no jornalismo" é um tópico. "Mantendo relevância profissional diante da ameaça de obsolescência" é um padrão de interesse.
-
----
-
-## ⚙️ Pré-requisitos
-
-- Docker e Docker Compose (recomendado)
-- Uma chave de API da Together.ai (gratuita com créditos iniciais)
-- Python 3.10+ (opcional, apenas para desenvolvimento local sem Docker)
-
----
-
-## 🔐 Configuração do ambiente (`.env`)
-
-O sistema utiliza variáveis de ambiente para segredos. **Nunca commite o seu `.env`** (ele já está no `.gitignore`).
-
-Seu arquivo `.env` deve conter **estas três variáveis obrigatórias**:
-
-JWT_SECRET=dev-jwt-secret-gt-local
-HMAC_SECRET=dev-celery-hmac-gt-local
-TOGETHER_API_KEY=xxxx
-
-### Explicação de cada variável
-
-| Variável | Finalidade |
-|----------|------------|
-| `JWT_SECRET` | Assinatura de sessões JWT para autenticação. **Em produção, troque por um valor seguro**. |
-| `HMAC_SECRET` | Assinatura de tarefas internas do Celery (workers). **Troque em produção**. |
-| `TOGETHER_API_KEY` | Chave de API da Together.ai. Obtenha em https://api.together.ai/settings/api-keys |
-
-> O restante da configuração (banco de dados, MinIO, Redis, caminhos) já possui valores padrão em `config.py` e `docker-compose.yml`.
-
-### Passos para criar seu `.env`
-
-1. Copie o exemplo ou crie o arquivo: `cp .env.example .env`
-2. Abra o `.env` e cole o conteúdo acima.
-3. Substitua `xxxx` pela sua `TOGETHER_API_KEY` real.
-
----
-
-## 🐳 Executando o sistema com Docker (recomendado)
-
-Construir as imagens (somente na primeira vez):
-docker-compose build
-
-Iniciar todos os serviços (API, workers, Redis, DB, MinIO):
-docker-compose up -d
-
-Ver logs em tempo real:
-docker-compose logs -f
-
-Parar os serviços:
-docker-compose down
-
-Uma vez iniciado, a API estará disponível em `http://localhost:8000` (por padrão).
-
----
-
-## 💻 Desenvolvimento local (sem Docker)
-
-Se preferir executar sem Docker para depuração:
-
-1. Criar e ativar um ambiente virtual:
-   python -m venv venv
-   source venv/bin/activate      # Linux/Mac
-   venv\Scripts\activate         # Windows
-
-2. Instalar dependências:
-   pip install -r requirements.txt
-
-3. Certifique-se de que Redis e PostgreSQL estejam rodando localmente (ou use docker-compose apenas para esses serviços).
-
-4. Exportar as variáveis de ambiente (ou carregar .env):
-   export JWT_SECRET=dev-jwt-secret-gt-local
-   export HMAC_SECRET=dev-celery-hmac-gt-local
-   export TOGETHER_API_KEY=xxxx
-
-5. Executar migrações (se usar Django/Flask + ORM):
-   python manage.py migrate
-
-6. Iniciar o servidor de desenvolvimento:
-   python manage.py runserver
-
----
-
-## 🧪 Comandos úteis
-
-- `make test` – Executar a suíte de testes
-- `make lint` – Verificar estilo do código (flake8, black)
-- `docker-compose exec api bash` – Acessar o container da API
-- `docker-compose exec worker bash` – Acessar o container do worker Celery
-- `docker-compose logs -f worker` – Ver logs do worker em tempo real
-
----
-
-## 📁 Documentação adicional
-
-- [`kb.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/kb.md) – Guia narrativa do processo CGT glaseriano.
-- [`4-Patrones_de_desarrollo.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/4-Patrones_de_desarrollo.md) – Detalhes técnicos (transições, checkpoints, cancelabilidade).
-- [`5-Adaptacion_Sistema_Agencial.md`](https://github.com/diegopaucarv/gt/blob/main/Documentacion/cgt_alignment/5-Adaptacion_Sistema_Agencial.md) – Arquitetura de agentes e workers.
-
----
-
-## ⚠️ Considerações de segurança
-
-- Os valores `dev-*` para JWT e HMAC são **apenas para desenvolvimento local**.
-- Nunca exponha sua `TOGETHER_API_KEY` em logs ou repositórios públicos.
-- O arquivo `.env` já está no `.gitignore`; verifique se ele não foi commitado.
-
----
-
-## 🆘 Suporte
-
-Se encontrar erros ao iniciar o sistema, verifique se:
-- O Docker está rodando e tem recursos suficientes (mínimo de 4 GB de RAM recomendados).
-- Sua `TOGETHER_API_KEY` é válida e tem créditos disponíveis.
-- As portas 8000, 5432, 6379 e 9000 não estão ocupadas.
-
+The system operationalises these principles through the agent architecture described above, while preserving the researcher's ultimate interpretive authority.
