@@ -74,45 +74,113 @@ Every agent prompt is carefully engineered with:
 ## 🏗️ Architecture Overview
 
 ```mermaid
-C4Context
-  title Geno – C4 Container Diagram (Level 2)
+sequenceDiagram
+    autonumber
+    participant Researcher
+    participant Dashboard as React Dashboard
+    participant Backend as FastAPI Backend
+    participant Broker as Redis (Broker/PubSub)
+    participant Worker-NLP as Worker-NLP (spaCy/Stanza)
+    participant Worker-PRO as Worker-PRO (DeepSeek V4)
+    participant Worker-Flash as Worker-Flash (Nemotron 550B)
+    participant Worker-Algo as Worker-Algo (Cascade/SQL)
+    participant DB as PostgreSQL
+    participant LLM-API as Together.ai API
 
-  Person(researcher, "Researcher", "Reviews proposals, merges categories, validates core concerns, and directs theoretical sampling.")
+    rect rgb(240, 248, 255)
+        Note over Researcher, LLM-API: Phase 1: Project Setup & Document Ingestion
+        Researcher->>Dashboard: Uploads transcripts, defines population & pattern
+        Dashboard->>Backend: POST /projects
+        Backend->>DB: Create project, store config
+        Backend->>Broker: Enqueue documents for NLP prep
+        Broker->>Worker-NLP: Process document batch
+        Worker-NLP->>Worker-NLP: Glaser Data Classification (Baseline filtering)
+        Worker-NLP->>Worker-NLP: Sliding-window segmentation (coref resolution)
+        Worker-NLP->>DB: Store classified segments (only baseline advances)
+    end
 
-  Container(react_dashboard, "React Dashboard", "TypeScript, React", "Provides the Human-in-the-Loop (HITL) interface. Displays four-panel views (categories, hypotheses, core concerns, config) and real-time progress via WebSocket.")
+    rect rgb(255, 248, 240)
+        Note over Researcher, LLM-API: Phase 2: Document Processing (Per Document)
+        loop Each Document in Batch (e.g., 3 docs)
+            Backend->>Broker: Trigger PRO extraction for doc
+            Broker->>Worker-PRO: Extract incidents & individual pattern
+            Note over Worker-PRO: PRO is blind to existing codebook
+            Worker-PRO->>LLM-API: PRO call (Temp 0.3, 8192 tokens)
+            LLM-API-->>Worker-PRO: Returns incidents (gerunds) + pattern
+            Worker-PRO->>DB: Store incidents with foreign-key trace
+            Worker-PRO->>Broker: Publish progress update
+            Broker->>Dashboard: Stream progress (WebSocket)
+        end
+    end
 
-  Container(fastapi_backend, "FastAPI Backend", "Python, FastAPI", "Orchestrates the 96-agent LangGraph workflows. Manages REST endpoints, WebSocket connections, and triggers cascading recalculations.")
+    rect rgb(255, 255, 240)
+        Note over Researcher, LLM-API: Phase 3: Cross-Document Synthesis & HITL Pause
+        Backend->>Broker: Trigger cross-doc synthesis (every 3 docs)
+        Broker->>Worker-PRO: Group all incidents from batch
+        Note over Worker-PRO: PRO is isolated from existing categories
+        Worker-PRO->>LLM-API: PRO call (grouping task)
+        LLM-API-->>Worker-PRO: Returns candidate categories
+        Worker-PRO->>DB: Store candidate categories
 
-  ContainerDb(postgres, "PostgreSQL", "SQL Database (46 tables)", "Stores all state: incidents, categories, memos, hypotheses, and full audit trails. Every theoretical proposition is traceable via foreign-key chains back to the source quotation.")
+        Backend->>Broker: Trigger Critique (FLASH)
+        Broker->>Worker-Flash: Critique candidate categories
+        Worker-Flash->>LLM-API: FLASH call (Temp 0.1, 4096 tokens)
+        Note over Worker-Flash: Evaluates fit, workability, relevance
+        LLM-API-->>Worker-Flash: Returns critique (strengths/weaknesses)
+        Worker-Flash->>DB: Store critique
 
-  Container(redis, "Redis", "In-Memory Data Store", "Serves as the Celery message broker and provides pub/sub channels for streaming real-time progress to the dashboard.")
+        Backend->>Broker: Publish HITL pause signal
+        Broker->>Dashboard: Show 4-panel view (Cats, Hypos, Core Cand., Config)
+        Dashboard->>Researcher: Awaiting decision
 
-  Container(worker_heavy, "Worker: Heavy (I/O)", "Python, LangGraph", "Handles PRO model calls (DeepSeek V4 Pro, Temp 0.3). Responsible for incident extraction, cross-document grouping, memo drafting, and theoretical writing.")
+        Researcher->>Dashboard: Accepts / Fuses / Modifies categories
+        Dashboard->>Backend: Send decision
+        Backend->>Broker: Trigger Cascade Recalc
+        Broker->>Worker-Algo: Recalculate dependent components
+        Worker-Algo->>DB: Update hypotheses, invalidate stale dependencies
+        Worker-Algo->>Broker: Publish updated view
+        Broker->>Dashboard: Update UI with new state
+    end
 
-  Container(worker_nlp, "Worker: NLP (CPU/RAM)", "Python, spaCy / Stanza", "Handles heavy text processing. Performs Glaser data classification (baseline, properline, interpreted, vague) and advanced sliding-window segmentation with coreference resolution.")
+    rect rgb(240, 255, 240)
+        Note over Researcher, LLM-API: Phase 4: Core Emergence & Saturation
+        Backend->>Worker-Algo: Check saturation conditions
+        Worker-Algo->>DB: Query property density & variance
+        alt Not Saturated
+            Worker-Algo->>Backend: Continue sampling (goto Phase 2/3)
+        else Saturated
+            Backend->>Broker: Trigger Core Concern Proposal
+            Broker->>Worker-PRO: Propose central concern & core category
+            Worker-PRO->>LLM-API: PRO call (elevation task)
+            LLM-API-->>Worker-PRO: Returns Core Concern + Central Cat
+            Worker-PRO->>DB: Store core proposal
 
-  Container(worker_fast, "Worker: Fast (Algo)", "Python, SQLAlchemy", "Executes algorithmic tasks: saturation checks, co-occurrence statistics, and cascading updates when the researcher merges or splits categories.")
+            Backend->>Broker: Trigger Final Critique
+            Broker->>Worker-Flash: Verify against saturation criteria
+            Worker-Flash->>LLM-API: FLASH call
+            LLM-API-->>Worker-Flash: Returns final validation/gaps
+            Worker-Flash->>DB: Store critique
 
-  Container(embedding_svc, "Embedding Service", "ONNX Runtime (voyage-4-nano)", "Isolated GPU/CPU container for generating embeddings. Used sparingly for backend retrieval, *never* invoked during the main coding flow to avoid semantic-proximity bias.")
+            Backend->>Broker: Final HITL for Core
+            Broker->>Dashboard: Show Core Concern & Central Category
+            Dashboard->>Researcher: Confirm or Refine
+            Researcher->>Dashboard: Approve Core
+            Dashboard->>Backend: Finalize Core
+            Backend->>DB: Mark core as confirmed
+        end
+    end
 
-  Container_Ext(llm_api, "External LLM APIs", "Together.ai / DeepSeek / Nemotron", "Provides high-level generation (PRO: DeepSeek V4 Pro) and verification (FLASH: Nemotron 550B) capabilities.")
-
-  Rel(researcher, react_dashboard, "Uses", "HTTPS / WS")
-  Rel(react_dashboard, fastapi_backend, "REST API / WebSocket", "JSON")
-  Rel(fastapi_backend, redis, "Enqueues tasks & subscribes", "Celery / Pub/Sub")
-  Rel(fastapi_backend, postgres, "Reads/Writes project state", "SQL")
-  Rel(redis, fastapi_backend, "Streams progress", "Pub/Sub")
-  Rel(redis, worker_heavy, "Delivers generation tasks", "Celery")
-  Rel(redis, worker_nlp, "Delivers segmentation tasks", "Celery")
-  Rel(redis, worker_fast, "Delivers algorithmic tasks", "Celery")
-  Rel(worker_heavy, llm_api, "Calls PRO (generation) / FLASH (verification)", "HTTPS (REST)")
-  Rel(worker_nlp, postgres, "Writes classified segments", "SQL")
-  Rel(worker_heavy, postgres, "Writes incidents, categories & memos", "SQL")
-  Rel(worker_fast, postgres, "Reads/Writes hypotheses & saturations", "SQL")
-  Rel(worker_fast, embedding_svc, "Requests embeddings (retrieval only)", "HTTP")
-  Rel(worker_heavy, redis, "Publishes agent progress", "Pub/Sub")
-  Rel(worker_nlp, redis, "Publishes NLP progress", "Pub/Sub")
-  Rel(worker_fast, redis, "Publishes recalculation updates", "Pub/Sub")
+    rect rgb(255, 240, 245)
+        Note over Researcher, LLM-API: Phase 5: Theoretical Redaction
+        Backend->>Broker: Draft theoretical sections
+        Broker->>Worker-PRO: Write theory (present tense, concepts only)
+        Worker-PRO->>LLM-API: PRO call (redaction)
+        LLM-API-->>Worker-PRO: Returns theory draft
+        Worker-PRO->>DB: Store memos & theoretical framework
+        Broker->>Dashboard: Display draft for review
+        Dashboard->>Researcher: Review final theory
+        Note over Researcher, Dashboard: Researcher owns the final output
+    end
 ```
 
 
