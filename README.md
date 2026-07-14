@@ -73,66 +73,46 @@ Every agent prompt is carefully engineered with:
 
 ## 🏗️ Architecture Overview
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+```mermaid
+C4Context
+  title Geno – C4 Container Diagram (Level 2)
 
-' Optional: Set a skinparam for better readability
-' skinparam componentStyle rectangle
+  Person(researcher, "Researcher", "Reviews proposals, merges categories, validates core concerns, and directs theoretical sampling.")
 
-LAYOUT_TOP_DOWN()
-LAYOUT_WITH_LEGEND()
+  Container(react_dashboard, "React Dashboard", "TypeScript, React", "Provides the Human-in-the-Loop (HITL) interface. Displays four-panel views (categories, hypotheses, core concerns, config) and real-time progress via WebSocket.")
 
-Person(researcher, "Researcher", "Reviews proposals, merges categories, validates core concerns, and directs the theoretical sampling.")
+  Container(fastapi_backend, "FastAPI Backend", "Python, FastAPI", "Orchestrates the 96-agent LangGraph workflows. Manages REST endpoints, WebSocket connections, and triggers cascading recalculations.")
 
-System_Boundary(geno_system, "Geno – Automated Classical Grounded Theory System") {
+  ContainerDb(postgres, "PostgreSQL", "SQL Database (46 tables)", "Stores all state: incidents, categories, memos, hypotheses, and full audit trails. Every theoretical proposition is traceable via foreign-key chains back to the source quotation.")
 
-    Container(react_dashboard, "React Dashboard", "TypeScript, React", "Provides the Human-in-the-Loop (HITL) interface. Displays four-panel views (categories, hypotheses, core concerns, config) and real-time progress.")
-    
-    Container(fastapi_backend, "FastAPI Backend", "Python, FastAPI", "Orchestrates the 96-agent LangGraph workflows. Manages REST endpoints, WebSocket connections, and triggers cascading recalculations.")
-    
-    Container(postgres, "PostgreSQL", "SQL Database (46 tables)", "Stores all state: incidents, categories, memos, hypotheses, and full audit trails. Every theoretical proposition is traceable via foreign-key chains back to the source quotation.")
-    
-    Container(redis, "Redis", "In-Memory Data Store", "Serves as the Celery message broker and provides pub/sub channels for streaming real-time progress to the dashboard.")
+  Container(redis, "Redis", "In-Memory Data Store", "Serves as the Celery message broker and provides pub/sub channels for streaming real-time progress to the dashboard.")
 
-    Container(worker_heavy, "Worker: Heavy (I/O)", "Python, LangGraph", "Handles PRO model calls (DeepSeek V4 Pro, Temp 0.3). Responsible for incident extraction, cross-document grouping, memo drafting, and theoretical writing.")
-    
-    Container(worker_nlp, "Worker: NLP (CPU/RAM)", "Python, spaCy / Stanza", "Handles heavy text processing. Performs Glaser data classification (baseline, properline, interpreted, vague) and advanced sliding-window segmentation with coreference resolution.")
-    
-    Container(worker_fast, "Worker: Fast (Algo)", "Python, SQLAlchemy", "Executes algorithmic tasks: saturation checks, co-occurrence statistics, and cascading updates when the researcher merges or splits categories.")
-    
-    Container(embedding_svc, "Embedding Service", "ONNX Runtime (voyage-4-nano)", "Isolated GPU/CPU container for generating and managing text embeddings. Used sparingly for backend retrieval, *never* invoked during the main coding flow to avoid semantic-proximity bias.")
-}
+  Container(worker_heavy, "Worker: Heavy (I/O)", "Python, LangGraph", "Handles PRO model calls (DeepSeek V4 Pro, Temp 0.3). Responsible for incident extraction, cross-document grouping, memo drafting, and theoretical writing.")
 
-System_Ext(llm_api, "External LLM APIs", "Together.ai / DeepSeek / Nemotron\n(DeepSeek V4 Pro & Nemotron 550B)")
+  Container(worker_nlp, "Worker: NLP (CPU/RAM)", "Python, spaCy / Stanza", "Handles heavy text processing. Performs Glaser data classification (baseline, properline, interpreted, vague) and advanced sliding-window segmentation with coreference resolution.")
 
-' === USER INTERACTIONS ===
-Rel(researcher, react_dashboard, "Uses", "HTTPS / WS")
-Rel(react_dashboard, fastapi_backend, "REST API / WebSocket", "JSON")
+  Container(worker_fast, "Worker: Fast (Algo)", "Python, SQLAlchemy", "Executes algorithmic tasks: saturation checks, co-occurrence statistics, and cascading updates when the researcher merges or splits categories.")
 
-' === BACKEND ORCHESTRATION ===
-Rel(fastapi_backend, redis, "Enqueues tasks & subscribes", "Celery / Pub/Sub")
-Rel(fastapi_backend, postgres, "Reads/Writes project state", "SQL")
-Rel(redis, fastapi_backend, "Streams progress", "Pub/Sub")
+  Container(embedding_svc, "Embedding Service", "ONNX Runtime (voyage-4-nano)", "Isolated GPU/CPU container for generating embeddings. Used sparingly for backend retrieval, *never* invoked during the main coding flow to avoid semantic-proximity bias.")
 
-' === TASK DISPATCH ===
-Rel(redis, worker_heavy, "Delivers generation tasks", "Celery")
-Rel(redis, worker_nlp, "Delivers segmentation tasks", "Celery")
-Rel(redis, worker_fast, "Delivers algorithmic tasks", "Celery")
+  Container_Ext(llm_api, "External LLM APIs", "Together.ai / DeepSeek / Nemotron", "Provides high-level generation (PRO: DeepSeek V4 Pro) and verification (FLASH: Nemotron 550B) capabilities.")
 
-' === WORKER ACTIONS ===
-Rel(worker_heavy, llm_api, "Calls PRO (generation)", "HTTPS (REST)")
-Rel(worker_nlp, postgres, "Writes classified segments", "SQL")
-Rel(worker_heavy, postgres, "Writes incidents, categories & memos", "SQL")
-Rel(worker_fast, postgres, "Reads/Writes hypotheses & saturations", "SQL")
-Rel(worker_fast, embedding_svc, "Requests embeddings (retrieval only)", "HTTP")
-
-' === PROGRESS FEEDBACK ===
-Rel(worker_heavy, redis, "Publishes agent progress", "Pub/Sub")
-Rel(worker_nlp, redis, "Publishes NLP progress", "Pub/Sub")
-Rel(worker_fast, redis, "Publishes recalculation updates", "Pub/Sub")
-
-@enduml
+  Rel(researcher, react_dashboard, "Uses", "HTTPS / WS")
+  Rel(react_dashboard, fastapi_backend, "REST API / WebSocket", "JSON")
+  Rel(fastapi_backend, redis, "Enqueues tasks & subscribes", "Celery / Pub/Sub")
+  Rel(fastapi_backend, postgres, "Reads/Writes project state", "SQL")
+  Rel(redis, fastapi_backend, "Streams progress", "Pub/Sub")
+  Rel(redis, worker_heavy, "Delivers generation tasks", "Celery")
+  Rel(redis, worker_nlp, "Delivers segmentation tasks", "Celery")
+  Rel(redis, worker_fast, "Delivers algorithmic tasks", "Celery")
+  Rel(worker_heavy, llm_api, "Calls PRO (generation) / FLASH (verification)", "HTTPS (REST)")
+  Rel(worker_nlp, postgres, "Writes classified segments", "SQL")
+  Rel(worker_heavy, postgres, "Writes incidents, categories & memos", "SQL")
+  Rel(worker_fast, postgres, "Reads/Writes hypotheses & saturations", "SQL")
+  Rel(worker_fast, embedding_svc, "Requests embeddings (retrieval only)", "HTTP")
+  Rel(worker_heavy, redis, "Publishes agent progress", "Pub/Sub")
+  Rel(worker_nlp, redis, "Publishes NLP progress", "Pub/Sub")
+  Rel(worker_fast, redis, "Publishes recalculation updates", "Pub/Sub")
 ```
 
 
