@@ -9,6 +9,9 @@ Geno is a production‑grade system that automates the discovery of latent patte
 ![DeepSeek](https://img.shields.io/badge/DeepSeek-V4%20Pro-orange)
 
 
+![imagen1](Documentacion/img/Sin_titulo.png)
+
+
 ---
 
 ## 🧠 The Core Loop
