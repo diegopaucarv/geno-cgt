@@ -29,7 +29,7 @@ fi
 BACKEND_ENV="$ROOT/backend/.env"
 if [ ! -f "$BACKEND_ENV" ]; then
     cat > "$BACKEND_ENV" <<EOF
-DATABASE_URL=postgresql+asyncpg://app_user:${DB_PASS}@127.0.0.1:5433/gt-db
+DATABASE_URL=postgresql+asyncpg://app_user:${DB_PASS}@127.0.0.1:5434/gt-db
 DB_PASSWORD=$DB_PASS
 JWT_SECRET_KEY=$JWT_SECRET
 CELERY_HMAC_SECRET=$HMAC_SECRET

@@ -36,10 +36,12 @@ together>=1.3.0
 # Corregido: python-dotenv es el paquete correcto
 python-dotenv==1.0.1
 
-boto3>=1.26.0
-aioboto3>=10.0.0  # versión asíncrona
+# Pinneados: las versiones abiertas hacen que pip entre en un bucle de
+# backtracking en Python 3.13 (aiobotocore fija botocore, boto3 no).
+boto3==1.40.61
+aioboto3==15.5.0  # versión asíncrona
 python-magic>=0.4.27  # para detectar tipos MIME
-PyMuPDF>=1.23  # extracción de texto PDF
+PyMuPDF>=1.23,<2  # extracción de texto PDF (2.x elimina el alias "fitz")
 python-docx>=1.1  # extracción de texto DOCX
 
 spacy>=3.7
