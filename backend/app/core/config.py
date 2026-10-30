@@ -56,8 +56,8 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 from app.core.defaults import EDITABLE_DEFAULTS as _D
 
 
-def _cfg(key: str) -> str:
-    return get_config_value(key, default=_D.get(key, ""))
+def _cfg(key: str, env_var: str | None = None) -> str:
+    return get_config_value(key, env_var=env_var, default=_D.get(key, ""))
 
 
 # ── LLM Models ───────────────────────────────────────────────────────
@@ -84,9 +84,9 @@ DEFAULT_POPULATION_ASSUMPTION = _cfg("DEFAULT_POPULATION_ASSUMPTION")
 DEFAULT_OBJECT_OF_STUDY = _cfg("DEFAULT_OBJECT_OF_STUDY")
 
 # ── Glaser Classifier ────────────────────────────────────────────────
-GLASER_CLASSIFIER_PROMPT = os.getenv(
-    "GLASER_CLASSIFIER_PROMPT", ""
-)  # Overridable via env var for the 3-step classifier
+GLASER_CLASSIFIER_PROMPT = _cfg(
+    "GLASER_CLASSIFIER_PROMPT", env_var="GLASER_CLASSIFIER_SYSTEM"
+)
 
 # ── System ───────────────────────────────────────────────────────────
 

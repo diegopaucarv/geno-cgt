@@ -476,6 +476,10 @@ const en: Translations = {
     custom: "Custom",
     meaning: "Meaning",
     populationAssumption: "Population assumption",
+    glaserPrompt: "Glaser classifier prompt",
+    glaserPromptField: "Custom system prompt (XML tags)",
+    glaserPromptHelp:
+      "Leave empty to use the built-in prompt. It must instruct the model to wrap every passage in one of: <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data>.",
     // System
     systemDeployment: "System & Deployment",
     environment: "Environment",
@@ -1306,6 +1310,10 @@ const es: Translations = {
     custom: "Personalizado",
     meaning: "Significado",
     populationAssumption: "Hipótesis poblacional (population assumption)",
+    glaserPrompt: "Prompt del clasificador Glaser",
+    glaserPromptField: "System prompt personalizado (tags XML)",
+    glaserPromptHelp:
+      "Déjalo vacío para usar el prompt integrado. Debe indicar al modelo que envuelva cada pasaje en uno de: <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data>.",
     // System
     systemDeployment: "Sistema y despliegue",
     environment: "Entorno",
@@ -2125,6 +2133,10 @@ const de: Translations = {
     custom: "Benutzerdefiniert",
     meaning: "Bedeutung",
     populationAssumption: "Populationsannahme (Population Assumption)",
+    glaserPrompt: "Glaser-Klassifizierer-Prompt",
+    glaserPromptField: "Benutzerdefinierter System-Prompt (XML-Tags)",
+    glaserPromptHelp:
+      "Leer lassen, um den integrierten Prompt zu verwenden. Er muss das Modell anweisen, jeden Abschnitt in einen von <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data> zu setzen.",
     // System
     systemDeployment: "System & Bereitstellung",
     environment: "Umgebung",
@@ -2939,6 +2951,10 @@ const pt: Translations = {
     custom: "Personalizado",
     meaning: "Significado",
     populationAssumption: "Suposição populacional (Population Assumption)",
+    glaserPrompt: "Prompt do classificador Glaser",
+    glaserPromptField: "System prompt personalizado (tags XML)",
+    glaserPromptHelp:
+      "Deixe vazio para usar o prompt integrado. Ele deve instruir o modelo a envolver cada passagem em uma das tags: <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data>.",
     // System
     systemDeployment: "Sistema & Implantação",
     environment: "Ambiente",

@@ -35,6 +35,7 @@ interface CGTConfig {
   population_assumption: string;
   object_of_study: string;
   coding_styles: string[];
+  glaser_classifier_prompt: string;
   available_styles: CodingStyle[];
   env_overrides: Record<string, string>;
 }
@@ -581,6 +582,7 @@ export default function ConfigModal({ open, onClose }: Props) {
           population_assumption: cgt.population_assumption,
           object_of_study: cgt.object_of_study,
           coding_styles: cgt.coding_styles,
+          glaser_classifier_prompt: cgt.glaser_classifier_prompt,
         };
       if (sys)
         body.system = {
@@ -911,6 +913,20 @@ export default function ConfigModal({ open, onClose }: Props) {
                     overrides={cgt.env_overrides}
                     blockedLabel={t("config.blockedByEnv")}
                   />
+                </div>
+                <div style={SECT}>
+                  <div style={SECT_TITLE}>{t("config.glaserPrompt")}</div>
+                  <TextareaField
+                    label={t("config.glaserPromptField")}
+                    value={cgt.glaser_classifier_prompt}
+                    onChange={(v) =>
+                      setCgt({ ...cgt, glaser_classifier_prompt: v })
+                    }
+                    rows={12}
+                  />
+                  <div style={{ fontSize: 10, color: "#8B949E", marginTop: 4 }}>
+                    {t("config.glaserPromptHelp")}
+                  </div>
                 </div>
               </>
             )}

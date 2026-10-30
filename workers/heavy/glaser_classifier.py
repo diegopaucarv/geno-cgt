@@ -15,6 +15,7 @@ import logging
 import re
 from typing import Any
 
+from app.core.runtime_config import get_config_value
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -75,18 +76,35 @@ Si hay problemas, suggested_fixes debe ser una instruccion concreta y especifica
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _resolve_system_prompt() -> str:
+    """System instructions for step 1.
+
+    Priority: env GLASER_CLASSIFIER_SYSTEM > runtime.json
+    GLASER_CLASSIFIER_PROMPT (⚙ panel) > built-in CLASSIFIER_SYSTEM_PROMPT.
+    An empty configured value means "use the built-in prompt".
+    """
+    configured = str(
+        get_config_value(
+            "GLASER_CLASSIFIER_PROMPT",
+            env_var="GLASER_CLASSIFIER_SYSTEM",
+            default=CLASSIFIER_SYSTEM_PROMPT,
+        )
+        or ""
+    ).strip()
+    return configured or CLASSIFIER_SYSTEM_PROMPT
+
+
 def _step1_classify_xml(
     raw_text: str, llm_client: Any, feedback: str | None = None
 ) -> str:
     """Classify full document text by wrapping passages in XML tags.
 
     Sends system instructions as 'system' role, raw text + feedback as 'user'.
-    Uses PRO tier.
+    Uses PRO tier. The system instructions come from config (see below), so the
+    Glaser prompt can be edited from the ⚙ panel without a restart.
     """
-    import os as _os
-
-    # System prompt optionally overridable via env var
-    system_prompt = _os.getenv("GLASER_CLASSIFIER_SYSTEM", CLASSIFIER_SYSTEM_PROMPT)
+    # Instructions come from config (see _resolve_system_prompt).
+    system_prompt = _resolve_system_prompt()
 
     user_content = f"<texto>\n{raw_text}\n</texto>"
     if feedback:

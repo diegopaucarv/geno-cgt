@@ -23,6 +23,7 @@ import logging
 from typing import Annotated, Any, Literal, Optional, TypedDict
 
 from app.core.llm_config import PROMPT_TIER_MAP, get_model_for_prompt
+from app.core.runtime_config import get_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -376,9 +377,8 @@ def route_via_orchestrator(state: AnalysisState) -> str:
     current = state.get("current_step", "")
 
     if ORCHESTRATOR_AVAILABLE and _orchestrator is not None:
-        import os as _os
-
-        if _os.getenv("AGENTIC_ORCHESTRATOR", "false").lower() in ("1", "true", "yes"):
+        enabled = get_config_value("AGENTIC_ORCHESTRATOR", default="false")
+        if enabled.lower() in ("1", "true", "yes"):
             try:
                 decision = _orchestrator.decide(current, dict(state))
                 logger.info("Orchestrator: %s -> %s", current, decision)

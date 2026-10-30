@@ -1,15 +1,14 @@
 """
 Runtime configuration store.
 
-Priority: env var > runtime.json > hardcoded default.
+Priority: env var > runtime.json > EDITABLE_DEFAULTS (app.core.defaults).
 
 Reads a JSON file that can be updated at runtime via the /api/v1/config endpoint.
 This allows the frontend config panel to persist changes without touching .env or code.
 
 Usage:
-    from app.core.runtime_config import get_runtime_config, update_runtime_config
-    cfg = get_runtime_config()
-    model_pro = cfg.get("MODEL_PRO", "deepseek-ai/DeepSeek-V4-Pro")
+    from app.core.runtime_config import get_config_value, update_runtime_config
+    model_pro = get_config_value("MODEL_PRO")  # env > runtime.json > defaults.py
 """
 
 import json
@@ -19,12 +18,15 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.core.defaults import EDITABLE_DEFAULTS as _DEFAULTS
+from app.core.defaults import INTERNAL_DEFAULTS as _INTERNAL
+
 logger = logging.getLogger(__name__)
 
-# Where the runtime overrides live (mounted as volume in docker-compose)
+# Where the runtime overrides live (env var > INTERNAL_DEFAULTS)
 RUNTIME_CONFIG_PATH = os.getenv(
     "RUNTIME_CONFIG_PATH",
-    "/app/config/runtime.json",
+    _INTERNAL.get("RUNTIME_CONFIG_PATH", "/app/config/runtime.json"),
 )
 
 _lock = Lock()
@@ -91,12 +93,19 @@ def update_runtime_config(updates: dict[str, Any]) -> dict[str, Any]:
 
 def get_config_value(key: str, env_var: str | None = None, default: Any = None) -> Any:
     """
-    Resolve a config value with priority: env var > runtime.json > default.
+    Resolve a config value with priority:
+
+        env var > runtime.json > EDITABLE_DEFAULTS (app.core.defaults) > default
+
+    Keys declared in EDITABLE_DEFAULTS take precedence over the per-call
+    `default`, so app/core/defaults.py stays the single source of truth for
+    the whole system (API and workers). `default` is only the last resort for
+    keys that are not declared there.
 
     Args:
-        key: Key in runtime.json
+        key: Config key (runtime.json / EDITABLE_DEFAULTS)
         env_var: Environment variable name (if different from key)
-        default: Hardcoded fallback
+        default: Fallback for keys not declared in EDITABLE_DEFAULTS
     """
     env_name = env_var or key
     env_val = os.getenv(env_name)
@@ -106,5 +115,9 @@ def get_config_value(key: str, env_var: str | None = None, default: Any = None) 
     runtime = get_runtime_config()
     if key in runtime:
         return runtime[key]
+
+    # Single source of truth: app.core.defaults
+    if key in _DEFAULTS:
+        return _DEFAULTS[key]
 
     return default

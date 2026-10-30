@@ -16,7 +16,6 @@ from app.core.config import (
     DEFAULT_OBJECT_OF_STUDY,
     DEFAULT_POPULATION_ASSUMPTION,
     ENVIRONMENT,
-    GLASER_CLASSIFIER_PROMPT,
     MODEL_FLASH,
     MODEL_FLASH_MAX_TOKENS,
     MODEL_FLASH_REPETITION_PENALTY,
@@ -55,6 +54,15 @@ def _get_spacy_model() -> str:
 
 
 # ── Schema for editable fields ───────────────────────────────────────
+
+
+# Some config keys are overridden by an env var with a different name.
+_ENV_ALIASES = {"GLASER_CLASSIFIER_PROMPT": "GLASER_CLASSIFIER_SYSTEM"}
+
+
+def _env_name(key: str) -> str:
+    """Env var that overrides `key` (usually the key itself)."""
+    return _ENV_ALIASES.get(key, key)
 
 
 class LLMConfig(BaseModel):
@@ -141,8 +149,9 @@ async def get_config():
             "object_of_study": DEFAULT_OBJECT_OF_STUDY,
             "coding_styles": active_styles,
             "available_styles": all_styles,
-            "glaser_classifier_prompt": GLASER_CLASSIFIER_PROMPT
-            or "(using built-in default)",
+            "glaser_classifier_prompt": get_config_value(
+                "GLASER_CLASSIFIER_PROMPT", default=""
+            ),
             "env_overrides": _env_overrides_section("cgt"),
         },
         "system": {
@@ -225,7 +234,7 @@ async def save_config(
     # Check which values are still overridden by env vars (can't be changed at runtime)
     blocked = {}
     for key in updates:
-        env_name = key
+        env_name = _env_name(key)
         import os
 
         if os.getenv(env_name) is not None:
@@ -275,7 +284,7 @@ def _env_overrides_section(section: str) -> dict[str, str]:
     }
     result = {}
     for key in env_map.get(section, []):
-        val = os.getenv(key)
+        val = os.getenv(_env_name(key))
         if val is not None:
             result[key] = val
     return result
