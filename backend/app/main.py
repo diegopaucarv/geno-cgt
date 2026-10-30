@@ -73,7 +73,6 @@ async def lifespan(app: FastAPI):
     # Seed theoretical codes al iniciar (usa psycopg2 sync, no asyncpg)
     try:
         import logging as _log
-        import os
 
         from sqlalchemy import create_engine
         from sqlalchemy import text as sa_text

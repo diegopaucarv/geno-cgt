@@ -27,7 +27,29 @@ def get_nlp_language() -> str:
 SPACY_MODELS: dict[str, str] = {
     "es": "es_core_news_lg",
     "en": "en_core_web_lg",
+    "de": "de_core_news_lg",
+    "pt": "pt_core_news_lg",
 }
+
+DEFAULT_SPACY_MODEL = "es_core_news_lg"
+
+
+def resolve_spacy_model(language: str | None = None) -> str:
+    """Resolve the spaCy model name for `language` (default: configured language).
+
+    Logs a warning when the language has no mapping, so an unsupported
+    language does not silently fall back to the Spanish model.
+    """
+    lang = language or get_nlp_language()
+    model = SPACY_MODELS.get(lang)
+    if model is None:
+        logger.warning(
+            "No spaCy model mapped for language '%s' — falling back to %s",
+            lang,
+            DEFAULT_SPACY_MODEL,
+        )
+        return DEFAULT_SPACY_MODEL
+    return model
 
 
 def get_current_spacy_model_name() -> str:
@@ -39,8 +61,7 @@ def get_current_spacy_model_name() -> str:
     override = get_config_value("SPACY_MODEL", default=None)
     if override:
         return override
-    lang = get_nlp_language()
-    return SPACY_MODELS.get(lang, "es_core_news_lg")
+    return resolve_spacy_model()
 
 
 def get_spacy_exclude() -> list[str]:
@@ -70,7 +91,15 @@ def get_current_spacy() -> "spacy.Language":
     model_name = get_current_spacy_model_name()
 
     if _nlp is None or _nlp_loaded_name != model_name:
+        import sys
+
         import spacy
+
+        # Los modelos se instalan con `pip --target` en el volumen compartido
+        # (SPACY_DATA_PATH), por lo que hay que hacerlo importable desde ahí.
+        spacy_data_path = os.environ.get("SPACY_DATA_PATH", "/app/nlp_models/spacy")
+        if os.path.isdir(spacy_data_path) and spacy_data_path not in sys.path:
+            sys.path.insert(0, spacy_data_path)
 
         exclude = get_spacy_exclude()
         load_kwargs = {}
@@ -94,6 +123,19 @@ def get_current_stanza_lang() -> str:
     return get_nlp_language()
 
 
+def is_stanza_available() -> bool:
+    """True if the `stanza` package is installed in the current image.
+
+    Only the worker-nlp image ships Stanza; the API image (fastapi) does not,
+    so `check_models_ready` must not report Stanza resources as pending there.
+    """
+    try:
+        import stanza  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 # ── Model readiness & warmup ───────────────────────────────────────────
 
 
@@ -102,10 +144,13 @@ def check_models_ready(language: str) -> dict:
     Return which NLP models are downloaded for the given language.
 
     Returns a dict with keys:
-        language, spacy_ready, stanza_ready,
+        language, spacy_ready, stanza_ready, stanza_available,
         models_downloaded, models_pending
+
+    Stanza is optional: when the package is absent (API image) it is neither
+    reported as pending nor does it block readiness.
     """
-    spacy_model = SPACY_MODELS.get(language, "es_core_news_lg")
+    spacy_model = resolve_spacy_model(language)
 
     # ── spaCy ──────────────────────────────────────────────────────
     spacy_data_path = os.environ.get("SPACY_DATA_PATH", "/app/nlp_models/spacy")
@@ -115,6 +160,7 @@ def check_models_ready(language: str) -> dict:
     stanza_resources_dir = os.environ.get(
         "STANZA_RESOURCES_DIR", "/app/nlp_models/stanza"
     )
+    stanza_available = is_stanza_available()
     stanza_ready = os.path.isdir(os.path.join(stanza_resources_dir, language))
 
     models_downloaded: list[str] = []
@@ -125,15 +171,17 @@ def check_models_ready(language: str) -> dict:
     else:
         models_pending.append(spacy_model)
 
-    if stanza_ready:
-        models_downloaded.append(f"stanza_{language}")
-    else:
-        models_pending.append(f"stanza_{language}")
+    if stanza_available:
+        if stanza_ready:
+            models_downloaded.append(f"stanza_{language}")
+        else:
+            models_pending.append(f"stanza_{language}")
 
     return {
         "language": language,
         "spacy_ready": spacy_ready,
-        "stanza_ready": stanza_ready,
+        "stanza_ready": stanza_ready or not stanza_available,
+        "stanza_available": stanza_available,
         "models_downloaded": models_downloaded,
         "models_pending": models_pending,
     }
@@ -153,7 +201,7 @@ def warmup_language(language: str, progress_callback=None) -> None:
     """
     import os
 
-    spacy_model = SPACY_MODELS.get(language, "es_core_news_lg")
+    spacy_model = resolve_spacy_model(language)
     spacy_data_path = os.environ.get("SPACY_DATA_PATH", "/app/nlp_models/spacy")
     stanza_resources_dir = os.environ.get(
         "STANZA_RESOURCES_DIR", "/app/nlp_models/stanza"
@@ -183,7 +231,12 @@ def warmup_language(language: str, progress_callback=None) -> None:
     if not ready["spacy_ready"]:
         _update(f"Downloading spaCy model: {spacy_model}...")
         os.makedirs(spacy_data_path, exist_ok=True)
-        spacy.cli.download(spacy_model, pip_args=["--target", spacy_data_path])
+        # spaCy declara los flags de pip como *pip_args (varargs, tras
+        # direct/sdist/custom_url), así que van posicionales. --no-deps evita
+        # duplicar dependencias en el volumen: ya están en la imagen.
+        spacy.cli.download(
+            spacy_model, False, False, None, "--no-deps", "--target", spacy_data_path
+        )
         _update(f"spaCy model {spacy_model} installed", step_delta=1)
     else:
         _update(f"spaCy model {spacy_model} already present", step_delta=1)

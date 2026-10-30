@@ -18,7 +18,9 @@ config = context.config
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: alembic corre dentro del proceso de la app
+    # y, por defecto, esta llamada apagaría los loggers de uvicorn (sin access logs).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # 3. Le inyectamos a Alembic la URL de tu base de datos
 db_url = str(os.environ.get("DATABASE_URL"))

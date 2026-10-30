@@ -334,6 +334,12 @@ def upgrade() -> None:
         nullable=False,
         existing_server_default=sa.text("now()"),
     )
+    # La cadena de migraciones no crea documentos.estado en una BD desde cero
+    # (solo existe en bases heredadas), así que la aseguramos antes del alter.
+    op.execute(
+        "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS estado "
+        "VARCHAR(50) NOT NULL DEFAULT 'crudo'"
+    )
     op.alter_column(
         "documentos",
         "estado",

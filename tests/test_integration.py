@@ -25,6 +25,14 @@ from typing import Any
 import requests
 
 BASE_URL = "http://localhost:8000/api/v1"
+
+# Host-side Postgres coordinates (docker-compose publishes 5434:5432).
+DB_HOST = os.environ.get("GT_DB_HOST", "localhost")
+DB_PORT = os.environ.get("GT_DB_PORT", "5434")
+DB_USER = os.environ.get("GT_DB_USER", "app_user")
+DB_NAME = os.environ.get("GT_DB_NAME", "gt-db")
+DB_PASSWORD = os.environ.get("GT_DB_PASSWORD", "strongpass")
+
 PASSED = 0
 FAILED = 0
 ERRORS: list[str] = []
@@ -374,13 +382,13 @@ def test_db_integrity():
         [
             "psql",
             "-h",
-            "localhost",
+            DB_HOST,
             "-p",
-            "5433",
+            DB_PORT,
             "-U",
-            "app_user",
+            DB_USER,
             "-d",
-            "gt-db",
+            DB_NAME,
             "-t",
             "-c",
             """
@@ -393,7 +401,7 @@ def test_db_integrity():
           (SELECT COUNT(*) FROM document_processes) as doc_proc
         """,
         ],
-        env={**os.environ, "PGPASSWORD": "strongpass"},
+        env={**os.environ, "PGPASSWORD": DB_PASSWORD},
         capture_output=True,
         text=True,
     )

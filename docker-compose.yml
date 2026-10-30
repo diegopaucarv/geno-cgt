@@ -21,6 +21,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      # El initdb inicial tarda minutos en discos lentos (crea gt-db y pg_hba.conf)
+      start_period: 300s
     networks:
       - gt_network
       - default
@@ -108,6 +110,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+      # Primer arranque descarga el modelo ONNX desde HuggingFace
+      start_period: 900s
     networks:
       - gt_network
       - default
