@@ -641,6 +641,19 @@ const en: Translations = {
     fieldPatternOfInterest: "Pattern of interest",
     fieldCodingStyles: "Coding styles",
     fieldSegmentation: "Segmentation",
+    // Glaser classifier prompt
+    fieldGlaserPrompt: "Glaser prompt",
+    glaserSourceProject: "Project override",
+    glaserSourceGlobal: "Inherited from global (⚙)",
+    glaserSourceBuiltin: "Built-in prompt",
+    glaserPromptInheritedHint: "Empty = inherit the global or built-in prompt.",
+    glaserPromptError: "Could not save the prompt.",
+    glaserClassification: "Glaser classification",
+    glaserPromptEditable: "(editable)",
+    glaserPromptEffective: "Effective prompt",
+    glaserPromptResetGlobal: "Reset to global",
+    glaserPromptEffectiveHint:
+      "This is the prompt the classifier will actually use.",
     // Defaults
     defaultGerund: "— (will emerge after A14)",
     defaultCodingStyles: "gerund, in_vivo (default)",
@@ -1477,6 +1490,20 @@ const es: Translations = {
     fieldPatternOfInterest: "Patrón de interés",
     fieldCodingStyles: "Estilos de codificación",
     fieldSegmentation: "Segmentación",
+    // Prompt del clasificador Glaser
+    fieldGlaserPrompt: "Prompt Glaser",
+    glaserSourceProject: "Override del proyecto",
+    glaserSourceGlobal: "Heredado del global (⚙)",
+    glaserSourceBuiltin: "Prompt integrado",
+    glaserPromptInheritedHint:
+      "Vacío = heredar el prompt global o el integrado.",
+    glaserPromptError: "No se pudo guardar el prompt.",
+    glaserClassification: "Clasificación Glaser",
+    glaserPromptEditable: "(editable)",
+    glaserPromptEffective: "Prompt efectivo",
+    glaserPromptResetGlobal: "Restablecer al global",
+    glaserPromptEffectiveHint:
+      "Este es el prompt que usará realmente el clasificador.",
     // Defaults
     defaultGerund: "— (emergerá después de A14)",
     defaultCodingStyles: "gerundio, in_vivo (default)",
@@ -2301,6 +2328,20 @@ const de: Translations = {
     fieldPatternOfInterest: "Interessenmuster",
     fieldCodingStyles: "Codierungsstile",
     fieldSegmentation: "Segmentierung",
+    // Glaser-Klassifikator-Prompt
+    fieldGlaserPrompt: "Glaser-Prompt",
+    glaserSourceProject: "Projekt-Override",
+    glaserSourceGlobal: "Vom globalen (⚙) geerbt",
+    glaserSourceBuiltin: "Integrierter Prompt",
+    glaserPromptInheritedHint:
+      "Leer = globalen oder integrierten Prompt erben.",
+    glaserPromptError: "Prompt konnte nicht gespeichert werden.",
+    glaserClassification: "Glaser-Klassifikation",
+    glaserPromptEditable: "(bearbeitbar)",
+    glaserPromptEffective: "Effektiver Prompt",
+    glaserPromptResetGlobal: "Auf global zurücksetzen",
+    glaserPromptEffectiveHint:
+      "Dies ist der Prompt, den der Klassifikator tatsächlich verwendet.",
     // Defaults
     defaultGerund: "— (entsteht nach A14)",
     defaultCodingStyles: "gerundium, in_vivo (Standard)",
@@ -3117,6 +3158,19 @@ const pt: Translations = {
     fieldPatternOfInterest: "Padrão de interesse",
     fieldCodingStyles: "Estilos de codificação",
     fieldSegmentation: "Segmentação",
+    // Prompt do classificador Glaser
+    fieldGlaserPrompt: "Prompt Glaser",
+    glaserSourceProject: "Override do projeto",
+    glaserSourceGlobal: "Herdado do global (⚙)",
+    glaserSourceBuiltin: "Prompt integrado",
+    glaserPromptInheritedHint: "Vazio = herdar o prompt global ou integrado.",
+    glaserPromptError: "Não foi possível salvar o prompt.",
+    glaserClassification: "Classificação Glaser",
+    glaserPromptEditable: "(editável)",
+    glaserPromptEffective: "Prompt efetivo",
+    glaserPromptResetGlobal: "Restaurar para o global",
+    glaserPromptEffectiveHint:
+      "Este é o prompt que o classificador realmente usará.",
     // Defaults
     defaultGerund: "— (emergirá após A14)",
     defaultCodingStyles: "gerúndio, in_vivo (padrão)",

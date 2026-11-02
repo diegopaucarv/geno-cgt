@@ -116,6 +116,10 @@ export interface ProjectConfig {
   config_segmentacion: Record<string, any>;
   mutation_policy: Record<string, string>;
   pending_suggestions: ConfigSuggestion[];
+  // ── Prompt Glaser por proyecto ("" = sin override) ──
+  glaser_classifier_prompt?: string;
+  glaser_classifier_prompt_effective?: string;
+  glaser_classifier_prompt_source?: "project" | "global" | "builtin";
 }
 
 export interface ConfigHistoryEntry {
@@ -318,6 +322,23 @@ export async function deleteAllDocuments(projectId: string) {
 
 export async function getProjectConfig(projectId: string) {
   return request<ProjectConfig>(`/projects/${projectId}/config`);
+}
+
+export async function updateGlaserPrompt(
+  projectId: string,
+  prompt: string | null,
+) {
+  return request<{
+    status: string;
+    message: string;
+    glaser_classifier_prompt: string;
+    glaser_classifier_prompt_effective: string;
+    glaser_classifier_prompt_source: "project" | "global" | "builtin";
+    warnings?: string[];
+  }>(`/projects/${projectId}/config/glaser-prompt`, {
+    method: "PUT",
+    body: JSON.stringify({ prompt }),
+  });
 }
 
 export async function getProjectConfigHistory(

@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from uuid import UUID
 
 from app.core.nlp_models import get_current_spacy
+from app.core.runtime_config import get_config_value
 from app.db.database import get_db
 from app.models.domain.category import Categoria
 from app.models.domain.document import Documento
@@ -14,6 +16,7 @@ from app.models.domain.user import Usuario
 from app.schemas import ProjectCreate, ProjectResponse
 from app.services.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -702,6 +705,133 @@ VALID_OBJECTS_OF_STUDY = {
     "meaning",
 }
 
+# ── Prompt Glaser por proyecto ────────────────────────────────────────
+
+# Prompt Glaser por proyecto: mismos 4 tags que validan los workers.
+# Canario de la definición: workers/heavy/glaser_classifier.py (VALID_TAGS).
+GLASER_TAGS: tuple[str, ...] = (
+    "baseline_data",
+    "interviewer_context",
+    "processual_data",
+    "contextual_data",
+)
+MAX_GLASER_PROMPT_LEN = 20_000
+GLASER_PROMPT_MIN_LEN = 200
+
+# Tags envolventes que el worker añade/espera además de los 4 de Glaser.
+_GLASER_ALLOWED_EXTRA_TAGS = {"texto", "texto_crudo"}
+_GLASER_TAG_RE = re.compile(r"</?([A-Za-z_][A-Za-z0-9_]*)>")
+# Expresiones que indican que el prompt prohíbe tags anidados.
+_GLASER_NESTING_KEYWORDS = (
+    "no anid",
+    "sin anid",
+    "not nest",
+    "no nest",
+    "keine verschachtel",
+    "não aninh",
+)
+
+
+class GlaserPromptUpdate(BaseModel):
+    """Body para PUT /config/glaser-prompt.
+
+    prompt=None → sin cambios; prompt="" → restablece al prompt global/integrado.
+    """
+
+    prompt: str | None = Field(default=None, max_length=MAX_GLASER_PROMPT_LEN)
+
+
+def _normalize_glaser_prompt(raw: str | None) -> str:
+    """Normaliza el prompt: nunca None, sin espacios sobrantes en los extremos."""
+    return (raw or "").strip()
+
+
+def _validate_glaser_prompt_tags(prompt: str) -> list[str]:
+    """Valida el prompt Glaser de un proyecto.
+
+    Los errores duros se lanzan como HTTPException(400). Las advertencias
+    (soft) se devuelven como lista para adjuntarlas en la respuesta.
+    """
+    if len(prompt) > MAX_GLASER_PROMPT_LEN:
+        raise HTTPException(400, "El prompt supera los 20000 caracteres.")
+
+    if len(prompt) < GLASER_PROMPT_MIN_LEN:
+        raise HTTPException(
+            400, "El prompt es demasiado corto (mínimo 200 caracteres útiles)."
+        )
+
+    missing = [
+        tag
+        for tag in GLASER_TAGS
+        if f"<{tag}>" not in prompt and f"</{tag}>" not in prompt
+    ]
+    if missing:
+        raise HTTPException(
+            400,
+            "El prompt debe mencionar los 4 tags: <baseline_data>, "
+            "<interviewer_context>, <processual_data>, <contextual_data>. "
+            f"Faltan: {', '.join(f'<{t}>' for t in missing)}.",
+        )
+
+    allowed = set(GLASER_TAGS) | _GLASER_ALLOWED_EXTRA_TAGS
+    for match in _GLASER_TAG_RE.finditer(prompt):
+        name = match.group(1)
+        if name not in allowed:
+            raise HTTPException(
+                400,
+                f"Tag no permitido en el prompt: '<{name}>'. Solo se permiten: "
+                "<baseline_data>, <interviewer_context>, <processual_data>, "
+                "<contextual_data>.",
+            )
+
+    if "{raw_text}" in prompt:
+        raise HTTPException(
+            400,
+            "Quita el marcador {raw_text}: el sistema añade el texto del "
+            "documento automáticamente en <texto>...</texto>.",
+        )
+
+    warnings: list[str] = []
+    lowered = prompt.lower()
+    if not any(kw in lowered for kw in _GLASER_NESTING_KEYWORDS):
+        warnings.append("El prompt no prohíbe explícitamente el anidamiento de tags.")
+    return warnings
+
+
+def _resolve_glaser_prompt(stored: str | None) -> tuple[str, str]:
+    """Resuelve el prompt efectivo y su origen: (prompt, source).
+
+    Orden: override del proyecto > prompt global (runtime.json / env) > integrado.
+    El prompt integrado no vive en el backend, así que se reporta como "" y
+    source="builtin" (el worker heavy usa su CLASSIFIER_SYSTEM_PROMPT).
+    """
+    project_prompt = _normalize_glaser_prompt(stored)
+    if project_prompt:
+        return project_prompt, "project"
+
+    global_prompt = str(
+        get_config_value(
+            "GLASER_CLASSIFIER_PROMPT",
+            env_var="GLASER_CLASSIFIER_SYSTEM",
+            default="",
+        )
+        or ""
+    ).strip()
+    if global_prompt:
+        return global_prompt, "global"
+
+    return "", "builtin"
+
+
+def _glaser_prompt_payload(proyecto: Proyecto) -> dict:
+    """Payload de estado del prompt Glaser para este proyecto."""
+    effective, source = _resolve_glaser_prompt(proyecto.glaser_classifier_prompt)
+    return {
+        "glaser_classifier_prompt": proyecto.glaser_classifier_prompt or "",
+        "glaser_classifier_prompt_effective": effective,
+        "glaser_classifier_prompt_source": source,
+    }
+
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -759,6 +889,8 @@ async def create_project(
     data = body.model_dump()
     # Remove fields that are NOT Proyecto columns (stored in JSONB later)
     custom_label = data.pop("custom_label", None)
+    # El prompt Glaser se gestiona por su propio endpoint (PUT /config/glaser-prompt).
+    data.pop("glaser_classifier_prompt", None)
     processing_verb = data.pop("processing_verb", "").strip() or "resolve"
     processing_gerund = data.pop("processing_gerund", "").strip() or "resolving"
     oos = data.get("object_of_study", "concern")
@@ -1455,6 +1587,8 @@ async def get_project_config(
         "coding_style_instruction": proyecto.coding_style_instruction,
         # ── Segmentación ──
         "config_segmentacion": proyecto.config_segmentacion or {},
+        # ── Prompt Glaser propio del proyecto (override opcional) ──
+        **_glaser_prompt_payload(proyecto),
         # ── Política de mutaciones ──
         "mutation_policy": policy,
         # ── Sugerencias pendientes (cambios propuestos por agentes, nivel "suggest") ──
@@ -1605,6 +1739,69 @@ async def update_mutation_policy(
         "status": "updated",
         "message": f"Política de mutaciones actualizada",
         "mutation_policy": proyecto.config_mutation_policy,
+    }
+
+
+@router.put("/{project_id}/config/glaser-prompt")
+async def update_glaser_prompt(
+    project_id: UUID,
+    body: GlaserPromptUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Actualiza el prompt Glaser propio del proyecto (override).
+
+    Body: {"prompt": "..."}. prompt=null → sin cambios; prompt="" → restablece
+    al prompt global (runtime.json / env) o al integrado del worker.
+    El prompt debe mencionar los 4 tags de Glaser y no inventar tags nuevos.
+    """
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    if body.prompt is None:
+        return {
+            "status": "no_changes",
+            "message": "Sin cambios",
+            **_glaser_prompt_payload(proyecto),
+        }
+
+    new_value = _normalize_glaser_prompt(body.prompt)
+    warnings: list[str] = []
+    if new_value:
+        warnings = _validate_glaser_prompt_tags(new_value)
+
+    old_value = (proyecto.glaser_classifier_prompt or "").strip()
+    if new_value == old_value:
+        return {
+            "status": "no_changes",
+            "message": "Sin cambios",
+            **_glaser_prompt_payload(proyecto),
+        }
+
+    await _record_config_change(
+        db,
+        project_id,
+        field="glaser_classifier_prompt",
+        old_value=old_value or None,
+        # new_value es NOT NULL: el reset se registra como cadena vacía.
+        new_value=new_value,
+        triggered_by="user",
+        context={"length": len(new_value)},
+    )
+    proyecto.glaser_classifier_prompt = new_value or None
+    await db.commit()
+    await db.refresh(proyecto)
+
+    return {
+        "status": "updated",
+        "message": (
+            "Prompt Glaser guardado"
+            if new_value
+            else "Prompt Glaser restablecido al prompt global/integrado"
+        ),
+        "warnings": warnings or [],
+        **_glaser_prompt_payload(proyecto),
     }
 
 

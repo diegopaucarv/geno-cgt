@@ -76,35 +76,126 @@ Si hay problemas, suggested_fixes debe ser una instruccion concreta y especifica
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _resolve_system_prompt() -> str:
-    """System instructions for step 1.
+def _resolve_project_prompt(session: Any, proyecto_id: str | None) -> tuple[str, str]:
+    """Prompt Glaser propio del proyecto: (prompt, source).
 
-    Priority: env GLASER_CLASSIFIER_SYSTEM > runtime.json
-    GLASER_CLASSIFIER_PROMPT (⚙ panel) > built-in CLASSIFIER_SYSTEM_PROMPT.
-    An empty configured value means "use the built-in prompt".
+    Devuelve ("", "") cuando no hay override (fila inexistente, NULL, cadena
+    vacía o solo espacios) o cuando la lectura falla. Abre SIEMPRE su propia
+    sesión (nunca la del llamador): un error de BD aquí no debe envenenar la
+    transacción que luego hace `UPDATE documentos`. Es fail-safe a propósito,
+    porque la columna no existe si la migración 017 aún no ha corrido.
     """
+    if not proyecto_id:
+        return "", ""
+
+    db = None
+    try:
+        from database import SessionLocal
+
+        db = SessionLocal()
+        row = db.execute(
+            text("SELECT glaser_classifier_prompt FROM proyectos WHERE id = :pid"),
+            {"pid": str(proyecto_id)},
+        ).fetchone()
+    except Exception as exc:  # noqa: BLE001 — best-effort: nunca romper la tarea
+        logger.warning(
+            "Glaser: no se pudo leer el prompt del proyecto %s (%s: %s); "
+            "se usará el prompt global/integrado",
+            (proyecto_id or "-")[:8],
+            type(exc).__name__,
+            exc,
+        )
+        if db is not None:
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+        return "", ""
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    if not row or row[0] is None:
+        return "", ""
+
+    prompt = str(row[0]).strip()
+    if not prompt:
+        return "", ""
+    return prompt, "project"
+
+
+def _resolve_system_prompt(
+    session: Any | None = None, proyecto_id: str | None = None
+) -> tuple[str, str]:
+    """System instructions for step 1: (prompt, source).
+
+    Priority:
+        1. Override del proyecto (proyectos.glaser_classifier_prompt) → "project"
+        2. env GLASER_CLASSIFIER_SYSTEM > runtime.json GLASER_CLASSIFIER_PROMPT
+           (⚙ panel)                                                        → "global"
+        3. built-in CLASSIFIER_SYSTEM_PROMPT                               → "builtin"
+
+    An empty configured value means "fall to the next tier". Called without
+    arguments it behaves as before (global/builtin tiers only).
+    """
+    proj_prompt, _ = _resolve_project_prompt(session, proyecto_id)
+    if proj_prompt:
+        return proj_prompt, "project"
+
     configured = str(
         get_config_value(
             "GLASER_CLASSIFIER_PROMPT",
             env_var="GLASER_CLASSIFIER_SYSTEM",
-            default=CLASSIFIER_SYSTEM_PROMPT,
+            default="",
         )
         or ""
     ).strip()
-    return configured or CLASSIFIER_SYSTEM_PROMPT
+    if configured:
+        return configured, "global"
+
+    return CLASSIFIER_SYSTEM_PROMPT, "builtin"
+
+
+def _prompt_mentions_all_tags(prompt: str) -> bool:
+    """True si el prompt menciona (apertura o cierre) los 4 tags de Glaser."""
+    return all(f"<{tag}>" in prompt or f"</{tag}>" in prompt for tag in VALID_TAGS)
 
 
 def _step1_classify_xml(
-    raw_text: str, llm_client: Any, feedback: str | None = None
+    raw_text: str,
+    llm_client: Any,
+    feedback: str | None = None,
+    *,
+    session: Any | None = None,
+    proyecto_id: str | None = None,
 ) -> str:
     """Classify full document text by wrapping passages in XML tags.
 
     Sends system instructions as 'system' role, raw text + feedback as 'user'.
     Uses PRO tier. The system instructions come from config (see below), so the
-    Glaser prompt can be edited from the ⚙ panel without a restart.
+    Glaser prompt can be edited from the ⚙ panel or per project without a
+    restart.
     """
     # Instructions come from config (see _resolve_system_prompt).
-    system_prompt = _resolve_system_prompt()
+    system_prompt, prompt_source = _resolve_system_prompt(
+        session=session, proyecto_id=proyecto_id
+    )
+    logger.info(
+        "Glaser prompt: source=%s, project=%s, len=%d",
+        prompt_source,
+        (proyecto_id or "-")[:8],
+        len(system_prompt),
+    )
+    if prompt_source == "project" and not _prompt_mentions_all_tags(system_prompt):
+        # Se respeta el prompt del usuario; solo se avisa.
+        logger.warning(
+            "Glaser prompt del proyecto %s no menciona los 4 tags válidos %s",
+            (proyecto_id or "-")[:8],
+            sorted(VALID_TAGS),
+        )
 
     user_content = f"<texto>\n{raw_text}\n</texto>"
     if feedback:
@@ -369,7 +460,9 @@ def classify_document_with_validation(
             documento_id[:8],
             "yes" if feedback else "no",
         )
-        xml_text = _step1_classify_xml(raw_text, llm_client, feedback)
+        xml_text = _step1_classify_xml(
+            raw_text, llm_client, feedback, session=session, proyecto_id=proyecto_id
+        )
 
         # Step 2: Validate (algorithmic first, FLASH only if needed)
         validation_result = _step2_validate_xml(xml_text, llm_client)

@@ -4,6 +4,7 @@ import {
   getProjectConfig,
   getProjectConfigHistory,
   updateMutationPolicy,
+  updateGlaserPrompt,
   updatePopulationAssumption,
   getResearchQuestion,
   generateResearchQuestion,
@@ -43,6 +44,7 @@ const FIELD_KEYS: Record<string, string> = {
   coding_styles: "projectConfig.fieldCodingStyles",
   gerundio_esperado: "projectConfig.fieldExpectedGerund",
   segmentation_config: "projectConfig.fieldSegmentation",
+  glaser_classifier_prompt: "projectConfig.fieldGlaserPrompt",
 };
 
 const LEVEL_KEYS: Record<string, { key: string; color: string }> = {
@@ -85,6 +87,15 @@ function tryParseJson(v: string | null): string {
   } catch {
     return v;
   }
+}
+
+// Los prompts pueden superar los 20k caracteres: en el historial solo se
+// muestra un extracto para que la entrada siga siendo legible.
+function historyValue(field: string, v: string | null): string {
+  const text = tryParseJson(v);
+  if (field !== "glaser_classifier_prompt" || v === null) return text;
+  if (text.length <= 120) return text;
+  return text.slice(0, 120) + "…";
 }
 
 function timeAgo(t: (key: string) => string, iso: string | null): string {
@@ -281,48 +292,15 @@ export default function ProjectConfigPanel({
   const [editOQValue, setEditOQValue] = useState("");
   const [rqSaving, setRqSaving] = useState(false);
 
-  // ── Classification prompt state ──
-  // The classifier prompt is stored in localStorage so backend workers can read it.
-  // Backend workers should read from the same localStorage key: "gt_classifier_prompt".
-  const DEFAULT_CLASSIFIER_PROMPT = [
-    "## System",
-    "",
-    "[ROL]",
-    "Eres un clasificador de datos cualitativos según la metodología Glaser.",
-    "",
-    "[OBJETIVO]",
-    "1. Clasifica cada segmento del texto en EXACTAMENTE uno de estos tipos:",
-    "   - baseline_data: datos centrales del fenómeno estudiado",
-    "   - interviewer_context: preguntas o intervenciones del entrevistador",
-    "   - processual_data: descripciones de procesos, secuencias, cambios",
-    "   - contextual_data: información de contexto, setting, background",
-    "2. Envuelve CADA segmento en su tag XML correspondiente.",
-    "3. NO dejes texto fuera de tags.",
-    "",
-    "[RESTRICCIONES]",
-    "- Usa SOLO los 4 tags permitidos.",
-    "- Cada bloque de texto debe estar envuelto en EXACTAMENTE un tag.",
-    "- Los tags NO deben solaparse.",
-    "- Preserva el texto original sin modificarlo.",
-    "- Responde directamente. NO uses herramientas externas.",
-    "",
-    "## Task",
-    "",
-    "<texto>",
-    "{raw_text}",
-    "</texto>",
-    "",
-    "Return the full text with XML tags wrapping each classified segment.",
-  ].join("\n");
-
-  const [classifierPrompt, setClassifierPrompt] = useState(() => {
-    try {
-      return localStorage.getItem("gt_classifier_prompt") || DEFAULT_CLASSIFIER_PROMPT;
-    } catch {
-      return DEFAULT_CLASSIFIER_PROMPT;
-    }
-  });
-  const [classifierSaved, setClassifierSaved] = useState(false);
+  // ── Prompt Glaser por proyecto ──
+  // Se persiste en proyectos.glaser_classifier_prompt vía
+  // PUT .../config/glaser-prompt. "" = heredar del prompt global (⚙) o integrado.
+  const [glaserPrompt, setGlaserPrompt] = useState("");
+  const [glaserSource, setGlaserSource] = useState<
+    "project" | "global" | "builtin"
+  >("builtin");
+  const [glaserSaving, setGlaserSaving] = useState(false);
+  const [glaserMsg, setGlaserMsg] = useState("");
 
   // ── Preprocess prompt state ──
   const DEFAULT_PROMPT = [
@@ -378,12 +356,46 @@ export default function ProjectConfigPanel({
     setTimeout(() => setPreSaved(false), 2000);
   }
 
-  function saveClassifierConfig() {
-    localStorage.setItem("gt_classifier_prompt", classifierPrompt);
-    setClassifierSaved(true);
-    setTimeout(() => setClassifierSaved(false), 2000);
+  async function saveGlaserPrompt() {
+    setGlaserSaving(true);
+    setGlaserMsg("");
+    try {
+      const r = await updateGlaserPrompt(projectId, glaserPrompt);
+      setGlaserPrompt(r.glaser_classifier_prompt ?? "");
+      setGlaserSource(r.glaser_classifier_prompt_source ?? "builtin");
+      const warnings = r.warnings?.length ? ` ⚠ ${r.warnings.join(" ")}` : "";
+      setGlaserMsg(`✅ ${r.message}${warnings}`);
+      const c = await getProjectConfig(projectId);
+      setConfig(c);
+      getProjectConfigHistory(projectId)
+        .then((h) => setHistory(h.entries || []))
+        .catch(() => {});
+    } catch (e: any) {
+      setGlaserMsg("❌ " + (e.message || t("projectConfig.glaserPromptError")));
+    } finally {
+      setGlaserSaving(false);
+    }
   }
 
+  async function resetGlaserPrompt() {
+    setGlaserSaving(true);
+    setGlaserMsg("");
+    try {
+      const r = await updateGlaserPrompt(projectId, "");
+      setGlaserPrompt("");
+      setGlaserSource(r.glaser_classifier_prompt_source ?? "builtin");
+      setGlaserMsg(`✅ ${r.message}`);
+      const c = await getProjectConfig(projectId);
+      setConfig(c);
+      getProjectConfigHistory(projectId)
+        .then((h) => setHistory(h.entries || []))
+        .catch(() => {});
+    } catch (e: any) {
+      setGlaserMsg("❌ " + (e.message || t("projectConfig.glaserPromptError")));
+    } finally {
+      setGlaserSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -393,9 +405,18 @@ export default function ProjectConfigPanel({
       .then((c) => {
         setConfig(c);
         setPolicy({ ...(c.mutation_policy || {}) });
+        setGlaserPrompt(c.glaser_classifier_prompt ?? "");
+        setGlaserSource(c.glaser_classifier_prompt_source ?? "builtin");
+        setGlaserMsg("");
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+
+    // El antiguo prompt Glaser se guardaba solo en localStorage y nunca
+    // llegó a los workers de Celery: se descarta sin importar su valor.
+    try {
+      localStorage.removeItem("gt_classifier_prompt");
+    } catch {}
 
     getProjectConfigHistory(projectId)
       .then((h) => setHistory(h.entries || []))
@@ -544,6 +565,19 @@ export default function ProjectConfigPanel({
       ["¶", "Separar parrafos", "parag"],
     ];
 
+    const glaserSourceColor =
+      glaserSource === "project"
+        ? "#3FB950"
+        : glaserSource === "global"
+          ? "#D29922"
+          : "#8B949E";
+    const glaserSourceKey =
+      glaserSource === "project"
+        ? "projectConfig.glaserSourceProject"
+        : glaserSource === "global"
+          ? "projectConfig.glaserSourceGlobal"
+          : "projectConfig.glaserSourceBuiltin";
+
     return (
       <div>
         <div style={{ marginBottom: 14 }}>
@@ -640,13 +674,25 @@ export default function ProjectConfigPanel({
         >
           <div
             style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#E6EDF3",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               marginBottom: 4,
             }}
           >
-            Clasificación Glaser
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>
+              {t("projectConfig.glaserClassification")}
+            </span>
+            <span
+              style={{
+                ...BADGE,
+                color: glaserSourceColor,
+                background: `${glaserSourceColor}18`,
+                border: `1px solid ${glaserSourceColor}44`,
+              }}
+            >
+              {t(glaserSourceKey)}
+            </span>
           </div>
           <div
             style={{
@@ -656,11 +702,13 @@ export default function ProjectConfigPanel({
               textTransform: "uppercase",
             }}
           >
-            Prompt de clasificación (editable)
+            {t("projectConfig.fieldGlaserPrompt")}{" "}
+            {t("projectConfig.glaserPromptEditable")}
           </div>
           <textarea
-            value={classifierPrompt}
-            onChange={(e) => setClassifierPrompt(e.target.value)}
+            value={glaserPrompt}
+            onChange={(e) => setGlaserPrompt(e.target.value)}
+            placeholder={t("projectConfig.glaserPromptInheritedHint")}
             style={{
               width: "100%",
               minHeight: 300,
@@ -675,20 +723,75 @@ export default function ProjectConfigPanel({
             }}
           />
 
+          {config?.glaser_classifier_prompt_effective && (
+            <details style={{ marginTop: 8 }}>
+              <summary
+                style={{ fontSize: 11, color: "#8B949E", cursor: "pointer" }}
+                title={t("projectConfig.glaserPromptEffectiveHint")}
+              >
+                {t("projectConfig.glaserPromptEffective")}
+              </summary>
+              <pre
+                style={{
+                  margin: "6px 0 0",
+                  padding: 10,
+                  borderRadius: 6,
+                  background: "#0D1117",
+                  border: "1px solid #30363D",
+                  color: "#8B949E",
+                  fontSize: 11,
+                  fontFamily: "monospace",
+                  whiteSpace: "pre-wrap",
+                  maxHeight: 200,
+                  overflow: "auto",
+                }}
+              >
+                {config.glaser_classifier_prompt_effective}
+              </pre>
+            </details>
+          )}
+
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button
-              onClick={() => setClassifierPrompt(DEFAULT_CLASSIFIER_PROMPT)}
-              style={{ ...BTN_SECONDARY, fontSize: 11 }}
+              onClick={resetGlaserPrompt}
+              disabled={glaserSaving || glaserSource !== "project"}
+              style={{
+                ...BTN_SECONDARY,
+                fontSize: 11,
+                opacity: glaserSaving || glaserSource !== "project" ? 0.5 : 1,
+                cursor:
+                  glaserSaving || glaserSource !== "project"
+                    ? "not-allowed"
+                    : "pointer",
+              }}
             >
-              Reset default
+              {t("projectConfig.glaserPromptResetGlobal")}
             </button>
             <button
-              onClick={saveClassifierConfig}
-              style={{ ...BTN_PRIMARY, fontSize: 11 }}
+              onClick={saveGlaserPrompt}
+              disabled={glaserSaving}
+              style={{
+                ...BTN_PRIMARY,
+                fontSize: 11,
+                opacity: glaserSaving ? 0.5 : 1,
+                cursor: glaserSaving ? "not-allowed" : "pointer",
+              }}
             >
-              {classifierSaved ? "✓ Guardado" : "Guardar"}
+              {glaserSaving ? t("projectConfig.saving") : t("common.save")}
             </button>
           </div>
+
+          {glaserMsg && (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                color: glaserMsg.startsWith("❌") ? "#F85149" : "#8B949E",
+              }}
+            >
+              {glaserMsg}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1065,7 +1168,7 @@ export default function ProjectConfigPanel({
                   }}
                 >
                   {entry.old_value
-                    ? tryParseJson(entry.old_value)
+                    ? historyValue(entry.field, entry.old_value)
                     : t("projectConfig.creationPlaceholder")}
                 </code>
               </div>
@@ -1086,7 +1189,7 @@ export default function ProjectConfigPanel({
                     overflow: "auto",
                   }}
                 >
-                  {tryParseJson(entry.new_value)}
+                  {historyValue(entry.field, entry.new_value)}
                 </code>
               </div>
             </div>

@@ -56,6 +56,14 @@ class Proyecto(Base, TimestampMixin):
     Derivada de population_assumption.coding_styles y compilada por
     coding_styles.py al guardar la configuración del proyecto."""
 
+    # ── Prompt Glaser propio del proyecto (override) ──
+    glaser_classifier_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Override por proyecto del system prompt del clasificador Glaser.
+    NULL / '' / solo-espacios = sin override: se usa el prompt global
+    (runtime.json GLASER_CLASSIFIER_PROMPT o env GLASER_CLASSIFIER_SYSTEM)
+    y, en última instancia, CLASSIFIER_SYSTEM_PROMPT del worker heavy.
+    Se guarda con .strip(); máximo 20000 caracteres (validado en la API)."""
+
     # ── F0.3.5: Objeto de estudio como columna dedicada ──
     object_of_study: Mapped[str] = mapped_column(String(50), default="concern")
     """Tipo de patrón humano que se busca. Extraído de population_assumption
