@@ -21,9 +21,4 @@ Extract:
 - Answer directly. Do NOT use external tools.
 - Do NOT attempt to search for additional information.
 
-## User
-[SEGMENT]
-{segment_text}
-
-[SEGMENT ID]
-{segment_id}
+The segment to analyse and its segment id arrive in the user message.

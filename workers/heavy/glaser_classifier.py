@@ -301,6 +301,28 @@ def _step3_extract_baseline(xml_text: str) -> list[str]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _has_nested_tags(xml_text: str) -> bool:
+    """True when a valid tag opens while a previous one is still open.
+
+    Nesting is forbidden (passages must be sequential), so a depth-first scan is
+    enough: any opening tag seen at depth > 0 is a violation. The previous
+    implementation used a single-regex lookahead that also matched perfectly
+    sequential multi-tag output, forcing three validator rounds on every
+    correctly classified document.
+    """
+    depth = 0
+    for match in re.finditer(r"<(/?)(\w+)>", xml_text):
+        if match.group(2) not in VALID_TAGS:
+            continue
+        if match.group(1):
+            depth = max(0, depth - 1)
+        elif depth > 0:
+            return True
+        else:
+            depth = 1
+    return False
+
+
 def _algorithmic_validate_xml(xml_text: str) -> dict:
     """Regex-based XML structure validation. Catches 80% of issues instantly."""
     issues = []
@@ -330,11 +352,7 @@ def _algorithmic_validate_xml(xml_text: str) -> dict:
         issues.append(f"Unknown tags: {', '.join(sorted(unknown))}")
 
     # 4. Overlapping tags (forbidden: no nesting allowed)
-    # Detect pattern: <tagA>...<tagB>...</tagA>...</tagB>
-    tag_pattern = "|".join(VALID_TAGS)
-    if re.search(
-        f"<({tag_pattern})>.*<({tag_pattern})>.*</\\1>.*</\\2>", xml_text, re.DOTALL
-    ):
+    if _has_nested_tags(xml_text):
         issues.append(
             "Overlapping or nested tags detected — tags must be sequential, not nested"
         )

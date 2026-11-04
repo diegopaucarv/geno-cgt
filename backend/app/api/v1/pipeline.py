@@ -1,7 +1,7 @@
 """Pipeline execution endpoints — dispara stages y devuelve task_ids para polling."""
 
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.core.celery_app import celery_app
 from app.core.context_config import context_config
@@ -70,8 +70,11 @@ async def run_pipeline_stage(
         result["note"] = "Precoding runs as part of open_coding phase"
 
     elif stage_name == "open_coding":
+        # process_document_agents_a llama _ensure_segmented, que LANZA si el doc
+        # no tiene segmentos. Solo despachamos docs realmente segmentados;
+        # 'crudo' y 'segmentando' fallarían siempre.
         for doc in docs:
-            if doc.estado in ("crudo", "segmentando", "segmentado"):
+            if (doc.estado or "").strip() == "segmentado":
                 task = celery_app.send_task(
                     "process_document_agents_a",
                     args=[str(doc.id), str(project_id)],
@@ -84,6 +87,17 @@ async def run_pipeline_stage(
             result["status"] = "dispatched"
 
     elif stage_name == "cross_doc":
+        # Limpiar los marcadores Phase-B obsoletos para que un run manual
+        # siempre despache (process_synthesis_agents_b se salta si ya están).
+        await db.execute(
+            text(
+                "DELETE FROM processing_states "
+                "WHERE entity_type = 'project' AND entity_id = :pid "
+                "AND step LIKE 'phase_b_run_%'"
+            ),
+            {"pid": str(project_id)},
+        )
+        await db.commit()
         task = celery_app.send_task(
             "process_synthesis_agents_b",
             args=[str(project_id)],
@@ -945,6 +959,106 @@ async def _get_project_state(db: AsyncSession, project_id: UUID) -> str:
     return result[0] if result else "collecting"
 
 
+# Tareas Celery de nivel proyecto registradas en worker-heavy que aceptan
+# únicamente (proyecto_id) como primer argumento. Verificado con
+# `grep '@app.task(name=...)' workers/heavy/tasks.py`.
+# NO incluye tareas que exigen argumentos adicionales (b3_critique_labels,
+# f6a_*/f6c_*/f6d_applicability_critic, a01_integrate_paradigm,
+# a16_test_interchangeability, f6b_memo_theoretical_tagger, query_lower_level,
+# seed_theoretical_codes) ni tareas de las colas fast/nlp.
+_PROJECT_LEVEL_TASK_NAMES = frozenset(
+    {
+        "a3_make_sense",
+        "a04_group_constructs",
+        "a06_theoretical_sample",
+        "a07_build_evidence_map",
+        "a14_find_main_concern",
+        "a15_core_emergence",
+        "b1_compare_incidents",
+        "b2_label_groups",
+        "core_emergence_pipeline",
+        "core_saturation_loop",
+        "database_a_pipeline",
+        "database_b_pipeline",
+        "evaluate_respec_signals",
+        "f6d_applicability_engine",
+        "final_report",
+        "global_saturation_check",
+        "invoke_graph",
+        "main_concern_pipeline",
+        "process_synthesis_agents_b",
+        "propose_core_categories",
+        "selective_coding_coordinator",
+        "selective_reduction_pipeline",
+        "synthesize_categories",
+        "update_hypotheses",
+        "verify_core_pattern",
+    }
+)
+
+
+async def _get_or_create_running_run_id(db: AsyncSession, project_id: UUID) -> UUID:
+    """Reutiliza el pipeline_run 'running' más reciente o crea uno nuevo."""
+    from sqlalchemy import text
+
+    row = await db.execute(
+        text(
+            "SELECT id FROM pipeline_runs "
+            "WHERE project_id = :pid AND status = 'running' "
+            "ORDER BY creado_en DESC LIMIT 1"
+        ),
+        {"pid": str(project_id)},
+    )
+    run_id = row.scalar_one_or_none()
+    if run_id is not None:
+        return run_id
+
+    new_id = uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO pipeline_runs "
+            "(id, project_id, status, triggered_by, summary) "
+            "VALUES (:id, :pid, 'running', 'manual', '{}'::jsonb)"
+        ),
+        {"id": new_id, "pid": str(project_id)},
+    )
+    return new_id
+
+
+async def _track_pipeline_task(
+    db: AsyncSession,
+    project_id: UUID,
+    document_id: str,
+    celery_task_id: str,
+    task_name: str,
+    queue: str,
+    doc_estado_before: str | None,
+) -> None:
+    """Registra la tarea despachada en pipeline_tasks para poder revertirla."""
+    from sqlalchemy import text
+
+    run_id = await _get_or_create_running_run_id(db, project_id)
+    await db.execute(
+        text(
+            "INSERT INTO pipeline_tasks "
+            "(id, run_id, document_id, celery_task_id, task_name, queue, status, "
+            " doc_estado_before, segments_before, codes_before) "
+            "VALUES (:id, :run_id, :did, :ctid, :tname, :queue, 'queued', "
+            " :before, 0, 0)"
+        ),
+        {
+            "id": uuid4(),
+            "run_id": run_id,
+            "did": str(document_id),
+            "ctid": celery_task_id,
+            "tname": task_name,
+            "queue": queue,
+            "before": doc_estado_before,
+        },
+    )
+    await db.commit()
+
+
 @router.post("/projects/{project_id}/pipeline/run-agent/{agent_id}")
 async def run_single_agent(
     project_id: UUID,
@@ -957,10 +1071,19 @@ async def run_single_agent(
     Body opcional: {"document_id": "..."} para agentes per-documento.
     """
     from app.core.celery_app import celery_app
-    from sqlalchemy import text
 
     doc_id = (body or {}).get("document_id")
-    task_name = agent_id  # Celery task names match agent IDs
+
+    # UI agent ids that do not match a registered Celery task name.
+    # Per-document agents receive (documento_id, proyecto_id).
+    per_doc_task_names = {
+        "fa_glaser_data_classifier": "run_glaser_classifier",
+        "clasificador_datos": "run_glaser_classifier",
+        # "Extraer incidentes": F2.3 runs inside process_document_agents_a,
+        # which segments (if needed), classifies segment types and extracts.
+        "extract_patterns": "process_document_agents_a",
+        "extract_patterns_and_incidents": "process_document_agents_a",
+    }
 
     # Per-document agents need document context
     if doc_id:
@@ -974,28 +1097,78 @@ async def run_single_agent(
             or (doc.metadatos or {}).get("texto_original", "")
         )
 
+        # Estado normalizado ANTES del dispatch (para rollback).
+        estado_before = (doc.estado or "").strip() or None
+
         if agent_id == "segmentar_documento":
+            task_name = "segmentar_documento"
+            queue = "nlp"
             task = celery_app.send_task(
-                agent_id,
+                task_name,
                 args=[texto, 1024, "", "TEXTO", "", doc_id, True],  # manual_mode=True
-                queue="nlp",
+                queue=queue,
             )
         elif agent_id in ("punctuate_text", "util_punctuator"):
+            task_name = "punctuate_text"
+            queue = "fast"
             task = celery_app.send_task(
-                "punctuate_text",
-                kwargs={"texto": texto, "max_chars": 10000, "documento_id": doc_id},
-                queue="fast",
+                task_name,
+                kwargs={
+                    "texto": texto,
+                    "max_chars": 10000,
+                    "documento_id": doc_id,
+                    # Afinidad de caché de prompt: todo el proyecto en la misma réplica.
+                    "cache_key": str(project_id),
+                },
+                queue=queue,
             )
         else:
+            task_name = per_doc_task_names.get(agent_id, agent_id)
+            queue = "heavy"
+            # process_document_agents_a necesita segmentos reales; en otros
+            # estados _ensure_segmented lanza y la tarea falla.
+            if task_name == "process_document_agents_a" and estado_before not in (
+                "segmentado",
+                "incidentes_extraidos",
+                "procesado",
+                "listo",
+                "error",
+            ):
+                raise HTTPException(
+                    409,
+                    f"Documento en estado '{estado_before}'. "
+                    "Ejecutá segmentar_documento antes de extraer.",
+                )
             task = celery_app.send_task(
-                agent_id,
+                task_name,
                 args=[doc_id, str(project_id)],
-                queue="heavy",
+                queue=queue,
             )
+
+        # Tracking: sin esto stop/cancel no pueden revertir el documento.
+        await _track_pipeline_task(
+            db,
+            project_id,
+            doc_id,
+            task.id,
+            task_name,
+            queue,
+            estado_before,
+        )
     else:
-        # Project-level agents (cross-doc, synthesizers, etc.)
+        # Project-level agents (cross-doc, synthesizers, etc.).
+        # El agent_id de la UI puede ser un id de prompt NO registrado en
+        # Celery; despacharlo igual devuelve 200 sin ejecutar nada.
+        if agent_id not in _PROJECT_LEVEL_TASK_NAMES:
+            raise HTTPException(
+                400,
+                f"El agente '{agent_id}' no es una tarea Celery registrada. "
+                "Los agentes de prompt deben ejecutarse vía "
+                f"POST /projects/{project_id}/pipeline/run-stage/{{stage}}.",
+            )
+        task_name = agent_id
         task = celery_app.send_task(
-            agent_id,
+            task_name,
             args=[str(project_id)],
             queue="heavy",
         )
@@ -1003,6 +1176,7 @@ async def run_single_agent(
     return {
         "status": "dispatched",
         "agent_id": agent_id,
+        "task_name": task_name,
         "task_id": task.id,
     }
 

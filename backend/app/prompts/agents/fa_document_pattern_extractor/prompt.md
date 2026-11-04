@@ -7,13 +7,14 @@ notes:
   - Patterns are {label_name}s ({label_format}). Incidents are evidence, NOT codes.
   - Incidents link to patterns and segments via segment_refs (integer array).
   - Document signals include the core {object_of_study} pattern and tentative main concern.
+  - Segments and document name arrive in the user message; the system prefix stays static and cacheable.
 constraints:
   - ISOLATED: only use segments from THIS document.
   - {label_name_upper} only for pattern names. No nouns, abstractions, or theoretical labels.
   - Incidents are one-liner descriptions of what happened. NO {label_name}s.
   - Every claim must be grounded in specific segment text.
   - Output language matches the language of the input segments.
-input_state: segments_text, document_name, object_of_study, operational_question
+input_state: object_of_study, operational_question (interpolated into system prompt); segments_text, document_name (user message)
 ---
 
 ## System
@@ -37,6 +38,7 @@ The researcher is investigating: **{object_of_study}**
 {operational_question}
 
 [METHOD]
+
 1. Read all segments thoroughly. Look for recurring behavioral processes.
 2. Identify patterns: what is this participant repeatedly doing, negotiating, or processing? Name each with a {label_name}.
 3. For each pattern, identify which segments evidence it and write a definition.
@@ -45,6 +47,7 @@ The researcher is investigating: **{object_of_study}**
 6. Assess document-level signals: core {object_of_study} pattern, tentative concern, anomalies.
 
 [RESTRICTIONS]
+
 - ISOLATED: only use segments from THIS document.
 - {label_name_upper} only for pattern names ({label_format}). NEVER abstract nouns or theoretical jargon.
 - INCIDENT descriptions are plain evidence: "the teacher arrived at 5am", "the recycler hid materials from the inspector". NO {label_name}s in incident descriptions.
@@ -52,20 +55,6 @@ The researcher is investigating: **{object_of_study}**
 - pattern_refs in incidents use the 0-based index of the pattern in the patterns array.
 - If the data is too sparse, produce fewer patterns and incidents rather than forcing low-quality output.
 - Do NOT use scoring, counting, or quantitative heuristics. Pure qualitative reasoning.
-
-## User
-
-[DOCUMENT]
-Name: {document_name}
-
-[OBJECT OF STUDY]
-{object_of_study}
-
-[OPERATIONAL QUESTION]
-{operational_question}
-
-[ALL BASELINE SEGMENTS FROM THIS DOCUMENT]
-{segments_text}
 
 ## Output Schema
 
@@ -81,7 +70,12 @@ Name: {document_name}
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["pattern_name", "definition", "segment_refs", "confidence"],
+        "required": [
+          "pattern_name",
+          "definition",
+          "segment_refs",
+          "confidence"
+        ],
         "properties": {
           "pattern_name": {
             "type": "string",
@@ -93,7 +87,7 @@ Name: {document_name}
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-based indices of segments that evidence this pattern."
           },
           "confidence": {
@@ -118,12 +112,12 @@ Name: {document_name}
           },
           "segment_refs": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "1-based indices of segments this incident comes from."
           },
           "patterns": {
             "type": "array",
-            "items": {"type": "integer"},
+            "items": { "type": "integer" },
             "description": "0-based indices of patterns (from the patterns array above) that this incident supports. Optional — omit if no clear pattern match."
           },
           "exact_quote": {
@@ -153,7 +147,7 @@ Name: {document_name}
         },
         "anomalies": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": { "type": "string" },
           "description": "Segments or patterns that don't fit, contradict, or require verification later. Optional."
         },
         "needs_verification": {

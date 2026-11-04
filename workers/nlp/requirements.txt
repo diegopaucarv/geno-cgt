@@ -1,4 +1,6 @@
 celery==5.4.0
+# kombu>=5.6 exige redis-py>=6.1; aquí redis está pinneado a 5.2.1
+kombu==5.4.2
 redis==5.2.1
 requests==2.32.3
 psycopg2-binary==2.9.10

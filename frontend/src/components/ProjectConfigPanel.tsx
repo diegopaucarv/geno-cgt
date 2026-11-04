@@ -468,12 +468,12 @@ export default function ProjectConfigPanel({
     try {
       await generateResearchQuestion(projectId);
       setRqMsg(t("projectConfig.generateSuccess"));
-      setTimeout(async () => {
-        try {
-          const rq = await getResearchQuestion(projectId);
-          setRqData(rq);
-        } catch {}
-      }, 8000);
+      // The endpoint is synchronous: generation + persistence already finished,
+      // so refetch immediately instead of waiting for a background task.
+      try {
+        const rq = await getResearchQuestion(projectId);
+        setRqData(rq);
+      } catch {}
     } catch (e: any) {
       setRqMsg("❌ " + (e.message || t("projectConfig.generateError")));
     } finally {

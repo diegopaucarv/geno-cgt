@@ -25,12 +25,15 @@ Schema enforcement
 ──────────────────
 ``schema=`` is enforced, not advisory. Two wire formats:
 
-    json_schema (backend)  {"type": "json_schema", "json_schema": <schema>}
-    json_object (workers)  {"type": "json_object"}
+    json_schema  {"type": "json_schema",
+                  "json_schema": {"name": ..., "schema": <schema>}}
+    json_object  {"type": "json_object"}
 
-Fireworks nests the schema object directly under ``json_schema``, unlike
-OpenAI which expects ``{"name": ..., "schema": ...}``. ``_normalise_schema``
-accepts either shape on input and emits the Fireworks one.
+Fireworks requires the OpenAI-style wrapper: the JSON Schema must be nested
+under ``json_schema`` together with a ``name``. Sending the bare schema in
+that slot is rejected with ``Invalid json_schema format`` (HTTP 400).
+``_schema_parts`` accepts either shape on input and ``build_payload`` always
+emits the wrapped one.
 
 Credentials
 ───────────
@@ -225,15 +228,20 @@ def resolve_endpoint(model: Any) -> ModelEndpoint:
     return MODEL_REGISTRY[TIER_DEFAULT_MODEL[tier]]
 
 
-def _normalise_schema(schema: Any) -> dict[str, Any] | None:
-    """Accept a bare JSON Schema or an OpenAI-style wrapper; return the schema."""
+def _schema_parts(schema: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """Return ``(schema_obj, name)`` from a bare JSON Schema or a wrapper."""
     if not schema or not isinstance(schema, dict):
-        return None
+        return None, None
     # {"name": ..., "schema": {...}} or {"strict": ..., "schema": {...}}
     if "schema" in schema and isinstance(schema["schema"], dict):
-        return schema["schema"]
+        return schema["schema"], schema.get("name")
     # Already a JSON Schema object (has properties/type/etc.).
-    return schema
+    return schema, None
+
+
+def _normalise_schema(schema: Any) -> dict[str, Any] | None:
+    """Accept a bare JSON Schema or a wrapper; return the bare schema."""
+    return _schema_parts(schema)[0]
 
 
 def _normalise_messages(
@@ -282,6 +290,7 @@ class LLMProvider:
         temperature: float | None = None,
         schema: Any = None,
         schema_mode: str = "json_schema",
+        schema_name: str | None = None,
         repetition_penalty: float | None = None,
         frequency_penalty: float | None = None,
         top_p: float | None = None,
@@ -321,14 +330,23 @@ class LLMProvider:
         elif rep != 1.0:
             payload["repetition_penalty"] = rep
 
-        schema_obj = _normalise_schema(schema)
+        schema_obj, schema_name_from_schema = _schema_parts(schema)
         if schema_obj:
             if schema_mode == "json_object":
                 payload["response_format"] = {"type": "json_object"}
             else:
+                # Fireworks rejects a bare schema in this slot: ``json_schema``
+                # must be the OpenAI-style {"name", "schema"} wrapper.
                 payload["response_format"] = {
                     "type": "json_schema",
-                    "json_schema": schema_obj,
+                    "json_schema": {
+                        "name": (
+                            schema_name
+                            or schema_name_from_schema
+                            or "structured_output"
+                        ),
+                        "schema": schema_obj,
+                    },
                 }
 
         if extra:
@@ -386,6 +404,7 @@ class LLMProvider:
         temperature: float | None = None,
         schema: Any = None,
         schema_mode: str = "json_schema",
+        schema_name: str | None = None,
         repetition_penalty: float | None = None,
         frequency_penalty: float | None = None,
         top_p: float | None = None,
@@ -405,6 +424,7 @@ class LLMProvider:
             temperature=temperature,
             schema=schema,
             schema_mode=schema_mode,
+            schema_name=schema_name,
             repetition_penalty=repetition_penalty,
             frequency_penalty=frequency_penalty,
             top_p=top_p,

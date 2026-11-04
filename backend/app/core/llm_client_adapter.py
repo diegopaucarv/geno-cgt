@@ -79,7 +79,9 @@ class TogetherLLM:
                 ``{"schema": ...}`` or ``{"type": "json_object"}``.
             schema: Convenience alternative to ``response_format``.
         """
-        schema_mode, schema_obj = _split_response_format(response_format, schema)
+        schema_mode, schema_obj, schema_name = _split_response_format(
+            response_format, schema
+        )
         tier = tier_of(model)
 
         try:
@@ -90,6 +92,7 @@ class TogetherLLM:
                 temperature=temperature,
                 schema=schema_obj,
                 schema_mode=schema_mode,
+                schema_name=schema_name,
             )
         except LLMProviderError as exc:
             logger.error("LLM call failed: %s", exc)
@@ -206,22 +209,22 @@ class TogetherLLM:
 def _split_response_format(
     response_format: dict[str, Any] | None,
     schema: dict[str, Any] | None,
-) -> tuple[str, dict[str, Any] | None]:
-    """Interpret a ``response_format`` dict into (mode, schema)."""
+) -> tuple[str, dict[str, Any] | None, str | None]:
+    """Interpret a ``response_format`` dict into (mode, schema, name)."""
     if schema:
-        return "json_schema", schema
+        return "json_schema", schema, None
     if not response_format:
-        return "json_schema", None
+        return "json_schema", None, None
 
     fmt_type = response_format.get("type")
     if fmt_type == "json_object":
-        return "json_object", None
+        return "json_object", None, None
     if fmt_type == "json_schema":
         inner = response_format.get("json_schema") or {}
-        # OpenAI nests {"name","schema"}; Fireworks wants the schema itself.
-        return "json_schema", inner.get("schema", inner) or None
+        # The provider re-wraps the schema, so pass the name back to it.
+        return "json_schema", inner.get("schema", inner) or None, inner.get("name")
     # A bare schema was passed directly.
-    return "json_schema", response_format
+    return "json_schema", response_format, None
 
 
 # Re-exported so callers can keep importing from one place.

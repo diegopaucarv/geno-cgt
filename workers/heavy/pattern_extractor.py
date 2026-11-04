@@ -22,12 +22,16 @@ import sys
 
 sys.path.insert(0, "/app")
 
-from database import SessionLocal
+from database import SessionLocal, engine
 from llm_client import LLMClient
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 llm = LLMClient()
+
+
+class ExtractionFailed(RuntimeError):
+    """La extracción F2.3 no pudo completarse; no debe reportarse como éxito."""
 
 
 def _get_object_of_study(session, proyecto_id: str) -> str:
@@ -49,18 +53,50 @@ def _get_operational_question(session, proyecto_id: str) -> str:
     return ""
 
 
-def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
+def extract_patterns_and_incidents(
+    documento_id: str,
+    proyecto_id: str,
+    replace_existing: bool = True,
+) -> dict:
     """Unified Open Coding: patterns + incidents + signals in ONE PRO call.
 
     Args:
         documento_id: UUID of the document.
         proyecto_id: UUID of the project.
+        replace_existing: When True (default), remove this document's previous
+            incidents (and the comparisons that reference them) after the LLM
+            call succeeds and before inserting the new rows. Makes re-runs of
+            the same document idempotent.
 
     Returns:
         dict with patterns, incidents, and document_signals from the AI.
     """
     session = SessionLocal()
+    lock_conn = None
     try:
+        # ── 0. Advisory lock por documento ────────────────────────
+        # Dos ejecuciones concurrentes del mismo doc harían DELETE + INSERT
+        # en paralelo y duplicarían incidentes. El lock es de sesión Postgres,
+        # así que se toma en una conexión dedicada que permanece abierta hasta
+        # el finally (si se tomara en `session` el COMMIT la devolvería al pool
+        # y el unlock podría caer en otra conexión).
+        try:
+            lock_conn = engine.connect()
+            lock_conn.execute(
+                text("SELECT pg_advisory_lock(hashtext(:key))"),
+                {"key": f"extract_incidents:{documento_id}"},
+            )
+            lock_conn.commit()
+        except Exception as exc:
+            logger.error(
+                "Pattern extraction: no se pudo tomar el advisory lock doc=%s — %s",
+                documento_id[:8],
+                exc,
+            )
+            raise ExtractionFailed(
+                f"advisory lock no disponible para doc={documento_id}"
+            ) from exc
+
         # ── 1. Fetch baseline segments ───────────────────────────
         seg_rows = session.execute(
             text(
@@ -74,10 +110,7 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
 
         if not seg_rows:
             logger.warning("No baseline segments for doc=%s", documento_id[:8])
-            return {
-                "error": "sin_segmentos_baseline",
-                "documento_id": documento_id,
-            }
+            raise ExtractionFailed(f"sin segmentos baseline para doc={documento_id}")
 
         # ── 2. Build segments_text for the prompt ─────────────────
         parts = []
@@ -94,9 +127,28 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
 
         # Truncate if too long for context window (~20K chars safe)
         max_chars = 20000
+        segments_omitted = 0
         if len(segments_text) > max_chars:
+            # Cuántos segmentos completos entran antes del límite
+            kept = 0
+            used = 0
+            for part in parts:
+                needed = len(part) + (2 if kept else 0)
+                if used + needed > max_chars:
+                    break
+                used += needed
+                kept += 1
+            segments_omitted = max(seg_count - kept, 1)
             segments_text = segments_text[:max_chars] + (
                 "\n\n[... texto truncado por límite de contexto ...]"
+            )
+            logger.warning(
+                "Pattern extraction: prompt truncado doc=%s — %d de %d "
+                "segmentos omitidos (%d chars)",
+                documento_id[:8],
+                segments_omitted,
+                seg_count,
+                max_chars,
             )
 
         logger.info(
@@ -118,6 +170,12 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
         operational_question = _get_operational_question(session, proyecto_id)
 
         # ── 5. Call AI (PRO) ─────────────────────────────────────
+        # Per-document content travels in the user message so the static
+        # system prefix (instructions + schema) stays cacheable across the batch.
+        user_content = (
+            f"[DOCUMENT]\nName: {doc_name}\n\n"
+            f"[ALL BASELINE SEGMENTS FROM THIS DOCUMENT]\n{segments_text}"
+        )
         response = llm.run_agent(
             "fa_document_pattern_extractor",
             variables={
@@ -126,6 +184,9 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
                 "object_of_study": object_of_study,
                 "operational_question": operational_question or "(not yet generated)",
             },
+            cache_key=str(proyecto_id),
+            tail_variables=("segments_text", "document_name"),
+            user_content=user_content,
         )
 
         # ── 5.5: Log raw response keys for debugging ────────────
@@ -148,18 +209,15 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
 
         # ── 6. Validate ──────────────────────────────────────────
         if response.get("mock_note") or response.get("error"):
+            cause = response.get("mock_note", response.get("error", ""))
             logger.warning(
                 "Pattern extraction: mock/error for doc=%s — %s",
                 documento_id[:8],
-                response.get("mock_note", response.get("error", "")),
+                cause,
             )
-            return {
-                "documento_id": documento_id,
-                "mock": True,
-                "patterns": [],
-                "incidents": [],
-                "document_signals": {},
-            }
+            raise ExtractionFailed(
+                f"respuesta mock/error del LLM para doc={documento_id}: {cause}"
+            )
 
         patterns = response.get("patterns", [])
         incidents = response.get("incidents", [])
@@ -169,7 +227,53 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
         # Build seg index → seg_id map
         seg_map = {i + 1: str(r[0]) for i, r in enumerate(seg_rows)}
 
+        # ── 7a. Replace this document's previous extraction ───────
+        # Both incident_comparisons FKs are NO ACTION (confdeltype='a'), not
+        # CASCADE, so the dependent rows must be removed before their
+        # incidents. Deferred until after the mock/error guard above so a
+        # failed LLM call never wipes existing data.
+        if replace_existing:
+            deleted_comparisons = (
+                session.execute(
+                    text(
+                        "DELETE FROM incident_comparisons "
+                        "WHERE incident_a_id IN ("
+                        "SELECT id FROM extracted_incidents "
+                        "WHERE documento_id = :did AND proyecto_id = :pid) "
+                        "OR incident_b_id IN ("
+                        "SELECT id FROM extracted_incidents "
+                        "WHERE documento_id = :did AND proyecto_id = :pid)"
+                    ),
+                    {"did": documento_id, "pid": proyecto_id},
+                ).rowcount
+                or 0
+            )
+
+            deleted_incidents = (
+                session.execute(
+                    text(
+                        "DELETE FROM extracted_incidents "
+                        "WHERE documento_id = :did AND proyecto_id = :pid"
+                    ),
+                    {"did": documento_id, "pid": proyecto_id},
+                ).rowcount
+                or 0
+            )
+
+            logger.info(
+                "Pattern extraction: removed %d previous incidents for doc=%s",
+                deleted_incidents,
+                documento_id[:8],
+            )
+            if deleted_comparisons:
+                logger.info(
+                    "Pattern extraction: removed %d previous comparisons for doc=%s",
+                    deleted_comparisons,
+                    documento_id[:8],
+                )
+
         persisted_incidents = 0
+        failed_inserts = 0
         for inc in incidents:
             description = (inc.get("description") or "").strip()
             if not description:
@@ -193,14 +297,31 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
                         seg_refs_clean.append(rint)
 
             # If no valid segment refs, link to first baseline segment as fallback
+            unlinked = False
             if not segment_ids and seg_rows:
+                logger.warning(
+                    "Pattern extraction: incidente sin segment_refs resolubles "
+                    "doc=%s — se enlaza al primer segmento baseline: %.80s",
+                    documento_id[:8],
+                    description,
+                )
                 segment_ids = [str(seg_rows[0][0])]
                 seg_refs_clean = [1]
+                unlinked = True
 
             # ONE row per incident, segmento_id = first referenced segment
             primary_seg = segment_ids[0] if segment_ids else None
             if not primary_seg:
                 continue
+
+            meta = {
+                "patterns": pattern_ids,
+                "segment_refs": seg_refs_clean,
+                "exact_quote": exact_quote,
+                "method": "unified_pattern_extractor",
+            }
+            if unlinked:
+                meta["unlinked"] = True
 
             try:
                 session.execute(
@@ -217,19 +338,26 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
                         "did": documento_id,
                         "pid": proyecto_id,
                         "desc": description,
-                        "meta": json.dumps(
-                            {
-                                "patterns": pattern_ids,
-                                "segment_refs": seg_refs_clean,
-                                "exact_quote": exact_quote,
-                                "method": "unified_pattern_extractor",
-                            }
-                        ),
+                        "meta": json.dumps(meta),
                     },
                 )
                 persisted_incidents += 1
             except Exception as e:
-                logger.warning("Failed to persist incident: %s", e)
+                failed_inserts += 1
+                logger.warning(
+                    "Pattern extraction: fallo al persistir incidente doc=%s: %s",
+                    documento_id[:8],
+                    e,
+                )
+
+        if failed_inserts:
+            # Una corrida parcialmente persistida no puede reportarse como éxito:
+            # se revierte también el DELETE previo para no perder los datos viejos.
+            session.rollback()
+            raise ExtractionFailed(
+                f"{failed_inserts} incidentes no se pudieron persistir "
+                f"(doc={documento_id}, proyecto={proyecto_id})"
+            )
 
         session.commit()
 
@@ -292,15 +420,36 @@ def extract_patterns_and_incidents(documento_id: str, proyecto_id: str) -> dict:
             "patterns": patterns,
             "incidents_count": persisted_incidents,
             "document_signals": doc_signals,
+            "segments_omitted": segments_omitted,
             "mock": False,
         }
 
-    except Exception:
+    except ExtractionFailed:
+        raise
+    except Exception as exc:
         logger.exception(
             "Pattern extraction failed for doc=%s proyecto=%s",
             documento_id,
             proyecto_id,
         )
-        return {"error": "exception", "documento_id": documento_id}
+        raise ExtractionFailed(
+            f"extracción falló para doc={documento_id} proyecto={proyecto_id}: {exc}"
+        ) from exc
     finally:
+        if lock_conn is not None:
+            try:
+                lock_conn.execute(text("SELECT pg_advisory_unlock_all()"))
+                lock_conn.commit()
+            except Exception as exc:
+                logger.warning(
+                    "Pattern extraction: no se pudo liberar el advisory lock "
+                    "doc=%s — %s",
+                    documento_id[:8],
+                    exc,
+                )
+            finally:
+                try:
+                    lock_conn.close()
+                except Exception:
+                    pass
         session.close()

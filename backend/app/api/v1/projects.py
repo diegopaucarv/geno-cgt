@@ -15,7 +15,7 @@ from app.models.domain.project_config_history import ProjectConfigHistory
 from app.models.domain.user import Usuario
 from app.schemas import ProjectCreate, ProjectResponse
 from app.services.auth import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -959,7 +959,7 @@ async def create_project(
             await db.refresh(proyecto)
             logger.info(
                 "Verb conjugated: verb=%r conjugated=%r for project=%s",
-                pv,
+                processing_verb,
                 pvc,
                 proyecto.id,
             )
@@ -1527,7 +1527,7 @@ async def preview_research_question(
         "population_article": pop_article,
         "pattern_gender": pattern_gender,
         "pattern_article": pattern_article,
-        "pronoun": pronoun,
+        "pronoun": pronoun_sg,
         "conjugated_verb": conjugated,
         "language": lang,
     }
@@ -1688,6 +1688,151 @@ async def get_research_question(
     return {
         "project_id": str(project_id),
         **rq_data,
+    }
+
+
+@router.post("/{project_id}/research-question/generate")
+async def generate_research_question(
+    project_id: UUID,
+    body: dict = Body(default={}),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Generate and persist the research questions for a project.
+
+    This is fully deterministic (spaCy conjugation + declarative templates),
+    reusing the same pipeline as the preview endpoint and ``create_project``.
+    Body fields are all optional and override the stored project values:
+    {population, object_of_study, processing_verb, custom_label?}
+
+    Safe to call repeatedly: each call only rewrites
+    ``population_assumption.research_question``.
+    """
+    proyecto = await db.get(Proyecto, project_id)
+    if not proyecto:
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    body = body or {}
+    pa = dict(proyecto.population_assumption or {})
+
+    population = (
+        body["population"]
+        if "population" in body and body["population"] is not None
+        else proyecto.supuesto_poblacional
+    )
+    population = (population or "").strip()
+
+    oos = (
+        body["object_of_study"]
+        if "object_of_study" in body and body["object_of_study"] is not None
+        else proyecto.object_of_study
+    )
+    oos = (oos or "").strip()
+
+    verb = (
+        body["processing_verb"]
+        if "processing_verb" in body and body["processing_verb"] is not None
+        else pa.get("processing_verb", "resolve")
+    )
+    verb = (verb or "resolve").strip() or "resolve"
+
+    custom_label = (
+        body["custom_label"]
+        if "custom_label" in body and body["custom_label"] is not None
+        else pa.get("custom_label")
+    )
+    custom_label = (custom_label or "").strip()
+
+    if not population:
+        raise HTTPException(400, "population is required")
+    if oos not in VALID_OBJECTS_OF_STUDY:
+        raise HTTPException(400, f"Invalid object_of_study: {oos}")
+
+    # ── Conjugate verb and detect population metadata ──
+    conj = _conjugate_verb_full(verb, population)
+    conjugated = conj["verb"]
+    pop_number = conj["number"]
+    pop_article = conj["article"]
+    lang = conj["language"]
+    pop_phrase = _format_population_phrase(pop_article, population)
+
+    # ── Pattern noun metadata (custom label overrides the canonical noun) ──
+    meta = _PATTERN_META.get(oos, _PATTERN_META["custom"])
+    lang_meta = meta.get(lang, meta.get("en", {}))
+    pattern_noun = lang_meta.get("noun", "pattern")
+    pattern_plural = lang_meta.get("plural", "patterns")
+    pattern_gender = lang_meta.get("gender", "n")
+    if oos == "custom" and custom_label:
+        pattern_noun = custom_label
+        pattern_plural = (
+            custom_label + "s" if not custom_label.endswith("s") else custom_label
+        )
+
+    # ── Article / pronoun agreement for the pattern noun ──
+    if lang == "es":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "la", "la", "las"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "el", "lo", "los"
+    elif lang == "pt":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "a", "a", "as"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "o", "o", "os"
+    elif lang == "de":
+        if pattern_gender == "f":
+            pat_art, pronoun_sg, pronoun_pl = "die", "sie", "sie"
+        elif pattern_gender == "n":
+            pat_art, pronoun_sg, pronoun_pl = "das", "es", "sie"
+        else:
+            pat_art, pronoun_sg, pronoun_pl = "der", "ihn", "sie"
+    else:
+        pat_art, pronoun_sg, pronoun_pl = "the", "it", "them"
+
+    questions = _build_questions(
+        lang=lang,
+        pop_phrase=pop_phrase,
+        population=population,
+        pat_art=pat_art,
+        pattern_noun=pattern_noun,
+        pattern_plural=pattern_plural,
+        pronoun_sg=pronoun_sg,
+        pronoun_pl=pronoun_pl,
+        conjugated=conjugated,
+    )
+
+    rq_data = {
+        "research_question": questions["research_question"],
+        "operational_question": questions["oq_discovery"],
+        "oq_discovery": questions["oq_discovery"],
+        "oq_selective": questions["oq_selective"],
+        "oq_theoretical": questions["oq_theoretical"],
+        "generated_at": datetime.utcnow().isoformat(),
+        "auto_generated": True,
+    }
+
+    # New dict (no in-place mutation of the ORM's JSONB value).
+    pa["research_question"] = rq_data
+    pa["processing_verb"] = verb
+    if custom_label:
+        pa["custom_label"] = custom_label
+    proyecto.population_assumption = pa
+    await db.commit()
+    await db.refresh(proyecto)
+
+    logger.info(
+        "Research question generated for project=%s (lang=%s, pop_number=%s)",
+        proyecto.id,
+        lang,
+        pop_number,
+    )
+
+    return {
+        "project_id": str(project_id),
+        **rq_data,
+        "population_number": pop_number,
+        "conjugated_verb": conjugated,
+        "language": lang,
     }
 
 

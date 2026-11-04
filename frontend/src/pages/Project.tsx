@@ -64,6 +64,16 @@ const btnSmall: React.CSSProperties = {
 type StageStatus = "pending" | "running" | "done" | "error";
 type ViewMode = "original" | "segmented";
 
+/** Estados transitorios mientras un worker procesa el documento. */
+const IN_FLIGHT_DOC_STATES = [
+  "preprocesando",
+  "segmentando",
+  "clasificando",
+  "procesando",
+  "extrayendo",
+  "codificando",
+];
+
 // ── Component ─────────────────────────────────────────────────────
 
 export default function ProjectDetail() {
@@ -207,6 +217,7 @@ export default function ProjectDetail() {
     docId: string,
     endpoint: string,
     signal: { current: boolean },
+    maxWaitMs = 360_000,
   ): Promise<"success" | "failed" | "aborted" | "timeout"> {
     console.log("[runDocTask] POST", endpoint, "docId:", docId);
     const token = `Bearer ${localStorage.getItem("access_token")}`;
@@ -242,19 +253,30 @@ export default function ProjectDetail() {
       return "success";
     }
 
-    for (let i = 0; i < 60 && !signal.current; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
+    const pollInterval = 2000;
+    const maxPolls = Math.ceil(maxWaitMs / pollInterval);
+    for (let i = 0; i < maxPolls && !signal.current; i++) {
+      await new Promise((r) => setTimeout(r, pollInterval));
       try {
         const ts = await getTaskStatus(taskId);
         if (ts.status === "SUCCESS") {
+          // Surface the real estado without requiring a manual reload.
           refreshDocs();
           return "success";
         }
-        if (ts.status === "FAILURE") return "failed";
+        if (ts.status === "FAILURE" || ts.status === "REVOKED") {
+          // The worker may still have advanced state before failing/cancelling.
+          refreshDocs();
+          return "failed";
+        }
+        // STARTED / RETRY / PENDING: keep polling.
       } catch {
         /* polling error, keep trying */
       }
     }
+    // Even on timeout the task may have completed server-side; surface the
+    // real estado instead of leaving the UI stale until a manual reload.
+    refreshDocs();
     return signal.current ? "aborted" : "timeout";
   }
 
@@ -292,6 +314,7 @@ export default function ProjectDetail() {
     Record<string, StageStatus>
   >({});
   const [stoppingWorkers, setStoppingWorkers] = useState(false);
+  const [openCodingRunning, setOpenCodingRunning] = useState(false);
 
   // ── Global view switch ──
   const [globalViewMode, setGlobalViewMode] = useState<ViewMode>("original");
@@ -1165,8 +1188,22 @@ export default function ProjectDetail() {
       if (err.action === "punctuate") return handlePunctuate(docId);
       if (err.action === "classify") return handleClassify(docId);
       if (err.action === "segment") return handleSegment(docId);
+      if (err.action === "extract") return handleExtractIncidents(docId);
       showErrorToast(err.message || "La acción anterior falló");
       return;
+    }
+
+    // A worker is already advancing this document: a second click must not
+    // re-dispatch nor silently cancel the in-flight operation.
+    if (IN_FLIGHT_DOC_STATES.includes(estado)) {
+      console.log("[handleDocAction] ignoring click, in-flight:", estado);
+      return;
+    }
+
+    // A document marked 'error' by the state machine has no retry path in the
+    // pipeline; route to the restore flow instead of a no-op "✓ Completo".
+    if (estado === "error") {
+      return handleRestoreStep(docId);
     }
 
     // Cancel running operation (modular)
@@ -1198,11 +1235,30 @@ export default function ProjectDetail() {
     setPunctRunning(docId);
     runningOp.current = { docId, op: "segment" as const };
     try {
-      await runDocTask(
+      const outcome = await runDocTask(
         docId,
         `/api/v1/projects/${id}/pipeline/run-agent/extract_patterns`,
         abortRef,
       );
+      if (outcome === "failed") {
+        const message =
+          "La extracción de incidentes falló en el worker. Revisa los logs de worker-heavy.";
+        setDocError((prev) => ({
+          ...prev,
+          [docId]: { action: "extract", message },
+        }));
+        setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
+        showErrorToast(message);
+      } else if (outcome === "timeout") {
+        const message =
+          "Timeout: la extracción de incidentes no respondió en 6 minutos.";
+        setDocError((prev) => ({
+          ...prev,
+          [docId]: { action: "extract", message },
+        }));
+        setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
+        showErrorToast(message);
+      }
     } catch (e: any) {
       if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
     } finally {
@@ -1219,11 +1275,23 @@ export default function ProjectDetail() {
     setRunningAgentIds((prev) => new Set([...prev, "segmentar_documento"]));
     runningOp.current = { docId, op: "segment" };
     try {
-      await runDocTask(
+      const outcome = await runDocTask(
         docId,
         `/api/v1/projects/${id}/pipeline/run-agent/segmentar_documento`,
         abortRef,
       );
+      if (outcome === "failed" || outcome === "timeout") {
+        const message =
+          outcome === "timeout"
+            ? "Timeout: la segmentación no respondió en 6 minutos."
+            : "La segmentación falló en el worker. Revisa los logs de worker-nlp.";
+        setDocError((prev) => ({
+          ...prev,
+          [docId]: { action: "segment", message },
+        }));
+        setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
+        showErrorToast(message);
+      }
     } catch (e: any) {
       if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
     } finally {
@@ -3268,14 +3336,22 @@ export default function ProjectDetail() {
                         // runningOps, while classify/segment set punctRunning.
                         // Checking only one of them leaves the button inert
                         // during single-document preprocessing.
-                        const isRunning =
-                          punctRunning === d.id || !!runningOps[d.id];
                         const estado = d.estado;
+                        // Worker-side estados are in flight even when no local
+                        // op/tracked task has been recorded yet (e.g. after a
+                        // reload while the worker is still running).
+                        const isInFlight =
+                          IN_FLIGHT_DOC_STATES.includes(estado);
+                        const isRunning =
+                          punctRunning === d.id ||
+                          !!runningOps[d.id] ||
+                          isInFlight;
                         const err = docError[d.id];
                         const hasText = !!(
                           (d as any).texto_original || d.texto_extraido
                         );
                         const isCrudo = estado === "crudo";
+                        const isError = estado === "error";
                         const isProcesado =
                           estado === "incidentes_extraidos" ||
                           estado === "procesado" ||
@@ -3286,39 +3362,44 @@ export default function ProjectDetail() {
                           ? "\u26A0 Reintentar"
                           : isRunning
                             ? t("project.statusInProgress")
-                            : isCrudo
-                              ? t("project.preprocessButton")
-                              : estado === "preprocesado"
-                                ? "Clasificar"
-                                : estado === "clasificado"
-                                  ? "Segmentar"
-                                  : estado === "segmentado"
-                                    ? "Extraer incidentes"
-                                    : isProcesado
-                                      ? "\u2713 Incidentes extra\u00eddos"
-                                      : isCodificado
-                                        ? "\u2713 Codificado"
-                                        : "\u2713 Completo";
+                            : isError
+                              ? "\u26A0 Error \u2014 Restaurar"
+                              : isCrudo
+                                ? t("project.preprocessButton")
+                                : estado === "preprocesado"
+                                  ? "Clasificar"
+                                  : estado === "clasificado"
+                                    ? "Segmentar"
+                                    : estado === "segmentado"
+                                      ? "Extraer incidentes"
+                                      : isProcesado
+                                        ? "\u2713 Incidentes extra\u00eddos"
+                                        : isCodificado
+                                          ? "\u2713 Codificado"
+                                          : "\u2713 Completo";
                         const bg = err
                           ? "#F85149"
                           : isRunning
                             ? "#21262D"
-                            : isCrudo
-                              ? hasText
-                                ? "#A371F7"
-                                : "#30363D"
-                              : estado === "preprocesado"
-                                ? "#3FB950"
-                                : estado === "clasificado"
-                                  ? "#58A6FF"
-                                  : estado === "segmentado"
-                                    ? "#D29922"
-                                    : "#3FB950";
+                            : isError
+                              ? "#F85149"
+                              : isCrudo
+                                ? hasText
+                                  ? "#A371F7"
+                                  : "#30363D"
+                                : estado === "preprocesado"
+                                  ? "#3FB950"
+                                  : estado === "clasificado"
+                                    ? "#58A6FF"
+                                    : estado === "segmentado"
+                                      ? "#D29922"
+                                      : "#3FB950";
                         // While running the primary action is inert: a second
                         // click must not re-dispatch nor silently cancel.
                         const disabled =
                           isRunning ||
                           (!err &&
+                            !isError &&
                             ((isCrudo && !hasText) ||
                               isProcesado ||
                               isCodificado));
@@ -4273,28 +4354,89 @@ export default function ProjectDetail() {
                 } else {
                   // Project-level agent
                   setRunningAgentIds((prev) => new Set([...prev, agentId]));
-                  fetch(
-                    `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: auth,
+                  const clearRunning = () =>
+                    setRunningAgentIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(agentId);
+                      return next;
+                    });
+                  try {
+                    const res = await fetch(
+                      `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: auth,
+                        },
+                        body: JSON.stringify({}),
                       },
-                      body: JSON.stringify({}),
-                    },
-                  )
-                    .then(() => {
-                      setRunningAgentIds((prev) => {
-                        const next = new Set(prev);
-                        next.delete(agentId);
-                        return next;
-                      });
-                      setCompletedAgents((prev) => new Set([...prev, agentId]));
-                    })
-                    .catch((e) =>
-                      showErrorToast("Error al ejecutar agente: " + e.message),
                     );
+                    if (!res.ok) {
+                      let detail = `HTTP ${res.status}`;
+                      try {
+                        const body = await res.json();
+                        if (body?.detail) {
+                          detail =
+                            typeof body.detail === "string"
+                              ? body.detail
+                              : JSON.stringify(body.detail);
+                        }
+                      } catch {
+                        /* non-JSON error body */
+                      }
+                      throw new Error(detail);
+                    }
+                    const { task_id: taskId } = await res.json();
+                    // Poll until terminal so the badge matches the real outcome.
+                    if (taskId) {
+                      const pollInterval = 3000;
+                      const maxPolls = Math.ceil(360_000 / pollInterval);
+                      let outcome: "success" | "failed" | "timeout" = "timeout";
+                      for (let i = 0; i < maxPolls; i++) {
+                        await new Promise((r) => setTimeout(r, pollInterval));
+                        try {
+                          const ts = await getTaskStatus(taskId);
+                          if (ts.status === "SUCCESS") {
+                            outcome = "success";
+                            break;
+                          }
+                          if (
+                            ts.status === "FAILURE" ||
+                            ts.status === "REVOKED"
+                          ) {
+                            outcome = "failed";
+                            break;
+                          }
+                        } catch {
+                          /* polling error, keep trying */
+                        }
+                      }
+                      if (outcome === "success") {
+                        setCompletedAgents(
+                          (prev) => new Set([...prev, agentId]),
+                        );
+                      } else if (outcome === "failed") {
+                        showErrorToast(
+                          `El agente "${agentId}" falló o fue cancelado.`,
+                        );
+                      } else {
+                        showErrorToast(
+                          `El agente "${agentId}" no terminó a tiempo.`,
+                        );
+                      }
+                    } else {
+                      setCompletedAgents((prev) => new Set([...prev, agentId]));
+                    }
+                  } catch (e: any) {
+                    showErrorToast(
+                      "Error al ejecutar agente: " +
+                        (e?.message || "error de red"),
+                    );
+                  } finally {
+                    clearRunning();
+                    refreshDocs();
+                  }
                 }
               }}
               onStopAgent={(agentId) => {
@@ -4638,6 +4780,66 @@ export default function ProjectDetail() {
                                 ✕ Cats
                               </button>
                             )}
+                            {docs.some(
+                              (d) => d.estado === "incidentes_extraidos",
+                            ) &&
+                              !docs.some((d) => d.estado === "codificando") && (
+                                <button
+                                  disabled={openCodingRunning}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setOpenCodingRunning(true);
+                                    try {
+                                      const auth = `Bearer ${localStorage.getItem("access_token")}`;
+                                      const res = await fetch(
+                                        `/api/v1/projects/${id}/pipeline/run-stage/cross_doc`,
+                                        {
+                                          method: "POST",
+                                          headers: { Authorization: auth },
+                                        },
+                                      );
+                                      if (!res.ok) {
+                                        let detail = `HTTP ${res.status}`;
+                                        try {
+                                          const body = await res.json();
+                                          if (body?.detail) {
+                                            detail =
+                                              typeof body.detail === "string"
+                                                ? body.detail
+                                                : JSON.stringify(body.detail);
+                                          }
+                                        } catch {
+                                          /* non-JSON error body */
+                                        }
+                                        throw new Error(detail);
+                                      }
+                                      await refreshDocs();
+                                      showToast("Codificación en curso");
+                                    } catch (err: any) {
+                                      showErrorToast(
+                                        "No se pudo iniciar la codificación: " +
+                                          (err?.message || "error de red"),
+                                      );
+                                    } finally {
+                                      setOpenCodingRunning(false);
+                                    }
+                                  }}
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 6px",
+                                    borderRadius: 999,
+                                    background: "#58A6FF18",
+                                    color: "#58A6FF",
+                                    border: "1px solid #58A6FF33",
+                                    cursor: openCodingRunning
+                                      ? "not-allowed"
+                                      : "pointer",
+                                    opacity: openCodingRunning ? 0.5 : 1,
+                                  }}
+                                >
+                                  ▶ Codificar
+                                </button>
+                              )}
                           </div>
                         )}
                         {stage.key === "selective_coding" &&

@@ -33,6 +33,41 @@ logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
 
+
+def resolve_model_tier(metadata: dict, agent_id: str = "") -> ModelTier:
+    """Resolve the canonical model tier declared by a prompt's metadata.
+
+    Precedence: ``tier`` wins over ``model_profile``; ``model_profile`` is the
+    legacy key used by many prompt files. Values are stripped and upper-cased,
+    so the lowercase ``pro``/``flash`` spellings map to ``PRO``/``FLASH``.
+    Unknown or missing values log a warning naming the agent and default to
+    ``PRO``.
+    """
+    raw = metadata.get("tier")
+    if raw is None or not str(raw).strip():
+        raw = metadata.get("model_profile")
+
+    if raw is None:
+        logger.warning(
+            "Agent %s declares no tier/model_profile; defaulting to PRO",
+            agent_id or "<unknown>",
+        )
+        return "PRO"
+
+    normalized = str(raw).strip().upper()
+    if normalized == "PRO":
+        return "PRO"
+    if normalized == "FLASH":
+        return "FLASH"
+
+    logger.warning(
+        "Agent %s declares unknown tier %r; defaulting to PRO",
+        agent_id or "<unknown>",
+        raw,
+    )
+    return "PRO"
+
+
 # Fireworks prompt caching reuses only exact prefixes. Per-document variables
 # (e.g. ``raw_text``) are therefore rendered as this stable marker in the system
 # prompt and sent in the trailing user message instead.
@@ -304,6 +339,8 @@ def _parse_legacy_format(raw: str) -> dict[str, Any]:
             metadata["agent"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("-- tier:"):
             metadata["tier"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("-- model_profile:"):
+            metadata["model_profile"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("-- description:"):
             metadata["description"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("-- notes:"):
@@ -675,10 +712,7 @@ class LLMClient:
                 error=f"Prompt no encontrado para {agent_id}",
             )
 
-        declared_tier = parsed["metadata"].get("tier", "PRO")
-        model_tier: ModelTier = (
-            declared_tier if declared_tier in ("PRO", "FLASH") else "PRO"
-        )
+        model_tier: ModelTier = resolve_model_tier(parsed["metadata"], agent_id)
 
         defaults = None
         if max_tokens is None:
@@ -873,7 +907,12 @@ class LLMClient:
             user_prompt = "[CONTENIDO]\n" + user_content + "\n\n" + user_prompt
 
         logger.info(
-            "LLM: tier=%s model=%s prompt_chars=%d", tier, model, len(system_prompt)
+            "LLM: tier=%s model=%s prompt_chars=%d static_chars=%d cache_key=%s",
+            tier,
+            model,
+            len(system_prompt) + len(user_prompt),
+            len(system_prompt),
+            cache_key or "-",
         )
 
         last_error = None

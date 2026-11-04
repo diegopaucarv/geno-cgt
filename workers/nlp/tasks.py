@@ -22,6 +22,21 @@ from kombu import Exchange, Queue
 logger = logging.getLogger(__name__)
 
 
+def _sync_sqlalchemy_url(url: str = DATABASE_URL) -> str:
+    """Pin ``url`` to the psycopg2 driver for SQLAlchemy sync engines.
+
+    SQLAlchemy >= 2.1 resolves a plain ``postgresql://`` URL to the psycopg v3
+    dialect, which this worker does not install. worker-heavy pins SQLAlchemy
+    2.0.x (psycopg2) but this worker does not, so an unpinned ``create_engine``
+    used to fail with ``No module named 'psycopg'`` and silently skipped the
+    ``segmentado`` transition. Pinning the driver keeps transitions working
+    regardless of the installed SQLAlchemy version.
+    """
+    return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://").replace(
+        "postgresql://", "postgresql+psycopg2://"
+    )
+
+
 # ── Pipeline log streaming ──────────────────────
 
 
@@ -95,11 +110,37 @@ app.conf.update(
 
 
 @app.task(name="update_saturation")
-def update_saturation_stub(proyecto_id: str):
-    """Stub: saturation update is handled by the heavy worker.
-    This task arrives on the NLP queue but should be ignored here."""
-    logger.debug("update_saturation stub called for %s — ignoring", proyecto_id)
-    return {"status": "ignored", "note": "handled by worker-heavy"}
+def update_saturation(proyecto_id: str, code_id: str | None = None) -> dict:
+    """Delega en la implementación real de ``saturation.py``.
+
+    ``saturation.py`` registra sus tareas sobre un objeto ``Celery`` propio,
+    invisible para el worker arrancado con ``celery -A tasks``. Importamos la
+    implementación de forma perezosa y la invocamos sincrónicamente: llamar a
+    un ``Task`` ejecuta su ``run`` directamente, sin pasar por el broker.
+    """
+    from saturation import update_saturation as _impl
+
+    return _impl(proyecto_id, code_id)
+
+
+@app.task(name="get_saturation_report")
+def get_saturation_report(proyecto_id: str) -> dict:
+    """Delega en ``saturation.get_saturation_report``.
+
+    Mismo motivo que ``update_saturation``: la tarea original vive en el
+    ``app`` privado de ``saturation.py`` y no llega al worker.
+    """
+    from saturation import get_saturation_report as _impl
+
+    return _impl(proyecto_id)
+
+
+@app.task(name="check_saturation_sliding_window")
+def check_saturation_sliding_window(code_id: str, window: int = 5) -> dict:
+    """Delega en ``saturation.check_saturation_sliding_window``."""
+    from saturation import check_saturation_sliding_window as _impl
+
+    return _impl(code_id, window)
 
 
 @app.task(name="generar_embedding")
@@ -250,9 +291,7 @@ def segmentar_documento(
             try:
                 from agents.transitions import _to_error
 
-                db_url_sa = DATABASE_URL.replace(
-                    "postgresql+asyncpg", "postgresql"
-                ).replace("postgresql+psycopg2", "postgresql")
+                db_url_sa = _sync_sqlalchemy_url()
                 from sqlalchemy import create_engine
                 from sqlalchemy.orm import Session as SASession
 
@@ -351,9 +390,7 @@ def segmentar_documento(
                     try:
                         from agents.transitions import transition
 
-                        db_url_sa = DATABASE_URL.replace(
-                            "postgresql+asyncpg", "postgresql"
-                        ).replace("postgresql+psycopg2", "postgresql")
+                        db_url_sa = _sync_sqlalchemy_url()
                         from sqlalchemy import create_engine
                         from sqlalchemy.orm import Session as SASession
 
@@ -390,9 +427,7 @@ def segmentar_documento(
             # Mark document as error so pipeline can detect & abort
             if documento_id:
                 try:
-                    db_url_sa = DATABASE_URL.replace(
-                        "postgresql+asyncpg", "postgresql"
-                    ).replace("postgresql+psycopg2", "postgresql")
+                    db_url_sa = _sync_sqlalchemy_url()
                     from sqlalchemy import create_engine
                     from sqlalchemy.orm import Session as SASession
 

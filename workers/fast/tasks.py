@@ -35,34 +35,17 @@ llm = LLMClient()
 # GraphRAG: Extracción de entidades y relaciones
 # ═══════════════════════════════════════════════════════════════════════
 
-ENTITY_EXTRACTION_PROMPT = """[ROL]
-Eres un extractor de entidades y relaciones para investigación cualitativa (Grounded Theory).
-
-[TAREA]
-Del siguiente segmento del documento, extrae:
-1. ENTIDADES: personas, organizaciones, conceptos abstractos, eventos significativos.
-   No extraigas entidades triviales (ej. "yo", "ellos" sin contexto).
-2. RELACIONES entre entidades, clasificadas como:
-   - CAUSA: A causa o provoca B
-   - CONDICION: A es condición necesaria para B
-   - CONSECUENCIA: A es consecuencia de B
-   - OPOSICION: A se opone o contradice a B
-   - COOCURRENCIA: A y B aparecen vinculados sin dirección causal clara
-
-[REGLAS]
-- Los nombres de entidades deben ser EXACTOS al texto original (no parafrasees).
-- Si no hay entidades significativas, devuelve listas vacías.
-- Si no hay relaciones claras, devuelve lista vacía.
-
-[SEGMENTO]
-{segment_text}
-
-[OUTPUT FORMAT — responde SOLO en JSON]
-{{"entities": [{{"name": "...", "type": "person|organization|concept|event"}}], "relations": [{{"source": "nombre exacto", "target": "nombre exacto", "type": "CAUSA|...", "rationale": "breve justificación en 1 oración"}}]}}"""
-
-
-def _build_entity_prompt(segment_text: str) -> str:
-    return ENTITY_EXTRACTION_PROMPT.format(segment_text=segment_text[:3000])
+# schema.en.json emits an English relation_type enum, while graph_relations
+# stores the original Spanish codes. Unknown values fall back to co-occurrence.
+RELATION_TYPE_MAP = {
+    "CAUSES": "CAUSA",
+    "CONDITIONS": "CONDICION",
+    "CONSEQUENCES": "CONSECUENCIA",
+    "OPPOSES": "OPOSICION",
+    "CO-OCCURS_WITH": "COOCURRENCIA",
+    "IS_PART_OF": "COOCURRENCIA",
+    "IS_A": "COOCURRENCIA",
+}
 
 
 @app.task(name="extract_graph_entities")
@@ -96,16 +79,21 @@ def extract_graph_entities(segmento_id: str, proyecto_id: str) -> dict:
             }
 
         # 2. Prompt al LLM
-        prompt = _build_entity_prompt(segment_text)
-
-        # Usamos tier POWERFUL para extracción precisa
+        # tail_variables + user_content keep instructions/schema as a cacheable
+        # prefix; cache_key pins the whole batch to one replica.
+        segment_excerpt = segment_text[:3000]
         response = llm.run_agent(
-            agent_id="util_graph_entity_extractor",
-            variables={"segment_text": segment_text[:3000]},
+            agent_id="util_entity_extraction",
+            variables={"segment_text": segment_excerpt, "segment_id": segmento_id},
             temperature=0.2,
+            cache_key=str(proyecto_id) or None,
+            tail_variables=("segment_text", "segment_id"),
+            user_content=(
+                f"[SEGMENT]\n{segment_excerpt}\n\n[SEGMENT ID]\n{segmento_id}"
+            ),
         )
 
-        # Si es mock, intentar parsear el prompt directo
+        # Si es mock, no hay respuesta real que persistir
         if response.get("mock_note"):
             return {
                 "entities_found": 0,
@@ -160,7 +148,9 @@ def extract_graph_entities(segmento_id: str, proyecto_id: str) -> dict:
         for rel in relations:
             source_name = rel.get("source", "").strip()
             target_name = rel.get("target", "").strip()
-            rel_type = rel.get("type", "COOCURRENCIA").strip().upper()
+            rel_type = (
+                (rel.get("relation_type") or rel.get("type") or "").strip().upper()
+            )
 
             if source_name not in entity_ids or target_name not in entity_ids:
                 continue
@@ -176,7 +166,7 @@ def extract_graph_entities(segmento_id: str, proyecto_id: str) -> dict:
                 "COOCURRENCIA",
             }
             if rel_type not in valid_types:
-                rel_type = "COOCURRENCIA"
+                rel_type = RELATION_TYPE_MAP.get(rel_type, "COOCURRENCIA")
 
             # Upsert relation (ON CONFLICT incrementa strength)
             session.execute(

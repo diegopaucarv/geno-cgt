@@ -423,10 +423,21 @@ export interface RQPreviewResponse {
 }
 
 export interface GenerateResearchQuestionResponse {
-  status: string;
   project_id: string;
-  task_id: string;
-  message: string;
+  research_question: string;
+  operational_question: string;
+  oq_discovery?: string;
+  oq_selective?: string;
+  oq_theoretical?: string;
+  generated_at: string;
+  auto_generated?: boolean;
+  population_number: string;
+  conjugated_verb: string;
+  language: string;
+  /** Legacy async fields — the endpoint is synchronous. */
+  status?: string;
+  task_id?: string;
+  message?: string;
 }
 
 export async function getResearchQuestion(projectId: string) {
@@ -616,6 +627,32 @@ export async function getAgentMemos(projectId: string) {
   );
 }
 
+export interface AgentDispatchResponse {
+  status: string;
+  agent_id: string;
+  task_id: string;
+  task_name: string;
+}
+
+export async function runPipelineStage(
+  projectId: string,
+  stage: string,
+): Promise<{
+  stage: string;
+  project_id: string;
+  status: string;
+  task_ids: string[];
+  note?: string;
+}> {
+  return request<{
+    stage: string;
+    project_id: string;
+    status: string;
+    task_ids: string[];
+    note?: string;
+  }>(`/projects/${projectId}/pipeline/run-stage/${stage}`, { method: "POST" });
+}
+
 // ── Playground Types ──────────────────────────────────────────────────
 
 export interface TheoreticalCode {
@@ -716,11 +753,7 @@ export interface Recommendation {
   title: string;
   description: string;
   action_type:
-    | "connect"
-    | "absorb_ghost"
-    | "rename"
-    | "sample"
-    | "resolve_tension";
+    "connect" | "absorb_ghost" | "rename" | "sample" | "resolve_tension";
   category_ids: string[];
   suggested_code: string;
   impact_score: number;
@@ -924,12 +957,14 @@ export async function killAllWorkers() {
 export async function stopProjectPipeline(projectId: string) {
   return request<{
     status: string;
-    run_id: string;
-    tasks_cancelled: number;
-    details: {
+    active_run?: null;
+    tasks_revoked?: number;
+    run_id?: string;
+    tasks_cancelled?: number;
+    details?: {
       task_id: string;
-      doc_rolled_back?: string;
-      previous_state?: string;
+      status: string;
+      doc_id: string | null;
     }[];
   }>(`/admin/projects/${projectId}/stop`, { method: "POST" });
 }
@@ -938,8 +973,9 @@ export async function cancelTask(taskId: string) {
   return request<{
     status: string;
     task_id: string;
-    document_rolled_back?: string;
-    previous_state?: string;
+    cleanup?: "unknown";
+    document_rolled_back?: string | null;
+    previous_state?: string | null;
   }>(`/admin/tasks/${taskId}/cancel`, { method: "POST" });
 }
 

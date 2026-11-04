@@ -65,7 +65,7 @@ export const FAMILY_COLORS: Record<string, string> = {
 
 export const PIPELINE_STAGES: StageDef[] = [
   // ═══ 1. DATA MANAGEMENT — Por documento (secuencial) ═══
-  // Orden: Punctuator → Clasificador Glaser (tags markdown) → Segmentador (solo baseline) 
+  // Orden: Punctuator → Clasificador Glaser (tags markdown) → Segmentador (solo baseline)
   {
     key: "data_management",
     icon: "📥",
@@ -95,41 +95,41 @@ export const PIPELINE_STAGES: StageDef[] = [
         independent: true,
         iterationKey: "data_mgmt",
       },
-
     ],
-    chains: [{
-      id: "data_management_main",
-      label: "pipeline.chain.data_management",
-      agents: [
-        {
-          id: "util_punctuator",
-          label: "pipeline.agent.util_punctuator",
-          tier: "PRO",
-          dependencies: [],
-          independent: true,
-          iterationKey: "data_mgmt",
-        },
-        {
-          id: "fa_glaser_data_classifier",
-          label: "pipeline.agent.clasificador_datos",
-          tier: "PRO",
-          dependencies: ["util_punctuator"],
-          independent: true,
-          iterationKey: "data_mgmt",
-        },
-        {
-          id: "segmentar_documento",
-          label: "pipeline.agent.segmentar_documento",
-          tier: "NLP",
-          dependencies: ["fa_glaser_data_classifier"],
-          independent: true,
-          iterationKey: "data_mgmt",
-        },
-
-      ],
-      default_max_retries: 3,
-      default_timeout_seconds: 600,
-    }],
+    chains: [
+      {
+        id: "data_management_main",
+        label: "pipeline.chain.data_management",
+        agents: [
+          {
+            id: "util_punctuator",
+            label: "pipeline.agent.util_punctuator",
+            tier: "PRO",
+            dependencies: [],
+            independent: true,
+            iterationKey: "data_mgmt",
+          },
+          {
+            id: "fa_glaser_data_classifier",
+            label: "pipeline.agent.clasificador_datos",
+            tier: "PRO",
+            dependencies: ["util_punctuator"],
+            independent: true,
+            iterationKey: "data_mgmt",
+          },
+          {
+            id: "segmentar_documento",
+            label: "pipeline.agent.segmentar_documento",
+            tier: "NLP",
+            dependencies: ["fa_glaser_data_classifier"],
+            independent: true,
+            iterationKey: "data_mgmt",
+          },
+        ],
+        default_max_retries: 3,
+        default_timeout_seconds: 600,
+      },
+    ],
   },
 
   // ═══ 2. OPEN CODING — Cada 3 documentos (acumulativo) ═══
@@ -657,62 +657,64 @@ export const PIPELINE_STAGES: StageDef[] = [
         iterationKey: "theory_6",
       },
     ],
-    chains: [{
-      id: "theoretical_coding",
-      label: "pipeline.chain.theoretical_coding",
-      agents: [
-        {
-          id: "f6b_ghost_blob_mapper",
-          label: "pipeline.agent.f6b_ghost_blob_mapper",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_1",
-        },
-        {
-          id: "f6b_memo_theoretical_tagger",
-          label: "pipeline.agent.f6b_memo_theoretical_tagger",
-          tier: "FLASH",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_2",
-        },
-        {
-          id: "f6b_ecosystem_gap_detector",
-          label: "pipeline.agent.f6b_ecosystem_gap_detector",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_3",
-        },
-        {
-          id: "f6b_conceptual_elaborator",
-          label: "pipeline.agent.f6b_conceptual_elaborator",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_4",
-        },
-        {
-          id: "f6b_definition_writer",
-          label: "pipeline.agent.f6b_definition_writer",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_5",
-        },
-        {
-          id: "f6b_incident_elaborator",
-          label: "pipeline.agent.f6b_incident_elaborator",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          independent: true,
-          iterationKey: "theory_6",
-        },
-      ],
-      default_max_retries: 2,
-      default_timeout_seconds: 900,
-    }],
+    chains: [
+      {
+        id: "theoretical_coding",
+        label: "pipeline.chain.theoretical_coding",
+        agents: [
+          {
+            id: "f6b_ghost_blob_mapper",
+            label: "pipeline.agent.f6b_ghost_blob_mapper",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_1",
+          },
+          {
+            id: "f6b_memo_theoretical_tagger",
+            label: "pipeline.agent.f6b_memo_theoretical_tagger",
+            tier: "FLASH",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_2",
+          },
+          {
+            id: "f6b_ecosystem_gap_detector",
+            label: "pipeline.agent.f6b_ecosystem_gap_detector",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_3",
+          },
+          {
+            id: "f6b_conceptual_elaborator",
+            label: "pipeline.agent.f6b_conceptual_elaborator",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_4",
+          },
+          {
+            id: "f6b_definition_writer",
+            label: "pipeline.agent.f6b_definition_writer",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_5",
+          },
+          {
+            id: "f6b_incident_elaborator",
+            label: "pipeline.agent.f6b_incident_elaborator",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            independent: true,
+            iterationKey: "theory_6",
+          },
+        ],
+        default_max_retries: 2,
+        default_timeout_seconds: 900,
+      },
+    ],
   },
 
   // ═══ 5. Writing ═══
@@ -749,41 +751,43 @@ export const PIPELINE_STAGES: StageDef[] = [
         iterationKey: "writing_1",
       },
     ],
-    chains: [{
-      id: "writing_main",
-      label: "pipeline.chain.writing",
-      agents: [
-        {
-          id: "f6a_natural_writer",
-          label: "pipeline.agent.f6a_natural_writer",
-          tier: "PRO",
-          dependencies: ["ff_database_b_critic"],
-          chain: "Writer→Critic→Gap",
-          chainOrder: 1,
-          iterationKey: "writing_1",
-        },
-        {
-          id: "f6a_writing_critic",
-          label: "pipeline.agent.f6a_writing_critic",
-          tier: "PRO",
-          dependencies: ["f6a_natural_writer"],
-          chain: "Writer→Critic→Gap",
-          chainOrder: 2,
-          iterationKey: "writing_1",
-        },
-        {
-          id: "f6a_gap_feeler",
-          label: "pipeline.agent.f6a_gap_feeler",
-          tier: "FLASH",
-          dependencies: ["f6a_writing_critic"],
-          chain: "Writer→Critic→Gap",
-          chainOrder: 3,
-          iterationKey: "writing_1",
-        },
-      ],
-      default_max_retries: 3,
-      default_timeout_seconds: 900,
-    }],
+    chains: [
+      {
+        id: "writing_main",
+        label: "pipeline.chain.writing",
+        agents: [
+          {
+            id: "f6a_natural_writer",
+            label: "pipeline.agent.f6a_natural_writer",
+            tier: "PRO",
+            dependencies: ["ff_database_b_critic"],
+            chain: "Writer→Critic→Gap",
+            chainOrder: 1,
+            iterationKey: "writing_1",
+          },
+          {
+            id: "f6a_writing_critic",
+            label: "pipeline.agent.f6a_writing_critic",
+            tier: "PRO",
+            dependencies: ["f6a_natural_writer"],
+            chain: "Writer→Critic→Gap",
+            chainOrder: 2,
+            iterationKey: "writing_1",
+          },
+          {
+            id: "f6a_gap_feeler",
+            label: "pipeline.agent.f6a_gap_feeler",
+            tier: "FLASH",
+            dependencies: ["f6a_writing_critic"],
+            chain: "Writer→Critic→Gap",
+            chainOrder: 3,
+            iterationKey: "writing_1",
+          },
+        ],
+        default_max_retries: 3,
+        default_timeout_seconds: 900,
+      },
+    ],
   },
 ];
 
@@ -811,14 +815,14 @@ export function areAllAgentsDone(
 }
 
 export function getStageChains(stageKey: string): ChainDef[] {
-  const stage = PIPELINE_STAGES.find(s => s.key === stageKey);
+  const stage = PIPELINE_STAGES.find((s) => s.key === stageKey);
   return stage?.chains || [];
 }
 
 export function getChainById(chainId: string): ChainDef | undefined {
   for (const stage of PIPELINE_STAGES) {
     if (stage.chains) {
-      const chain = stage.chains.find(c => c.id === chainId);
+      const chain = stage.chains.find((c) => c.id === chainId);
       if (chain) return chain;
     }
   }

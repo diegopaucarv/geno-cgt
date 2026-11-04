@@ -160,75 +160,54 @@ class PipelineOrchestrator:
         self.db.add(run)
         self.db.flush()
 
-        # Dispatch ONE segment and ONE agents task at a time.
-        # The transition chain handles subsequent docs sequentially.
+        # Fan out to every doc that still needs work, in sort_order. Workers
+        # report back through the transition chain, which keeps a single
+        # pipeline run consistent.
         dispatched_segment = 0
         dispatched_agents = 0
         skipped = 0
         task_ids = {"segment": [], "agents": []}
 
+        # Estados terminales o de codificación: no se re-despachan.
+        skip_estados = {
+            "incidentes_extraidos",
+            "procesado",
+            "listo",
+            "codificando",
+            "codificado",
+            "error",
+        }
+
         if force:
-            # Forzar desde cero: reset all, but dispatch only the FIRST doc
-            first_doc = None
+            # Forzar desde cero: reset all docs and segment every one of them.
             for row in docs:
                 doc_id = str(row[0])
+                metadatos = self._parse_metadatos(row[2])
                 self._reset_document(doc_id)
-                if first_doc is None:
-                    raw_meta = row[2]
-                    if isinstance(raw_meta, dict):
-                        meta = raw_meta
-                    elif isinstance(raw_meta, str):
-                        try:
-                            meta = __import__("json").loads(raw_meta)
-                        except Exception:
-                            meta = {}
-                    else:
-                        meta = {}
-                    first_doc = (doc_id, meta)
-
-            if first_doc:
-                doc_id, metadatos = first_doc
                 task = self._dispatch("crudo", doc_id, project_id, metadatos, run)
                 if task:
                     dispatched_segment += 1
                     task_ids["segment"].append(
                         {"doc_id": doc_id, "task_id": task["celery_task_id"]}
                     )
-                skipped = len(docs) - 1
         else:
-            # Find first doc needing segment and first doc needing agents.
-            # Only ONE of each type at a time.
             for row in docs:
                 doc_id = str(row[0])
-                estado = row[1] or "crudo"
-                raw_meta = row[2]
-                if isinstance(raw_meta, dict):
-                    metadatos = raw_meta
-                elif isinstance(raw_meta, str):
-                    try:
-                        metadatos = __import__("json").loads(raw_meta)
-                    except Exception:
-                        metadatos = {}
-                else:
-                    metadatos = {}
+                estado = (row[1] or "crudo").strip()
+                metadatos = self._parse_metadatos(row[2])
 
-                # Reset errored docs so they can be retried
-                if estado == "error":
-                    self.db.execute(
-                        text("UPDATE documentos SET estado = 'crudo' WHERE id = :did"),
-                        {"did": doc_id},
-                    )
-                    self.db.flush()
-                    estado = "crudo"
+                if estado in skip_estados:
+                    skipped += 1
+                    continue
 
                 n_segs = self._count_segments(doc_id, self.db)
                 n_codes = self._count_codes(doc_id, self.db)
 
-                if n_segs == 0 and dispatched_segment == 0:
-                    # First doc needing segmentation (crudo or preprocesado)
-                    from_state = "crudo"
-                    if estado == "preprocesado":
-                        from_state = "preprocesado"
+                if n_segs == 0:
+                    # Doc needing segmentation (crudo, preprocesado o clasificado)
+                    from_state = (
+                        estado if estado in ("preprocesado", "clasificado") else "crudo"
+                    )
                     task = self._dispatch(
                         from_state, doc_id, project_id, metadatos, run
                     )
@@ -237,8 +216,8 @@ class PipelineOrchestrator:
                         task_ids["segment"].append(
                             {"doc_id": doc_id, "task_id": task["celery_task_id"]}
                         )
-                elif n_segs > 0 and n_codes == 0 and dispatched_agents == 0:
-                    # First doc needing agents
+                elif n_codes == 0:
+                    # Doc with segments but no codes yet
                     task = self._dispatch(
                         "segmentado", doc_id, project_id, metadatos, run
                     )
@@ -247,7 +226,7 @@ class PipelineOrchestrator:
                         task_ids["agents"].append(
                             {"doc_id": doc_id, "task_id": task["celery_task_id"]}
                         )
-                elif n_segs > 0 and n_codes > 0:
+                else:
                     skipped += 1
 
         run.summary = {
@@ -258,8 +237,16 @@ class PipelineOrchestrator:
         }
         self.db.commit()
 
-        # If all docs already done, trigger Phase B directly (no transition will fire it)
-        if skipped == len(docs) and skipped >= 3:
+        # If all docs already reached batch-ready, trigger Phase B directly
+        # (no per-document transition will fire it).
+        ready = self.db.execute(
+            text(
+                "SELECT COUNT(*) FROM documentos WHERE proyecto_id = :pid "
+                "AND TRIM(estado) IN ('listo', 'incidentes_extraidos', 'procesado')"
+            ),
+            {"pid": project_id},
+        ).fetchone()[0]
+        if ready == len(docs) and ready >= 3:
             from app.agents.transitions import _maybe_trigger_phase_b
 
             result = _maybe_trigger_phase_b(self.db, str(project_id))
@@ -277,6 +264,18 @@ class PipelineOrchestrator:
     # ═══════════════════════════════════════════════════════════════
     # Internal
     # ═══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _parse_metadatos(raw_meta) -> dict:
+        """Normaliza los metadatos de un documento (dict, JSON string o vacío)."""
+        if isinstance(raw_meta, dict):
+            return raw_meta
+        if isinstance(raw_meta, str):
+            try:
+                return __import__("json").loads(raw_meta)
+            except Exception:
+                return {}
+        return {}
 
     def _reset_document(self, doc_id: str):
         """Resetea un documento a estado crudo (para force=True)."""
@@ -311,7 +310,7 @@ class PipelineOrchestrator:
             return None
 
         # Update document estado (optimistic locking)
-        self.db.execute(
+        result = self.db.execute(
             text(
                 "UPDATE documentos SET estado = :next "
                 "WHERE id = :did AND estado = :from_st"
@@ -319,6 +318,16 @@ class PipelineOrchestrator:
             {"next": trans["next_state"], "did": doc_id, "from_st": from_state},
         )
         self.db.flush()
+
+        # Optimistic lock: si el doc ya no estaba en from_state, otro proceso
+        # lo movió. No despachar trabajo stale.
+        if result.rowcount == 0:
+            logger.info(
+                "Doc %s not in expected state '%s'; skipping dispatch",
+                doc_id,
+                from_state,
+            )
+            return None
 
         # Dispatch Celery task via shared app instance
         if trans["task_name"] == "segmentar_documento":

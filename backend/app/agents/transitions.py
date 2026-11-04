@@ -9,8 +9,8 @@ Principios:
 - Optimistic locking: WHERE estado = from_state previene race conditions
 
 Workers llaman:
-  transition(session, doc_id, proj_id, "segmentando", "segmentar_documento", True)
-  transition(session, doc_id, proj_id, "procesando", "process_document_agents_a", True)
+  transition(session, doc_id, proj_id, "segmentado", "segmentar_documento", True)
+  transition(session, doc_id, proj_id, "extrayendo", "process_document_agents_a", True)
   transition(session, doc_id, proj_id, estado_actual, task_name, False)  # error
 """
 
@@ -34,14 +34,23 @@ _celery_app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
 NEXT: dict[str, tuple[str, str | None, str | None]] = {
     # ── Stage 1: Data Management (per-document) ──
+    # The manual UI flow is punctuate → classify → segment:
+    #   crudo → preprocesando → preprocesado → clasificando → clasificado
+    #         → segmentando → segmentado
+    # `crudo` also feeds segmentation directly for the bulk pipeline, which
+    # segments raw text without the manual preprocess/classify steps.
     "crudo": ("segmentando", "segmentar_documento", "nlp"),
     "preprocesando": ("preprocesado", None, None),
-    "preprocesado": ("segmentando", "segmentar_documento", "nlp"),
+    "preprocesado": ("clasificando", "run_glaser_classifier", "heavy"),
+    # The classifier worker writes 'clasificado' itself.
     "clasificando": ("clasificado", None, None),
     "clasificado": ("segmentando", "segmentar_documento", "nlp"),
     "segmentando": ("segmentado", None, None),
     # ── F2.3 runs inside process_document_agents_a, not as separate task ──
     "segmentado": ("procesando", "process_document_agents_a", "heavy"),
+    # process_document_agents_a sets 'extrayendo' while F2.3 runs; this is the
+    # state it must transition FROM to reach the batch-ready terminal state.
+    "extrayendo": ("incidentes_extraidos", None, None),
     "incidentes_extraidos": (None, None, None),  # waits for batch trigger (3+ docs)
     # ── Stage 2: Open Coding (batch, cross-document) ──
     "codificando": ("codificado", None, None),
@@ -98,6 +107,8 @@ def transition(
     from_state: str,
     task_name: str,
     success: bool,
+    *,
+    fail_to: str = "error",
 ) -> dict | None:
     """Transiciona el estado de un documento y despacha la siguiente tarea.
 
@@ -108,12 +119,13 @@ def transition(
         from_state: estado ACTUAL del documento (para optimistic lock)
         task_name: nombre de la tarea que acaba de terminar
         success: True si la tarea se completó, False si falló
+        fail_to: estado al que se enruta el doc cuando success=False
 
     Returns:
         dict con next_task si se despachó algo, None si no.
     """
     if not success:
-        return _to_error(session, documento_id)
+        return _to_error(session, documento_id, fail_to)
 
     info = NEXT.get(from_state)
     if not info:
@@ -167,12 +179,12 @@ def transition(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _to_error(session, documento_id: str) -> None:
-    """Marca documento como error."""
+def _to_error(session, documento_id: str, to_state: str = "error") -> None:
+    """Marca documento como error (o en el estado de fallo indicado)."""
     session.rollback()  # clear any previously aborted transaction
     session.execute(
-        text("UPDATE documentos SET estado = 'error' WHERE id = :did"),
-        {"did": documento_id},
+        text("UPDATE documentos SET estado = :to WHERE id = :did"),
+        {"to": to_state, "did": documento_id},
     )
     session.commit()
 
@@ -229,15 +241,20 @@ def _dispatch_next(
 
 
 def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
-    """Dispara Phase B si >= 3 docs listos y no se disparó ya.
+    """Dispara Phase B si hay >= batch_size docs listos y no se disparó ya.
 
     Si pause_mode == 'auto' → despacha process_synthesis_agents_b automáticamente.
     Si pause_mode == 'manual' → publica evento Redis 'batch_ready' y NO despacha.
+
+    El tamaño del lote se lee de GT_OPEN_CODING_BATCH_SIZE (default 3). Un lote
+    final de 1-2 docs también dispara: se compara contra los docs que aún no
+    entraron a codificación, no contra el total del proyecto.
     """
     listos = session.execute(
         text(
             "SELECT COUNT(*) FROM documentos "
-            "WHERE proyecto_id = :pid AND estado IN ('listo', 'incidentes_extraidos', 'procesado')"
+            "WHERE proyecto_id = :pid "
+            "AND TRIM(estado) IN ('listo', 'incidentes_extraidos', 'procesado')"
         ),
         {"pid": proyecto_id},
     ).fetchone()[0]
@@ -247,15 +264,36 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
         {"pid": proyecto_id},
     ).fetchone()[0]
 
-    if listos < 3 and listos < total_docs:
-        return None  # Not enough docs and not the last batch
+    # Docs que todavía no pasaron por open coding (ni fallaron).
+    pendientes = session.execute(
+        text(
+            "SELECT COUNT(*) FROM documentos "
+            "WHERE proyecto_id = :pid "
+            "AND TRIM(estado) NOT IN ('codificando', 'codificado', 'error')"
+        ),
+        {"pid": proyecto_id},
+    ).fetchone()[0]
+
+    try:
+        batch_size = int(_os.getenv("GT_OPEN_CODING_BATCH_SIZE", "3"))
+    except ValueError:
+        batch_size = 3
+
+    if listos == 0:
+        return None
+
+    # Lote incompleto y todavía quedan docs pendientes → esperar más docs.
+    if listos < batch_size and listos < pendientes:
+        return None
 
     # Dedup by active pipeline run, not by doc count
     run_id = _get_active_run(session, proyecto_id)
     if not run_id:
         return None
 
-    step = f"phase_b_run_{run_id}"
+    # La clave incluye el tamaño del lote: un batch posterior con más docs
+    # listos no debe quedar bloqueado por el marcador del batch anterior.
+    step = f"phase_b_run_{run_id}_n{listos}"
     already = session.execute(
         text(
             "SELECT step FROM processing_states "
@@ -307,11 +345,24 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
     )
     session.commit()
 
-    task = _celery_app.send_task(
-        "process_synthesis_agents_b",
-        args=[proyecto_id],
-        queue="heavy",
-    )
+    try:
+        task = _celery_app.send_task(
+            "process_synthesis_agents_b",
+            args=[proyecto_id],
+            queue="heavy",
+        )
+    except Exception:
+        # Dispatch fallido: liberar el marcador para que este lote se pueda
+        # reintentar en lugar de quedar bloqueado para siempre.
+        session.execute(
+            text(
+                "DELETE FROM processing_states "
+                "WHERE entity_type = 'project' AND entity_id = :pid AND step = :step"
+            ),
+            {"pid": proyecto_id, "step": step},
+        )
+        session.commit()
+        raise
 
     logger.info(
         "Phase B triggered: project=%s (%d docs listos, task=%s)",
@@ -349,6 +400,53 @@ def _get_texto(session, documento_id: str) -> str:
             or meta.get("texto_original", "")
         )
     return ""
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers para el worker pesado (idempotencia de extracción)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def begin_extraction(session, documento_id: str) -> bool:
+    """Mueve el doc a 'extrayendo' sólo desde estados no terminales.
+
+    Devuelve True si esta ejecución debe hacer la transición final
+    extrayendo -> incidentes_extraidos. Devuelve False si el doc ya estaba
+    en un estado terminal (re-ejecución manual), para no regresarlo.
+    """
+    result = session.execute(
+        text(
+            "UPDATE documentos SET estado = 'extrayendo' "
+            "WHERE id = :did "
+            "AND TRIM(estado) IN ('segmentado', 'procesando', 'error')"
+        ),
+        {"did": documento_id},
+    )
+    session.commit()
+
+    if result.rowcount:
+        return True
+
+    row = session.execute(
+        text("SELECT estado FROM documentos WHERE id = :did"),
+        {"did": documento_id},
+    ).fetchone()
+    return bool(row and (row[0] or "").strip() == "extrayendo")
+
+
+def reset_after_cancel(
+    session, documento_id: str, to_state: str = "segmentado"
+) -> None:
+    """Devuelve el doc a un estado reintentable tras una cancelación."""
+    session.rollback()
+    session.execute(
+        text(
+            "UPDATE documentos SET estado = :to "
+            "WHERE id = :did AND TRIM(estado) = 'extrayendo'"
+        ),
+        {"to": to_state, "did": documento_id},
+    )
+    session.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -511,19 +609,21 @@ def hitl_gate(
 
 
 def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
-    """Dispara el selective_coding_coordinator cuando todos los docs están sintetizados.
+    """Dispara el selective_coding_coordinator cuando todos los docs están codificados.
 
     Análogo a _maybe_trigger_phase_b pero para la transición
-    open coding → selective coding.
+    open coding → selective coding. Acepta tanto 'codificado' (estado que deja
+    el batch de open coding) como 'sintetizado' (alias legacy).
     """
     import os as _os
 
     from celery import Celery
 
-    sintetizados = session.execute(
+    codificados = session.execute(
         text(
             "SELECT COUNT(*) FROM documentos "
-            "WHERE proyecto_id = :pid AND estado = 'sintetizado'"
+            "WHERE proyecto_id = :pid "
+            "AND TRIM(estado) IN ('codificado', 'sintetizado')"
         ),
         {"pid": proyecto_id},
     ).fetchone()[0]
@@ -533,10 +633,10 @@ def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
         {"pid": proyecto_id},
     ).fetchone()[0]
 
-    if sintetizados < total or total == 0:
+    if codificados < total or total == 0:
         return None
 
-    step = f"selective_coding_dc_{sintetizados}"
+    step = f"selective_coding_dc_{codificados}"
     already = session.execute(
         text(
             "SELECT step FROM processing_states "
@@ -564,9 +664,9 @@ def _maybe_trigger_selective_coding(session, proyecto_id: str) -> dict | None:
     )
 
     logger.info(
-        "Selective coding triggered: project=%s (%d docs sintetizados, task=%s)",
+        "Selective coding triggered: project=%s (%d docs codificados, task=%s)",
         proyecto_id,
-        sintetizados,
+        codificados,
         task.id,
     )
     return {"next_task": "selective_coding_coordinator", "task_id": task.id}
@@ -596,11 +696,12 @@ def _maybe_trigger_iteration(session, proyecto_id: str) -> dict | None:
     if project_state not in ("playground_ready", "completed"):
         return None
 
-    # Detectar docs nuevos (listo pero no sintetizado)
+    # Detectar docs nuevos (listos pero todavía sin sintetizar)
     new_docs = session.execute(
         text(
             "SELECT COUNT(*) FROM documentos "
-            "WHERE proyecto_id = :pid AND estado = 'listo'"
+            "WHERE proyecto_id = :pid "
+            "AND TRIM(estado) IN ('listo', 'incidentes_extraidos')"
         ),
         {"pid": proyecto_id},
     ).fetchone()[0]
@@ -641,7 +742,7 @@ def _maybe_trigger_iteration(session, proyecto_id: str) -> dict | None:
     session.commit()
 
     logger.info(
-        "Iteration triggered: project=%s (%d new docs in 'listo', was %s → coding)",
+        "Iteration triggered: project=%s (%d new docs in 'listo'/'incidentes_extraidos', was %s → coding)",
         proyecto_id,
         new_docs,
         project_state,

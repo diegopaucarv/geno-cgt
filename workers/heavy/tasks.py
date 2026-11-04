@@ -894,7 +894,13 @@ def process_document_agents_a(
         cleanup_step,
         load_checkpoints,
     )
-    from agents.transitions import transition as transit
+    from agents.transitions import (
+        begin_extraction,
+        reset_after_cancel,
+    )
+    from agents.transitions import (
+        transition as transit,
+    )
 
     results: dict[str, Any] = {"documento_id": documento_id}
     session = SessionLocal()
@@ -928,6 +934,13 @@ def process_document_agents_a(
             _classify_glaser_types_for_doc(session, documento_id, use_llm_fallback=True)
             checkpoint(session, documento_id, STEP, "completed")
 
+        # ── Paso 0.25: marcar 'extrayendo' de forma idempotente ───────────────
+        # begin_extraction sólo mueve el doc desde ('segmentado','procesando',
+        # 'error'). Si ya estaba en un estado terminal (re-ejecución manual)
+        # devuelve False y esta corrida NO debe hacer la transición final
+        # extrayendo -> incidentes_extraidos.
+        needs_final_transition = begin_extraction(session, documento_id)
+
         # ── Step 0.5: F2.3 — Extract patterns & incidents (unified PRO call) ──
         # Replaces old per-segment extract_incident (~13 FLASH) + extract_core_pattern (1 PRO)
         # + _extract_prime_mover (1 FLASH). ONE PRO call does all three.
@@ -936,33 +949,28 @@ def process_document_agents_a(
             raise TaskCancelledError()
         if STEP not in completed:
             checkpoint(session, documento_id, STEP, "in_progress")
-            # Mark document as extracting incidents
-            session.execute(
-                text("UPDATE documentos SET estado = 'extrayendo' WHERE id = :did"),
-                {"did": documento_id},
-            )
-            session.commit()
             logger.info("F2.3: Extracting patterns & incidents doc %s", documento_id)
-            try:
-                from pattern_extractor import (
-                    extract_patterns_and_incidents as _extract_pi,
-                )
+            from pattern_extractor import (
+                extract_patterns_and_incidents as _extract_pi,
+            )
 
-                pi_result = _extract_pi(documento_id, proyecto_id)
-                results["patterns"] = pi_result.get("patterns", [])
-                results["incidents_extracted"] = pi_result.get("incidents_count", 0)
-                results["document_signals"] = pi_result.get("document_signals", {})
-                logger.info(
-                    "F2.3: %d patterns, %d incidents doc %s",
-                    len(results["patterns"]),
-                    results["incidents_extracted"],
-                    documento_id,
+            pi_result = _extract_pi(documento_id, proyecto_id)
+            # Defensivo: si alguna ruta devolviera en vez de lanzar, el paso NO
+            # puede marcarse como completado.
+            if pi_result.get("error") or pi_result.get("mock"):
+                raise RuntimeError(
+                    "Extracción F2.3 incompleta para doc="
+                    f"{documento_id}: {pi_result.get('error') or 'mock'}"
                 )
-            except Exception as e:
-                logger.warning("Pattern extraction failed: %s", e)
-                results["patterns"] = []
-                results["incidents_extracted"] = 0
-                results["document_signals"] = {}
+            results["patterns"] = pi_result.get("patterns", [])
+            results["incidents_extracted"] = pi_result.get("incidents_count", 0)
+            results["document_signals"] = pi_result.get("document_signals", {})
+            logger.info(
+                "F2.3: %d patterns, %d incidents doc %s",
+                len(results["patterns"]),
+                results["incidents_extracted"],
+                documento_id,
+            )
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Step 0.7: F2.5 — Every OPEN_CODING_BATCH_SIZE docs, verify pattern convergence (PRO) ──
@@ -1034,14 +1042,22 @@ def process_document_agents_a(
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Transition: mark ready + maybe trigger Phase B ──
-        transit(
-            session,
-            documento_id,
-            proyecto_id,
-            "extrayendo",
-            "process_document_agents_a",
-            True,
-        )
+        # begin_extraction ya dejó el doc en 'extrayendo'. Si esa llamada
+        # devolvió False (doc ya terminal) no corresponde hacer la transición.
+        if needs_final_transition:
+            transit(
+                session,
+                documento_id,
+                proyecto_id,
+                "extrayendo",
+                "process_document_agents_a",
+                True,
+            )
+        else:
+            logger.info(
+                "Doc %s ya estaba en estado terminal — se omite transición final",
+                documento_id,
+            )
 
         return results
 
@@ -1049,8 +1065,12 @@ def process_document_agents_a(
         logger.warning(
             "Task process_document_agents_a cancelled for doc=%s", documento_id
         )
+        # No dejar el doc atascado en 'extrayendo' tras una cancelación.
+        reset_after_cancel(session, documento_id)
         return {"status": "cancelled", "documento_id": documento_id}
     except Exception as e:
+        # Una extracción fallida vuelve a 'segmentado' (reintentable desde el
+        # mismo botón de la UI) en vez de quedar en 'error' o en 'extrayendo'.
         transit(
             session,
             documento_id,
@@ -1058,6 +1078,7 @@ def process_document_agents_a(
             "extrayendo",
             "process_document_agents_a",
             False,
+            fail_to="segmentado",
         )
         raise
     finally:
@@ -1498,10 +1519,15 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         return results
 
     except TaskCancelledError:
+        # Phase B cancelada: devolver los docs a un estado reintentable.
+        _restore_phase_b_docs(s, proyecto_id)
         _checkpoint_step(s, proyecto_id, "cancelled", "completed")
         return {"status": "cancelled", "proyecto_id": proyecto_id}
     except Exception:
         logger.exception("process_synthesis_agents_b failed for %s", proyecto_id)
+        # Phase B fallida: los docs no deben quedar atascados en 'codificando'
+        # ni el marcador phase_b_run_* bloquear un nuevo intento.
+        _restore_phase_b_docs(s, proyecto_id)
         # Push error to pipeline logs so overlay shows it even if worker crashes
         try:
             _plog(
@@ -1513,6 +1539,43 @@ def process_synthesis_agents_b(self, proyecto_id: str) -> dict:
         raise
     finally:
         s.close()
+
+
+def _restore_phase_b_docs(session, proyecto_id: str) -> None:
+    """Unstick docs left in 'codificando' and allow Phase B to run again."""
+    try:
+        session.rollback()
+        session.execute(
+            text(
+                "UPDATE documentos SET estado = 'incidentes_extraidos' "
+                "WHERE proyecto_id = :pid AND TRIM(estado) = 'codificando'"
+            ),
+            {"pid": proyecto_id},
+        )
+        session.execute(
+            text(
+                "DELETE FROM processing_states "
+                "WHERE entity_type = 'project' AND entity_id = :pid "
+                "AND step LIKE 'phase_b_run_%'"
+            ),
+            {"pid": proyecto_id},
+        )
+        session.commit()
+        logger.warning(
+            "Phase B: docs de proyecto=%s devueltos a 'incidentes_extraidos' "
+            "y marcadores phase_b_run_* liberados",
+            proyecto_id[:8],
+        )
+    except Exception as exc:
+        logger.warning(
+            "Phase B: no se pudo restaurar el estado de los docs de proyecto=%s: %s",
+            proyecto_id[:8] if proyecto_id else "?",
+            exc,
+        )
+        try:
+            session.rollback()
+        except Exception:
+            pass
 
 
 def _checkpoint_step(session, proyecto_id: str, step_name: str, status: str) -> None:

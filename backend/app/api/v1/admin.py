@@ -161,7 +161,8 @@ async def stop_project_pipeline(
         await db.execute(
             text(
                 "UPDATE documentos SET estado = 'crudo' WHERE estado IN "
-                "('preprocesando', 'segmentando', 'procesando', 'resumiendo')"
+                "('preprocesando', 'segmentando', 'procesando', 'resumiendo', "
+                " 'extrayendo', 'clasificando', 'codificando')"
             ),
         )
         await db.commit()
@@ -213,11 +214,14 @@ async def stop_project_pipeline(
                 {"did": task.document_id},
             )
             current_estado = row_result.scalar_one_or_none()
-            if current_estado in (
+            if (current_estado or "").strip() in (
                 "segmentando",
                 "procesando",
                 "preprocesando",
                 "resumiendo",
+                "extrayendo",
+                "clasificando",
+                "codificando",
             ):
                 await db.execute(
                     text("UPDATE documentos SET estado = :estado WHERE id = :did"),
@@ -279,20 +283,38 @@ async def cancel_task(
     if not task_record:
         # Fallback: revocar sin limpiar (no tenemos tracking)
         celery_app.control.revoke(task_id, terminate=True)
-        return {"status": "revoked", "cleanup": "unknown"}
+        return {"status": "revoked", "cleanup": "unknown", "task_id": str(task_id)}
 
     # Revocar en Celery
     celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
 
-    # Rollback
+    # Rollback — solo si el doc sigue en un estado transitorio (mismo criterio
+    # que stop_project_pipeline). Si ya avanzó, una tarea vieja no lo rewindea.
+    document_rolled_back = None
     if task_record.document_id and task_record.doc_estado_before:
-        await db.execute(
-            text("UPDATE documentos SET estado = :estado WHERE id = :did"),
-            {
-                "estado": task_record.doc_estado_before,
-                "did": task_record.document_id,
-            },
-        )
+        current_estado = (
+            await db.execute(
+                text("SELECT estado FROM documentos WHERE id = :did"),
+                {"did": task_record.document_id},
+            )
+        ).scalar_one_or_none()
+        if (current_estado or "").strip() in (
+            "segmentando",
+            "procesando",
+            "preprocesando",
+            "resumiendo",
+            "extrayendo",
+            "clasificando",
+            "codificando",
+        ):
+            await db.execute(
+                text("UPDATE documentos SET estado = :estado WHERE id = :did"),
+                {
+                    "estado": task_record.doc_estado_before,
+                    "did": task_record.document_id,
+                },
+            )
+            document_rolled_back = str(task_record.document_id)
 
     task_record.status = "cancelled"
     await db.commit()
@@ -300,9 +322,7 @@ async def cancel_task(
     return {
         "status": "cancelled",
         "task_id": task_id,
-        "document_rolled_back": (
-            str(task_record.document_id) if task_record.document_id else None
-        ),
+        "document_rolled_back": document_rolled_back,
         "previous_state": task_record.doc_estado_before,
     }
 
