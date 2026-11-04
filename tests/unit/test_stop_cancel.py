@@ -70,8 +70,8 @@ def test_task_cancelled_error():
 
 
 def test_together_llm_has_chat_stream():
-    """TogetherLLM tiene el método chat_stream."""
-    from app.core.together_client import TogetherLLM
+    """TogetherLLM (adapter sobre el proveedor unificado) tiene chat_stream."""
+    from app.core.llm_client_adapter import TogetherLLM
 
     client = TogetherLLM()
     assert hasattr(client, "chat_stream")
@@ -82,7 +82,7 @@ def test_chat_stream_signature():
     """chat_stream acepta abort_event."""
     import inspect
 
-    from app.core.together_client import TogetherLLM
+    from app.core.llm_client_adapter import TogetherLLM
 
     sig = inspect.signature(TogetherLLM.chat_stream)
     params = list(sig.parameters.keys())

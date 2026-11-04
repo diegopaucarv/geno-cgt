@@ -1,0 +1,282 @@
+"""Prompt-caching invariants.
+
+Fireworks caches an **exact prefix** of the request (see
+https://docs.fireworks.ai/guides/prompt-caching). Two things must hold for a
+batch of documents to reuse that cache:
+
+1. The per-document text must not appear in the *system* prompt, otherwise
+   every document invalidates the prefix from the first differing token.
+2. All requests of the batch must carry the same ``x-session-affinity`` value,
+   because the cache lives inside a single replica.
+
+These tests assert both invariants without making a network call: the fast
+worker's provider is replaced by a recorder that captures the kwargs of every
+``chat()`` call.
+
+The structural probe runs inside ``worker-fast`` because that is the only
+container where ``llm_client`` resolves to ``workers/fast/llm_client.py``.
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import pytest
+
+from tests.workflow.conftest import docker_compose_exec
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+# ── In-container structural probe ──────────────────────────────────────
+
+CACHE_PROBE = r"""
+import types
+
+import llm_client as fast
+
+client = fast.LLMClient(api_key="sk-cache-probe")
+client.is_mock = False
+
+captured = []
+
+
+class Recorder:
+    is_mock = False
+    timeout = 1
+
+    def chat(self, **kwargs):
+        captured.append(kwargs)
+        return types.SimpleNamespace(
+            content='{"punctuated_text": "ok", "changes_made": false}',
+            reasoning_content="",
+        )
+
+
+client._provider = Recorder()
+
+DOCS = [
+    "<texto_crudo>\nEl PRIMER documento habla de sequias.\n</texto_crudo>",
+    "<texto_crudo>\nEl SEGUNDO documento habla de lluvias.\n</texto_crudo>",
+]
+
+for body in DOCS:
+    client.run_agent(
+        "util_punctuator",
+        variables={"raw_text": body},
+        temperature=0.3,
+        cache_key="project-affinity-key",
+        tail_variables=("raw_text",),
+        user_content=body,
+    )
+
+assert len(captured) == 2, captured
+
+systems = [call["messages"][0]["content"] for call in captured]
+users = [call["messages"][1]["content"] for call in captured]
+
+# 1. Static prefix: instructions (+ schema) identical across documents.
+assert systems[0] == systems[1], (
+    "system prompt differs between documents; prompt caching cannot hit"
+)
+
+# 2. The document text lives only in the trailing user message.
+for body, system, user in zip(DOCS, systems, users):
+    assert body not in system, "document text leaked into the cached prefix"
+    assert body in user, "document text missing from the user message"
+
+# 3. Affinity: every request of the batch pins the same replica.
+for call in captured:
+    assert call.get("session_affinity") == "project-affinity-key", call
+
+print("ok")
+"""
+
+
+def test_punctuator_prefix_is_static_and_affinity_is_set(docker):
+    """The punctuator must separate static instructions from document text."""
+    proc = docker_compose_exec("worker-fast", "python", "-c", CACHE_PROBE)
+    assert proc.returncode == 0, (
+        "prompt-caching probe failed for util_punctuator:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:1500]}"
+    )
+    assert "ok" in proc.stdout
+
+
+HEADER_PROBE = r"""
+import requests
+
+from app.core.llm_client import LLMProvider
+
+captured = {}
+
+
+class FakeResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {"choices": [{"message": {"content": "hola"}}]}
+
+
+def fake_post(url, json=None, headers=None, timeout=None):
+    captured["headers"] = headers or {}
+    return FakeResponse()
+
+
+requests.post = fake_post
+provider = LLMProvider(api_key="sk-header-probe")
+provider.chat(
+    model="pro",
+    messages=[{"role": "user", "content": "hola"}],
+    session_affinity="project-affinity-key",
+)
+headers = captured.get("headers", {})
+assert headers.get("x-session-affinity") == "project-affinity-key", headers
+assert headers.get("Authorization", "").startswith("Bearer "), headers
+print("ok")
+"""
+
+
+def test_provider_sends_session_affinity_header(docker):
+    """The affinity key must reach the wire as ``x-session-affinity``."""
+    proc = docker_compose_exec("fastapi", "python", "-c", HEADER_PROBE)
+    assert proc.returncode == 0, (
+        "provider did not send x-session-affinity:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:1500]}"
+    )
+    assert "ok" in proc.stdout
+
+
+# ── Source-level invariants (no container needed) ──────────────────────
+
+
+def test_punctuator_prompt_has_no_inline_document_text():
+    """``{raw_text}`` must not be interpolated into the system prompt."""
+    prompt = (
+        REPO_ROOT
+        / "backend"
+        / "app"
+        / "prompts"
+        / "agents"
+        / "util_punctuator"
+        / "prompt.md"
+    ).read_text(encoding="utf-8")
+    assert "{raw_text}" not in prompt, (
+        "util_punctuator/prompt.md still embeds the document in the system "
+        "prompt; move it to the user message so the prefix stays cacheable"
+    )
+
+
+def test_punctuate_task_forwards_cache_key():
+    """The Celery task must accept and forward the batch affinity key."""
+    source = (REPO_ROOT / "workers" / "fast" / "tasks.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    tasks = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    func = tasks.get("punctuate_text")
+    assert func is not None, "punctuate_text not found"
+    args = [a.arg for a in func.args.args]
+    assert "cache_key" in args, "punctuate_text must accept cache_key"
+
+    calls = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run_agent"
+    ]
+    assert calls, "punctuate_text no longer calls llm.run_agent"
+    keywords = {kw.arg for call in calls for kw in call.keywords}
+    assert {"cache_key", "tail_variables", "user_content"} <= keywords, (
+        "punctuate_text must pass cache_key/tail_variables/user_content to "
+        f"run_agent; got {sorted(keywords)}"
+    )
+
+
+def test_punctuate_endpoint_sends_cache_key():
+    """The API must derive the affinity key from the document's project."""
+    source = (REPO_ROOT / "backend" / "app" / "api" / "v1" / "documents.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+
+    handlers = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for name in ("punctuate_document", "process_document"):
+        func = handlers.get(name)
+        assert func is not None, f"{name} not found"
+        send_tasks = [
+            node
+            for node in ast.walk(func)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "send_task"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == "punctuate_text"
+        ]
+        assert send_tasks, f"{name} no longer dispatches punctuate_text"
+        for call in send_tasks:
+            kwargs = next(
+                (kw.value for kw in call.keywords if kw.arg == "kwargs"),
+                None,
+            )
+            assert isinstance(kwargs, ast.Dict), (
+                f"{name}: send_task must pass kwargs as a dict literal"
+            )
+            keys = {k.value for k in kwargs.keys if isinstance(k, ast.Constant)}
+            assert "cache_key" in keys, (
+                f"{name}: punctuate_text dispatched without cache_key, so the "
+                "batch will not be pinned to one replica"
+            )
+
+
+def test_glaser_classifier_pins_replica():
+    """The Glaser classifier already sends static system + variable user."""
+    source = (REPO_ROOT / "workers" / "heavy" / "glaser_classifier.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+
+    func = next(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_step1_classify_xml"
+        ),
+        None,
+    )
+    assert func is not None, "_step1_classify_xml not found"
+    calls = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "chat"
+    ]
+    assert any(kw.arg == "cache_key" for call in calls for kw in call.keywords), (
+        "the Glaser classifier must forward cache_key to LLMClient.chat"
+    )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "workers/fast/llm_client.py",
+        "workers/heavy/llm_client.py",
+    ],
+)
+def test_workers_expose_cache_tail_marker(relative_path: str):
+    """Both worker adapters must expose the shared cache-tail marker."""
+    source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    assert "CACHE_TAIL_MARKER" in source
+    assert "session_affinity=" in source

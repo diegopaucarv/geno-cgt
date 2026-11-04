@@ -360,15 +360,22 @@ def punctuate_text(
     texto: str,
     max_chars: int = 3000,
     documento_id: str = "",
+    cache_key: str = "",
 ) -> dict:
-    """
-    Anade puntuacion a texto crudo de documentos.
+    """Anade puntuacion a texto crudo de documentos.
+
     Si el texto excede max_chars, lo divide en bloques y procesa iterativamente.
     Si se proporciona documento_id, actualiza el texto en la DB tras la puntuacion.
+
+    ``cache_key`` (normalmente el proyecto) se envía como ``x-session-affinity``
+    para que todos los documentos de un lote compartan réplica y aprovechen la
+    caché de prompt de Fireworks.
     """
     texto = texto.strip()
     if not texto:
         return {"punctuated_text": "", "changes_made": False}
+
+    affinity_key = cache_key or documento_id or None
 
     # ── Estado: marcar inicio de preprocesamiento ──
     if documento_id:
@@ -412,6 +419,11 @@ def punctuate_text(
                 "util_punctuator",
                 variables={"raw_text": raw},
                 temperature=0.3,
+                cache_key=affinity_key,
+                # Keep the document text out of the system prompt so the
+                # instructions + schema form a stable cacheable prefix.
+                tail_variables=("raw_text",),
+                user_content=f"<texto_crudo>\n{raw}\n</texto_crudo>",
             )
         except Exception as e:
             logger.error("Punctuator LLM call failed: %s", e)

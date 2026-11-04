@@ -1047,13 +1047,15 @@ async def create_project(
     # ── F1.2: f0_population_generalizer (FLASH, single-shot) ──
     if raw_pop and raw_pop.strip():
         try:
+            from app.core.llm_client_adapter import TogetherLLM
             from app.core.llm_config import get_model_for_prompt
-            from app.core.together_client import TogetherLLM
             from app.prompts import PROMPT_REGISTRY
 
             template = PROMPT_REGISTRY["f0_population_generalizer"]
             messages = template.build_messages(raw_population_description=raw_pop)
-            # Forzar JSON: Gemma Flash no respeta response_format, necesita instruccion explicita
+            # El proveedor impone el schema server-side; la instrucción explícita
+            # se mantiene como refuerzo (Fireworks documenta que JSON mode
+            # requiere además indicarlo en el prompt).
             messages.append(
                 {
                     "role": "user",
@@ -1067,9 +1069,10 @@ async def create_project(
                 llm.chat,
                 model=model,
                 messages=messages,
+                response_format=template.build_payload().get("response_format"),
             )
 
-            # Parse JSON from text (gemma flash no soporta response_format JSON schema)
+            # Fallback tolerante por si el modelo se sale del schema.
             raw_content = response.get("content", "{}")
             content = {}
             try:
@@ -1280,8 +1283,8 @@ async def generalize_population(
         raise HTTPException(400, "No hay supuesto_poblacional para generalizar")
 
     try:
+        from app.core.llm_client_adapter import TogetherLLM
         from app.core.llm_config import get_model_for_prompt
-        from app.core.together_client import TogetherLLM
         from app.prompts import PROMPT_REGISTRY
 
         template = PROMPT_REGISTRY["f0_population_generalizer"]
@@ -1295,7 +1298,12 @@ async def generalize_population(
         model = get_model_for_prompt("f0_population_generalizer")
 
         llm = TogetherLLM()
-        response = await asyncio.to_thread(llm.chat, model=model, messages=messages)
+        response = await asyncio.to_thread(
+            llm.chat,
+            model=model,
+            messages=messages,
+            response_format=template.build_payload().get("response_format"),
+        )
 
         raw_content = response.get("content", "{}")
         content = {}

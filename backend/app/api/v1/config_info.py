@@ -66,14 +66,16 @@ def _env_name(key: str) -> str:
 
 
 class LLMConfig(BaseModel):
-    model_pro: str = "deepseek-ai/DeepSeek-V4-Pro"
-    model_pro_max_tokens: int = 8192
-    model_pro_temperature: float = 0.3
-    model_flash: str = "nvidia/nemotron-3-ultra-550b-a55b"
-    model_flash_max_tokens: int = 4096
-    model_flash_temperature: float = 0.1
-    model_flash_repetition_penalty: float = 1.1
-    model_flash_top_p: float = 0.9
+    # Los defaults viven en app.core.defaults (fuente única); aquí solo se
+    # declara el tipo. Los valores mostrados en el panel vienen de GET /config.
+    model_pro: str
+    model_pro_max_tokens: int
+    model_pro_temperature: float
+    model_flash: str
+    model_flash_max_tokens: int
+    model_flash_temperature: float
+    model_flash_repetition_penalty: float
+    model_flash_top_p: float
 
 
 class SegmentationConfig(BaseModel):

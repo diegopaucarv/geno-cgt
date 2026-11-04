@@ -20,11 +20,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from app.core.llm_client import (
+    LLMProvider,
+    LLMResponse,
+    TierSettings,
+    api_base_url,
+    model_id_of,
+)
 from app.core.runtime_config import get_config_value
 
 logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
+
+# Fireworks prompt caching reuses only exact prefixes. Per-document variables
+# (e.g. ``raw_text``) are therefore rendered as this stable marker in the system
+# prompt and sent in the trailing user message instead.
+CACHE_TAIL_MARKER = "[contenido variable: ver mensaje del usuario]"
 
 # ═══════════════════════════════════════════════════════════════════════
 # ChainOrchestrator v3 — Dataclasses y fallback para _self_evaluation
@@ -88,12 +100,6 @@ class AgentOutput:
             return self.data.get(key, default)
         return default
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Backward-compatible .get(): output.get('codes', []) -> output.data.get('codes', [])."""
-        if isinstance(self.data, dict):
-            return self.data.get(key, default)
-        return default
-
     def __contains__(self, key: str) -> bool:
         """Backward-compatible 'in' operator."""
         if isinstance(self.data, dict):
@@ -126,19 +132,17 @@ class AgentOutput:
 
 # ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
 
-_MODEL_FLASH = get_config_value(
-    "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
-)
-_MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4-Pro")
+_MODEL_FLASH = model_id_of("flash")
+_MODEL_PRO = model_id_of("pro")
 
 _TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": _MODEL_FLASH,
-    "PRO": _MODEL_PRO,
+    "FLASH": model_id_of("flash"),
+    "PRO": model_id_of("pro"),
 }
 
 _TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": int(get_config_value("MODEL_FLASH_MAX_TOKENS", default="4096")),
-    "PRO": int(get_config_value("MODEL_PRO_MAX_TOKENS", default="8192")),
+    "FLASH": TierSettings.for_tier("flash").max_tokens,
+    "PRO": TierSettings.for_tier("pro").max_tokens,
 }
 
 _TIER_TEMPERATURE: dict[ModelTier, float] = {
@@ -146,7 +150,9 @@ _TIER_TEMPERATURE: dict[ModelTier, float] = {
     "PRO": float(get_config_value("MODEL_PRO_TEMPERATURE", default="0.3")),
 }
 
-PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
+PROMPTS_DIR = get_config_value(
+    "PROMPTS_DIR", default="/app/prompts", env_var="PROMPTS_DIR"
+)
 
 # ── Coding style i18n tokens ─────────────────────────────────────
 try:
@@ -530,25 +536,17 @@ class LLMClient:
             cls._user_language = lang
 
     def __init__(self, api_key: str | None = None):
-        from config import TOGETHER_API_KEY as _cfg_key
-
-        raw_key = (api_key or _cfg_key).strip()
-        self.is_mock = not raw_key or raw_key.startswith("${") or raw_key == "changeme"
+        self._provider = LLMProvider(api_key=api_key)
+        self.is_mock = self._provider.is_mock
 
         if self.is_mock:
-            logger.warning("TOGETHER_API_KEY no configurada. Usando modo MOCK.")
+            logger.warning("LLM_API_KEY no configurada o invalida. Usando modo MOCK.")
         else:
-            try:
-                from together import Together
-
-                self.client = Together(
-                    api_key=raw_key,
-                    timeout=600,  # 10 minutos para textos largos
-                )
-                logger.info("LLMClient: Together.ai inicializado (timeout=180s)")
-            except Exception as e:
-                logger.warning("Together.ai init failed: %s. MOCK mode.", e)
-                self.is_mock = True
+            logger.info(
+                "LLMClient: proveedor %s inicializado (timeout=%ss)",
+                api_base_url(),
+                self._provider.timeout,
+            )
 
     def chat(
         self,
@@ -556,41 +554,33 @@ class LLMClient:
         model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        cache_key: str | None = None,
     ) -> dict[str, Any]:
         """Simple chat interface for agents (orchestrator, plan_executor, react).
 
-        Compatible with backend TogetherLLM.chat() interface.
+        Compatible with backend TogetherLLM.chat() interface. ``cache_key`` se
+        envía como ``x-session-affinity`` para que las llamadas de un mismo lote
+        caigan en la misma réplica y aprovechen la caché de prompt de Fireworks.
         """
         if self.is_mock:
             return {
-                "content": '{"next_step": "final_report"}',
+                "content": self._provider.mock_answer(),
                 "reasoning_content": "",
                 "usage": {"total_tokens": 0},
             }
 
-        model = model or _MODEL_PRO
-        system_msg = ""
-        user_msg = ""
-        for m in messages:
-            if m.get("role") == "system":
-                system_msg = m.get("content", "")
-            elif m.get("role") == "user":
-                user_msg = m.get("content", "")
-
         try:
-            response = self.client.chat.completions.create(
+            response: LLMResponse = self._provider.chat(
                 model=model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                session_affinity=cache_key,
             )
-            msg = response.choices[0].message
             return {
-                "content": msg.content or "",
-                "reasoning_content": getattr(msg, "reasoning_content", ""),
-                "usage": {
-                    "total_tokens": response.usage.total_tokens if response.usage else 0
-                },
+                "content": response.content,
+                "reasoning_content": response.reasoning_content or "",
+                "usage": {"total_tokens": response.usage.get("total_tokens", 0)},
             }
         except Exception as e:
             logger.warning("LLMClient.chat failed: %s", e)
@@ -610,6 +600,9 @@ class LLMClient:
         history: list[dict] | None = None,
         override_user_prompt: str | None = None,
         conversation_history: list[dict] | None = None,
+        cache_key: str | None = None,
+        tail_variables: tuple[str, ...] | list[str] | None = None,
+        user_content: str | None = None,
     ) -> AgentOutput:
         """Carga prompt, reemplaza variables, inyecta schema i18n, llama al LLM.
 
@@ -620,6 +613,13 @@ class LLMClient:
             override_user_prompt: If provided, replaces the default generic user prompt.
             conversation_history: ChainOrchestrator v3 retry history.
                      When provided, injected as prior attempts before current user input.
+            cache_key: Sent as ``x-session-affinity`` to pin a batch to one replica
+                     so Fireworks can reuse its prompt cache.
+            tail_variables: Per-document variables to keep OUT of the system prompt.
+                     They are replaced by a constant marker so the instructions +
+                     schema stay a stable, cacheable prefix.
+            user_content: The actual per-document content, appended to the user
+                     message (i.e. after the cached prefix).
 
         Returns:
             AgentOutput with parsed data, tokens, conversation, and _self_evaluation.
@@ -695,6 +695,11 @@ class LLMClient:
         )
 
         prompt_template = parsed["prompt"]
+        if tail_variables:
+            for key in tail_variables:
+                prompt_template = prompt_template.replace(
+                    "{" + key + "}", CACHE_TAIL_MARKER
+                )
         try:
             system_prompt = prompt_template.format(**variables)
         except KeyError as e:
@@ -758,6 +763,8 @@ class LLMClient:
             history=history,
             override_user_prompt=override_user_prompt,
             conversation_history=conversation_history,
+            cache_key=cache_key,
+            user_content=user_content,
         )
 
         # ── Log LLM response after receiving it ──────────────────────
@@ -774,7 +781,11 @@ class LLMClient:
             pass
 
         # ── Build AgentOutput with _self_evaluation parsing ────────────
-        tokens_used = result.get("usage", {}).get("total_tokens", 0) if isinstance(result, dict) else 0
+        tokens_used = (
+            result.get("usage", {}).get("total_tokens", 0)
+            if isinstance(result, dict)
+            else 0
+        )
         error = result.get("error") if isinstance(result, dict) else None
 
         # Parse _self_evaluation from agent output
@@ -828,6 +839,8 @@ class LLMClient:
         history: list[dict] | None = None,
         override_user_prompt: str | None = None,
         conversation_history: list[dict] | None = None,
+        cache_key: str | None = None,
+        user_content: str | None = None,
     ) -> tuple[dict[str, Any], list[dict]]:
         """Llama a Together.ai con response_format json_object.
 
@@ -854,6 +867,10 @@ class LLMClient:
             f"must be in {self._user_language}. "
             "Source quotes stay in original language. System codes (SAT, MOD, FORCED) are language-neutral."
         )
+        if user_content:
+            # Variable, per-document content goes LAST so the static prefix
+            # (instructions + schema) stays cacheable across documents.
+            user_prompt = "[CONTENIDO]\n" + user_content + "\n\n" + user_prompt
 
         logger.info(
             "LLM: tier=%s model=%s prompt_chars=%d", tier, model, len(system_prompt)
@@ -874,16 +891,16 @@ class LLMClient:
                     messages.extend(history)
                 messages.append({"role": "user", "content": user_prompt})
 
-                response = self.client.chat.completions.create(
+                response: LLMResponse = self._provider.chat(
                     model=model,
                     messages=messages,
-                    response_format={"type": "json_object"},
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    schema=schema,
+                    session_affinity=cache_key,
                 )
-                message = response.choices[0].message
-                content = message.content or ""
-                reasoning = getattr(message, "reasoning_content", None)
+                content = response.content
+                reasoning = response.reasoning_content
                 content = content.strip()
                 # Strip markdown code fences if present
                 if content.startswith("```"):
@@ -898,10 +915,12 @@ class LLMClient:
                     result["_reasoning_content"] = reasoning
                 # Build full conversation for caller
                 full_conversation = list(messages)
-                full_conversation.append({
-                    "role": "assistant",
-                    "content": content,
-                })
+                full_conversation.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                    }
+                )
                 if reasoning:
                     full_conversation[-1]["reasoning_content"] = reasoning
                 return result, full_conversation

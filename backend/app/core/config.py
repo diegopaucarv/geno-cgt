@@ -20,7 +20,9 @@ from app.core.runtime_config import get_config_value
 # 🔒 SECRETS REALES — solo de env, NUNCA expuestos ni persistidos
 # ═══════════════════════════════════════════════════════════════════════
 
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+# ⚠️ ÚNICA credencial LLM del sistema. Válida para cualquier proveedor
+# OpenAI-compatible (Fireworks por defecto). No hay variables por proveedor.
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-gt-local")
 JWT_ALGORITHM = "HS256"

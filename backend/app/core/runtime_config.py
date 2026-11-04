@@ -120,4 +120,8 @@ def get_config_value(key: str, env_var: str | None = None, default: Any = None) 
     if key in _DEFAULTS:
         return _DEFAULTS[key]
 
+    # Non-editable infrastructure defaults (paths, mount points)
+    if key in _INTERNAL:
+        return _INTERNAL[key]
+
     return default

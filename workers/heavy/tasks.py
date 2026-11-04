@@ -134,7 +134,14 @@ def _pipeline_log_to(project_id: str):
 
 from kombu import Exchange, Queue
 
-app = Celery("heavy_tasks", broker=os.getenv("REDIS_URL", "redis://redis:6379/0"))
+app = Celery(
+    "heavy_tasks",
+    broker=os.getenv("REDIS_URL", "redis://redis:6379/0"),
+    # The API polls GET /documents/tasks/{id} through this backend. Without it,
+    # heavy tasks stay PENDING forever from the client's point of view even
+    # after they finish, so classify/segment/extract look like 120s timeouts.
+    backend=os.getenv("REDIS_URL", "redis://redis:6379/0"),
+)
 app.conf.update(
     task_queues=(
         Queue("heavy", Exchange("heavy", type="direct"), routing_key="heavy"),
@@ -2853,9 +2860,11 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
     except TaskCancelledError:
         logger.warning("run_glaser_classifier cancelled for doc=%s", documento_id)
         return {"status": "cancelled", "documento_id": documento_id}
-    except Exception as e:
+    except Exception:
         logger.exception("run_glaser_classifier failed for doc=%s", documento_id)
-        return {"status": "error", "documento_id": documento_id, "error": str(e)}
+        # Re-raise so Celery marks the task FAILURE; returning an error dict
+        # would report SUCCESS and the UI would show "Clasificado" on failure.
+        raise
     finally:
         session.close()
 
@@ -3704,7 +3713,7 @@ def task_core_saturation_loop(self, proyecto_id: str) -> dict:
                         "operational_question": operational_question or "",
                         "processing_verb": processing_verb,
                     },
-                    tier="FAST",
+                    # Tier comes from the prompt's own `tier:` metadata.
                 )
 
                 did_expand = proposal.get("did_state_expand", False)

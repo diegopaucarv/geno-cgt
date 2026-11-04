@@ -164,11 +164,23 @@ export default function ProjectDetail() {
     const token = `Bearer ${localStorage.getItem("access_token")}`;
     runningOp.current = null;
     abortRef.current = true;
-    const t = punctTaskRef.current;
+    const taskId = punctTaskRef.current;
     setPunctRunning(null);
+    // Clear the per-doc marker too, otherwise the card stays stuck on
+    // "En curso" until the next refresh.
+    setRunningOps((prev) => {
+      if (!prev[docId]) return prev;
+      const n = { ...prev };
+      delete n[docId];
+      return n;
+    });
+    setPunctStatus((prev) => ({
+      ...prev,
+      [docId]: t("project.preprocessingCancelled"),
+    }));
     punctTaskRef.current = null;
-    if (t) {
-      await fetch(`/api/v1/admin/tasks/${t}/cancel`, {
+    if (taskId) {
+      await fetch(`/api/v1/admin/tasks/${taskId}/cancel`, {
         method: "POST",
         headers: { Authorization: token },
       }).catch(() => {});
@@ -198,14 +210,30 @@ export default function ProjectDetail() {
   ): Promise<"success" | "failed" | "aborted" | "timeout"> {
     console.log("[runDocTask] POST", endpoint, "docId:", docId);
     const token = `Bearer ${localStorage.getItem("access_token")}`;
-    const res = await fetch(endpoint, {
+    const resp = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: token,
       },
       body: JSON.stringify({ document_id: docId }),
-    }).then((r) => r.json());
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const body = await resp.json();
+        if (body?.detail) {
+          detail =
+            typeof body.detail === "string"
+              ? body.detail
+              : JSON.stringify(body.detail);
+        }
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(detail);
+    }
+    const res = await resp.json();
 
     const taskId = res.task_id;
     punctTaskRef.current = taskId;
@@ -576,9 +604,17 @@ export default function ProjectDetail() {
     return () => clearInterval(poll);
   }, [id]);
 
-  function refreshDocs() {
-    if (!id) return;
-    listDocuments(id).then(setDocs).catch(console.error);
+  function refreshDocs(): Promise<void> {
+    if (!id) return Promise.resolve();
+    return listDocuments(id)
+      .then(setDocs)
+      .catch((e: any) => {
+        console.error("[refreshDocs] failed:", e);
+        showErrorToast(
+          "No se pudo refrescar el estado de los documentos: " +
+            (e?.message || "error de red"),
+        );
+      });
   }
 
   async function toggleSegments(docId: string) {
@@ -632,8 +668,11 @@ export default function ProjectDetail() {
       : last.slice(0, 8).toUpperCase();
   }
 
-  /** API call + poll until Celery task completes. Keeps punctRunning alive. */
-  async function punctuateSingleDoc(docId: string) {
+  /** API call + poll until Celery task completes. Keeps punctRunning alive.
+   *  Returns the outcome so callers don't wipe a freshly-set docError. */
+  async function punctuateSingleDoc(
+    docId: string,
+  ): Promise<"success" | "failed" | "cancelled"> {
     console.log("[punctuateSingleDoc] starting for", docId);
     setPunctStatus((prev) => ({
       ...prev,
@@ -643,10 +682,22 @@ export default function ProjectDetail() {
     if (doc?.texto_extraido) {
       originalTexts.current[docId] = doc.texto_extraido;
     }
+
+    // Visible, retryable failure. Returns "failed" so callers keep docError.
+    const fail = (message: string) => {
+      setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
+      setDocError((prev) => ({
+        ...prev,
+        [docId]: { action: "punctuate", message },
+      }));
+      showErrorToast(message);
+      return "failed" as const;
+    };
+
     try {
       const res = await punctuateDocument(docId);
       console.log("[punctuateSingleDoc] response for", docId, ":", res);
-      if (abortRef.current) return;
+      if (abortRef.current) return "cancelled";
 
       if (res.status === "ok" && !res.task_id) {
         // Backend determined no punctuation needed — already well-punctuated.
@@ -656,7 +707,7 @@ export default function ProjectDetail() {
           ...prev,
           [docId]: t("project.preprocessingOK"),
         }));
-        return;
+        return "success";
       }
 
       if (res.task_id) {
@@ -678,38 +729,43 @@ export default function ProjectDetail() {
             );
             if (ts.status === "SUCCESS") {
               const output = ts.result;
+              if (
+                output &&
+                typeof output === "object" &&
+                (output.status === "error" || output.status === "cancelled")
+              ) {
+                return fail(
+                  "Error del preprocesado: " +
+                    (output.error || output.reason || "el worker no completó"),
+                );
+              }
               const changed =
                 output && typeof output === "object" && output.changes_made;
+              setPunctStatus((prev) => ({
+                ...prev,
+                [docId]: changed
+                  ? t("project.preprocessingImproved")
+                  : t("project.preprocessingOK"),
+              }));
               if (changed) {
-                setPunctStatus((prev) => ({
-                  ...prev,
-                  [docId]: t("project.preprocessingImproved"),
-                }));
-                refreshDocs();
                 setSegments((prev) => {
                   const n = { ...prev };
                   delete n[docId];
                   return n;
                 });
-              } else {
-                setPunctStatus((prev) => ({
-                  ...prev,
-                  [docId]: t("project.preprocessingOK"),
-                }));
               }
-              return;
+              // The worker owns the estado transition (crudo -> preprocesado).
+              // Always refetch, even when punctuation did not change, otherwise
+              // the card keeps showing 'crudo' until a manual reload.
+              await refreshDocs();
+              return "success";
             }
             if (ts.status === "FAILURE") {
-              setPunctStatus((prev) => ({
-                ...prev,
-                [docId]:
-                  t("project.preprocessingError") + (ts.result?.error || ""),
-              }));
-              showErrorToast(
-                "Error del worker de preprocesado: " +
-                  (ts.result?.error || "Fallo interno"),
-              );
-              return;
+              const detail =
+                typeof ts.result === "string"
+                  ? ts.result
+                  : ts.result?.error || ts.result?.reason || "Fallo interno";
+              return fail("Error del worker de preprocesado: " + detail);
             }
             // Still PENDING/STARTED — keep waiting
           } catch {
@@ -718,13 +774,9 @@ export default function ProjectDetail() {
         }
         // Timeout after 120s
         if (!abortRef.current) {
-          setPunctStatus((prev) => ({
-            ...prev,
-            [docId]: t("project.preprocessingError") + "Timeout",
-          }));
-          showErrorToast("Timeout: el preprocesado no respondio en 120s");
+          return fail("Timeout: el preprocesado no respondio en 120s");
         }
-        return;
+        return "cancelled";
       }
 
       // Fallback: old-style response
@@ -739,29 +791,26 @@ export default function ProjectDetail() {
           delete n[docId];
           return n;
         });
-      } else if (res.status === "ok") {
+        return "success";
+      }
+      if (res.status === "ok") {
         setPunctStatus((prev) => ({
           ...prev,
           [docId]: t("project.preprocessingOK"),
         }));
-      } else {
-        setPunctStatus((prev) => ({
-          ...prev,
-          [docId]: t("project.preprocessingError") + (res.message || ""),
-        }));
+        refreshDocs();
+        return "success";
       }
+      return fail(
+        "Error del preprocesado: " + (res.message || "respuesta no reconocida"),
+      );
     } catch (err: any) {
-      if (!abortRef.current) {
-        console.error("[punctuateSingleDoc] error for", docId, ":", err);
-        setPunctStatus((prev) => ({
-          ...prev,
-          [docId]: t("project.preprocessingError") + (err.message || ""),
-        }));
-        showErrorToast(
-          "Error de API al preprocesar: " +
-            (err.message || "Sin respuesta del servidor"),
-        );
-      }
+      if (abortRef.current) return "cancelled";
+      console.error("[punctuateSingleDoc] error for", docId, ":", err);
+      return fail(
+        "Error de API al preprocesar: " +
+          (err?.message || "Sin respuesta del servidor"),
+      );
     }
   }
 
@@ -785,11 +834,14 @@ export default function ProjectDetail() {
           doc.original_filename,
         );
         setPunctRunning(doc.id);
+        // Register the op so the cancel button works during a batch run too.
+        runningOp.current = { docId: doc.id, op: "punctuate" };
         setPunctStatus((prev) => ({
           ...prev,
           [doc.id]: t("project.preprocessingStarting"),
         }));
         await punctuateSingleDoc(doc.id);
+        runningOp.current = null;
         setPunctRunning(null);
       }
     } finally {
@@ -828,19 +880,22 @@ export default function ProjectDetail() {
 
     abortRef.current = false;
     setRunningOps((prev) => ({ ...prev, [docId]: "punctuate" }));
+    runningOp.current = { docId, op: "punctuate" };
     setPunctStatus((prev) => ({
       ...prev,
       [docId]: t("project.preprocessingStarting"),
     }));
 
     try {
-      await punctuateSingleDoc(docId);
-      markAgentDone("preprocesado");
-      setDocError((prev) => {
-        const n = { ...prev };
-        delete n[docId];
-        return n;
-      });
+      const outcome = await punctuateSingleDoc(docId);
+      if (outcome === "success") {
+        markAgentDone("preprocesado");
+        setDocError((prev) => {
+          const n = { ...prev };
+          delete n[docId];
+          return n;
+        });
+      }
     } catch (e: any) {
       setDocError((prev) => ({
         ...prev,
@@ -852,6 +907,14 @@ export default function ProjectDetail() {
     } finally {
       runningOp.current = null;
       setPunctRunning(null);
+      // Don't leave a stale op behind: a leftover entry would show the doc as
+      // still preprocessing and turn the next click into a bogus cancel.
+      setRunningOps((prev) => {
+        if (!prev[docId]) return prev;
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
     }
   }
 
@@ -915,7 +978,31 @@ export default function ProjectDetail() {
   /** Classify a single document via Glaser classifier (3-step + validator loop) */
   async function handleClassify(docId: string) {
     const doc = docs.find((x) => x.id === docId);
-    if (!doc || doc.estado !== "preprocesado") return;
+    const estado = String(doc?.estado ?? "").trim();
+
+    // Single error exit: always visible and always retryable.
+    const fail = (message: string) => {
+      setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
+      setDocError((prev) => ({
+        ...prev,
+        [docId]: { action: "classify", message },
+      }));
+      showErrorToast(message);
+    };
+
+    if (!doc) {
+      fail(
+        "No se encontró el documento en la lista. Recarga la página e intenta de nuevo.",
+      );
+      return;
+    }
+    if (estado !== "preprocesado") {
+      fail(
+        `No se puede clasificar: estado actual "${doc.estado}". Se esperaba "preprocesado".`,
+      );
+      return;
+    }
+
     if (punctRunning === docId) {
       // Cancel: abort polling + revoke Celery task
       abortRef.current = true;
@@ -937,15 +1024,41 @@ export default function ProjectDetail() {
 
     abortRef.current = false;
     setPunctRunning(docId);
+    setRunningOps((prev) => ({ ...prev, [docId]: "classify" }));
     runningOp.current = { docId, op: "classify" };
     setPunctStatus((prev) => ({ ...prev, [docId]: "Clasificando…" }));
+    setDocError((prev) => {
+      const n = { ...prev };
+      delete n[docId];
+      return n;
+    });
 
     try {
       const token = `Bearer ${localStorage.getItem("access_token")}`;
-      const res = await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
+      const resp = await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
         method: "POST",
-        headers: { Authorization: token },
-      }).then((r) => r.json());
+        headers: { "Content-Type": "application/json", Authorization: token },
+      });
+
+      // HTTP-level failure (400 sin texto, 401, 404, 500…) is never assumed OK.
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body?.detail) {
+            detail =
+              typeof body.detail === "string"
+                ? body.detail
+                : JSON.stringify(body.detail);
+          }
+        } catch {
+          /* non-JSON error body */
+        }
+        fail(`Error al clasificar (${resp.status}): ${detail}`);
+        return;
+      }
+
+      const res = await resp.json();
 
       if (res.task_id) {
         punctTaskRef.current = res.task_id;
@@ -954,41 +1067,67 @@ export default function ProjectDetail() {
           try {
             const ts = await getTaskStatus(res.task_id);
             if (ts.status === "SUCCESS") {
+              if (ts.result?.status === "cancelled") return;
+              if (ts.result?.status === "error") {
+                fail(
+                  "La clasificación falló: " +
+                    (ts.result?.error ||
+                      ts.result?.reason ||
+                      "error interno del worker"),
+                );
+                return;
+              }
               markAgentDone("clasificado");
-              // ── Final refresh after completion ──
-              refreshDocs();
+              await refreshDocs();
               setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
               return;
             }
             if (ts.status === "FAILURE") {
-              setPunctStatus((prev) => ({
-                ...prev,
-                [docId]: "Error de clasificación",
-              }));
+              const detail =
+                typeof ts.result === "string"
+                  ? ts.result
+                  : ts.result?.error || ts.result?.reason || "fallo del worker";
+              fail("Error de clasificación: " + detail);
               return;
             }
-          } catch {}
+          } catch {
+            /* polling hiccup, keep trying */
+          }
         }
         if (!abortRef.current) {
-          showErrorToast("Timeout: clasificación no respondió en 120s");
+          fail("Timeout: la clasificación no respondió en 120s.");
         }
-      } else {
-        // Synchronous completion — no task_id
-        markAgentDone("clasificado");
-        refreshDocs();
-        setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
+        return;
       }
+
+      if (res.status === "error") {
+        fail(
+          "La clasificación falló: " +
+            (res.error || res.reason || "error interno"),
+        );
+        return;
+      }
+
+      // Synchronous completion — no task_id
+      markAgentDone("clasificado");
+      await refreshDocs();
+      setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
     } catch (e: any) {
       if (!abortRef.current) {
-        showErrorToast("Error: " + (e.message || ""));
-        setPunctStatus((prev) => ({
-          ...prev,
-          [docId]: "Error: " + (e.message || ""),
-        }));
+        fail(
+          "No se pudo enviar la solicitud de clasificación: " +
+            (e?.message || "error de red"),
+        );
       }
     } finally {
       runningOp.current = null;
       setPunctRunning(null);
+      setRunningOps((prev) => {
+        if (!prev[docId]) return prev;
+        const n = { ...prev };
+        delete n[docId];
+        return n;
+      });
     }
   }
 
@@ -1007,9 +1146,13 @@ export default function ProjectDetail() {
 
   /** Route action based on doc estado */
   async function handleDocAction(docId: string) {
-    console.log("[handleDocAction] docId:", docId, "estado:", docs.find((x) => x.id === docId)?.estado);
     const d = docs.find((x) => x.id === docId);
-    if (!d) return;
+    if (!d) {
+      showErrorToast("No se encontró el documento. Recarga la página.");
+      return;
+    }
+    const estado = String(d.estado ?? "").trim();
+    console.log("[handleDocAction] docId:", docId, "estado:", d.estado);
 
     // Error retry
     const err = docError[docId];
@@ -1021,6 +1164,8 @@ export default function ProjectDetail() {
       });
       if (err.action === "punctuate") return handlePunctuate(docId);
       if (err.action === "classify") return handleClassify(docId);
+      if (err.action === "segment") return handleSegment(docId);
+      showErrorToast(err.message || "La acción anterior falló");
       return;
     }
 
@@ -1031,7 +1176,7 @@ export default function ProjectDetail() {
     }
 
     // Route action based on document estado
-    switch (d.estado) {
+    switch (estado) {
       case "crudo":
         return handlePunctuate(docId);
       case "preprocesado":
@@ -1042,6 +1187,7 @@ export default function ProjectDetail() {
         // Trigger incident extraction (F2.3) via the pipeline orchestrator
         return handleExtractIncidents(docId);
       default:
+        showErrorToast(`Acción no disponible para el estado "${d.estado}"`);
         return;
     }
   }
@@ -1798,8 +1944,11 @@ export default function ProjectDetail() {
     color: string;
     bg: string;
   } {
-    if (runningOps[doc.id]) {
-      const op = runningOps[doc.id];
+    const activeOp =
+      runningOps[doc.id] ??
+      (punctRunning === doc.id ? (runningOp.current?.op ?? "punctuate") : null);
+    if (activeOp) {
+      const op = activeOp;
       if (op === "classify") {
         return { text: "Clasificando…", color: "#3FB950", bg: "#3FB95022" };
       }
@@ -3115,7 +3264,12 @@ export default function ProjectDetail() {
                     >
                       {/* Unified per-document action button */}
                       {(() => {
-                        const isRunning = punctRunning === d.id;
+                        // Both sources matter: handlePunctuate records the op in
+                        // runningOps, while classify/segment set punctRunning.
+                        // Checking only one of them leaves the button inert
+                        // during single-document preprocessing.
+                        const isRunning =
+                          punctRunning === d.id || !!runningOps[d.id];
                         const estado = d.estado;
                         const err = docError[d.id];
                         const hasText = !!(
@@ -3131,7 +3285,7 @@ export default function ProjectDetail() {
                         const label = err
                           ? "\u26A0 Reintentar"
                           : isRunning
-                            ? t("project.cancelPreprocess")
+                            ? t("project.statusInProgress")
                             : isCrudo
                               ? t("project.preprocessButton")
                               : estado === "preprocesado"
@@ -3148,7 +3302,7 @@ export default function ProjectDetail() {
                         const bg = err
                           ? "#F85149"
                           : isRunning
-                            ? "#F85149"
+                            ? "#21262D"
                             : isCrudo
                               ? hasText
                                 ? "#A371F7"
@@ -3160,26 +3314,52 @@ export default function ProjectDetail() {
                                   : estado === "segmentado"
                                     ? "#D29922"
                                     : "#3FB950";
+                        // While running the primary action is inert: a second
+                        // click must not re-dispatch nor silently cancel.
                         const disabled =
-                          !err &&
-                          ((isCrudo && !hasText && !isRunning) ||
-                            isProcesado ||
-                            isCodificado);
+                          isRunning ||
+                          (!err &&
+                            ((isCrudo && !hasText) ||
+                              isProcesado ||
+                              isCodificado));
 
                         return (
-                          <button
-                            onClick={() => handleDocAction(d.id)}
-                            disabled={disabled}
-                            style={{
-                              ...btnSmall,
-                              background: bg,
-                              color: "#FFF",
-                              border: "none",
-                              cursor: disabled ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {label}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleDocAction(d.id)}
+                              disabled={disabled}
+                              style={{
+                                ...btnSmall,
+                                background: bg,
+                                color: isRunning ? "#8B949E" : "#FFF",
+                                border: "none",
+                                cursor: disabled ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {label}
+                            </button>
+                            {isRunning && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelRunningOp(d.id);
+                                }}
+                                title={t("project.cancelPreprocess")}
+                                style={{
+                                  ...btnSmall,
+                                  background: "transparent",
+                                  color: "#F85149",
+                                  border: "1px solid #F8514955",
+                                  fontSize: 14,
+                                  padding: "2px 8px",
+                                  lineHeight: 1,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {"\u23F9"}
+                              </button>
+                            )}
+                          </>
                         );
                       })()}
                       {/* Restore: hidden while running; same rollback as cancel but at rest */}
@@ -3262,6 +3442,49 @@ export default function ProjectDetail() {
                     </div>
                   </div>
 
+                  {/* Per-document error fallback (visible without reload) */}
+                  {docError[d.id] && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        padding: "6px 10px",
+                        background: "#F8514914",
+                        border: "1px solid #F8514933",
+                        borderRadius: 6,
+                        color: "#F85149",
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <span>⚠</span>
+                      <span style={{ flex: 1 }}>{docError[d.id].message}</span>
+                      <button
+                        onClick={() => {
+                          setDocError((prev) => {
+                            const n = { ...prev };
+                            delete n[d.id];
+                            return n;
+                          });
+                        }}
+                        title="Descartar"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#F85149",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          lineHeight: 1,
+                          padding: 0,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
                   {/* ── Expanded text view ── */}
                   {expandedDoc === d.id && (
                     <div style={{ marginTop: 8 }}>
@@ -3338,88 +3561,104 @@ export default function ProjectDetail() {
                         </div>
                       }
                       {/* Unified text viewer — same style for all modes */}
-                      {textEdits[d.id] !== undefined ? (
-                        <textarea
-                          disabled={punctRunning === d.id}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) =>
-                            setTextEdits((prev) => ({
-                              ...prev,
-                              [d.id]: e.target.value,
-                            }))
-                          }
-                          style={{
-                            width: "100%",
-                            minHeight: 150,
-                            fontFamily: "monospace",
-                            fontSize: 13,
-                            background: "#0D1117",
-                            color: "#E6EDF3",
-                            border: "1px solid #D29922",
-                            borderRadius: 6,
-                            padding: 8,
-                            resize: "vertical",
-                          }}
-                          value={textEdits[d.id]}
-                        />
-                      ) : (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            width: "100%",
-                            minHeight: 150,
-                            maxHeight: "55vh",
-                            fontFamily: "monospace",
-                            fontSize: 13,
-                            background: "#0D1117",
-                            color: "#E6EDF3",
-                            border: "1px solid #21262D",
-                            borderRadius: 6,
-                            padding: 8,
-                            overflow: "auto",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html:
-                              textViewMode === "classified"
-                                ? renderClassifiedText(
-                                    (d as any).texto_clasificado ||
-                                      ((d as any).metadatos &&
-                                        (d as any).metadatos
-                                          .texto_clasificado) ||
-                                      "",
-                                  )
-                                : textViewMode === "segmented" &&
-                                    segments[d.id]?.length
-                                  ? segments[d.id]!.map(
-                                      (s) => `[${s.posicion}] ${s.texto}`,
+                      {/* While processing, the text is 50% transparent and
+                          non-interactive so it cannot be edited mid-run. */}
+                      <div
+                        style={{
+                          opacity:
+                            punctRunning === d.id || runningOps[d.id] ? 0.5 : 1,
+                          pointerEvents:
+                            punctRunning === d.id || runningOps[d.id]
+                              ? "none"
+                              : "auto",
+                          transition: "opacity .2s",
+                        }}
+                      >
+                        {textEdits[d.id] !== undefined ? (
+                          <textarea
+                            disabled={
+                              punctRunning === d.id || !!runningOps[d.id]
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setTextEdits((prev) => ({
+                                ...prev,
+                                [d.id]: e.target.value,
+                              }))
+                            }
+                            style={{
+                              width: "100%",
+                              minHeight: 150,
+                              fontFamily: "monospace",
+                              fontSize: 13,
+                              background: "#0D1117",
+                              color: "#E6EDF3",
+                              border: "1px solid #D29922",
+                              borderRadius: 6,
+                              padding: 8,
+                              resize: "vertical",
+                            }}
+                            value={textEdits[d.id]}
+                          />
+                        ) : (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: "100%",
+                              minHeight: 150,
+                              maxHeight: "55vh",
+                              fontFamily: "monospace",
+                              fontSize: 13,
+                              background: "#0D1117",
+                              color: "#E6EDF3",
+                              border: "1px solid #21262D",
+                              borderRadius: 6,
+                              padding: 8,
+                              overflow: "auto",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                            }}
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                textViewMode === "classified"
+                                  ? renderClassifiedText(
+                                      (d as any).texto_clasificado ||
+                                        ((d as any).metadatos &&
+                                          (d as any).metadatos
+                                            .texto_clasificado) ||
+                                        "",
                                     )
-                                      .join("\n\n")
-                                      .replace(/&/g, "&amp;")
-                                      .replace(/</g, "&lt;")
-                                      .replace(/>/g, "&gt;")
-                                  : textViewMode === "preprocessed"
-                                    ? (
-                                        (d as any).texto_preprocesado ||
-                                        d.texto_extraido ||
-                                        ""
+                                  : textViewMode === "segmented" &&
+                                      segments[d.id]?.length
+                                    ? segments[d.id]!.map(
+                                        (s) => `[${s.posicion}] ${s.texto}`,
                                       )
+                                        .join("\n\n")
                                         .replace(/&/g, "&amp;")
                                         .replace(/</g, "&lt;")
                                         .replace(/>/g, "&gt;")
-                                    : (
-                                        (d as any).texto_original ||
-                                        d.texto_extraido ||
-                                        ""
-                                      )
-                                        .replace(/&/g, "&amp;")
-                                        .replace(/</g, "&lt;")
-                                        .replace(/>/g, "&gt;")
-                                        .replace(/\n/g, "<br>"),
-                          }}
-                        />
-                      )}
+                                    : textViewMode === "preprocessed"
+                                      ? (
+                                          (d as any).texto_preprocesado ||
+                                          d.texto_extraido ||
+                                          ""
+                                        )
+                                          .replace(/&/g, "&amp;")
+                                          .replace(/</g, "&lt;")
+                                          .replace(/>/g, "&gt;")
+                                      : (
+                                          (d as any).texto_original ||
+                                          d.texto_extraido ||
+                                          ""
+                                        )
+                                          .replace(/&/g, "&amp;")
+                                          .replace(/</g, "&lt;")
+                                          .replace(/>/g, "&gt;")
+                                          .replace(/\n/g, "<br>"),
+                            }}
+                          />
+                        )}
+                      </div>
                       {textEdits[d.id] !== undefined && (
                         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                           <button
@@ -3941,19 +4180,16 @@ export default function ProjectDetail() {
                         (d as any).texto_original ||
                         d.texto_extraido
                       );
-                      return (
-                        hasText &&
-                        !(BEYOND[out] || []).includes(d.estado)
-                      );
+                      return hasText && !(BEYOND[out] || []).includes(d.estado);
                     });
                     dispatchAgentLoop(resetEligible);
                   };
 
                   // Determine which docs are eligible = all docs not yet at or beyond output
                   const eligible = docs.filter((d) => {
-                    return !(BEYOND[PER_DOC_AGENTS[agentId].output] || []).includes(
-                      d.estado,
-                    );
+                    return !(
+                      BEYOND[PER_DOC_AGENTS[agentId].output] || []
+                    ).includes(d.estado);
                   });
 
                   // ── Build a single confirmation message ──
@@ -3964,8 +4200,7 @@ export default function ProjectDetail() {
                     "segmentar_documento",
                   ];
                   const myIdx = agentOrder.indexOf(agentId);
-                  const wipedAgents =
-                    myIdx >= 0 ? agentOrder.slice(myIdx) : [];
+                  const wipedAgents = myIdx >= 0 ? agentOrder.slice(myIdx) : [];
                   const wipeLabels: string[] = [];
                   if (wipedAgents.includes("segmentar_documento"))
                     wipeLabels.push("segmentos");
@@ -4012,7 +4247,7 @@ export default function ProjectDetail() {
                   // ── Wipe downstream layers before running ──
                   await clearAndRestart(agentId);
 
-async function dispatchAgentLoop(
+                  async function dispatchAgentLoop(
                     docsToProcess: typeof eligible,
                   ) {
                     abortRef.current = false;
@@ -4100,9 +4335,8 @@ async function dispatchAgentLoop(
               eligibleDocCounts={Object.fromEntries(
                 Object.entries(PER_DOC_AGENTS).map(([agentId, { output }]) => [
                   agentId,
-                  docs.filter(
-                    (d) => !(BEYOND[output] || []).includes(d.estado),
-                  ).length,
+                  docs.filter((d) => !(BEYOND[output] || []).includes(d.estado))
+                    .length,
                 ]),
               )}
               upstreamDocCounts={Object.fromEntries(

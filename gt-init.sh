@@ -40,7 +40,6 @@ fi
 # Build and run
 echo ""
 echo "🚀 Building and starting..."
-docker compose build base
 docker compose build
 docker compose up -d
 

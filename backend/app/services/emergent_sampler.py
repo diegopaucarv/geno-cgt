@@ -176,7 +176,7 @@ class EmergentSampler:
                     "target_extreme": target_extreme,
                     "segments_text": batch_text,
                 },
-                tier="FAST",
+                # Tier comes from the prompt's own `tier:` metadata.
                 temperature=0.1,
             )
             matches = flash_result.get("matches", [])

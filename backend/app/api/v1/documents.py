@@ -380,6 +380,9 @@ async def punctuate_document(
             "texto": texto,
             "max_chars": 10000,
             "documento_id": str(document_id),
+            # All documents of the same project share one replica, which is
+            # what makes the cached instruction+schema prefix reusable.
+            "cache_key": str(doc.proyecto_id),
         },
         queue="fast",
     )
@@ -425,6 +428,7 @@ async def process_document(
                     "texto": texto_extraido_raw,
                     "max_chars": 10000,
                     "documento_id": str(document_id),
+                    "cache_key": str(doc.proyecto_id),
                 },
                 queue="fast",
             )

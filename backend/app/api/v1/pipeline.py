@@ -365,7 +365,7 @@ async def get_pipeline_decisions(
     rows = await db.execute(
         text(
             "SELECT gate_name, proposal, critic_verdict, status, "
-            "researcher_decision, researcher_note, decidido_en "
+            "researcher_decision, researcher_note, decided_at "
             "FROM hitl_decisions "
             "WHERE project_id = :pid AND status = 'accepted' "
             "ORDER BY creado_en ASC"
@@ -450,7 +450,7 @@ async def get_pipeline_status(
 
     # Count hypotheses
     hyp_result = await db.execute(
-        text("SELECT COUNT(*) FROM hipotesis WHERE proyecto_id = :pid"),
+        text("SELECT COUNT(*) FROM hypotheses WHERE project_id = :pid"),
         {"pid": project_id},
     )
     hyp_count = hyp_result.scalar() or 0

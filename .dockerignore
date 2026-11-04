@@ -1,0 +1,45 @@
+# Build contexts are now the repository root for every Python target, so keep
+# the context small. Nothing under backend/ or workers/ is excluded except
+# secrets and runtime artifacts.
+
+.git
+.github
+.zed
+.gitignore
+
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.venv
+**/venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.DS_Store
+**/*.log
+
+# Never bake secrets into an image
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Not needed by any Python target
+frontend
+**/node_modules
+Documentacion
+tests
+scripts
+
+c.json
+mock_interview_*.txt
+test_entrevista.txt
+*.md
+gt-init.sh
+Makefile
+docker-compose.yml
+
+# Runtime data that is mounted as a volume
+**/uploads
+**/nlp_models
+**/.cache

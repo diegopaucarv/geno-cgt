@@ -12,6 +12,7 @@ import json
 import logging
 from uuid import uuid4
 
+from app.core.runtime_config import get_config_value
 from database import SessionLocal
 from llm_client import LLMClient
 from sqlalchemy import text
@@ -157,34 +158,30 @@ def _step_generate(session, category_id: str, proyecto_id: str, cat_name: str) -
         ),
     }
 
-    response = llm._call_llm(
+    response, _ = llm._call_llm(
         tier="PRO",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Eres un generador de memos teoricos para Classic Grounded Theory. "
-                    "Integra 4 fuentes de analisis en un memo narrativo:\n"
-                    "1. Paradigma: dimensiones, condiciones, consecuencias, estrategias\n"
-                    "2. Incidentes: evidencia textual que respalda la categoria\n"
-                    "3. Gaps: que propiedades faltan documentar\n"
-                    "4. Relaciones: con que otras categorias se vincula\n\n"
-                    "Escribe en presente conceptual. Usa gerundios. "
-                    "Cada afirmacion debe rastrearse a un incidente fuente. "
-                    "Maximo 500 palabras."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Categoria: {cat_name}\n\n"
-                    f"Paradigma (ultimas 5 iteraciones):\n{variables['paradigm_snapshots']}\n\n"
-                    f"Incidentes de evidencia:\n{variables['incident_samples']}\n\n"
-                    f"Panel de saturacion:\n{variables['saturation_panel']}\n\n"
-                    "Redacta un memo teorico que integre estos 4 analisis."
-                ),
-            },
-        ],
+        model=get_config_value(
+            "MODEL_PRO", default="accounts/fireworks/models/deepseek-v4p1-flash-1017"
+        ),
+        system_prompt=(
+            "Eres un generador de memos teoricos para Classic Grounded Theory. "
+            "Integra 4 fuentes de analisis en un memo narrativo:\n"
+            "1. Paradigma: dimensiones, condiciones, consecuencias, estrategias\n"
+            "2. Incidentes: evidencia textual que respalda la categoria\n"
+            "3. Gaps: que propiedades faltan documentar\n"
+            "4. Relaciones: con que otras categorias se vincula\n\n"
+            "Escribe en presente conceptual. Usa gerundios. "
+            "Cada afirmacion debe rastrearse a un incidente fuente. "
+            "Maximo 500 palabras."
+        ),
+        override_user_prompt=(
+            f"Categoria: {cat_name}\n\n"
+            f"Paradigma (ultimas 5 iteraciones):\n{variables['paradigm_snapshots']}\n\n"
+            f"Incidentes de evidencia:\n{variables['incident_samples']}\n\n"
+            f"Panel de saturacion:\n{variables['saturation_panel']}\n\n"
+            "Redacta un memo teorico que integre estos 4 analisis."
+        ),
+        schema=None,
         temperature=0.3,
         max_tokens=1500,
     )
@@ -200,29 +197,25 @@ def _step_generate(session, category_id: str, proyecto_id: str, cat_name: str) -
 def _step_simplify(memo_content: str, cat_name: str) -> dict:
     """PRO: Transform the narrative memo into double-entry analysis tables."""
 
-    response = llm._call_llm(
+    response, _ = llm._call_llm(
         tier="PRO",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Eres un simplificador de memos para Classic Grounded Theory. "
-                    "Transforma un memo narrativo en tablas de doble entrada. "
-                    "Para cada dimension del paradigma, crea una tabla:\n"
-                    "Filas = propiedades, Columnas = documentos/incidentes.\n"
-                    "Responde SOLO en JSON."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Memo de la categoria '{cat_name}':\n\n{memo_content}\n\n"
-                    "Produce tablas de doble entrada en formato JSON:\n"
-                    '{{"tables": [{{"dimension": "...", "rows": [{{"property": "...", '
-                    '"documents": {{"doc1": "evidencia", "doc2": "..."}}}}]}}]}}'
-                ),
-            },
-        ],
+        model=get_config_value(
+            "MODEL_PRO", default="accounts/fireworks/models/deepseek-v4p1-flash-1017"
+        ),
+        system_prompt=(
+            "Eres un simplificador de memos para Classic Grounded Theory. "
+            "Transforma un memo narrativo en tablas de doble entrada. "
+            "Para cada dimension del paradigma, crea una tabla:\n"
+            "Filas = propiedades, Columnas = documentos/incidentes.\n"
+            "Responde SOLO en JSON."
+        ),
+        override_user_prompt=(
+            f"Memo de la categoria '{cat_name}':\n\n{memo_content}\n\n"
+            "Produce tablas de doble entrada en formato JSON:\n"
+            '{{"tables": [{{"dimension": "...", "rows": [{{"property": "...", '
+            '"documents": {{"doc1": "evidencia", "doc2": "..."}}}}]}}]}}'
+        ),
+        schema=None,
         temperature=0.2,
         max_tokens=2000,
     )
@@ -264,35 +257,31 @@ def _step_correlate(simplified: dict, cat_name: str, proyecto_id: str) -> dict:
         else "(12 familias built-in)"
     )
 
-    response = llm._call_llm(
+    response, _ = llm._call_llm(
         tier="PRO",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Eres un correlador de memos para Classic Grounded Theory. "
-                    "A partir de tablas de doble entrada, identifica patrones "
-                    "transversales usando las 12 familias de codigos teoricos de Glaser. "
-                    "Produce:\n"
-                    "1. Matrices 2x2: cruza dos dimensiones → 4 cuadrantes con tipologias\n"
-                    "2. Correlaciones: que familias teoricas aplican a este memo\n\n"
-                    "Responde SOLO en JSON."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Categoria: {cat_name}\n\n"
-                    f"Tablas simplificadas:\n{json.dumps(simplified, ensure_ascii=False)}\n\n"
-                    f"Familias teoricas disponibles:\n{family_lenses}\n\n"
-                    "Produce matrices 2x2 y correlaciones teoricas en JSON:\n"
-                    '{{"matrices": [{{"dimension_a": "...", "dimension_b": "...", '
-                    '"quadrants": [{{"label": "...", "properties": [...]}}]}}], '
-                    '"family_correlations": [{{"family": "...", "relevance": 0.8, '
-                    '"rationale": "..."}}]}}'
-                ),
-            },
-        ],
+        model=get_config_value(
+            "MODEL_PRO", default="accounts/fireworks/models/deepseek-v4p1-flash-1017"
+        ),
+        system_prompt=(
+            "Eres un correlador de memos para Classic Grounded Theory. "
+            "A partir de tablas de doble entrada, identifica patrones "
+            "transversales usando las 12 familias de codigos teoricos de Glaser. "
+            "Produce:\n"
+            "1. Matrices 2x2: cruza dos dimensiones → 4 cuadrantes con tipologias\n"
+            "2. Correlaciones: que familias teoricas aplican a este memo\n\n"
+            "Responde SOLO en JSON."
+        ),
+        override_user_prompt=(
+            f"Categoria: {cat_name}\n\n"
+            f"Tablas simplificadas:\n{json.dumps(simplified, ensure_ascii=False)}\n\n"
+            f"Familias teoricas disponibles:\n{family_lenses}\n\n"
+            "Produce matrices 2x2 y correlaciones teoricas en JSON:\n"
+            '{{"matrices": [{{"dimension_a": "...", "dimension_b": "...", '
+            '"quadrants": [{{"label": "...", "properties": [...]}}]}}], '
+            '"family_correlations": [{{"family": "...", "relevance": 0.8, '
+            '"rationale": "..."}}]}}'
+        ),
+        schema=None,
         temperature=0.3,
         max_tokens=2000,
     )

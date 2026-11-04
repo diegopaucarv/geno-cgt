@@ -19,8 +19,8 @@ DATABASE_URL = os.getenv(
 # ── Redis ────────────────────────────────────────────────────────────
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
-# ── Together AI ──────────────────────────────────────────────────────
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+# ── LLM API (única credencial, cualquier proveedor OpenAI-compatible) ──
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 
 # ── Celery ───────────────────────────────────────────────────────────
 CELERY_HMAC_SECRET = os.getenv("CELERY_HMAC_SECRET", "changeme")

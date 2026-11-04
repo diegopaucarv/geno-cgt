@@ -19,19 +19,28 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
+from app.core.llm_client import (
+    LLMProvider,
+    TierSettings,
+    model_id_of,
+    parse_json_answer,
+)
 from app.core.runtime_config import get_config_value
 
 logger = logging.getLogger(__name__)
 
 ModelTier = Literal["PRO", "FLASH"]
 
+# Fireworks prompt caching reuses only exact prefixes. Per-document variables
+# (e.g. ``raw_text``) are therefore rendered as this stable marker in the system
+# prompt and sent in the trailing user message instead.
+CACHE_TAIL_MARKER = "[contenido variable: ver mensaje del usuario]"
+
 # ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
 # These are also defined in config.py; kept here for worker self-containment.
 
-_MODEL_FLASH = get_config_value(
-    "MODEL_FLASH", default="nvidia/nemotron-3-ultra-550b-a55b"
-)
-_MODEL_PRO = get_config_value("MODEL_PRO", default="deepseek-ai/DeepSeek-V4-Pro")
+_MODEL_FLASH = model_id_of("flash")
+_MODEL_PRO = model_id_of("pro")
 
 _TIER_MODELS: dict[ModelTier, str] = {
     "FLASH": _MODEL_FLASH,
@@ -39,31 +48,33 @@ _TIER_MODELS: dict[ModelTier, str] = {
 }
 
 _TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": int(get_config_value("MODEL_FLASH_MAX_TOKENS", default="1500")),
-    "PRO": int(get_config_value("MODEL_PRO_MAX_TOKENS", default="8192")),
+    "FLASH": TierSettings.for_tier("flash").max_tokens,
+    "PRO": TierSettings.for_tier("pro").max_tokens,
 }
 
 _TIER_TEMPERATURE: dict[ModelTier, float] = {
-    "FLASH": float(get_config_value("MODEL_FLASH_TEMPERATURE", default="0.1")),
-    "PRO": float(get_config_value("MODEL_PRO_TEMPERATURE", default="0.3")),
+    "FLASH": TierSettings.for_tier("flash").temperature,
+    "PRO": TierSettings.for_tier("pro").temperature,
 }
 
 _TIER_REPETITION_PENALTY: dict[ModelTier, float] = {
-    "FLASH": float(get_config_value("MODEL_FLASH_REPETITION_PENALTY", default="1.1")),
-    "PRO": float(get_config_value("MODEL_PRO_REPETITION_PENALTY", default="1.0")),
+    "FLASH": TierSettings.for_tier("flash").repetition_penalty,
+    "PRO": TierSettings.for_tier("pro").repetition_penalty,
 }
 
 _TIER_FREQUENCY_PENALTY: dict[ModelTier, float] = {
-    "FLASH": float(get_config_value("MODEL_FLASH_FREQUENCY_PENALTY", default="1.15")),
-    "PRO": float(get_config_value("MODEL_PRO_FREQUENCY_PENALTY", default="0.0")),
+    "FLASH": TierSettings.for_tier("flash").frequency_penalty,
+    "PRO": TierSettings.for_tier("pro").frequency_penalty,
 }
 
 _TIER_TOP_P: dict[ModelTier, float] = {
-    "FLASH": float(get_config_value("MODEL_FLASH_TOP_P", default="0.9")),
-    "PRO": float(get_config_value("MODEL_PRO_TOP_P", default="1.0")),
+    "FLASH": TierSettings.for_tier("flash").top_p,
+    "PRO": TierSettings.for_tier("pro").top_p,
 }
 
-PROMPTS_DIR = os.getenv("PROMPTS_DIR", "/app/prompts")
+PROMPTS_DIR = get_config_value(
+    "PROMPTS_DIR", default="/app/prompts", env_var="PROMPTS_DIR"
+)
 # Parseo unificado de prompts (.md YAML + .txt legacy)
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -381,15 +392,15 @@ class LLMClient:
     """
 
     def __init__(self, api_key: str | None = None):
-        raw_key = (api_key or os.getenv("TOGETHER_API_KEY", "")).strip()
-        self.is_mock = not raw_key or raw_key.startswith("${") or raw_key == "changeme"
-        self.api_key = raw_key
-        self._http = None  # lazy import
+        self._provider = LLMProvider(api_key=api_key)
+        self.is_mock = self._provider.is_mock
 
         if self.is_mock:
-            logger.warning("TOGETHER_API_KEY no configurada. Usando modo MOCK.")
+            logger.warning("LLM_API_KEY no configurada o invalida. Usando modo MOCK.")
         else:
-            logger.info("LLMClient: Together.ai via HTTP directo (timeout=600s)")
+            logger.info(
+                "LLMClient: proveedor unificado (timeout=%ss)", self._provider.timeout
+            )
 
     def run_agent(
         self,
@@ -397,11 +408,22 @@ class LLMClient:
         variables: dict[str, str],
         max_tokens: int | None = None,
         temperature: float | None = None,
+        cache_key: str | None = None,
+        tail_variables: tuple[str, ...] | list[str] | None = None,
+        user_content: str | None = None,
     ) -> dict[str, Any]:
         """Carga prompt, reemplaza variables, inyecta schema, llama al LLM.
 
         Si max_tokens o temperature no se especifican, se usan defaults
         según el tier del modelo (PRO → 8K/0.3, FLASH → 4K/0.1).
+
+        Prompt caching: ``tail_variables`` nombra las variables que cambian en
+        cada documento. Se sustituyen por un marcador constante en el system
+        prompt y su contenido va como ``user_content`` al final del mensaje de
+        usuario, de modo que las instrucciones + el schema quedan como prefijo
+        estático y Fireworks puede reutilizarlo entre documentos del lote.
+        ``cache_key`` se envía como ``x-session-affinity`` para fijar todas las
+        llamadas del lote a la misma réplica.
         """
         if self.is_mock:
             return dict(
@@ -445,8 +467,13 @@ class LLMClient:
 
         prompt_template = parsed["prompt"]
         # Usar reemplazo simple para evitar conflicto con {{ }} del JSON
+        render_vars = dict(variables)
+        if tail_variables:
+            for key in tail_variables:
+                if key in render_vars:
+                    render_vars[key] = CACHE_TAIL_MARKER
         system_prompt = prompt_template
-        for k, v in variables.items():
+        for k, v in render_vars.items():
             system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
         schema = parsed["schema"]
@@ -461,6 +488,8 @@ class LLMClient:
             repetition_penalty,
             frequency_penalty,
             top_p,
+            cache_key=cache_key,
+            user_content=user_content,
         )
 
     def _call_llm(
@@ -474,92 +503,61 @@ class LLMClient:
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         top_p: float = 1.0,
+        cache_key: str | None = None,
+        user_content: str | None = None,
         retry: bool = True,
     ) -> dict[str, Any]:
-        """Llama a Together.ai con response_format json_object. Retry 1 vez."""
+        """Llama a Together.ai con response_format json_object. Retry 1 vez.
+
+        El schema se añade al *system prompt* (contenido estático) y el
+        contenido variable del documento va en el mensaje de usuario, de modo
+        que el prefijo instrucciones+schema se repite entre documentos y
+        Fireworks lo sirve desde caché.
+        """
         if schema:
             system_prompt += (
                 "\n\n[OUTPUT FORMAT — responde EXCLUSIVAMENTE en JSON]\n"
                 + json.dumps(schema, indent=2)
             )
 
-        user_prompt = (
+        user_parts: list[str] = []
+        if user_content:
+            user_parts.append("[CONTENIDO]\n" + user_content)
+        user_parts.append(
             "[TAREA]\nResponde según el formato y razonamiento indicados arriba."
         )
+        user_prompt = "\n\n".join(user_parts)
 
         logger.info(
-            "LLM: tier=%s model=%s prompt_chars=%d", tier, model, len(system_prompt)
+            "LLM: tier=%s model=%s prompt_chars=%d static_chars=%d cache_key=%s",
+            tier,
+            model,
+            len(system_prompt) + len(user_prompt),
+            len(system_prompt),
+            cache_key or "-",
         )
 
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "repetition_penalty": repetition_penalty,
-            "frequency_penalty": frequency_penalty,
-            "top_p": top_p,
-        }
-        if schema:
-            kwargs["response_format"] = {"type": "json_object"}
-
         try:
-            import requests as _r
-
-            if self._http is None:
-                self._http = _r.Session()
-                self._http.headers.update(
-                    {
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    }
-                )
-
-            r = self._http.post(
-                "https://api.together.ai/v1/chat/completions",
-                json=kwargs,
-                timeout=600,
+            response = self._provider.chat(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                schema=schema,
+                schema_mode="json_object",
+                repetition_penalty=repetition_penalty,
+                frequency_penalty=frequency_penalty,
+                top_p=top_p,
+                session_affinity=cache_key,
             )
-            if r.status_code != 200:
-                raise Exception(f"HTTP {r.status_code}: {r.text[:300]}")
-            data = r.json()
-            message = data["choices"][0]["message"]
-            content = message["content"] or ""
-            reasoning = message.get("reasoning_content")
-            content = content.strip()
-            # Strip markdown code fences if present
-            if content.startswith("```"):
-                lines = content.split("\n")
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                content = "\n".join(lines)
-
-            # Try to extract JSON - find outermost { }
-            import re as _re
-
-            # Buscar desde la primera { hasta la última }
-            start = content.find("{")
-            end = content.rfind("}")
-            if start >= 0 and end > start:
-                content = content[start : end + 1]
-
-            # Arreglar newlines no escapados dentro de strings JSON
-            # (modelos pequeños a veces no escapan \n correctamente)
-            content = _re.sub(
-                r'"(.*?)"',
-                lambda m: (
-                    '"' + m.group(1).replace("\n", "\\n").replace("\t", "\\t") + '"'
-                ),
-                content,
-                flags=_re.DOTALL,
-            )
-
-            result = json.loads(content)
+            content = response.content or ""
+            reasoning = response.reasoning_content
+            result = parse_json_answer(content, default={})
+            if not result:
+                raise ValueError("respuesta no contiene JSON valido")
             if reasoning:
                 result["_reasoning_content"] = reasoning
             return result
@@ -591,6 +589,8 @@ class LLMClient:
                     repetition_penalty,
                     frequency_penalty,
                     top_p,
+                    cache_key=cache_key,
+                    user_content=user_content,
                     retry=False,
                 )
             logger.warning("JSON parse failed after retry. Mock fallback.")

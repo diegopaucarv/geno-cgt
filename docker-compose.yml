@@ -1,11 +1,4 @@
 services:
-  base:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    image: gt-base:latest
-    command: ["echo", "base image ready"]
-
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -75,18 +68,15 @@ services:
     networks:
       - gt_network
 
-  clamav:
-    image: clamav/clamav:latest
-    ports:
-      - "3310:3310"
-
   hocuspocus-stub:
     image: alpine:latest
     command: sh -c "echo 'Hocuspocus stub running' && tail -f /dev/null"
 
   tei:
     build:
-      context: ./backend/tei
+      context: .
+      dockerfile: Dockerfile
+      target: tei
       args:
         USE_GPU: ${USE_GPU:-false}
     develop:
@@ -97,7 +87,7 @@ services:
         - action: rebuild
           path: ./backend/tei/requirements.txt
         - action: rebuild
-          path: ./backend/tei/Dockerfile
+          path: ./Dockerfile
     environment:
       - HF_HOME=/app/.cache
       - MODEL_ID=thomasht86/voyage-4-nano-ONNX
@@ -117,7 +107,10 @@ services:
       - default
 
   fastapi:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
     develop:
       watch:
         - action: sync
@@ -138,7 +131,7 @@ services:
         - action: rebuild
           path: ./backend/requirements.txt
         - action: rebuild
-          path: ./backend/Dockerfile
+          path: ./Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379
@@ -149,7 +142,7 @@ services:
       ENVIRONMENT: dev
       JWT_SECRET_KEY: ${JWT_SECRET:-dev-jwt-secret-gt-local}
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
-      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       SPACY_DATA_PATH: /app/nlp_models/spacy
       STANZA_RESOURCES_DIR: /app/nlp_models/stanza
     depends_on:
@@ -171,7 +164,10 @@ services:
       - gt_network
 
   worker-fast:
-    build: ./workers/fast
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-fast
     networks:
       - gt_network
       - default
@@ -180,16 +176,19 @@ services:
         - action: sync+restart
           path: ./workers/fast/tasks.py
           target: /app/tasks.py
+        - action: sync+restart
+          path: ./workers/fast/llm_client.py
+          target: /app/llm_client.py
         - action: rebuild
           path: ./workers/fast/requirements.txt
         - action: rebuild
-          path: ./workers/fast/Dockerfile
+          path: ./Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       REDIS_URL: redis://redis:6379
       TEI_URL: http://tei:8080
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
-      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       PYTHONPATH: /app/backend:/app/backend/app
     volumes:
       - ./backend:/app/backend:ro
@@ -201,7 +200,10 @@ services:
       - tei
 
   worker-nlp:
-    build: ./workers/nlp
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-nlp
     networks:
       - gt_network
       - default
@@ -219,7 +221,7 @@ services:
         - action: rebuild
           path: ./workers/nlp/requirements.txt
         - action: rebuild
-          path: ./workers/nlp/Dockerfile
+          path: ./Dockerfile
     volumes:
       - uploads_data:/app/uploads
       - ./backend:/app/backend:ro
@@ -248,7 +250,10 @@ services:
         condition: service_healthy
 
   worker-heavy:
-    build: ./workers/heavy
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-heavy
     networks:
       - gt_network
       - default
@@ -275,11 +280,11 @@ services:
         - action: rebuild
           path: ./workers/heavy/requirements.txt
         - action: rebuild
-          path: ./workers/heavy/Dockerfile
+          path: ./Dockerfile
     environment:
       DATABASE_URL: postgresql://app_user:${DB_PASSWORD:-strongpass}@postgres:5432/gt-db
       CELERY_HMAC_SECRET: ${HMAC_SECRET:-dev-celery-hmac-gt-local}
-      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       PYTHONPATH: /app/backend:/app/backend/app
     depends_on:
       - pgbouncer

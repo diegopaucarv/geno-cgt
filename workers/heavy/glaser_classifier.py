@@ -213,6 +213,7 @@ def _step1_classify_xml(
             model=None,  # default PRO
             max_tokens=8192,
             temperature=0.3,
+            cache_key=str(proyecto_id) if proyecto_id else None,
         )
         result = (response.get("content") or "").strip()
         # Strip markdown code fences if model wrapped XML in them
@@ -238,7 +239,9 @@ def _step1_classify_xml(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _step2_validate_xml(xml_text: str, llm_client: Any) -> dict:
+def _step2_validate_xml(
+    xml_text: str, llm_client: Any, cache_key: str | None = None
+) -> dict:
     """Validate XML structure. Uses FLASH tier for speed, falls back to algorithmic."""
     # Run algorithmic first — catches 80% of issues without LLM cost
     algo_result = _algorithmic_validate_xml(xml_text)
@@ -256,9 +259,13 @@ def _step2_validate_xml(xml_text: str, llm_client: Any) -> dict:
                     "content": f"El validador algoritmico encontro estos problemas:\n{issues_text}\n\nTexto clasificado (primeros 6000 chars):\n{xml_text[:6000]}\n\nGenera el JSON con suggested_fixes concretos para que el clasificador corrija estos problemas.",
                 },
             ],
-            model=llm_client.FLASH if hasattr(llm_client, "FLASH") else None,
+            model=get_config_value(
+                "MODEL_FLASH",
+                default="accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+            ),
             max_tokens=1000,
             temperature=0.1,
+            cache_key=cache_key,
         )
         content = response.get("content") or ""
         json_match = re.search(r"\{[\s\S]*\}", content)
@@ -465,7 +472,9 @@ def classify_document_with_validation(
         )
 
         # Step 2: Validate (algorithmic first, FLASH only if needed)
-        validation_result = _step2_validate_xml(xml_text, llm_client)
+        validation_result = _step2_validate_xml(
+            xml_text, llm_client, cache_key=str(proyecto_id) if proyecto_id else None
+        )
         logger.info(
             "Glaser round %d/%d: valid=%s, issues=%d",
             round_num,
