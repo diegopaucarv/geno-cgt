@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.log
+*.log.*
+.compose-watch*
 *.pid
 data/
 cache/
