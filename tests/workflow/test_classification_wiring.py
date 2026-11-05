@@ -156,3 +156,132 @@ def test_glaser_validator_accepts_sequential_tags(docker: bool) -> None:
             f"{(proc.stderr or proc.stdout).strip()[:500]}"
         )
     assert "VALIDATOR_OK" in proc.stdout, proc.stdout
+
+
+# ── 4. The classifier's PRO call must not cap a reasoning model's budget ──
+#
+# DeepSeek V4.1 and Nemotron are reasoning models: before emitting the XML they
+# write a long ``reasoning_content`` block. Measured on a 33-segment document
+# (3 591 chars of text) with the real CLASSIFIER_SYSTEM_PROMPT:
+#
+#   max_tokens=8192   → reasoning 32 198 chars, content 0     ← degraded
+#   max_tokens=32768  → reasoning 36 747 chars, content 4 400 ← OK
+#
+# With the 8 192 cap ``content`` came back empty, `_step1_classify_xml` raised
+# "Empty response from LLM" and fell back to wrapping the whole document in
+# `<baseline_data>`. The degraded run still reported status="completed" and
+# valid=True, so every segment looked classified while none actually was.
+
+GLASER_CLASSIFIER = REPO / "workers" / "heavy" / "glaser_classifier.py"
+
+#: 8 192 tokens is ~30k chars of reasoning — not enough for a real document.
+MIN_PRO_MAX_TOKENS = 32768
+
+
+def test_step1_classifier_does_not_cap_max_tokens() -> None:
+    """`_step1_classify_xml` must inherit MODEL_PRO_MAX_TOKENS."""
+    source = GLASER_CLASSIFIER.read_text(encoding="utf-8")
+    match = re.search(r"def _step1_classify_xml\(.*?(?=\ndef )", source, re.DOTALL)
+    assert match, "_step1_classify_xml not found in glaser_classifier.py"
+    body = match.group(0)
+
+    calls = re.findall(r"max_tokens\s*=\s*([^,\n]+)", body)
+    assert not calls, (
+        "the step-1 classifier must not override max_tokens; a cap below "
+        f"{MIN_PRO_MAX_TOKENS} is consumed by the model's reasoning and "
+        f"returns empty content. Found: {calls}"
+    )
+
+
+# ── 5. A degraded classification must not look like a completed one ────
+#
+# The old code wrapped the whole document in `<baseline_data>` when Step 1
+# produced nothing usable and still returned status="completed", valid=True.
+# Every segment looked classified while none actually was. Step 1 now raises
+# ``ClassificationUnavailable`` and the orchestrator returns status="degraded"
+# with valid=False, so the task can fail loudly and leave the doc retryable.
+
+_DEGRADED_PROBE = r"""
+import sys
+
+sys.path.insert(0, "/app")
+
+import glaser_classifier as gc
+
+
+class FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+
+class FakeSession:
+    def __init__(self):
+        self.committed = False
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if "SELECT metadatos" in sql:
+            return FakeResult([({"texto_extraido": "Primero uno. Luego dos."},)])
+        if "FROM segmentos" in sql:
+            return FakeResult(
+                [
+                    ("11111111-1111-1111-1111-111111111111", "Primero uno.", 0),
+                    ("22222222-2222-2222-2222-222222222222", "Luego dos.", 1),
+                ]
+            )
+        return FakeResult([])
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        pass
+
+
+def fake_step1(*args, **kwargs):
+    raise gc.ClassificationUnavailable("probe: contenido vacío")
+
+
+assert hasattr(gc, "ClassificationUnavailable"), "no ClassificationUnavailable"
+gc._step1_classify_xml = fake_step1
+
+result = gc.classify_document_with_validation(
+    "doc-12345678", "proj-12345678", FakeSession(), llm_client=None
+)
+
+assert result["status"] == "degraded", result
+assert result["valid"] is False, result
+assert "probe" in (result.get("reason") or ""), result
+assert result["segments_classified"] == 2, result
+
+print("ok")
+"""
+
+
+def test_classifier_reports_degraded_instead_of_completed(docker: bool) -> None:
+    from tests.workflow.conftest import docker_compose_exec
+
+    proc = docker_compose_exec(
+        "worker-heavy", "python", "-c", _DEGRADED_PROBE, timeout=90
+    )
+    assert proc.returncode == 0, (
+        "a failed Step 1 is still reported as a successful classification:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:1200]}"
+    )
+    assert "ok" in proc.stdout
+
+
+def test_degraded_status_fails_the_run() -> None:
+    """Neither caller may let a degraded classification pass as success."""
+    source = (REPO / "workers" / "heavy" / "tasks.py").read_text(encoding="utf-8")
+    assert source.count('result.get("status") == "degraded"') >= 2, (
+        "both _classify_glaser_types_for_doc and task_run_glaser_classifier must "
+        "treat status='degraded' as a failure"
+    )
+    assert "raise ClassificationUnavailable" in source

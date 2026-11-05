@@ -106,8 +106,8 @@ class ProcessingState(Base):
     )  # 'document', 'segment', 'code'
     entity_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     step: Mapped[str] = mapped_column(
-        String(50), primary_key=True
-    )  # 'segmented', 'coded', 'synthesized'
+        String(120), primary_key=True
+    )  # 'segmented', 'coded', 'phase_b_run_<uuid>_n3'
 
 
 class GraphEntity(Base):

@@ -28,6 +28,33 @@ VALID_TAGS = {
     "contextual_data",
 }
 
+
+class ClassificationUnavailable(RuntimeError):
+    """El LLM no devolvió una clasificación utilizable.
+
+    Antes, `_step1_classify_xml` envolvía todo el documento en
+    `<baseline_data>` y seguía como si nada: el documento quedaba con sus N
+    segmentos en `baseline_data`, `status="completed"` y `valid=True`. Nada
+    distinguía eso de una clasificación real, así que la degradación pasaba
+    inadvertida hasta que los incidentes extraídos no tenían sentido.
+    """
+
+
+def _baseline_fallback_xml(raw_text: str) -> str:
+    """Fallback conservador: el documento entero como baseline.
+
+    Solo se usa para dejar los segmentos en un valor conocido cuando la
+    clasificación falla; el llamador debe marcar el resultado como degradado.
+    """
+    escaped = raw_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"<baseline_data>{escaped}</baseline_data>"
+
+
+def _mentions_glaser_tag(xml_text: str) -> bool:
+    """True cuando la respuesta contiene al menos un tag Glaser."""
+    return any(f"<{tag}" in xml_text for tag in VALID_TAGS)
+
+
 # ── System prompt (instructions, NO raw text) ──
 CLASSIFIER_SYSTEM_PROMPT = """[ROL]
 Eres un clasificador de datos cualitativos. Tu tarea es envolver pasajes de texto en tags XML segun su tipo de dato. DEBES usar al menos 2 tipos de tag diferentes.
@@ -211,7 +238,14 @@ def _step1_classify_xml(
                 {"role": "user", "content": user_content},
             ],
             model=None,  # default PRO
-            max_tokens=8192,
+            # Sin override explícito: el presupuesto del tier PRO
+            # (MODEL_PRO_MAX_TOKENS, 131072 por defecto) es el único que deja
+            # sitio al razonamiento. DeepSeek V4 / Nemotron son modelos de
+            # razonamiento: para un documento de ~30 segmentos emiten ~32 000
+            # caracteres de `reasoning_content` antes del XML. Con un cap
+            # pequeño (4096 u 8192) el razonamiento agota el budget, `content`
+            # llega vacío y la clasificación degrada en silencio a
+            # `<baseline_data>` para todo el documento.
             temperature=0.3,
             cache_key=str(proyecto_id) if proyecto_id else None,
         )
@@ -220,18 +254,24 @@ def _step1_classify_xml(
         if result.startswith("```"):
             result = re.sub(r"^```(?:xml)?\s*\n?", "", result)
             result = re.sub(r"\n?```\s*$", "", result)
-        # If result is empty, fall through to fallback
+        # If result is empty, the reasoning budget was exhausted or the call
+        # failed: let the caller mark the document as degraded.
         if not result:
-            raise ValueError("Empty response from LLM")
+            raise ClassificationUnavailable(
+                "Empty response from LLM"
+                f" (finish_reason={response.get('finish_reason')}"
+                f", reasoning_chars={len(response.get('reasoning_content') or '')})"
+            )
+        if not _mentions_glaser_tag(result):
+            raise ClassificationUnavailable(
+                "LLM response contains no Glaser tag"
+                f" (chars={len(result)}, head={result[:80]!r})"
+            )
         return result
+    except ClassificationUnavailable:
+        raise
     except Exception as e:
-        logger.error(
-            "Step 1 (classify XML) failed: %s — falling back to all-baseline", e
-        )
-        escaped = (
-            raw_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
-        return f"<baseline_data>{escaped}</baseline_data>"
+        raise ClassificationUnavailable(f"{type(e).__name__}: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -449,7 +489,11 @@ def classify_document_with_validation(
     """Run the 3-step Glaser classifier with validator loop.
 
     Returns:
-        dict with status, validation_rounds, baseline_tags_count, segments_classified
+        dict with status, validation_rounds, baseline_tags_count,
+        segments_classified. ``status`` is ``"degraded"`` (not ``"completed"``)
+        when Step 1 never produced a usable classification; the conservative
+        all-baseline mapping is still persisted so downstream state is defined,
+        but callers must not treat that as success.
     """
     # ── Get raw text ──
     row = session.execute(
@@ -473,6 +517,7 @@ def classify_document_with_validation(
     feedback = None
     validation_result = None
     rounds = 0
+    unavailable: str | None = None
 
     for round_num in range(1, max_validation_rounds + 1):
         rounds = round_num
@@ -485,9 +530,23 @@ def classify_document_with_validation(
             documento_id[:8],
             "yes" if feedback else "no",
         )
-        xml_text = _step1_classify_xml(
-            raw_text, llm_client, feedback, session=session, proyecto_id=proyecto_id
-        )
+        try:
+            xml_text = _step1_classify_xml(
+                raw_text, llm_client, feedback, session=session, proyecto_id=proyecto_id
+            )
+        except ClassificationUnavailable as exc:
+            # Reintentar con feedback no sirve: el modelo no está devolviendo
+            # clasificación alguna. Se corta el loop y se marca degradado.
+            unavailable = str(exc)
+            logger.error(
+                "Glaser round %d/%d: clasificación no disponible doc=%s: %s",
+                round_num,
+                max_validation_rounds,
+                documento_id[:8],
+                exc,
+            )
+            xml_text = _baseline_fallback_xml(raw_text)
+            break
 
         # Step 2: Validate (algorithmic first, FLASH only if needed)
         validation_result = _step2_validate_xml(
@@ -531,9 +590,12 @@ def classify_document_with_validation(
     session.commit()
 
     return {
-        "status": "completed",
+        "status": "degraded" if unavailable else "completed",
         "validation_rounds": rounds,
         "baseline_tags_count": len(baseline_tags),
         "segments_classified": segments_classified,
-        "valid": validation_result.get("valid", False) if validation_result else False,
+        "valid": bool(
+            unavailable is None and validation_result and validation_result.get("valid")
+        ),
+        "reason": unavailable,
     }

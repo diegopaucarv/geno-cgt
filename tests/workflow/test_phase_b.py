@@ -31,8 +31,16 @@ REPO = Path(__file__).resolve().parents[2]
 TRANSITIONS = REPO / "backend" / "app" / "agents" / "transitions.py"
 PATTERN_EXTRACTOR = REPO / "workers" / "heavy" / "pattern_extractor.py"
 HEAVY_TASKS = REPO / "workers" / "heavy" / "tasks.py"
+PROCESSING_STATES_MODEL = (
+    REPO / "backend" / "app" / "models" / "domain" / "synthesis.py"
+)
 
-EXPECTED_FILES = (TRANSITIONS, PATTERN_EXTRACTOR, HEAVY_TASKS)
+EXPECTED_FILES = (
+    TRANSITIONS,
+    PATTERN_EXTRACTOR,
+    HEAVY_TASKS,
+    PROCESSING_STATES_MODEL,
+)
 
 
 # ── Parsing helpers ────────────────────────────────────────────────────
@@ -443,4 +451,127 @@ def test_restore_phase_b_docs_is_module_level_and_called_on_both_errors() -> Non
     assert "Exception" in handler_types, (
         "the failure handler no longer restores the docs or clears the "
         "phase_b_run_* marker, so a retry would be skipped"
+    )
+
+
+# ── 6. Phase B idempotency key must fit processing_states.step ─────────
+#
+# Bug pinned here: `_maybe_trigger_phase_b` builds
+#     step = f"phase_b_run_{run_id}_n{listos}"
+# With `run_id` being a 36-character UUID string that is 51 characters against
+# a `character varying(50)` column. Every INSERT raised
+# `StringDataRightTruncation`, the exception escaped `transition()`, and the
+# `except` in `process_document_agents_a` treated it as an extraction failure
+# and rewound the document to 'segmentado' — with the incidents already
+# committed. The project could therefore never reach three terminal documents,
+# so Phase B never fired and "Extraer incidentes" appeared to do nothing.
+
+PHASE_B_STEP_PREFIX = "phase_b_run_"
+UUID_TEXT_LEN = 36
+
+
+def _phase_b_step_key_max_len() -> int:
+    """Longest realistic key: prefix + UUID + '_n' + 6-digit doc count."""
+    return len(PHASE_B_STEP_PREFIX) + UUID_TEXT_LEN + len("_n") + 6
+
+
+def _processing_states_step_width() -> int:
+    """Read the ``step`` column width out of the ProcessingState model."""
+    tree = _tree(_source(PROCESSING_STATES_MODEL), PROCESSING_STATES_MODEL)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ProcessingState":
+            for stmt in node.body:
+                if not isinstance(stmt, ast.AnnAssign):
+                    continue
+                target = stmt.target
+                if not (isinstance(target, ast.Name) and target.id == "step"):
+                    continue
+                for child in ast.walk(stmt.value):
+                    if (
+                        isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Name)
+                        and child.func.id == "String"
+                        and child.args
+                        and isinstance(child.args[0], ast.Constant)
+                    ):
+                        return int(child.args[0].value)
+    raise AssertionError("could not locate ProcessingState.step width")
+
+
+def test_phase_b_step_key_fits_model_column() -> None:
+    """The dedupe key must fit the declared column width."""
+    width = _processing_states_step_width()
+    needed = _phase_b_step_key_max_len()
+    assert width >= needed, (
+        f"processing_states.step is String({width}) but the Phase B key needs "
+        f"{needed} characters; the INSERT raises StringDataRightTruncation"
+    )
+
+
+def test_phase_b_step_key_matches_transitions_source() -> None:
+    """Guard the constant above against the real f-string in transitions.py."""
+    source = _source(TRANSITIONS)
+    assert PHASE_B_STEP_PREFIX in source, (
+        "the Phase B dedupe key prefix changed; update PHASE_B_STEP_PREFIX and "
+        "the migration that sizes processing_states.step"
+    )
+    assert len(PHASE_B_STEP_PREFIX) == 12
+
+
+def test_batch_trigger_failures_do_not_demote_document() -> None:
+    """A failing batch trigger must not rewind an already-committed estado.
+
+    ``transition()`` commits the document's new estado before running the
+    batch-side effects, so those are advisory. Before the fix the exception
+    escaped and the worker's ``except`` demoted the doc (``fail_to``).
+    """
+    tree = _tree(_source(TRANSITIONS), TRANSITIONS)
+    func = _function_node(tree, "transition")
+
+    guarded: list[ast.Try] = []
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Try):
+            continue
+        body_src = _squash(ast.unparse(ast.Module(body=node.body, type_ignores=[])))
+        if "_maybe_trigger_phase_b" in body_src:
+            guarded.append(node)
+
+    assert guarded, (
+        "transition() calls _maybe_trigger_phase_b outside a try/except; a "
+        "failing idempotency marker demotes the document via fail_to"
+    )
+
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ("exception", "error")
+        for try_node in guarded
+        for handler in try_node.handlers
+        for node in ast.walk(handler)
+    ), "the batch-trigger guard must log the failure (logger.exception)"
+
+
+def test_processing_states_step_live_width(docker: bool) -> None:
+    """The running database must have accepted migration 019."""
+    from tests.workflow.conftest import docker_compose_exec
+
+    proc = docker_compose_exec(
+        "postgres",
+        "psql",
+        "-U",
+        "app_user",
+        "-d",
+        "gt-db",
+        "-t",
+        "-A",
+        "-c",
+        "select character_maximum_length from information_schema.columns "
+        "where table_name='processing_states' and column_name='step';",
+    )
+    assert proc.returncode == 0, proc.stderr[:500]
+    width = int(proc.stdout.strip())
+    needed = _phase_b_step_key_max_len()
+    assert width >= needed, (
+        f"live processing_states.step is varchar({width}), needs >= {needed}. "
+        "Migration 019_widen_processing_states_step was not applied."
     )

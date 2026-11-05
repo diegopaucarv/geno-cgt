@@ -1,0 +1,11 @@
+ Image geno-cgt-worker-fast Building 
+ Image geno-cgt-tei Building 
+ Image geno-cgt-worker-nlp Building 
+ Image geno-cgt-fastapi Building 
+ Image geno-cgt-worker-heavy Building 
+target worker-nlp: failed to receive status: rpc error: code = Unavailable desc = error reading from server: EOF
+
+
+
+View build details: docker-desktop://dashboard/build/default/default/tt0coyqg5puu5r0fd8s4m642c
+

@@ -12,13 +12,13 @@ Prioridad efectiva: env var > runtime.json > EDITABLE_DEFAULTS.
 
 EDITABLE_DEFAULTS: dict[str, str] = {
     # ── LLM Models ──
-    "MODEL_PRO": "accounts/fireworks/models/deepseek-v4p1-flash-1017",
+    "MODEL_PRO": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
     # Los límites se fijan al máximo de salida útil por tier. Un valor por
     # encima del contexto real del modelo hace que el proveedor recorte
     # silenciosamente (context_length_exceeded_behavior=truncate).
     "MODEL_PRO_MAX_TOKENS": "131072",
     "MODEL_PRO_TEMPERATURE": "0.3",
-    "MODEL_FLASH": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "MODEL_FLASH": "nvidia/NVIDIA-Nemotron-3.5-Super-VL",
     "MODEL_FLASH_MAX_TOKENS": "32768",
     "MODEL_FLASH_TEMPERATURE": "0.1",
     "MODEL_FLASH_REPETITION_PENALTY": "1.1",
@@ -26,7 +26,7 @@ EDITABLE_DEFAULTS: dict[str, str] = {
     # ── LLM Transport (común a todos los servicios) ──
     # Endpoint OpenAI-compatible. Cambiarlo permite apuntar a otro proveedor
     # o a un gateway propio sin tocar código.
-    "LLM_API_BASE": "https://api.fireworks.ai/inference/v1",
+    "LLM_API_BASE": "https://api.together.ai/v1",
     "LLM_TIMEOUT_S": "600",
     # ── Segmentation ──
     "SEGMENTATION_MODE": "progressive",
@@ -49,7 +49,7 @@ EDITABLE_DEFAULTS: dict[str, str] = {
     # ── Advanced ──
     "CODING_STYLES": "gerundio,in_vivo",
     "GLASER_CLASSIFIER_PROMPT": "",
-    "MODEL_FLASH_FREQUENCY_PENALTY": "1.15",
+    "MODEL_FLASH_FREQUENCY_PENALTY": "0.0",
     "MODEL_PRO_FREQUENCY_PENALTY": "0.0",
     "MODEL_PRO_REPETITION_PENALTY": "1.0",
     "MODEL_PRO_TOP_P": "1.0",

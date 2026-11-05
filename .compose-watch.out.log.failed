@@ -1,0 +1,2485 @@
+#1 [internal] load local bake definitions
+#1 reading from stdin 2.54kB 0.0s done
+#1 DONE 0.0s
+
+#2 [fastapi internal] load build definition from Dockerfile
+#2 transferring dockerfile:
+#2 transferring dockerfile: 4.22kB 0.0s done
+#2 DONE 2.6s
+
+#2 [worker-fast internal] load build definition from Dockerfile
+#2 DONE 2.6s
+
+#3 [worker-fast internal] load metadata for docker.io/library/python:3.13-slim
+#3 ...
+
+#4 [auth] library/python:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [worker-fast internal] load metadata for docker.io/library/python:3.13-slim
+#3 DONE 4.0s
+
+#5 [tei internal] load .dockerignore
+#5 transferring context:
+#5 transferring context: 749B done
+#5 DONE 0.9s
+
+#5 [worker-heavy internal] load .dockerignore
+#5 DONE 0.9s
+
+#6 [tei internal] load build context
+#6 DONE 0.0s
+
+#7 [tei base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 resolve docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 resolve docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 3.4s done
+#7 DONE 3.5s
+
+#8 [fastapi internal] load build context
+#8 transferring context: 3.19MB 0.5s done
+#8 DONE 5.2s
+
+#7 [fastapi base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 resolve docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1 3.4s done
+#7 ...
+
+#9 [worker-nlp internal] load build context
+#9 transferring context: 105.39kB 0.0s done
+#9 DONE 5.4s
+
+#10 [worker-heavy internal] load build context
+#10 transferring context: 505.52kB 0.1s done
+#10 ...
+
+#11 [worker-fast internal] load build context
+#11 transferring context: 73.00kB 0.0s done
+#11 DONE 5.6s
+
+#6 [tei internal] load build context
+#6 ...
+
+#10 [worker-heavy internal] load build context
+#10 DONE 6.3s
+
+#6 [tei internal] load build context
+#6 transferring context: 2.36kB 0.0s done
+#6 DONE 4.6s
+
+#7 [fastapi base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 DONE 9.8s
+
+#7 [fastapi base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 DONE 9.8s
+
+#7 [worker-nlp base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 extracting sha256:6fc242d221a673263eabd14a9ad9584d3177c96e5cb504c891497338e2f912f5
+#7 extracting sha256:6fc242d221a673263eabd14a9ad9584d3177c96e5cb504c891497338e2f912f5 3.1s done
+#7 extracting sha256:789960dca7c613e9d8872d4790f2ec423b8fe17f52989c6225982f28696e7315
+#7 extracting sha256:6fc242d221a673263eabd14a9ad9584d3177c96e5cb504c891497338e2f912f5 3.1s done
+#7 extracting sha256:789960dca7c613e9d8872d4790f2ec423b8fe17f52989c6225982f28696e7315 0.7s done
+#7 extracting sha256:7d824d9f832184c4084576664b622717cb0eb579b504f2079d3b4ac36454761f
+#7 extracting sha256:789960dca7c613e9d8872d4790f2ec423b8fe17f52989c6225982f28696e7315 0.7s done
+#7 extracting sha256:7d824d9f832184c4084576664b622717cb0eb579b504f2079d3b4ac36454761f 3.6s done
+#7 extracting sha256:7d824d9f832184c4084576664b622717cb0eb579b504f2079d3b4ac36454761f 3.6s done
+#7 extracting sha256:6f058ad03f0cab30c01926ad20e38348fe53783080f5309e4bfc4d2709c5fbaf
+#7 extracting sha256:6f058ad03f0cab30c01926ad20e38348fe53783080f5309e4bfc4d2709c5fbaf 0.5s done
+#7 DONE 17.8s
+
+#7 [worker-fast base 1/3] FROM docker.io/library/python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+#7 extracting sha256:6f058ad03f0cab30c01926ad20e38348fe53783080f5309e4bfc4d2709c5fbaf 0.5s done
+#7 DONE 17.8s
+
+#12 [worker-heavy base 2/3] RUN apt-get update && apt-get install -y --no-install-recommends     gcc g++ build-essential git curl libmagic1     && rm -rf /var/lib/apt/lists/*
+#12 2.020 Hit:1 http://deb.debian.org/debian trixie InRelease
+#12 2.020 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#12 2.022 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#12 2.046 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+#12 2.704 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [1108 B]
+#12 2.704 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [298 kB]
+#12 5.706 Fetched 10.1 MB in 3s (3366 kB/s)
+#12 5.706 Reading package lists...
+#12 6.380 Reading package lists...
+#12 7.217 Building dependency tree...
+#12 7.384 Reading state information...
+#12 7.659 The following additional packages will be installed:
+#12 7.659   binutils binutils-common binutils-x86-64-linux-gnu bzip2 cpp cpp-14
+#12 7.659   cpp-14-x86-64-linux-gnu cpp-x86-64-linux-gnu dpkg-dev g++-14
+#12 7.659   g++-14-x86-64-linux-gnu g++-x86-64-linux-gnu gcc-14 gcc-14-x86-64-linux-gnu
+#12 7.659   gcc-x86-64-linux-gnu git-man libasan8 libatomic1 libbinutils libbrotli1
+#12 7.659   libc-dev-bin libc6-dev libcc1-0 libcom-err2 libcrypt-dev libctf-nobfd0
+#12 7.660   libctf0 libcurl3t64-gnutls libcurl4t64 libdpkg-perl liberror-perl libexpat1
+#12 7.660   libgcc-14-dev libgdbm-compat4t64 libgnutls30t64 libgomp1 libgprofng0
+#12 7.660   libgssapi-krb5-2 libhwasan0 libidn2-0 libisl23 libitm1 libjansson4
+#12 7.660   libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0 libldap2 liblsan0
+#12 7.660   libmagic-mgc libmpc3 libmpfr6 libnghttp2-14 libnghttp3-9 libngtcp2-16
+#12 7.660   libngtcp2-crypto-gnutls8 libp11-kit0 libperl5.40 libpsl5t64 libquadmath0
+#12 7.662   librtmp1 libsasl2-2 libsasl2-modules-db libsframe1 libssh2-1t64
+#12 7.663   libstdc++-14-dev libtasn1-6 libtsan2 libubsan1 libunistring5 linux-libc-dev
+#12 7.663   make patch perl perl-modules-5.40 rpcsvc-proto xz-utils
+#12 7.667 Suggested packages:
+#12 7.667   binutils-doc gprofng-gui binutils-gold bzip2-doc cpp-doc gcc-14-locales
+#12 7.667   cpp-14-doc debian-keyring debian-tag2upload-keyring g++-multilib
+#12 7.667   g++-14-multilib gcc-14-doc gcc-multilib manpages-dev autoconf automake
+#12 7.667   libtool flex bison gdb gcc-doc gcc-14-multilib gdb-x86-64-linux-gnu
+#12 7.667   gettext-base git-doc git-email git-gui gitk gitweb git-cvs git-mediawiki
+#12 7.667   git-svn libc-devtools glibc-doc sq | sqop | rsop | gosop | pgpainless-cli
+#12 7.667   | gpg-sq | gnupg sensible-utils bzr gnutls-bin krb5-doc krb5-user file
+#12 7.667   libstdc++-14-doc make-doc ed diffutils-doc perl-doc
+#12 7.667   libterm-readline-gnu-perl | libterm-readline-perl-perl
+#12 7.667   libtap-harness-archive-perl
+#12 7.667 Recommended packages:
+#12 7.667   bash-completion fakeroot sq | sqop | rsop | gosop | pgpainless-cli | gpg-sq
+#12 7.667   | gnupg libalgorithm-merge-perl less ssh-client manpages manpages-dev
+#12 7.667   libfile-fcntllock-perl liblocale-gettext-perl krb5-locales libldap-common
+#12 7.667   publicsuffix libsasl2-modules
+#12 8.029 The following NEW packages will be installed:
+#12 8.029   binutils binutils-common binutils-x86-64-linux-gnu build-essential bzip2 cpp
+#12 8.029   cpp-14 cpp-14-x86-64-linux-gnu cpp-x86-64-linux-gnu curl dpkg-dev g++ g++-14
+#12 8.029   g++-14-x86-64-linux-gnu g++-x86-64-linux-gnu gcc gcc-14
+#12 8.029   gcc-14-x86-64-linux-gnu gcc-x86-64-linux-gnu git git-man libasan8 libatomic1
+#12 8.030   libbinutils libbrotli1 libc-dev-bin libc6-dev libcc1-0 libcom-err2
+#12 8.030   libcrypt-dev libctf-nobfd0 libctf0 libcurl3t64-gnutls libcurl4t64
+#12 8.030   libdpkg-perl liberror-perl libexpat1 libgcc-14-dev libgdbm-compat4t64
+#12 8.030   libgnutls30t64 libgomp1 libgprofng0 libgssapi-krb5-2 libhwasan0 libidn2-0
+#12 8.030   libisl23 libitm1 libjansson4 libk5crypto3 libkeyutils1 libkrb5-3
+#12 8.030   libkrb5support0 libldap2 liblsan0 libmagic-mgc libmagic1t64 libmpc3 libmpfr6
+#12 8.030   libnghttp2-14 libnghttp3-9 libngtcp2-16 libngtcp2-crypto-gnutls8 libp11-kit0
+#12 8.031   libperl5.40 libpsl5t64 libquadmath0 librtmp1 libsasl2-2 libsasl2-modules-db
+#12 8.031   libsframe1 libssh2-1t64 libstdc++-14-dev libtasn1-6 libtsan2 libubsan1
+#12 8.033   libunistring5 linux-libc-dev make patch perl perl-modules-5.40 rpcsvc-proto
+#12 8.033   xz-utils
+#12 8.089 0 upgraded, 83 newly installed, 0 to remove and 3 not upgraded.
+#12 8.089 Need to get 99.8 MB of archives.
+#12 8.089 After this operation, 416 MB of additional disk space will be used.
+#12 8.089 Get:1 http://deb.debian.org/debian-security trixie-security/main amd64 libexpat1 amd64 2.9.0-1~deb13u1 [126 kB]
+#12 8.121 Get:2 http://deb.debian.org/debian trixie/main amd64 bzip2 amd64 1.0.8-6 [40.5 kB]
+#12 8.154 Get:3 http://deb.debian.org/debian trixie/main amd64 perl-modules-5.40 all 5.40.1-6+deb13u1 [3014 kB]
+#12 8.420 Get:4 http://deb.debian.org/debian trixie/main amd64 libgdbm-compat4t64 amd64 1.24-2 [50.3 kB]
+#12 8.423 Get:5 http://deb.debian.org/debian trixie/main amd64 libperl5.40 amd64 5.40.1-6+deb13u1 [4326 kB]
+#12 8.723 Get:6 http://deb.debian.org/debian trixie/main amd64 perl amd64 5.40.1-6+deb13u1 [268 kB]
+#12 8.739 Get:7 http://deb.debian.org/debian-security trixie-security/main amd64 xz-utils amd64 5.8.1-1+deb13u2 [660 kB]
+#12 8.844 Get:8 http://deb.debian.org/debian trixie/main amd64 libsframe1 amd64 2.44-3 [78.4 kB]
+#12 8.850 Get:9 http://deb.debian.org/debian trixie/main amd64 binutils-common amd64 2.44-3 [2509 kB]
+#12 9.091 Get:10 http://deb.debian.org/debian trixie/main amd64 libbinutils amd64 2.44-3 [534 kB]
+#12 9.144 Get:11 http://deb.debian.org/debian trixie/main amd64 libgprofng0 amd64 2.44-3 [808 kB]
+#12 9.246 Get:12 http://deb.debian.org/debian trixie/main amd64 libctf-nobfd0 amd64 2.44-3 [156 kB]
+#12 9.255 Get:13 http://deb.debian.org/debian trixie/main amd64 libctf0 amd64 2.44-3 [88.6 kB]
+#12 9.261 Get:14 http://deb.debian.org/debian trixie/main amd64 libjansson4 amd64 2.14-2+b3 [39.8 kB]
+#12 9.268 Get:15 http://deb.debian.org/debian trixie/main amd64 binutils-x86-64-linux-gnu amd64 2.44-3 [1014 kB]
+#12 9.338 Get:16 http://deb.debian.org/debian trixie/main amd64 binutils amd64 2.44-3 [265 kB]
+#12 9.359 Get:17 http://deb.debian.org/debian trixie/main amd64 libc-dev-bin amd64 2.41-12+deb13u4 [60.0 kB]
+#12 9.363 Get:18 http://deb.debian.org/debian-security trixie-security/main amd64 linux-libc-dev all 6.12.115-2 [3050 kB]
+#12 9.583 Get:19 http://deb.debian.org/debian trixie/main amd64 libcrypt-dev amd64 1:4.4.38-1 [119 kB]
+#12 9.592 Get:20 http://deb.debian.org/debian trixie/main amd64 rpcsvc-proto amd64 1.4.3-1 [63.3 kB]
+#12 9.600 Get:21 http://deb.debian.org/debian trixie/main amd64 libc6-dev amd64 2.41-12+deb13u4 [1995 kB]
+#12 9.775 Get:22 http://deb.debian.org/debian trixie/main amd64 libisl23 amd64 0.27-1 [659 kB]
+#12 9.837 Get:23 http://deb.debian.org/debian trixie/main amd64 libmpfr6 amd64 4.2.2-1 [729 kB]
+#12 9.883 Get:24 http://deb.debian.org/debian trixie/main amd64 libmpc3 amd64 1.3.1-1+b3 [52.2 kB]
+#12 9.890 Get:25 http://deb.debian.org/debian trixie/main amd64 cpp-14-x86-64-linux-gnu amd64 14.2.0-19 [11.0 MB]
+#12 10.65 Get:26 http://deb.debian.org/debian trixie/main amd64 cpp-14 amd64 14.2.0-19 [1280 B]
+#12 10.65 Get:27 http://deb.debian.org/debian trixie/main amd64 cpp-x86-64-linux-gnu amd64 4:14.2.0-1 [4840 B]
+#12 10.65 Get:28 http://deb.debian.org/debian trixie/main amd64 cpp amd64 4:14.2.0-1 [1568 B]
+#12 10.65 Get:29 http://deb.debian.org/debian trixie/main amd64 libcc1-0 amd64 14.2.0-19 [42.8 kB]
+#12 10.65 Get:30 http://deb.debian.org/debian trixie/main amd64 libgomp1 amd64 14.2.0-19 [137 kB]
+#12 10.66 Get:31 http://deb.debian.org/debian trixie/main amd64 libitm1 amd64 14.2.0-19 [26.0 kB]
+#12 10.67 Get:32 http://deb.debian.org/debian trixie/main amd64 libatomic1 amd64 14.2.0-19 [9308 B]
+#12 10.67 Get:33 http://deb.debian.org/debian trixie/main amd64 libasan8 amd64 14.2.0-19 [2725 kB]
+#12 11.28 Get:34 http://deb.debian.org/debian trixie/main amd64 liblsan0 amd64 14.2.0-19 [1204 kB]
+#12 11.37 Get:35 http://deb.debian.org/debian trixie/main amd64 libtsan2 amd64 14.2.0-19 [2460 kB]
+#12 11.56 Get:36 http://deb.debian.org/debian trixie/main amd64 libubsan1 amd64 14.2.0-19 [1074 kB]
+#12 11.64 Get:37 http://deb.debian.org/debian trixie/main amd64 libhwasan0 amd64 14.2.0-19 [1488 kB]
+#12 11.76 Get:38 http://deb.debian.org/debian trixie/main amd64 libquadmath0 amd64 14.2.0-19 [145 kB]
+#12 11.77 Get:39 http://deb.debian.org/debian trixie/main amd64 libgcc-14-dev amd64 14.2.0-19 [2672 kB]
+#12 11.95 Get:40 http://deb.debian.org/debian trixie/main amd64 gcc-14-x86-64-linux-gnu amd64 14.2.0-19 [21.4 MB]
+#12 13.58 Get:41 http://deb.debian.org/debian trixie/main amd64 gcc-14 amd64 14.2.0-19 [540 kB]
+#12 13.62 Get:42 http://deb.debian.org/debian trixie/main amd64 gcc-x86-64-linux-gnu amd64 4:14.2.0-1 [1436 B]
+#12 13.62 Get:43 http://deb.debian.org/debian trixie/main amd64 gcc amd64 4:14.2.0-1 [5136 B]
+#12 13.62 Get:44 http://deb.debian.org/debian trixie/main amd64 libstdc++-14-dev amd64 14.2.0-19 [2376 kB]
+#12 13.76 Get:45 http://deb.debian.org/debian trixie/main amd64 g++-14-x86-64-linux-gnu amd64 14.2.0-19 [12.1 MB]
+#12 14.64 Get:46 http://deb.debian.org/debian trixie/main amd64 g++-14 amd64 14.2.0-19 [22.5 kB]
+#12 14.64 Get:47 http://deb.debian.org/debian trixie/main amd64 g++-x86-64-linux-gnu amd64 4:14.2.0-1 [1200 B]
+#12 14.64 Get:48 http://deb.debian.org/debian trixie/main amd64 g++ amd64 4:14.2.0-1 [1344 B]
+#12 14.64 Get:49 http://deb.debian.org/debian trixie/main amd64 make amd64 4.4.1-2 [463 kB]
+#12 14.67 Get:50 http://deb.debian.org/debian trixie/main amd64 libdpkg-perl all 1.22.22 [651 kB]
+#12 14.73 Get:51 http://deb.debian.org/debian trixie/main amd64 patch amd64 2.8-2 [134 kB]
+#12 14.74 Get:52 http://deb.debian.org/debian trixie/main amd64 dpkg-dev all 1.22.22 [1337 kB]
+#12 14.81 Get:53 http://deb.debian.org/debian trixie/main amd64 build-essential amd64 12.12 [4624 B]
+#12 14.81 Get:54 http://deb.debian.org/debian-security trixie-security/main amd64 libbrotli1 amd64 1.1.0-2+deb13u1 [304 kB]
+#12 14.83 Get:55 http://deb.debian.org/debian trixie/main amd64 libkrb5support0 amd64 1.21.3-5+deb13u1 [33.1 kB]
+#12 14.83 Get:56 http://deb.debian.org/debian trixie/main amd64 libcom-err2 amd64 1.47.2-3+b12 [25.0 kB]
+#12 14.83 Get:57 http://deb.debian.org/debian trixie/main amd64 libk5crypto3 amd64 1.21.3-5+deb13u1 [81.2 kB]
+#12 14.84 Get:58 http://deb.debian.org/debian trixie/main amd64 libkeyutils1 amd64 1.6.3-6 [9456 B]
+#12 14.84 Get:59 http://deb.debian.org/debian trixie/main amd64 libkrb5-3 amd64 1.21.3-5+deb13u1 [326 kB]
+#12 14.86 Get:60 http://deb.debian.org/debian trixie/main amd64 libgssapi-krb5-2 amd64 1.21.3-5+deb13u1 [138 kB]
+#12 14.87 Get:61 http://deb.debian.org/debian trixie/main amd64 libunistring5 amd64 1.3-2 [477 kB]
+#12 14.90 Get:62 http://deb.debian.org/debian trixie/main amd64 libidn2-0 amd64 2.3.8-2 [109 kB]
+#12 14.90 Get:63 http://deb.debian.org/debian trixie/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg1-9 [19.8 kB]
+#12 14.91 Get:64 http://deb.debian.org/debian trixie/main amd64 libsasl2-2 amd64 2.1.28+dfsg1-9 [57.5 kB]
+#12 14.91 Get:65 http://deb.debian.org/debian trixie/main amd64 libldap2 amd64 2.6.10+dfsg-1 [194 kB]
+#12 14.92 Get:66 http://deb.debian.org/debian trixie/main amd64 libnghttp2-14 amd64 1.64.0-1.1+deb13u1 [76.2 kB]
+#12 14.93 Get:67 http://deb.debian.org/debian trixie/main amd64 libnghttp3-9 amd64 1.8.0-1 [67.7 kB]
+#12 14.93 Get:68 http://deb.debian.org/debian trixie/main amd64 libpsl5t64 amd64 0.21.2-1.1+b1 [57.2 kB]
+#12 14.94 Get:69 http://deb.debian.org/debian trixie/main amd64 libp11-kit0 amd64 0.25.5-3 [425 kB]
+#12 14.97 Get:70 http://deb.debian.org/debian trixie/main amd64 libtasn1-6 amd64 4.20.0-2+deb13u1 [50.1 kB]
+#12 14.97 Get:71 http://deb.debian.org/debian trixie/main amd64 libgnutls30t64 amd64 3.8.9-3+deb13u4 [1469 kB]
+#12 15.06 Get:72 http://deb.debian.org/debian trixie/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b5 [58.8 kB]
+#12 15.07 Get:73 http://deb.debian.org/debian trixie/main amd64 libssh2-1t64 amd64 1.11.1-1+deb13u2 [245 kB]
+#12 15.08 Get:74 http://deb.debian.org/debian-security trixie-security/main amd64 libcurl4t64 amd64 8.14.1-2+deb13u7 [392 kB]
+#12 15.11 Get:75 http://deb.debian.org/debian-security trixie-security/main amd64 curl amd64 8.14.1-2+deb13u7 [270 kB]
+#12 15.12 Get:76 http://deb.debian.org/debian trixie/main amd64 libngtcp2-16 amd64 1.11.0-1+deb13u1 [132 kB]
+#12 15.14 Get:77 http://deb.debian.org/debian trixie/main amd64 libngtcp2-crypto-gnutls8 amd64 1.11.0-1+deb13u1 [29.5 kB]
+#12 15.14 Get:78 http://deb.debian.org/debian-security trixie-security/main amd64 libcurl3t64-gnutls amd64 8.14.1-2+deb13u7 [385 kB]
+#12 15.17 Get:79 http://deb.debian.org/debian trixie/main amd64 liberror-perl all 0.17030-1 [26.9 kB]
+#12 15.17 Get:80 http://deb.debian.org/debian trixie/main amd64 git-man all 1:2.47.3-0+deb13u1 [2205 kB]
+#12 15.31 Get:81 http://deb.debian.org/debian trixie/main amd64 git amd64 1:2.47.3-0+deb13u1 [8862 kB]
+#12 17.36 Get:82 http://deb.debian.org/debian trixie/main amd64 libmagic-mgc amd64 1:5.46-5 [338 kB]
+#12 17.39 Get:83 http://deb.debian.org/debian trixie/main amd64 libmagic1t64 amd64 1:5.46-5 [109 kB]
+#12 58.23 debconf: unable to initialize frontend: Dialog
+#12 58.23 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 58.23 debconf: falling back to frontend: Readline
+#12 58.23 debconf: unable to initialize frontend: Readline
+#12 58.23 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 83.)
+#12 58.23 debconf: falling back to frontend: Teletype
+#12 58.24 debconf: unable to initialize frontend: Teletype
+#12 58.24 debconf: (This frontend requires a controlling tty.)
+#12 58.24 debconf: falling back to frontend: Noninteractive
+#12 64.22 Fetched 99.8 MB in 9s (10.7 MB/s)
+#12 66.62 Selecting previously unselected package libexpat1:amd64.
+#12 66.62 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5658 files and directories currently installed.)
+#12 66.63 Preparing to unpack .../00-libexpat1_2.9.0-1~deb13u1_amd64.deb ...
+#12 68.61 Unpacking libexpat1:amd64 (2.9.0-1~deb13u1) ...
+#12 73.34 Selecting previously unselected package bzip2.
+#12 73.34 Preparing to unpack .../01-bzip2_1.0.8-6_amd64.deb ...
+#12 74.21 Unpacking bzip2 (1.0.8-6) ...
+#12 76.65 Selecting previously unselected package perl-modules-5.40.
+#12 76.66 Preparing to unpack .../02-perl-modules-5.40_5.40.1-6+deb13u1_all.deb ...
+#12 77.26 Unpacking perl-modules-5.40 (5.40.1-6+deb13u1) ...
+#12 84.27 Selecting previously unselected package libgdbm-compat4t64:amd64.
+#12 84.27 Preparing to unpack .../03-libgdbm-compat4t64_1.24-2_amd64.deb ...
+#12 84.42 Unpacking libgdbm-compat4t64:amd64 (1.24-2) ...
+#12 86.41 Selecting previously unselected package libperl5.40:amd64.
+#12 86.41 Preparing to unpack .../04-libperl5.40_5.40.1-6+deb13u1_amd64.deb ...
+#12 86.58 Unpacking libperl5.40:amd64 (5.40.1-6+deb13u1) ...
+#12 90.64 Selecting previously unselected package perl.
+#12 90.65 Preparing to unpack .../05-perl_5.40.1-6+deb13u1_amd64.deb ...
+#12 90.81 Unpacking perl (5.40.1-6+deb13u1) ...
+#12 91.82 Selecting previously unselected package xz-utils.
+#12 91.82 Preparing to unpack .../06-xz-utils_5.8.1-1+deb13u2_amd64.deb ...
+#12 91.97 Unpacking xz-utils (5.8.1-1+deb13u2) ...
+#12 93.11 Selecting previously unselected package libsframe1:amd64.
+#12 93.11 Preparing to unpack .../07-libsframe1_2.44-3_amd64.deb ...
+#12 93.30 Unpacking libsframe1:amd64 (2.44-3) ...
+#12 94.19 Selecting previously unselected package binutils-common:amd64.
+#12 94.19 Preparing to unpack .../08-binutils-common_2.44-3_amd64.deb ...
+#12 94.39 Unpacking binutils-common:amd64 (2.44-3) ...
+#12 96.54 Selecting previously unselected package libbinutils:amd64.
+#12 96.54 Preparing to unpack .../09-libbinutils_2.44-3_amd64.deb ...
+#12 96.73 Unpacking libbinutils:amd64 (2.44-3) ...
+#12 97.89 Selecting previously unselected package libgprofng0:amd64.
+#12 97.89 Preparing to unpack .../10-libgprofng0_2.44-3_amd64.deb ...
+#12 98.04 Unpacking libgprofng0:amd64 (2.44-3) ...
+#12 99.18 Selecting previously unselected package libctf-nobfd0:amd64.
+#12 99.19 Preparing to unpack .../11-libctf-nobfd0_2.44-3_amd64.deb ...
+#12 99.34 Unpacking libctf-nobfd0:amd64 (2.44-3) ...
+#12 101.7 Selecting previously unselected package libctf0:amd64.
+#12 101.7 Preparing to unpack .../12-libctf0_2.44-3_amd64.deb ...
+#12 101.9 Unpacking libctf0:amd64 (2.44-3) ...
+#12 102.9 Selecting previously unselected package libjansson4:amd64.
+#12 102.9 Preparing to unpack .../13-libjansson4_2.14-2+b3_amd64.deb ...
+#12 103.0 Unpacking libjansson4:amd64 (2.14-2+b3) ...
+#12 104.8 Selecting previously unselected package binutils-x86-64-linux-gnu.
+#12 104.8 Preparing to unpack .../14-binutils-x86-64-linux-gnu_2.44-3_amd64.deb ...
+#12 104.9 Unpacking binutils-x86-64-linux-gnu (2.44-3) ...
+#12 106.1 Selecting previously unselected package binutils.
+#12 106.1 Preparing to unpack .../15-binutils_2.44-3_amd64.deb ...
+#12 106.2 Unpacking binutils (2.44-3) ...
+#12 107.1 Selecting previously unselected package libc-dev-bin.
+#12 107.1 Preparing to unpack .../16-libc-dev-bin_2.41-12+deb13u4_amd64.deb ...
+#12 107.3 Unpacking libc-dev-bin (2.41-12+deb13u4) ...
+#12 108.3 Selecting previously unselected package linux-libc-dev.
+#12 108.3 Preparing to unpack .../17-linux-libc-dev_6.12.115-2_all.deb ...
+#12 108.5 Unpacking linux-libc-dev (6.12.115-2) ...
+#12 116.7 Selecting previously unselected package libcrypt-dev:amd64.
+#12 116.7 Preparing to unpack .../18-libcrypt-dev_1%3a4.4.38-1_amd64.deb ...
+#12 117.1 Unpacking libcrypt-dev:amd64 (1:4.4.38-1) ...
+#12 118.0 Selecting previously unselected package rpcsvc-proto.
+#12 118.0 Preparing to unpack .../19-rpcsvc-proto_1.4.3-1_amd64.deb ...
+#12 118.2 Unpacking rpcsvc-proto (1.4.3-1) ...
+#12 119.2 Selecting previously unselected package libc6-dev:amd64.
+#12 119.2 Preparing to unpack .../20-libc6-dev_2.41-12+deb13u4_amd64.deb ...
+#12 119.3 Unpacking libc6-dev:amd64 (2.41-12+deb13u4) ...
+#12 120.8 Selecting previously unselected package libisl23:amd64.
+#12 120.8 Preparing to unpack .../21-libisl23_0.27-1_amd64.deb ...
+#12 121.0 Unpacking libisl23:amd64 (0.27-1) ...
+#12 135.1 Selecting previously unselected package libmpfr6:amd64.
+#12 135.1 Preparing to unpack .../22-libmpfr6_4.2.2-1_amd64.deb ...
+#12 135.3 Unpacking libmpfr6:amd64 (4.2.2-1) ...
+#12 141.2 Selecting previously unselected package libmpc3:amd64.
+#12 141.2 Preparing to unpack .../23-libmpc3_1.3.1-1+b3_amd64.deb ...
+#12 141.3 Unpacking libmpc3:amd64 (1.3.1-1+b3) ...
+#12 142.1 Selecting previously unselected package cpp-14-x86-64-linux-gnu.
+#12 142.1 Preparing to unpack .../24-cpp-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#12 144.2 Unpacking cpp-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 150.2 Selecting previously unselected package cpp-14.
+#12 150.2 Preparing to unpack .../25-cpp-14_14.2.0-19_amd64.deb ...
+#12 151.3 Unpacking cpp-14 (14.2.0-19) ...
+#12 161.2 Selecting previously unselected package cpp-x86-64-linux-gnu.
+#12 161.2 Preparing to unpack .../26-cpp-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#12 162.4 Unpacking cpp-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 164.5 Selecting previously unselected package cpp.
+#12 164.5 Preparing to unpack .../27-cpp_4%3a14.2.0-1_amd64.deb ...
+#12 164.6 Unpacking cpp (4:14.2.0-1) ...
+#12 168.0 Selecting previously unselected package libcc1-0:amd64.
+#12 168.0 Preparing to unpack .../28-libcc1-0_14.2.0-19_amd64.deb ...
+#12 168.2 Unpacking libcc1-0:amd64 (14.2.0-19) ...
+#12 169.3 Selecting previously unselected package libgomp1:amd64.
+#12 169.3 Preparing to unpack .../29-libgomp1_14.2.0-19_amd64.deb ...
+#12 170.2 Unpacking libgomp1:amd64 (14.2.0-19) ...
+#12 174.3 Selecting previously unselected package libitm1:amd64.
+#12 174.3 Preparing to unpack .../30-libitm1_14.2.0-19_amd64.deb ...
+#12 174.4 Unpacking libitm1:amd64 (14.2.0-19) ...
+#12 177.4 Selecting previously unselected package libatomic1:amd64.
+#12 177.4 Preparing to unpack .../31-libatomic1_14.2.0-19_amd64.deb ...
+#12 177.6 Unpacking libatomic1:amd64 (14.2.0-19) ...
+#12 178.8 Selecting previously unselected package libasan8:amd64.
+#12 178.8 Preparing to unpack .../32-libasan8_14.2.0-19_amd64.deb ...
+#12 179.0 Unpacking libasan8:amd64 (14.2.0-19) ...
+#12 182.3 Selecting previously unselected package liblsan0:amd64.
+#12 182.3 Preparing to unpack .../33-liblsan0_14.2.0-19_amd64.deb ...
+#12 182.4 Unpacking liblsan0:amd64 (14.2.0-19) ...
+#12 195.7 Selecting previously unselected package libtsan2:amd64.
+#12 195.7 Preparing to unpack .../34-libtsan2_14.2.0-19_amd64.deb ...
+#12 196.6 Unpacking libtsan2:amd64 (14.2.0-19) ...
+#12 199.3 Selecting previously unselected package libubsan1:amd64.
+#12 199.3 Preparing to unpack .../35-libubsan1_14.2.0-19_amd64.deb ...
+#12 200.1 Unpacking libubsan1:amd64 (14.2.0-19) ...
+#12 201.4 Selecting previously unselected package libhwasan0:amd64.
+#12 201.4 Preparing to unpack .../36-libhwasan0_14.2.0-19_amd64.deb ...
+#12 201.6 Unpacking libhwasan0:amd64 (14.2.0-19) ...
+#12 204.6 Selecting previously unselected package libquadmath0:amd64.
+#12 204.6 Preparing to unpack .../37-libquadmath0_14.2.0-19_amd64.deb ...
+#12 204.9 Unpacking libquadmath0:amd64 (14.2.0-19) ...
+#12 207.2 Selecting previously unselected package libgcc-14-dev:amd64.
+#12 207.2 Preparing to unpack .../38-libgcc-14-dev_14.2.0-19_amd64.deb ...
+#12 207.4 Unpacking libgcc-14-dev:amd64 (14.2.0-19) ...
+#12 209.0 Selecting previously unselected package gcc-14-x86-64-linux-gnu.
+#12 209.0 Preparing to unpack .../39-gcc-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#12 209.2 Unpacking gcc-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 217.2 Selecting previously unselected package gcc-14.
+#12 217.2 Preparing to unpack .../40-gcc-14_14.2.0-19_amd64.deb ...
+#12 218.5 Unpacking gcc-14 (14.2.0-19) ...
+#12 221.0 Selecting previously unselected package gcc-x86-64-linux-gnu.
+#12 221.0 Preparing to unpack .../41-gcc-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#12 221.2 Unpacking gcc-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 226.6 Selecting previously unselected package gcc.
+#12 226.6 Preparing to unpack .../42-gcc_4%3a14.2.0-1_amd64.deb ...
+#12 227.0 Unpacking gcc (4:14.2.0-1) ...
+#12 231.6 Selecting previously unselected package libstdc++-14-dev:amd64.
+#12 231.6 Preparing to unpack .../43-libstdc++-14-dev_14.2.0-19_amd64.deb ...
+#12 231.9 Unpacking libstdc++-14-dev:amd64 (14.2.0-19) ...
+#12 234.7 Selecting previously unselected package g++-14-x86-64-linux-gnu.
+#12 234.7 Preparing to unpack .../44-g++-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#12 235.0 Unpacking g++-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 236.5 Selecting previously unselected package g++-14.
+#12 236.5 Preparing to unpack .../45-g++-14_14.2.0-19_amd64.deb ...
+#12 236.6 Unpacking g++-14 (14.2.0-19) ...
+#12 237.4 Selecting previously unselected package g++-x86-64-linux-gnu.
+#12 237.4 Preparing to unpack .../46-g++-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#12 237.6 Unpacking g++-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 239.4 Selecting previously unselected package g++.
+#12 239.4 Preparing to unpack .../47-g++_4%3a14.2.0-1_amd64.deb ...
+#12 239.6 Unpacking g++ (4:14.2.0-1) ...
+#12 240.4 Selecting previously unselected package make.
+#12 240.4 Preparing to unpack .../48-make_4.4.1-2_amd64.deb ...
+#12 240.6 Unpacking make (4.4.1-2) ...
+#12 241.4 Selecting previously unselected package libdpkg-perl.
+#12 241.4 Preparing to unpack .../49-libdpkg-perl_1.22.22_all.deb ...
+#12 241.5 Unpacking libdpkg-perl (1.22.22) ...
+#12 242.5 Selecting previously unselected package patch.
+#12 242.5 Preparing to unpack .../50-patch_2.8-2_amd64.deb ...
+#12 242.6 Unpacking patch (2.8-2) ...
+#12 264.4 Selecting previously unselected package dpkg-dev.
+#12 264.4 Preparing to unpack .../51-dpkg-dev_1.22.22_all.deb ...
+#12 264.6 Unpacking dpkg-dev (1.22.22) ...
+#12 265.7 Selecting previously unselected package build-essential.
+#12 265.7 Preparing to unpack .../52-build-essential_12.12_amd64.deb ...
+#12 266.2 Unpacking build-essential (12.12) ...
+#12 268.7 Selecting previously unselected package libbrotli1:amd64.
+#12 268.7 Preparing to unpack .../53-libbrotli1_1.1.0-2+deb13u1_amd64.deb ...
+#12 269.6 Unpacking libbrotli1:amd64 (1.1.0-2+deb13u1) ...
+#12 285.9 Selecting previously unselected package libkrb5support0:amd64.
+#12 285.9 Preparing to unpack .../54-libkrb5support0_1.21.3-5+deb13u1_amd64.deb ...
+#12 286.0 Unpacking libkrb5support0:amd64 (1.21.3-5+deb13u1) ...
+#12 287.7 Selecting previously unselected package libcom-err2:amd64.
+#12 287.7 Preparing to unpack .../55-libcom-err2_1.47.2-3+b12_amd64.deb ...
+#12 287.9 Unpacking libcom-err2:amd64 (1.47.2-3+b12) ...
+#12 293.9 Selecting previously unselected package libk5crypto3:amd64.
+#12 294.0 Preparing to unpack .../56-libk5crypto3_1.21.3-5+deb13u1_amd64.deb ...
+#12 294.3 Unpacking libk5crypto3:amd64 (1.21.3-5+deb13u1) ...
+#12 300.3 Selecting previously unselected package libkeyutils1:amd64.
+#12 300.3 Preparing to unpack .../57-libkeyutils1_1.6.3-6_amd64.deb ...
+#12 301.6 Unpacking libkeyutils1:amd64 (1.6.3-6) ...
+#12 304.1 Selecting previously unselected package libkrb5-3:amd64.
+#12 304.1 Preparing to unpack .../58-libkrb5-3_1.21.3-5+deb13u1_amd64.deb ...
+#12 304.2 Unpacking libkrb5-3:amd64 (1.21.3-5+deb13u1) ...
+#12 307.2 Selecting previously unselected package libgssapi-krb5-2:amd64.
+#12 307.2 Preparing to unpack .../59-libgssapi-krb5-2_1.21.3-5+deb13u1_amd64.deb ...
+#12 307.4 Unpacking libgssapi-krb5-2:amd64 (1.21.3-5+deb13u1) ...
+#12 308.6 Selecting previously unselected package libunistring5:amd64.
+#12 308.6 Preparing to unpack .../60-libunistring5_1.3-2_amd64.deb ...
+#12 308.8 Unpacking libunistring5:amd64 (1.3-2) ...
+#12 312.3 Selecting previously unselected package libidn2-0:amd64.
+#12 312.3 Preparing to unpack .../61-libidn2-0_2.3.8-2_amd64.deb ...
+#12 312.8 Unpacking libidn2-0:amd64 (2.3.8-2) ...
+#12 314.7 Selecting previously unselected package libsasl2-modules-db:amd64.
+#12 314.7 Preparing to unpack .../62-libsasl2-modules-db_2.1.28+dfsg1-9_amd64.deb ...
+#12 314.9 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg1-9) ...
+#12 315.9 Selecting previously unselected package libsasl2-2:amd64.
+#12 315.9 Preparing to unpack .../63-libsasl2-2_2.1.28+dfsg1-9_amd64.deb ...
+#12 316.1 Unpacking libsasl2-2:amd64 (2.1.28+dfsg1-9) ...
+#12 317.3 Selecting previously unselected package libldap2:amd64.
+#12 317.3 Preparing to unpack .../64-libldap2_2.6.10+dfsg-1_amd64.deb ...
+#12 317.4 Unpacking libldap2:amd64 (2.6.10+dfsg-1) ...
+#12 318.7 Selecting previously unselected package libnghttp2-14:amd64.
+#12 318.7 Preparing to unpack .../65-libnghttp2-14_1.64.0-1.1+deb13u1_amd64.deb ...
+#12 319.2 Unpacking libnghttp2-14:amd64 (1.64.0-1.1+deb13u1) ...
+#12 320.7 Selecting previously unselected package libnghttp3-9:amd64.
+#12 320.7 Preparing to unpack .../66-libnghttp3-9_1.8.0-1_amd64.deb ...
+#12 320.9 Unpacking libnghttp3-9:amd64 (1.8.0-1) ...
+#12 323.0 Selecting previously unselected package libpsl5t64:amd64.
+#12 323.0 Preparing to unpack .../67-libpsl5t64_0.21.2-1.1+b1_amd64.deb ...
+#12 323.1 Unpacking libpsl5t64:amd64 (0.21.2-1.1+b1) ...
+#12 324.1 Selecting previously unselected package libp11-kit0:amd64.
+#12 324.1 Preparing to unpack .../68-libp11-kit0_0.25.5-3_amd64.deb ...
+#12 324.3 Unpacking libp11-kit0:amd64 (0.25.5-3) ...
+#12 325.1 Selecting previously unselected package libtasn1-6:amd64.
+#12 325.1 Preparing to unpack .../69-libtasn1-6_4.20.0-2+deb13u1_amd64.deb ...
+#12 325.3 Unpacking libtasn1-6:amd64 (4.20.0-2+deb13u1) ...
+#12 327.3 Selecting previously unselected package libgnutls30t64:amd64.
+#12 327.3 Preparing to unpack .../70-libgnutls30t64_3.8.9-3+deb13u4_amd64.deb ...
+#12 328.2 Unpacking libgnutls30t64:amd64 (3.8.9-3+deb13u4) ...
+#12 329.3 Selecting previously unselected package librtmp1:amd64.
+#12 329.3 Preparing to unpack .../71-librtmp1_2.4+20151223.gitfa8646d.1-2+b5_amd64.deb ...
+#12 329.4 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b5) ...
+#12 330.5 Selecting previously unselected package libssh2-1t64:amd64.
+#12 330.5 Preparing to unpack .../72-libssh2-1t64_1.11.1-1+deb13u2_amd64.deb ...
+#12 330.6 Unpacking libssh2-1t64:amd64 (1.11.1-1+deb13u2) ...
+#12 333.6 Selecting previously unselected package libcurl4t64:amd64.
+#12 333.6 Preparing to unpack .../73-libcurl4t64_8.14.1-2+deb13u7_amd64.deb ...
+#12 333.7 Unpacking libcurl4t64:amd64 (8.14.1-2+deb13u7) ...
+#12 334.6 Selecting previously unselected package curl.
+#12 334.6 Preparing to unpack .../74-curl_8.14.1-2+deb13u7_amd64.deb ...
+#12 334.8 Unpacking curl (8.14.1-2+deb13u7) ...
+#12 335.9 Selecting previously unselected package libngtcp2-16:amd64.
+#12 335.9 Preparing to unpack .../75-libngtcp2-16_1.11.0-1+deb13u1_amd64.deb ...
+#12 336.1 Unpacking libngtcp2-16:amd64 (1.11.0-1+deb13u1) ...
+#12 337.2 Selecting previously unselected package libngtcp2-crypto-gnutls8:amd64.
+#12 337.2 Preparing to unpack .../76-libngtcp2-crypto-gnutls8_1.11.0-1+deb13u1_amd64.deb ...
+#12 337.4 Unpacking libngtcp2-crypto-gnutls8:amd64 (1.11.0-1+deb13u1) ...
+#12 339.3 Selecting previously unselected package libcurl3t64-gnutls:amd64.
+#12 339.3 Preparing to unpack .../77-libcurl3t64-gnutls_8.14.1-2+deb13u7_amd64.deb ...
+#12 340.2 Unpacking libcurl3t64-gnutls:amd64 (8.14.1-2+deb13u7) ...
+#12 341.1 Selecting previously unselected package liberror-perl.
+#12 341.1 Preparing to unpack .../78-liberror-perl_0.17030-1_all.deb ...
+#12 341.2 Unpacking liberror-perl (0.17030-1) ...
+#12 343.8 Selecting previously unselected package git-man.
+#12 343.8 Preparing to unpack .../79-git-man_1%3a2.47.3-0+deb13u1_all.deb ...
+#12 344.3 Unpacking git-man (1:2.47.3-0+deb13u1) ...
+#12 346.5 Selecting previously unselected package git.
+#12 346.5 Preparing to unpack .../80-git_1%3a2.47.3-0+deb13u1_amd64.deb ...
+#12 346.7 Unpacking git (1:2.47.3-0+deb13u1) ...
+#12 361.5 Selecting previously unselected package libmagic-mgc.
+#12 361.5 Preparing to unpack .../81-libmagic-mgc_1%3a5.46-5_amd64.deb ...
+#12 362.8 Unpacking libmagic-mgc (1:5.46-5) ...
+#12 369.6 Selecting previously unselected package libmagic1t64:amd64.
+#12 369.6 Preparing to unpack .../82-libmagic1t64_1%3a5.46-5_amd64.deb ...
+#12 370.8 Unpacking libmagic1t64:amd64 (1:5.46-5) ...
+#12 375.5 Setting up libexpat1:amd64 (2.9.0-1~deb13u1) ...
+#12 376.9 Setting up libkeyutils1:amd64 (1.6.3-6) ...
+#12 377.5 Setting up libgdbm-compat4t64:amd64 (1.24-2) ...
+#12 378.0 Setting up libmagic-mgc (1:5.46-5) ...
+#12 379.8 Setting up libbrotli1:amd64 (1.1.0-2+deb13u1) ...
+#12 380.5 Setting up libmagic1t64:amd64 (1:5.46-5) ...
+#12 383.2 Setting up binutils-common:amd64 (2.44-3) ...
+#12 384.4 Setting up libnghttp2-14:amd64 (1.64.0-1.1+deb13u1) ...
+#12 385.0 Setting up linux-libc-dev (6.12.115-2) ...
+#12 385.6 Setting up libctf-nobfd0:amd64 (2.44-3) ...
+#12 386.1 Setting up libcom-err2:amd64 (1.47.2-3+b12) ...
+#12 386.9 Setting up libgomp1:amd64 (14.2.0-19) ...
+#12 387.4 Setting up bzip2 (1.0.8-6) ...
+#12 388.0 Setting up libsframe1:amd64 (2.44-3) ...
+#12 388.6 Setting up libjansson4:amd64 (2.14-2+b3) ...
+#12 389.1 Setting up libkrb5support0:amd64 (1.21.3-5+deb13u1) ...
+#12 389.8 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg1-9) ...
+#12 391.3 Setting up rpcsvc-proto (1.4.3-1) ...
+#12 391.9 Setting up make (4.4.1-2) ...
+#12 392.4 Setting up libmpfr6:amd64 (4.2.2-1) ...
+#12 392.9 Setting up xz-utils (5.8.1-1+deb13u2) ...
+#12 393.4 update-alternatives: using /usr/bin/xz to provide /usr/bin/lzma (lzma) in auto mode
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzma.1.gz because associated file /usr/share/man/man1/xz.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/unlzma.1.gz because associated file /usr/share/man/man1/unxz.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcat.1.gz because associated file /usr/share/man/man1/xzcat.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzmore.1.gz because associated file /usr/share/man/man1/xzmore.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzless.1.gz because associated file /usr/share/man/man1/xzless.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzdiff.1.gz because associated file /usr/share/man/man1/xzdiff.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcmp.1.gz because associated file /usr/share/man/man1/xzcmp.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzgrep.1.gz because associated file /usr/share/man/man1/xzgrep.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzegrep.1.gz because associated file /usr/share/man/man1/xzegrep.1.gz (of link group lzma) doesn't exist
+#12 393.4 update-alternatives: warning: skip creation of /usr/share/man/man1/lzfgrep.1.gz because associated file /usr/share/man/man1/xzfgrep.1.gz (of link group lzma) doesn't exist
+#12 393.7 Setting up libquadmath0:amd64 (14.2.0-19) ...
+#12 395.7 Setting up libp11-kit0:amd64 (0.25.5-3) ...
+#12 396.2 Setting up libunistring5:amd64 (1.3-2) ...
+#12 396.8 Setting up libmpc3:amd64 (1.3.1-1+b3) ...
+#12 397.3 Setting up libatomic1:amd64 (14.2.0-19) ...
+#12 397.7 Setting up patch (2.8-2) ...
+#12 398.2 Setting up libk5crypto3:amd64 (1.21.3-5+deb13u1) ...
+#12 399.7 Setting up libsasl2-2:amd64 (2.1.28+dfsg1-9) ...
+#12 400.3 Setting up libnghttp3-9:amd64 (1.8.0-1) ...
+#12 400.9 Setting up libubsan1:amd64 (14.2.0-19) ...
+#12 401.4 Setting up perl-modules-5.40 (5.40.1-6+deb13u1) ...
+#12 401.9 Setting up libhwasan0:amd64 (14.2.0-19) ...
+#12 402.4 Setting up libcrypt-dev:amd64 (1:4.4.38-1) ...
+#12 403.8 Setting up libasan8:amd64 (14.2.0-19) ...
+#12 405.7 Setting up libtasn1-6:amd64 (4.20.0-2+deb13u1) ...
+#12 406.4 Setting up git-man (1:2.47.3-0+deb13u1) ...
+#12 406.9 Setting up libngtcp2-16:amd64 (1.11.0-1+deb13u1) ...
+#12 408.3 Setting up libkrb5-3:amd64 (1.21.3-5+deb13u1) ...
+#12 408.8 Setting up libssh2-1t64:amd64 (1.11.1-1+deb13u2) ...
+#12 409.3 Setting up libtsan2:amd64 (14.2.0-19) ...
+#12 411.2 Setting up libbinutils:amd64 (2.44-3) ...
+#12 411.8 Setting up libisl23:amd64 (0.27-1) ...
+#12 412.3 Setting up libc-dev-bin (2.41-12+deb13u4) ...
+#12 412.8 Setting up libcc1-0:amd64 (14.2.0-19) ...
+#12 414.0 Setting up libldap2:amd64 (2.6.10+dfsg-1) ...
+#12 415.0 Setting up liblsan0:amd64 (14.2.0-19) ...
+#12 416.2 Setting up libitm1:amd64 (14.2.0-19) ...
+#12 416.9 Setting up libctf0:amd64 (2.44-3) ...
+#12 418.1 Setting up libidn2-0:amd64 (2.3.8-2) ...
+#12 419.6 Setting up libperl5.40:amd64 (5.40.1-6+deb13u1) ...
+#12 420.4 Setting up perl (5.40.1-6+deb13u1) ...
+#12 421.1 Setting up libgprofng0:amd64 (2.44-3) ...
+#12 421.6 Setting up libgssapi-krb5-2:amd64 (1.21.3-5+deb13u1) ...
+#12 422.1 Setting up cpp-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 422.7 Setting up libdpkg-perl (1.22.22) ...
+#12 423.3 Setting up cpp-14 (14.2.0-19) ...
+#12 424.1 Setting up libc6-dev:amd64 (2.41-12+deb13u4) ...
+#12 424.7 Setting up libgcc-14-dev:amd64 (14.2.0-19) ...
+#12 425.2 Setting up libstdc++-14-dev:amd64 (14.2.0-19) ...
+#12 425.9 Setting up binutils-x86-64-linux-gnu (2.44-3) ...
+#12 428.6 Setting up cpp-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 429.1 Setting up libgnutls30t64:amd64 (3.8.9-3+deb13u4) ...
+#12 429.6 Setting up libpsl5t64:amd64 (0.21.2-1.1+b1) ...
+#12 430.1 Setting up binutils (2.44-3) ...
+#12 431.0 Setting up dpkg-dev (1.22.22) ...
+#12 431.9 Setting up liberror-perl (0.17030-1) ...
+#12 432.4 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b5) ...
+#12 433.0 Setting up cpp (4:14.2.0-1) ...
+#12 433.7 Setting up gcc-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 434.2 Setting up libngtcp2-crypto-gnutls8:amd64 (1.11.0-1+deb13u1) ...
+#12 436.6 Setting up gcc-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 437.1 Setting up libcurl4t64:amd64 (8.14.1-2+deb13u7) ...
+#12 437.6 Setting up libcurl3t64-gnutls:amd64 (8.14.1-2+deb13u7) ...
+#12 438.2 Setting up gcc-14 (14.2.0-19) ...
+#12 438.8 Setting up git (1:2.47.3-0+deb13u1) ...
+#12 439.5 Setting up g++-14-x86-64-linux-gnu (14.2.0-19) ...
+#12 440.0 Setting up g++-x86-64-linux-gnu (4:14.2.0-1) ...
+#12 440.7 Setting up curl (8.14.1-2+deb13u7) ...
+#12 441.2 Setting up g++-14 (14.2.0-19) ...
+#12 441.7 Setting up gcc (4:14.2.0-1) ...
+#12 443.0 Setting up g++ (4:14.2.0-1) ...
+#12 444.0 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+#12 444.2 Setting up build-essential (12.12) ...
+#12 444.7 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#12 DONE 447.9s
+
+#12 [worker-fast base 2/3] RUN apt-get update && apt-get install -y --no-install-recommends     gcc g++ build-essential git curl libmagic1     && rm -rf /var/lib/apt/lists/*
+#12 DONE 447.9s
+
+#13 [worker-fast base 3/3] RUN --mount=type=cache,target=/root/.cache/pip     pip install --upgrade pip setuptools wheel
+#13 4.353 Requirement already satisfied: pip in ./usr/local/lib/python3.13/site-packages (26.2.2)
+#13 7.048 Collecting pip
+#13 7.292   Downloading pip-26.3-py3-none-any.whl.metadata (4.6 kB)
+#13 10.03 Collecting setuptools
+#13 10.09   Downloading setuptools-84.2.1-py3-none-any.whl.metadata (6.6 kB)
+#13 10.52 Collecting wheel
+#13 10.59   Downloading wheel-0.48.0-py3-none-any.whl.metadata (2.3 kB)
+#13 12.04 Collecting packaging>=24.0 (from wheel)
+#13 12.10   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+#13 12.35 Downloading pip-26.3-py3-none-any.whl (2.0 MB)
+#13 14.38    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 903.4 kB/s  0:00:02
+#13 14.45 Downloading setuptools-84.2.1-py3-none-any.whl (876 kB)
+#13 16.01    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 876.3/876.3 kB 399.7 kB/s  0:00:01
+#13 16.07 Downloading wheel-0.48.0-py3-none-any.whl (33 kB)
+#13 17.53 Downloading packaging-26.3-py3-none-any.whl (129 kB)
+#13 18.84 Installing collected packages: setuptools, pip, packaging, wheel
+#13 20.51   Attempting uninstall: pip
+#13 20.51     Found existing installation: pip 26.2.2
+#13 20.56     Uninstalling pip-26.2.2:
+#13 21.17       Successfully uninstalled pip-26.2.2
+#13 24.91 
+#13 24.92 Successfully installed packaging-26.3 pip-26.3 setuptools-84.2.1 wheel-0.48.0
+#13 24.92 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#13 DONE 35.6s
+
+#13 [worker-heavy base 3/3] RUN --mount=type=cache,target=/root/.cache/pip     pip install --upgrade pip setuptools wheel
+#13 DONE 35.6s
+
+#14 [worker-nlp backend 1/4] WORKDIR /app
+#14 DONE 4.6s
+
+#15 [tei tei 1/8] RUN rm -rf /app/.cache && mkdir -p /app/.cache && chmod 777 /app/.cache
+#15 ...
+
+#14 [fastapi backend 1/4] WORKDIR /app
+#14 DONE 4.6s
+
+#16 [worker-heavy worker-heavy 2/4] COPY workers/heavy/requirements.txt .
+#16 ...
+
+#15 [tei tei 1/8] RUN rm -rf /app/.cache && mkdir -p /app/.cache && chmod 777 /app/.cache
+#15 DONE 6.6s
+
+#17 [fastapi backend 2/4] COPY backend/requirements.txt .
+#17 ...
+
+#18 [worker-nlp worker-nlp 2/6] COPY workers/nlp/requirements.txt .
+#18 DONE 6.0s
+
+#19 [tei tei 2/8] WORKDIR /app
+#19 ...
+
+#20 [worker-fast worker-fast 2/4] COPY workers/fast/requirements.txt .
+#20 DONE 6.5s
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 ...
+
+#16 [worker-heavy worker-heavy 2/4] COPY workers/heavy/requirements.txt .
+#16 DONE 7.0s
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 ...
+
+#17 [fastapi backend 2/4] COPY backend/requirements.txt .
+#17 DONE 10.8s
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 ...
+
+#19 [tei tei 2/8] WORKDIR /app
+#19 DONE 10.8s
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 ...
+
+#25 [tei tei 3/8] COPY backend/tei/requirements.txt .
+#25 DONE 3.0s
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 13.98 Looking in indexes: https://download.pytorch.org/whl/cpu
+#22 14.91 Collecting torch
+#22 15.39   Downloading torch-2.15.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl.metadata (35 kB)
+#22 16.31 Collecting filelock (from torch)
+#22 16.41   Downloading filelock-4.2.4-py3-none-any.whl.metadata (2.0 kB)
+#22 18.68 Collecting typing-extensions>=4.13.0 (from torch)
+#22 18.69   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#22 19.51 Requirement already satisfied: setuptools>=77.0.3 in /usr/local/lib/python3.13/site-packages (from torch) (84.2.1)
+#22 21.45 Collecting sympy>=1.13.3 (from torch)
+#22 21.46   Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+#22 22.29 Collecting networkx>=2.5.1 (from torch)
+#22 22.30   Downloading networkx-3.7-py3-none-any.whl.metadata (6.7 kB)
+#22 24.71 Collecting jinja2 (from torch)
+#22 24.73   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#22 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 14.60 Collecting celery==5.4.0 (from -r requirements.txt (line 1))
+#24 14.69   Downloading celery-5.4.0-py3-none-any.whl.metadata (21 kB)
+#24 16.73 Collecting redis==5.2.1 (from -r requirements.txt (line 2))
+#24 16.75   Downloading redis-5.2.1-py3-none-any.whl.metadata (9.1 kB)
+#24 20.59 Collecting sqlalchemy==2.0.36 (from -r requirements.txt (line 3))
+#24 20.61   Downloading SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.7 kB)
+#24 22.40 Collecting psycopg2-binary==2.9.10 (from -r requirements.txt (line 4))
+#24 22.41   Downloading psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#24 24.64 Collecting pgvector==0.3.5 (from -r requirements.txt (line 5))
+#24 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 7.992 Looking in indexes: https://download.pytorch.org/whl/cpu
+#26 9.590 Collecting torch
+#26 9.825   Downloading torch-2.15.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl.metadata (35 kB)
+#26 11.97 Collecting filelock (from torch)
+#26 12.07   Downloading filelock-4.2.4-py3-none-any.whl.metadata (2.0 kB)
+#26 14.46 Collecting typing-extensions>=4.13.0 (from torch)
+#26 14.47   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#26 15.03 Requirement already satisfied: setuptools>=77.0.3 in /usr/local/lib/python3.13/site-packages (from torch) (84.2.1)
+#26 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 24.65   Downloading pgvector-0.3.5-py3-none-any.whl.metadata (13 kB)
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 15.73 Collecting celery==5.4.0 (from -r requirements.txt (line 1))
+#21 16.09   Downloading celery-5.4.0-py3-none-any.whl.metadata (21 kB)
+#21 17.50 Collecting redis==5.2.1 (from -r requirements.txt (line 2))
+#21 17.67   Downloading redis-5.2.1-py3-none-any.whl.metadata (9.1 kB)
+#21 21.31 Collecting sqlalchemy==2.0.36 (from -r requirements.txt (line 3))
+#21 21.42   Downloading SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.7 kB)
+#21 23.03 Collecting psycopg2-binary==2.9.10 (from -r requirements.txt (line 4))
+#21 23.12   Downloading psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#21 25.28 Collecting pgvector==0.3.5 (from -r requirements.txt (line 5))
+#21 25.37   Downloading pgvector-0.3.5-py3-none-any.whl.metadata (13 kB)
+#21 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 16.30 Collecting sympy>=1.13.3 (from torch)
+#26 16.31   Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+#26 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 11.53 Collecting fastapi==0.115.6 (from -r requirements.txt (line 2))
+#23 11.76   Downloading fastapi-0.115.6-py3-none-any.whl.metadata (27 kB)
+#23 14.24 Collecting uvicorn==0.34.0 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 14.31   Downloading uvicorn-0.34.0-py3-none-any.whl.metadata (6.5 kB)
+#23 17.41 Collecting pydantic==2.10.4 (from -r requirements.txt (line 4))
+#23 17.48   Downloading pydantic-2.10.4-py3-none-any.whl.metadata (29 kB)
+#23 19.96 Collecting pydantic-settings==2.6.1 (from -r requirements.txt (line 5))
+#23 20.02   Downloading pydantic_settings-2.6.1-py3-none-any.whl.metadata (3.5 kB)
+#23 21.28 Collecting sqlalchemy==2.0.36 (from -r requirements.txt (line 8))
+#23 21.28   Using cached SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.7 kB)
+#23 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 26.44 Collecting fsspec>=0.8.5 (from torch)
+#22 26.46   Downloading fsspec-2026.9.0-py3-none-any.whl.metadata (10 kB)
+#22 27.28 Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch)
+#22 27.30   Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+#22 28.10 Collecting MarkupSafe>=2.0 (from jinja2->torch)
+#22 28.12   Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+#22 28.55 Downloading torch-2.15.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl (209.5 MB)
+#22 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 22.05 Collecting greenlet>=3.0 (from -r requirements.txt (line 9))
+#23 22.14   Downloading greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+#23 23.12 Collecting alembic==1.14.1 (from -r requirements.txt (line 10))
+#23 23.19   Downloading alembic-1.14.1-py3-none-any.whl.metadata (7.4 kB)
+#23 25.19 Collecting asyncpg==0.30.0 (from -r requirements.txt (line 11))
+#23 25.26   Downloading asyncpg-0.30.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.0 kB)
+#23 27.45 Collecting pgvector==0.3.5 (from -r requirements.txt (line 12))
+#23 27.45   Using cached pgvector-0.3.5-py3-none-any.whl.metadata (13 kB)
+#23 27.62 Collecting psycopg2-binary==2.9.10 (from -r requirements.txt (line 14))
+#23 27.63   Using cached psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#23 28.67 Collecting httpx==0.28.1 (from -r requirements.txt (line 18))
+#23 28.76   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+#23 29.75 Collecting python-jose==3.3.0 (from python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 29.85   Downloading python_jose-3.3.0-py2.py3-none-any.whl.metadata (5.4 kB)
+#23 30.73 Collecting passlib==1.7.4 (from passlib[bcrypt]==1.7.4->-r requirements.txt (line 22))
+#23 30.81   Downloading passlib-1.7.4-py2.py3-none-any.whl.metadata (1.7 kB)
+#23 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 26.01 Collecting requests==2.32.3 (from -r requirements.txt (line 6))
+#24 26.02   Downloading requests-2.32.3-py3-none-any.whl.metadata (4.6 kB)
+#24 26.55 Collecting greenlet>=3.0 (from -r requirements.txt (line 7))
+#24 26.55   Using cached greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+#24 27.02 Collecting billiard<5.0,>=4.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 27.04   Downloading billiard-4.3.2-py3-none-any.whl.metadata (5.0 kB)
+#24 29.29 Collecting kombu<6.0,>=5.3.4 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 29.31   Downloading kombu-5.7.0-py3-none-any.whl.metadata (17 kB)
+#24 32.40 Collecting vine<6.0,>=5.1.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 32.44   Downloading vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+#24 33.35 Collecting click<9.0,>=8.1.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 33.38   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#24 34.30 Collecting click-didyoumean>=0.3.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 34.32   Downloading click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+#24 35.14 Collecting click-repl>=0.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 35.16   Downloading click_repl-0.4.1-py3-none-any.whl.metadata (3.7 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 31.82 Collecting bcrypt==4.0.1 (from -r requirements.txt (line 23))
+#23 31.90   Downloading bcrypt-4.0.1-cp36-abi3-manylinux_2_28_x86_64.whl.metadata (9.0 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 26.65 Collecting requests==2.32.3 (from -r requirements.txt (line 6))
+#21 26.75   Downloading requests-2.32.3-py3-none-any.whl.metadata (4.6 kB)
+#21 27.66 Collecting billiard<5.0,>=4.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 27.76   Downloading billiard-4.3.2-py3-none-any.whl.metadata (5.0 kB)
+#21 29.93 Collecting kombu<6.0,>=5.3.4 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 30.06   Downloading kombu-5.7.0-py3-none-any.whl.metadata (17 kB)
+#21 33.04 Collecting vine<6.0,>=5.1.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 33.15   Downloading vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+#21 34.12 Collecting click<9.0,>=8.1.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 34.22   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#21 35.22 Collecting click-didyoumean>=0.3.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 35.34   Downloading click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+#21 36.21 Collecting click-repl>=0.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 36.22   Using cached click_repl-0.4.1-py3-none-any.whl.metadata (3.7 kB)
+#21 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 17.17 Collecting networkx>=2.5.1 (from torch)
+#26 17.18   Downloading networkx-3.7-py3-none-any.whl.metadata (6.7 kB)
+#26 18.05 Collecting jinja2 (from torch)
+#26 18.06   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#26 19.56 Collecting fsspec>=0.8.5 (from torch)
+#26 19.57   Downloading fsspec-2026.9.0-py3-none-any.whl.metadata (10 kB)
+#26 23.40 Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch)
+#26 23.41   Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+#26 24.07 Collecting MarkupSafe>=2.0 (from jinja2->torch)
+#26 24.09   Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+#26 24.69 Downloading torch-2.15.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl (209.5 MB)
+#26 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 37.99 Collecting click-plugins>=1.1.1 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 38.12   Downloading click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 37.38 Collecting click-plugins>=1.1.1 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 37.40   Downloading click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+#24 40.20 Collecting tzdata>=2022.7 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 40.21   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 34.06 Collecting python-multipart==0.0.20 (from -r requirements.txt (line 24))
+#23 34.12   Downloading python_multipart-0.0.20-py3-none-any.whl.metadata (1.8 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 68.42 Collecting tzdata>=2022.7 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 68.55   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+#21 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 90.33 Collecting slowapi==0.1.9 (from -r requirements.txt (line 25))
+#23 90.39   Downloading slowapi-0.1.9-py3-none-any.whl.metadata (3.0 kB)
+#23 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 100.5 Collecting python-dateutil>=2.8.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#24 100.5   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+#24 109.1 Collecting typing-extensions>=4.6.0 (from sqlalchemy==2.0.36->-r requirements.txt (line 3))
+#24 109.1   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 102.5 Collecting python-dateutil>=2.8.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#21 102.5   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+#21 115.1 Collecting typing-extensions>=4.6.0 (from sqlalchemy==2.0.36->-r requirements.txt (line 3))
+#21 115.1   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 116.1 Collecting numpy (from pgvector==0.3.5->-r requirements.txt (line 5))
+#24 116.1   Downloading numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 249.6 Collecting celery==5.4.0 (from -r requirements.txt (line 28))
+#23 249.6   Using cached celery-5.4.0-py3-none-any.whl.metadata (21 kB)
+#23 249.7 Collecting redis==5.2.1 (from -r requirements.txt (line 29))
+#23 249.7   Using cached redis-5.2.1-py3-none-any.whl.metadata (9.1 kB)
+#23 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 262.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 209.5/209.5 MB ?  0:03:54
+#22 262.7 Downloading fsspec-2026.9.0-py3-none-any.whl (221 kB)
+#22 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 269.0 Collecting numpy (from pgvector==0.3.5->-r requirements.txt (line 5))
+#21 269.0   Using cached numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#21 269.8 Collecting charset-normalizer<4,>=2 (from requests==2.32.3->-r requirements.txt (line 6))
+#21 269.9   Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#21 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 252.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 209.5/209.5 MB ?  0:03:47
+#26 252.6 Downloading fsspec-2026.9.0-py3-none-any.whl (221 kB)
+#26 259.9 Downloading networkx-3.7-py3-none-any.whl (2.1 MB)
+#26 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 269.2 Collecting charset-normalizer<4,>=2 (from requests==2.32.3->-r requirements.txt (line 6))
+#24 269.2   Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#24 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 263.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 493.7 kB/s  0:00:03
+#26 263.7 Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+#26 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 264.9 Collecting langgraph==0.2.44 (from -r requirements.txt (line 32))
+#23 265.0   Downloading langgraph-0.2.44-py3-none-any.whl.metadata (15 kB)
+#23 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 270.2 Downloading networkx-3.7-py3-none-any.whl (2.1 MB)
+#22 287.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 107.7 kB/s  0:00:17
+#22 287.7 Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+#22 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 282.8 Collecting python-dotenv==1.0.1 (from -r requirements.txt (line 36))
+#23 282.9   Downloading python_dotenv-1.0.1-py3-none-any.whl.metadata (23 kB)
+#23 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 285.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 275.0 kB/s  0:00:21
+#26 285.7 Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+#26 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 308.4 Collecting idna<4,>=2.5 (from requests==2.32.3->-r requirements.txt (line 6))
+#24 308.4   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#24 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 317.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 205.9 kB/s  0:00:29
+#22 317.1 Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+#22 317.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 364.0 kB/s  0:00:00
+#22 317.9 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#22 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 309.1 Collecting idna<4,>=2.5 (from requests==2.32.3->-r requirements.txt (line 6))
+#21 309.2   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#21 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 307.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 12.9 kB/s  0:00:21
+#26 307.0 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#26 307.8 Downloading filelock-4.2.4-py3-none-any.whl (162 kB)
+#26 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 313.1 Collecting boto3==1.40.61 (from -r requirements.txt (line 40))
+#23 313.2   Downloading boto3-1.40.61-py3-none-any.whl.metadata (6.6 kB)
+#23 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 340.0 Downloading filelock-4.2.4-py3-none-any.whl (162 kB)
+#22 340.9 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#22 341.4 Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+#22 342.8 Installing collected packages: mpmath, typing-extensions, sympy, networkx, MarkupSafe, fsspec, filelock, jinja2, torch
+#22 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 338.8 Collecting urllib3<3,>=1.21.1 (from requests==2.32.3->-r requirements.txt (line 6))
+#24 338.8   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#24 340.2 Collecting certifi>=2017.4.17 (from requests==2.32.3->-r requirements.txt (line 6))
+#24 340.2   Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+#24 340.9 Collecting amqp>=5.4.2 (from kombu<6.0,>=5.3.4->celery==5.4.0->-r requirements.txt (line 1))
+#24 340.9   Downloading amqp-5.4.2-py3-none-any.whl.metadata (9.4 kB)
+#24 341.9 Collecting prompt_toolkit>=3.0.36 (from click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#24 341.9   Downloading prompt_toolkit-3.0.53-py3-none-any.whl.metadata (6.4 kB)
+#24 343.0 Collecting wcwidth>=0.1.4 (from prompt_toolkit>=3.0.36->click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#24 343.0   Downloading wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+#24 343.4 Downloading celery-5.4.0-py3-none-any.whl (425 kB)
+#24 344.0 Downloading redis-5.2.1-py3-none-any.whl (261 kB)
+#24 344.7 Downloading SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+#24 345.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 2.9 MB/s  0:00:01
+#24 345.8 Downloading psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 339.4 Collecting urllib3<3,>=1.21.1 (from requests==2.32.3->-r requirements.txt (line 6))
+#21 339.5   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#21 340.8 Collecting certifi>=2017.4.17 (from requests==2.32.3->-r requirements.txt (line 6))
+#21 340.9   Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+#21 341.7 Collecting amqp>=5.4.2 (from kombu<6.0,>=5.3.4->celery==5.4.0->-r requirements.txt (line 1))
+#21 341.8   Downloading amqp-5.4.2-py3-none-any.whl.metadata (9.4 kB)
+#21 342.8 Collecting prompt_toolkit>=3.0.36 (from click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#21 342.9   Downloading prompt_toolkit-3.0.53-py3-none-any.whl.metadata (6.4 kB)
+#21 343.8 Collecting wcwidth>=0.1.4 (from prompt_toolkit>=3.0.36->click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#21 343.9   Downloading wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+#21 344.5 Downloading celery-5.4.0-py3-none-any.whl (425 kB)
+#21 345.6 Using cached redis-5.2.1-py3-none-any.whl (261 kB)
+#21 345.7 Downloading SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+#21 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 336.2 Collecting aioboto3==15.5.0 (from -r requirements.txt (line 41))
+#23 336.3   Downloading aioboto3-15.5.0-py3-none-any.whl.metadata (8.9 kB)
+#23 337.0 Collecting python-magic>=0.4.27 (from -r requirements.txt (line 42))
+#23 337.1   Downloading python_magic-0.4.27-py2.py3-none-any.whl.metadata (5.8 kB)
+#23 338.3 Collecting PyMuPDF<2,>=1.23 (from -r requirements.txt (line 43))
+#23 338.4   Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl.metadata (26 kB)
+#23 339.4 Collecting python-docx>=1.1 (from -r requirements.txt (line 44))
+#23 339.5   Downloading python_docx-1.2.0-py3-none-any.whl.metadata (2.0 kB)
+#23 341.0 Collecting spacy>=3.7 (from -r requirements.txt (line 46))
+#23 341.1   Downloading spacy-3.8.18-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (28 kB)
+#23 342.5 Collecting starlette<0.42.0,>=0.40.0 (from fastapi==0.115.6->-r requirements.txt (line 2))
+#23 342.6   Downloading starlette-0.41.3-py3-none-any.whl.metadata (6.0 kB)
+#23 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 330.3 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#26 330.9 Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+#26 332.3 Installing collected packages: mpmath, typing-extensions, sympy, networkx, MarkupSafe, fsspec, filelock, jinja2, torch
+#26 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 435.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB ?  0:01:29
+#21 435.6 Downloading psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 542.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB ?  0:03:16
+#24 542.1 Downloading pgvector-0.3.5-py3-none-any.whl (24 kB)
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 549.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB ?  0:01:54
+#21 550.1 Downloading pgvector-0.3.5-py3-none-any.whl (24 kB)
+#21 550.5 Using cached requests-2.32.3-py3-none-any.whl (64 kB)
+#21 550.6 Downloading billiard-4.3.2-py3-none-any.whl (90 kB)
+#21 552.1 Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)
+#21 552.9 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#21 553.4 Using cached idna-3.20-py3-none-any.whl (69 kB)
+#21 553.6 Downloading kombu-5.7.0-py3-none-any.whl (266 kB)
+#21 554.2 Downloading vine-5.1.0-py3-none-any.whl (9.6 kB)
+#21 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 539.8 Collecting typing-extensions>=4.8.0 (from fastapi==0.115.6->-r requirements.txt (line 2))
+#23 539.8   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#23 545.8 Collecting annotated-types>=0.6.0 (from pydantic==2.10.4->-r requirements.txt (line 4))
+#23 545.9   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#23 548.8 Collecting pydantic-core==2.27.2 (from pydantic==2.10.4->-r requirements.txt (line 4))
+#23 548.9   Downloading pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+#23 549.5 Collecting click>=7.0 (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 549.5   Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#23 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 549.4 Downloading requests-2.32.3-py3-none-any.whl (64 kB)
+#24 549.9 Downloading billiard-4.3.2-py3-none-any.whl (90 kB)
+#24 551.2 Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)
+#24 551.7 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#24 552.2 Downloading idna-3.20-py3-none-any.whl (69 kB)
+#24 552.8 Downloading kombu-5.7.0-py3-none-any.whl (266 kB)
+#24 553.3 Downloading vine-5.1.0-py3-none-any.whl (9.6 kB)
+#24 553.8 Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+#24 554.3 Downloading greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (623 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 550.1 Collecting h11>=0.8 (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 550.2   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 554.7 Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+#21 559.9 Downloading amqp-5.4.2-py3-none-any.whl (51 kB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 576.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 623.8/623.8 kB 16.3 kB/s  0:00:22
+#24 576.6 Downloading amqp-5.4.2-py3-none-any.whl (51 kB)
+#24 577.0 Downloading certifi-2026.10.23-py3-none-any.whl (135 kB)
+#24 577.7 Downloading click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+#24 578.1 Downloading click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+#24 579.0 Downloading click_repl-0.4.1-py3-none-any.whl (14 kB)
+#24 580.1 Downloading prompt_toolkit-3.0.53-py3-none-any.whl (392 kB)
+#24 581.7 Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+#24 582.6 Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#24 582.6 Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 573.1 Collecting Mako (from alembic==1.14.1->-r requirements.txt (line 10))
+#23 573.1   Downloading mako-1.4.3-py3-none-any.whl.metadata (2.9 kB)
+#23 574.2 Collecting numpy (from pgvector==0.3.5->-r requirements.txt (line 12))
+#23 574.2   Using cached numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#23 574.9 Collecting anyio (from httpx==0.28.1->-r requirements.txt (line 18))
+#23 575.0   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+#23 576.1 Collecting certifi (from httpx==0.28.1->-r requirements.txt (line 18))
+#23 576.1   Using cached certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+#23 577.7 Collecting httpcore==1.* (from httpx==0.28.1->-r requirements.txt (line 18))
+#23 578.3   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+#23 578.9 Collecting idna (from httpx==0.28.1->-r requirements.txt (line 18))
+#23 579.0   Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 577.5 Downloading certifi-2026.10.23-py3-none-any.whl (135 kB)
+#21 578.2 Downloading click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+#21 578.7 Downloading click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+#21 579.8 Downloading click_repl-0.4.1-py3-none-any.whl (14 kB)
+#21 580.7 Downloading prompt_toolkit-3.0.53-py3-none-any.whl (392 kB)
+#21 582.7 Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+#21 583.2 Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#21 583.3 Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 915.1 Downloading wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (785 kB)
+#24 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1052.3 Collecting ecdsa!=0.15 (from python-jose==3.3.0->python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 1052.6   Downloading ecdsa-0.19.2-py2.py3-none-any.whl.metadata (29 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 1064.5 Downloading wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (785 kB)
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 1192.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 785.9/785.9 kB ?  0:04:37
+#24 1192.2 Downloading numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 1435.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 785.9/785.9 kB ?  0:06:11
+#21 1435.7 Downloading numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+#21 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1450.5 Collecting rsa (from python-jose==3.3.0->python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 1450.6   Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 1530.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB ?  0:01:34
+#21 1536.1 Installing collected packages: wcwidth, vine, urllib3, tzdata, typing-extensions, redis, psycopg2-binary, numpy, idna, click, charset-normalizer, certifi, billiard, sqlalchemy, requests, python-dateutil, prompt_toolkit, pgvector, click-plugins, click-didyoumean, amqp, kombu, click-repl, celery
+#21 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 1529.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB ?  0:05:37
+#24 1538.8 Installing collected packages: wcwidth, vine, urllib3, tzdata, typing-extensions, redis, psycopg2-binary, numpy, idna, greenlet, click, charset-normalizer, certifi, billiard, sqlalchemy, requests, python-dateutil, prompt_toolkit, pgvector, click-plugins, click-didyoumean, amqp, kombu, click-repl, celery
+#24 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 1533.1 
+#26 1533.7 Successfully installed MarkupSafe-3.0.3 filelock-4.2.4 fsspec-2026.9.0 jinja2-3.1.6 mpmath-1.3.0 networkx-3.7 sympy-1.14.0 torch-2.15.0+cpu typing-extensions-4.16.0
+#26 1533.7 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#26 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 1543.7 
+#22 1543.7 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#22 1543.7 Successfully installed MarkupSafe-3.0.3 filelock-4.2.4 fsspec-2026.9.0 jinja2-3.1.6 mpmath-1.3.0 networkx-3.7 sympy-1.14.0 torch-2.15.0+cpu typing-extensions-4.16.0
+#22 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1552.0 Collecting pyasn1 (from python-jose==3.3.0->python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 1552.1   Downloading pyasn1-0.6.5-py3-none-any.whl.metadata (8.4 kB)
+#23 ...
+
+#22 [worker-nlp worker-nlp 3/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#22 DONE 1559.4s
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 ...
+
+#26 [tei tei 4/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#26 DONE 1552.9s
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1563.5 Collecting limits>=2.3 (from slowapi==0.1.9->-r requirements.txt (line 25))
+#23 1564.6   Downloading limits-5.8.0-py3-none-any.whl.metadata (10 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1588.7 Collecting billiard<5.0,>=4.2.0 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1589.3   Using cached billiard-4.3.2-py3-none-any.whl.metadata (5.0 kB)
+#23 1591.9 Collecting kombu<6.0,>=5.3.4 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1592.1   Using cached kombu-5.7.0-py3-none-any.whl.metadata (17 kB)
+#23 1596.0 Collecting vine<6.0,>=5.1.0 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1596.1   Using cached vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+#23 1601.1 Collecting click-didyoumean>=0.3.0 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1604.7   Using cached click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+#23 1607.4 Collecting click-repl>=0.2.0 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1607.5   Using cached click_repl-0.4.1-py3-none-any.whl.metadata (3.7 kB)
+#23 1766.7 Collecting click-plugins>=1.1.1 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1777.5   Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+#23 1784.3 Collecting tzdata>=2022.7 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1784.5   Using cached tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+#23 1789.8 Collecting python-dateutil>=2.8.2 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1789.9   Using cached python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+#23 1790.9 Collecting langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43 (from langgraph==0.2.44->-r requirements.txt (line 32))
+#23 1791.0   Downloading langchain_core-0.3.86-py3-none-any.whl.metadata (3.2 kB)
+#23 1792.2 Collecting langgraph-checkpoint<3.0.0,>=2.0.0 (from langgraph==0.2.44->-r requirements.txt (line 32))
+#23 1792.3   Downloading langgraph_checkpoint-2.1.2-py3-none-any.whl.metadata (4.2 kB)
+#23 1793.6 Collecting langgraph-sdk<0.2.0,>=0.1.32 (from langgraph==0.2.44->-r requirements.txt (line 32))
+#23 1793.6   Downloading langgraph_sdk-0.1.74-py3-none-any.whl.metadata (1.5 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 236.8 Collecting celery==5.4.0 (from -r requirements.txt (line 1))
+#28 236.9   Using cached celery-5.4.0-py3-none-any.whl.metadata (21 kB)
+#28 237.0 Collecting kombu==5.4.2 (from -r requirements.txt (line 3))
+#28 237.5   Downloading kombu-5.4.2-py3-none-any.whl.metadata (3.2 kB)
+#28 238.7 Collecting redis==5.2.1 (from -r requirements.txt (line 4))
+#28 238.8   Using cached redis-5.2.1-py3-none-any.whl.metadata (9.1 kB)
+#28 242.3 Collecting requests==2.32.3 (from -r requirements.txt (line 5))
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 238.6 Collecting fastapi==0.111.0 (from -r requirements.txt (line 1))
+#27 238.9   Downloading fastapi-0.111.0-py3-none-any.whl.metadata (25 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1797.4 Collecting botocore<1.41.0,>=1.40.61 (from boto3==1.40.61->-r requirements.txt (line 40))
+#23 1797.5   Downloading botocore-1.40.76-py3-none-any.whl.metadata (5.9 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 384.7   Using cached requests-2.32.3-py3-none-any.whl.metadata (4.6 kB)
+#28 401.4 Collecting psycopg2-binary==2.9.10 (from -r requirements.txt (line 6))
+#28 401.6   Using cached psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1960.5 Collecting jmespath<2.0.0,>=0.7.1 (from boto3==1.40.61->-r requirements.txt (line 40))
+#23 1960.6   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+#23 1963.1 Collecting s3transfer<0.15.0,>=0.14.0 (from boto3==1.40.61->-r requirements.txt (line 40))
+#23 1963.2   Downloading s3transfer-0.14.0-py3-none-any.whl.metadata (1.7 kB)
+#23 1964.7 Collecting aiobotocore==2.25.1 (from aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 1964.8   Downloading aiobotocore-2.25.1-py3-none-any.whl.metadata (25 kB)
+#23 1966.0 Collecting aiofiles>=23.2.1 (from aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 1966.1   Downloading aiofiles-25.1.0-py3-none-any.whl.metadata (6.3 kB)
+#23 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 1970.5 
+#21 1970.5 Successfully installed amqp-5.4.2 billiard-4.3.2 celery-5.4.0 certifi-2026.10.23 charset-normalizer-3.5.2 click-8.5.0 click-didyoumean-0.3.1 click-plugins-1.1.1.2 click-repl-0.4.1 idna-3.20 kombu-5.7.0 numpy-2.5.4 pgvector-0.3.5 prompt_toolkit-3.0.53 psycopg2-binary-2.9.10 python-dateutil-4.0.0 redis-5.2.1 requests-2.32.3 sqlalchemy-2.0.36 typing-extensions-4.16.0 tzdata-2026.6 urllib3-2.8.0 vine-5.1.0 wcwidth-0.9.4
+#21 1970.5 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#21 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 402.0 Collecting uvicorn==0.30.1 (from -r requirements.txt (line 2))
+#27 402.1   Downloading uvicorn-0.30.1-py3-none-any.whl.metadata (6.3 kB)
+#27 404.3 Collecting sentence-transformers>=3.0.0 (from -r requirements.txt (line 3))
+#27 404.4   Downloading sentence_transformers-6.2.0-py3-none-any.whl.metadata (20 kB)
+#27 405.9 Collecting optimum>=1.20.0 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 406.0   Downloading optimum-2.3.0-py3-none-any.whl.metadata (14 kB)
+#27 407.1 Collecting starlette<0.38.0,>=0.37.2 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 407.3   Downloading starlette-0.37.2-py3-none-any.whl.metadata (5.9 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 403.8 Collecting sqlalchemy>=2.0 (from -r requirements.txt (line 7))
+#28 403.9   Downloading sqlalchemy-2.1.8-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.7 kB)
+#28 404.8 Collecting spacy>=3.7 (from -r requirements.txt (line 9))
+#28 404.8   Using cached spacy-3.8.18-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (28 kB)
+#28 405.8 Collecting stanza>=1.8 (from -r requirements.txt (line 10))
+#28 405.9   Downloading stanza-1.15.0-py3-none-any.whl.metadata (14 kB)
+#28 407.0 Collecting numpy>=1.26 (from -r requirements.txt (line 12))
+#28 407.0   Using cached numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#28 415.5 Collecting scipy>=1.11 (from -r requirements.txt (line 14))
+#28 415.6   Downloading scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+#28 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 1982.4 
+#24 1982.4 Successfully installed amqp-5.4.2 billiard-4.3.2 celery-5.4.0 certifi-2026.10.23 charset-normalizer-3.5.2 click-8.5.0 click-didyoumean-0.3.1 click-plugins-1.1.1.2 click-repl-0.4.1 greenlet-3.5.6 idna-3.20 kombu-5.7.0 numpy-2.5.4 pgvector-0.3.5 prompt_toolkit-3.0.53 psycopg2-binary-2.9.10 python-dateutil-4.0.0 redis-5.2.1 requests-2.32.3 sqlalchemy-2.0.36 typing-extensions-4.16.0 tzdata-2026.6 urllib3-2.8.0 vine-5.1.0 wcwidth-0.9.4
+#24 1982.4 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#24 ...
+
+#21 [worker-fast worker-fast 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#21 DONE 1988.8s
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 421.0 Collecting pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 424.2   Downloading pydantic-2.14.2-py3-none-any.whl.metadata (137 kB)
+#27 ...
+
+#29 [worker-fast worker-fast 4/4] COPY workers/fast/ .
+#29 ...
+
+#24 [worker-heavy worker-heavy 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#24 DONE 1991.4s
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 1986.8 Collecting aiohttp<4.0.0,>=3.9.2 (from aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 1987.3   Downloading aiohttp-3.14.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
+#23 1990.4 Collecting aioitertools<1.0.0,>=0.5.1 (from aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 1990.5   Downloading aioitertools-0.13.0-py3-none-any.whl.metadata (3.3 kB)
+#23 1994.2 Collecting botocore<1.41.0,>=1.40.61 (from boto3==1.40.61->-r requirements.txt (line 40))
+#23 1994.3   Downloading botocore-1.40.61-py3-none-any.whl.metadata (5.7 kB)
+#23 1995.1 Collecting python-dateutil>=2.8.2 (from celery==5.4.0->-r requirements.txt (line 28))
+#23 1995.2   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 429.2 Collecting scikit-learn>=1.3 (from -r requirements.txt (line 15))
+#28 429.3   Downloading scikit_learn-1.9.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.3 kB)
+#28 436.1 Collecting rapidfuzz>=3.0 (from -r requirements.txt (line 16))
+#28 436.3   Downloading rapidfuzz-3.14.6-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (12 kB)
+#28 ...
+
+#30 [worker-heavy worker-heavy 4/4] COPY workers/heavy/ .
+#30 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 429.4 Requirement already satisfied: typing-extensions>=4.8.0 in /usr/local/lib/python3.13/site-packages (from fastapi==0.111.0->-r requirements.txt (line 1)) (4.16.0)
+#27 430.2 Collecting fastapi-cli>=0.0.2 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 430.4   Downloading fastapi_cli-0.0.32-py3-none-any.whl.metadata (6.7 kB)
+#27 435.9 Collecting httpx>=0.23.0 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 436.0   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+#27 436.7 Requirement already satisfied: jinja2>=2.11.2 in /usr/local/lib/python3.13/site-packages (from fastapi==0.111.0->-r requirements.txt (line 1)) (3.1.6)
+#27 439.5 Collecting python-multipart>=0.0.7 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 439.6   Downloading python_multipart-0.0.33-py3-none-any.whl.metadata (6.3 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 439.9 Collecting transformers>=4.40 (from -r requirements.txt (line 18))
+#28 440.0   Downloading transformers-5.22.1-py3-none-any.whl.metadata (31 kB)
+#28 ...
+
+#29 [worker-fast worker-fast 4/4] COPY workers/fast/ .
+#29 DONE 14.7s
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2000.8 Collecting multidict<7.0.0,>=6.0.0 (from aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2000.9   Downloading multidict-6.9.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+#23 ...
+
+#30 [worker-heavy worker-heavy 4/4] COPY workers/heavy/ .
+#30 DONE 13.0s
+
+#31 [worker-fast] exporting to image
+#31 exporting layers
+#31 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 442.9 Collecting peft>=0.10 (from -r requirements.txt (line 19))
+#28 443.0   Downloading peft-0.21.2-py3-none-any.whl.metadata (15 kB)
+#28 444.6 Collecting torchao>=0.3.0 (from -r requirements.txt (line 21))
+#28 444.7   Downloading torchao-0.18.0-cp310-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (21 kB)
+#28 445.2 Collecting billiard<5.0,>=4.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 445.2   Using cached billiard-4.3.2-py3-none-any.whl.metadata (5.0 kB)
+#28 445.3 Collecting vine<6.0,>=5.1.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 445.3   Using cached vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+#28 446.4 Collecting click<9.0,>=8.1.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.6   Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#28 446.8 Collecting click-didyoumean>=0.3.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.8   Using cached click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+#28 446.8 Collecting click-repl>=0.2.0 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.8   Using cached click_repl-0.4.1-py3-none-any.whl.metadata (3.7 kB)
+#28 446.8 Collecting click-plugins>=1.1.1 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.8   Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+#28 446.8 Collecting tzdata>=2022.7 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.8   Using cached tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+#28 446.8 Collecting python-dateutil>=2.8.2 (from celery==5.4.0->-r requirements.txt (line 1))
+#28 446.8   Using cached python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+#28 448.0 Collecting amqp<6.0.0,>=5.1.1 (from kombu==5.4.2->-r requirements.txt (line 3))
+#28 448.1   Using cached amqp-5.4.2-py3-none-any.whl.metadata (9.4 kB)
+#28 449.5 Collecting charset-normalizer<4,>=2 (from requests==2.32.3->-r requirements.txt (line 5))
+#28 449.6   Using cached charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#28 450.5 Collecting idna<4,>=2.5 (from requests==2.32.3->-r requirements.txt (line 5))
+#28 450.5   Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#28 451.6 Collecting urllib3<3,>=1.21.1 (from requests==2.32.3->-r requirements.txt (line 5))
+#28 451.6   Using cached urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#28 452.2 Collecting certifi>=2017.4.17 (from requests==2.32.3->-r requirements.txt (line 5))
+#28 452.2   Using cached certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+#28 452.3 Requirement already satisfied: typing-extensions>=4.6.0 in /usr/local/lib/python3.13/site-packages (from sqlalchemy>=2.0->-r requirements.txt (line 7)) (4.16.0)
+#28 ...
+
+#32 [worker-heavy] exporting to image
+#32 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 442.8 Collecting ujson!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0,>=4.0.1 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 442.9   Downloading ujson-6.1.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (10.0 kB)
+#27 447.0 Collecting orjson>=3.2.1 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 447.2   Downloading orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (42 kB)
+#27 451.4 Collecting email_validator>=2.0.0 (from fastapi==0.111.0->-r requirements.txt (line 1))
+#27 451.5   Downloading email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 453.1 Collecting spacy-legacy<3.1.0,>=3.0.11 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 453.2   Downloading spacy_legacy-3.0.12-py2.py3-none-any.whl.metadata (2.8 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2003.3 Collecting wrapt<2.0.0,>=1.10.10 (from aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2003.4   Downloading wrapt-1.17.3-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.4 kB)
+#23 2006.0 Collecting cryptography>=3.4.0 (from python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 2006.0   Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+#23 2008.4 Collecting httptools>=0.6.3 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 2008.4   Downloading httptools-0.9.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+#23 2010.4 Collecting pyyaml>=5.1 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 2010.5   Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+#23 2011.9 Collecting uvloop!=0.15.0,!=0.15.1,>=0.14.0 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 2012.0   Downloading uvloop-0.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.1 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 454.6 Collecting click>=7.0 (from uvicorn==0.30.1->-r requirements.txt (line 2))
+#27 454.7   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#27 456.7 Collecting h11>=0.8 (from uvicorn==0.30.1->-r requirements.txt (line 2))
+#27 456.8   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 455.3 Collecting spacy-loggers<2.0.0,>=1.0.0 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 455.4   Downloading spacy_loggers-1.0.5-py3-none-any.whl.metadata (23 kB)
+#28 457.4 Collecting murmurhash<1.1.0,>=0.28.0 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 457.5   Downloading murmurhash-1.0.16-cp313-cp313-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl.metadata (2.3 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2014.4 Collecting watchfiles>=0.13 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 2014.4   Downloading watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#23 2029.8 Collecting websockets>=10.4 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 3))
+#23 2029.9   Downloading websockets-17.4-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 472.9 Collecting annotated-types>=0.6.0 (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 473.0   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#27 475.7 Collecting pydantic-core==2.50.2 (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 475.9   Downloading pydantic_core-2.50.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.5 kB)
+#27 478.4 Collecting typing-inspection>=0.4.4 (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 478.6   Downloading typing_inspection-0.4.5-py3-none-any.whl.metadata (2.6 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2032.1 Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2032.2   Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+#23 2033.6 Collecting aiosignal>=1.4.0 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2033.7   Downloading aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+#23 2035.2 Collecting attrs>=17.3.0 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2035.3   Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+#23 2037.8 Collecting frozenlist>=1.1.1 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2037.8   Downloading frozenlist-1.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 481.5 Collecting anyio<5,>=3.4.0 (from starlette<0.38.0,>=0.37.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 481.6   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 473.2 Collecting cymem<2.1.0,>=2.0.2 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 473.3   Downloading cymem-2.0.16-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (9.7 kB)
+#28 474.6 Collecting preshed!=3.0.14,<3.1.0,>=3.0.2 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 474.7   Downloading preshed-3.0.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+#28 476.3 Collecting thinc<8.4.0,>=8.3.12 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 476.4   Downloading thinc-8.3.14-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (14 kB)
+#28 479.0 Collecting wasabi<1.2.0,>=0.9.1 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 479.1   Downloading wasabi-1.1.3-py3-none-any.whl.metadata (28 kB)
+#28 482.1 Collecting srsly<3.0.0,>=2.5.3 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 482.2   Downloading srsly-2.5.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (20 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 483.2 Collecting idna>=2.8 (from anyio<5,>=3.4.0->starlette<0.38.0,>=0.37.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 483.4   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 483.7 Collecting catalogue<2.1.0,>=2.0.6 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 483.8   Downloading catalogue-2.0.10-py3-none-any.whl.metadata (14 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2040.9 Collecting propcache>=0.2.0 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2041.0   Downloading propcache-0.5.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (25 kB)
+#23 2051.0 Collecting yarl<2.0,>=1.25.1 (from aiohttp<4.0.0,>=3.9.2->aiobotocore==2.25.1->aiobotocore[boto3]==2.25.1->aioboto3==15.5.0->-r requirements.txt (line 41))
+#23 2051.1   Downloading yarl-1.25.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (111 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 493.4 Collecting transformers<6.0.0,>=5.0.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 493.5   Downloading transformers-5.22.1-py3-none-any.whl.metadata (31 kB)
+#27 496.5 Collecting tokenizers>=0.19 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 496.6   Downloading tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.8 kB)
+#27 498.6 Collecting huggingface-hub<3.0.0,>=1.3.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 498.7   Downloading huggingface_hub-2.4.0-py3-none-any.whl.metadata (16 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2052.2 Collecting urllib3!=2.2.0,<3,>=1.25.4 (from botocore<1.41.0,>=1.40.61->boto3==1.40.61->-r requirements.txt (line 40))
+#23 2052.2   Using cached urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#23 2052.2 Collecting amqp>=5.4.2 (from kombu<6.0,>=5.3.4->celery==5.4.0->-r requirements.txt (line 28))
+#23 2052.2   Using cached amqp-5.4.2-py3-none-any.whl.metadata (9.4 kB)
+#23 2053.0 Collecting langsmith<1.0.0,>=0.3.45 (from langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2053.0   Downloading langsmith-0.14.17-py3-none-any.whl.metadata (39 kB)
+#23 2056.0 Collecting tenacity!=8.4.0,<10.0.0,>=8.1.0 (from langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2056.0   Downloading tenacity-9.2.1-py3-none-any.whl.metadata (1.4 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 493.6 Collecting weasel<2.0.0,>=1.0.1 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 493.7   Downloading weasel-1.0.1-py3-none-any.whl.metadata (4.8 kB)
+#28 496.3 Collecting confection<2.0.0,>=1.3.4 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 496.5   Downloading confection-1.3.4-py3-none-any.whl.metadata (19 kB)
+#28 498.3 Collecting typer<1.0.0,>=0.3.0 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 498.4   Downloading typer-0.27.3-py3-none-any.whl.metadata (16 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2063.1 Collecting jsonpatch<2.0.0,>=1.33.0 (from langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2063.2   Downloading jsonpatch-1.42-py3-none-any.whl.metadata (4.3 kB)
+#23 2065.8 Collecting packaging<26.0.0,>=23.2.0 (from langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2065.9   Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+#23 2068.7 Collecting uuid-utils<1.0,>=0.12.0 (from langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2068.8   Downloading uuid_utils-0.19.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.4 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 506.2 Collecting tqdm<5.0.0,>=4.38.0 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 506.3   Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+#28 507.9 Collecting pydantic<3.0.0,>=2.0.0 (from spacy>=3.7->-r requirements.txt (line 9))
+#28 508.0   Downloading pydantic-2.14.2-py3-none-any.whl.metadata (137 kB)
+#28 510.0 Requirement already satisfied: jinja2 in /usr/local/lib/python3.13/site-packages (from spacy>=3.7->-r requirements.txt (line 9)) (3.1.6)
+#28 510.0 Requirement already satisfied: setuptools in /usr/local/lib/python3.13/site-packages (from spacy>=3.7->-r requirements.txt (line 9)) (84.2.1)
+#28 510.0 Requirement already satisfied: packaging>=20.0 in /usr/local/lib/python3.13/site-packages (from spacy>=3.7->-r requirements.txt (line 9)) (26.3)
+#28 510.3 Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.0.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 510.3   Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#28 511.4 Collecting pydantic-core==2.50.2 (from pydantic<3.0.0,>=2.0.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 511.5   Downloading pydantic_core-2.50.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.5 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2070.9 Collecting jsonpointer>=3.8 (from jsonpatch<2.0.0,>=1.33.0->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2070.9   Downloading jsonpointer-3.8-py3-none-any.whl.metadata (2.7 kB)
+#23 2073.0 Collecting ormsgpack>=1.10.0 (from langgraph-checkpoint<3.0.0,>=2.0.0->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2073.0   Downloading ormsgpack-1.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.2 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 504.7 Requirement already satisfied: torch>=2.2 in /usr/local/lib/python3.13/site-packages (from sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (2.15.0+cpu)
+#27 507.3 Collecting numpy>=1.24.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 507.4   Downloading numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#27 510.1 Collecting scikit-learn>=1.1.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 510.2   Downloading scikit_learn-1.9.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.3 kB)
+#27 512.2 Collecting scipy>=1.0.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 512.3   Downloading scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+#27 513.8 Collecting tqdm>=4.0.0 (from sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 514.0   Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+#27 514.6 Requirement already satisfied: filelock>=3.10.0 in /usr/local/lib/python3.13/site-packages (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (4.2.4)
+#27 514.6 Requirement already satisfied: fsspec>=2023.5.0 in /usr/local/lib/python3.13/site-packages (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (2026.9.0)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 513.1 Collecting typing-inspection>=0.4.4 (from pydantic<3.0.0,>=2.0.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 513.2   Downloading typing_inspection-0.4.5-py3-none-any.whl.metadata (2.6 kB)
+#28 516.2 Collecting blis<1.4.0,>=1.3.0 (from thinc<8.4.0,>=8.3.12->spacy>=3.7->-r requirements.txt (line 9))
+#28 516.3   Downloading blis-1.3.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.4 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2083.5 Collecting orjson>=3.10.1 (from langgraph-sdk<0.2.0,>=0.1.32->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2083.6   Downloading orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (42 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 516.3 Collecting hf-xet<2.0.0,>=1.6.0 (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 516.4   Downloading hf_xet-1.8.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 530.7 Collecting shellingham>=1.3.0 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 530.8   Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+#28 533.7 Collecting rich>=13.8.0 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 533.8   Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+#28 535.1 Collecting annotated-doc>=0.0.2 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 535.2   Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2091.9 Collecting distro<2,>=1.7.0 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2092.0   Downloading distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+#23 2093.4 Collecting httpx2<3,>=2 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2093.4   Downloading httpx2-2.16.0-py3-none-any.whl.metadata (10 kB)
+#23 2096.1 Collecting requests-toolbelt>=1.0.0 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2096.2   Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl.metadata (14 kB)
+#23 2096.6 Collecting requests>=2.0.0 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2096.6   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+#23 2098.0 Collecting sniffio (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2098.4   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 537.8 Collecting cloudpathlib>=0.7.0 (from weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 9))
+#28 537.9   Downloading cloudpathlib-0.26.0-py3-none-any.whl.metadata (16 kB)
+#28 539.1 Collecting smart-open>=5.2.1 (from smart-open[http]>=5.2.1->weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 9))
+#28 539.2   Downloading smart_open-9.0.2-py3-none-any.whl.metadata (25 kB)
+#28 539.9 Collecting httpx>=0.24.0 (from weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 9))
+#28 539.9   Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+#28 540.3 Collecting emoji (from stanza>=1.8->-r requirements.txt (line 10))
+#28 540.4   Downloading emoji-2.16.0-py3-none-any.whl.metadata (5.7 kB)
+#28 540.9 Requirement already satisfied: networkx in /usr/local/lib/python3.13/site-packages (from stanza>=1.8->-r requirements.txt (line 10)) (3.7)
+#28 541.2 Collecting orjson (from stanza>=1.8->-r requirements.txt (line 10))
+#28 541.2   Using cached orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (42 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 531.5 Collecting httpx2<3,>=2.0.0 (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 531.6   Downloading httpx2-2.16.0-py3-none-any.whl.metadata (10 kB)
+#27 533.3 Requirement already satisfied: packaging>=20.9 in /usr/local/lib/python3.13/site-packages (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (26.3)
+#27 533.9 Collecting pyyaml>=5.1 (from huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 534.0   Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+#27 535.3 Collecting httpcore2==2.16.0 (from httpx2<3,>=2.0.0->huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 535.4   Downloading httpcore2-2.16.0-py3-none-any.whl.metadata (27 kB)
+#27 538.0 Collecting truststore>=0.10 (from httpx2<3,>=2.0.0->huggingface-hub<3.0.0,>=1.3.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 538.1   Downloading truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+#27 539.9 Collecting regex>=2025.10.22 (from transformers<6.0.0,>=5.0.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 540.0   Downloading regex-2026.9.29-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+#27 541.2 Collecting typer (from transformers<6.0.0,>=5.0.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 541.3   Downloading typer-0.27.3-py3-none-any.whl.metadata (16 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2099.7 Collecting xxhash>=3.0.0 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2099.8   Downloading xxhash-4.0.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (17 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 560.7 Collecting platformdirs (from stanza>=1.8->-r requirements.txt (line 10))
+#28 560.9   Downloading platformdirs-4.14.5-py3-none-any.whl.metadata (5.7 kB)
+#28 562.6 Collecting protobuf>=3.15.0 (from stanza>=1.8->-r requirements.txt (line 10))
+#28 562.8   Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+#28 563.2 Requirement already satisfied: torch>=1.13.0 in /usr/local/lib/python3.13/site-packages (from stanza>=1.8->-r requirements.txt (line 10)) (2.15.0+cpu)
+#28 564.6 Collecting udtools>=0.2.4 (from stanza>=1.8->-r requirements.txt (line 10))
+#28 564.7   Downloading udtools-0.2.9-py3-none-any.whl.metadata (14 kB)
+#28 567.6 Collecting huggingface-hub (from stanza>=1.8->-r requirements.txt (line 10))
+#28 567.7   Downloading huggingface_hub-2.4.0-py3-none-any.whl.metadata (16 kB)
+#28 568.4 Collecting joblib>=1.4.0 (from scikit-learn>=1.3->-r requirements.txt (line 15))
+#28 568.5   Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2119.9 Collecting zstandard>=0.23.0 (from langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2120.0   Downloading zstandard-0.25.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.3 kB)
+#23 2121.7 Collecting httpcore2==2.16.0 (from httpx2<3,>=2->langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2121.8   Downloading httpcore2-2.16.0-py3-none-any.whl.metadata (27 kB)
+#23 2123.3 Collecting truststore>=0.10 (from httpx2<3,>=2->langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2123.4   Downloading truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+#23 2126.5 Collecting six>=1.5 (from python-dateutil>=2.8.2->celery==5.4.0->-r requirements.txt (line 28))
+#23 2126.5   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+#23 2128.2 Collecting lxml>=3.1.0 (from python-docx>=1.1->-r requirements.txt (line 44))
+#23 2128.3   Downloading lxml-6.1.3-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
+#23 2128.8 Collecting spacy-legacy<3.1.0,>=3.0.11 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2128.8   Using cached spacy_legacy-3.0.12-py2.py3-none-any.whl.metadata (2.8 kB)
+#23 2128.8 Collecting spacy-loggers<2.0.0,>=1.0.0 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2128.9   Using cached spacy_loggers-1.0.5-py3-none-any.whl.metadata (23 kB)
+#23 2128.9 Collecting murmurhash<1.1.0,>=0.28.0 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2128.9   Using cached murmurhash-1.0.16-cp313-cp313-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl.metadata (2.3 kB)
+#23 2129.0 Collecting cymem<2.1.0,>=2.0.2 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.0   Using cached cymem-2.0.16-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (9.7 kB)
+#23 2129.1 Collecting preshed!=3.0.14,<3.1.0,>=3.0.2 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.1   Using cached preshed-3.0.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 570.5 Collecting narwhals>=2.0.1 (from scikit-learn>=1.3->-r requirements.txt (line 15))
+#28 570.6   Downloading narwhals-2.28.0-py3-none-any.whl.metadata (15 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 561.4 Collecting safetensors>=0.8.0 (from transformers<6.0.0,>=5.0.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 561.5   Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.2 kB)
+#27 563.1 Collecting dnspython>=2.0.0 (from email_validator>=2.0.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 563.2   Downloading dnspython-2.9.2-py3-none-any.whl.metadata (5.8 kB)
+#27 564.7 Collecting rich-toolkit>=0.14.8 (from fastapi-cli>=0.0.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 564.8   Downloading rich_toolkit-0.20.6-py3-none-any.whl.metadata (3.0 kB)
+#27 567.9 Collecting certifi (from httpx>=0.23.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 568.0   Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+#27 569.7 Collecting httpcore==1.* (from httpx>=0.23.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 569.8   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+#27 570.4 Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.13/site-packages (from jinja2>=2.11.2->fastapi==0.111.0->-r requirements.txt (line 1)) (3.0.3)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2129.3 Collecting thinc<8.4.0,>=8.3.12 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.3   Using cached thinc-8.3.14-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (14 kB)
+#23 2129.4 Collecting wasabi<1.2.0,>=0.9.1 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.4   Using cached wasabi-1.1.3-py3-none-any.whl.metadata (28 kB)
+#23 2129.4 Collecting srsly<3.0.0,>=2.5.3 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.4   Using cached srsly-2.5.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (20 kB)
+#23 2129.4 Collecting catalogue<2.1.0,>=2.0.6 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.4   Using cached catalogue-2.0.10-py3-none-any.whl.metadata (14 kB)
+#23 2129.4 Collecting weasel<2.0.0,>=1.0.1 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.4   Using cached weasel-1.0.1-py3-none-any.whl.metadata (4.8 kB)
+#23 2129.4 Collecting confection<2.0.0,>=1.3.4 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.5   Using cached confection-1.3.4-py3-none-any.whl.metadata (19 kB)
+#23 2129.5 Collecting typer<1.0.0,>=0.3.0 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.5   Using cached typer-0.27.3-py3-none-any.whl.metadata (16 kB)
+#23 2129.5 Collecting tqdm<5.0.0,>=4.38.0 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2129.5   Using cached tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+#23 2131.2 Collecting jinja2 (from spacy>=3.7->-r requirements.txt (line 46))
+#23 2131.3   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#23 2131.6 Requirement already satisfied: setuptools in /usr/local/lib/python3.13/site-packages (from spacy>=3.7->-r requirements.txt (line 46)) (84.2.1)
+#23 2131.8 Collecting charset_normalizer<4,>=2 (from requests>=2.0.0->langsmith<1.0.0,>=0.3.45->langchain-core!=0.3.0,!=0.3.1,!=0.3.10,!=0.3.11,!=0.3.12,!=0.3.13,!=0.3.14,!=0.3.2,!=0.3.3,!=0.3.4,!=0.3.5,!=0.3.6,!=0.3.7,!=0.3.8,!=0.3.9,<0.4.0,>=0.2.43->langgraph==0.2.44->-r requirements.txt (line 32))
+#23 2131.8   Using cached charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#23 2131.9 Collecting blis<1.4.0,>=1.3.0 (from thinc<8.4.0,>=8.3.12->spacy>=3.7->-r requirements.txt (line 46))
+#23 2131.9   Using cached blis-1.3.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.4 kB)
+#23 2132.0 Collecting shellingham>=1.3.0 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2132.0   Using cached shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+#23 2132.0 Collecting rich>=13.8.0 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2132.0   Using cached rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+#23 2132.0 Collecting annotated-doc>=0.0.2 (from typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2132.0   Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+#23 2132.0 Collecting cloudpathlib>=0.7.0 (from weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 46))
+#23 2132.1   Using cached cloudpathlib-0.26.0-py3-none-any.whl.metadata (16 kB)
+#23 2132.1 Collecting smart-open>=5.2.1 (from smart-open[http]>=5.2.1->weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 46))
+#23 2132.1   Using cached smart_open-9.0.2-py3-none-any.whl.metadata (25 kB)
+#23 2132.6 Collecting prompt_toolkit>=3.0.36 (from click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 28))
+#23 2132.7   Using cached prompt_toolkit-3.0.53-py3-none-any.whl.metadata (6.4 kB)
+#23 2133.4 Collecting cffi>=2.0.0 (from cryptography>=3.4.0->python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 2133.5   Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+#23 2135.8 Collecting pycparser (from cffi>=2.0.0->cryptography>=3.4.0->python-jose[cryptography]==3.3.0->-r requirements.txt (line 21))
+#23 2135.9   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+#23 2138.3 Collecting deprecated>=1.2 (from limits>=2.3->slowapi==0.1.9->-r requirements.txt (line 25))
+#23 2138.3   Downloading deprecated-3.0.1-py3-none-any.whl.metadata (6.5 kB)
+#23 2139.3 Collecting wcwidth>=0.1.4 (from prompt_toolkit>=3.0.36->click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 28))
+#23 2139.4   Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+#23 2139.8 Collecting markdown-it-py>=2.2.0 (from rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2139.9   Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+#23 2141.0 Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2141.1   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 572.3 Collecting optimum-onnx[onnxruntime] (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 572.4   Downloading optimum_onnx-0.1.0-py3-none-any.whl.metadata (4.8 kB)
+#27 573.2 Collecting rich>=13.7.1 (from rich-toolkit>=0.14.8->fastapi-cli>=0.0.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 573.4   Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+#27 574.4 Collecting markdown-it-py>=2.2.0 (from rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 574.5   Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+#27 576.2 Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 576.3   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+#27 578.7 Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.2->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 578.9   Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+#27 580.6 Collecting joblib>=1.4.0 (from scikit-learn>=1.1.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 580.7   Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
+#27 581.6 Collecting narwhals>=2.0.1 (from scikit-learn>=1.1.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 581.8   Downloading narwhals-2.28.0-py3-none-any.whl.metadata (15 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 572.8 Collecting threadpoolctl>=3.5.0 (from scikit-learn>=1.3->-r requirements.txt (line 15))
+#28 572.9   Downloading threadpoolctl-3.7.0-py3-none-any.whl.metadata (24 kB)
+#28 573.4 Collecting pyyaml>=5.1 (from transformers>=4.40->-r requirements.txt (line 18))
+#28 573.4   Using cached pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+#28 574.7 Collecting regex>=2025.10.22 (from transformers>=4.40->-r requirements.txt (line 18))
+#28 574.8   Downloading regex-2026.9.29-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+#28 577.7 Collecting tokenizers<0.24.0,>=0.23.1 (from transformers>=4.40->-r requirements.txt (line 18))
+#28 577.8   Downloading tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.8 kB)
+#28 580.4 Collecting safetensors>=0.8.0 (from transformers>=4.40->-r requirements.txt (line 18))
+#28 580.5   Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.2 kB)
+#28 580.8 Requirement already satisfied: filelock>=3.10.0 in /usr/local/lib/python3.13/site-packages (from huggingface-hub->stanza>=1.8->-r requirements.txt (line 10)) (4.2.4)
+#28 580.8 Requirement already satisfied: fsspec>=2023.5.0 in /usr/local/lib/python3.13/site-packages (from huggingface-hub->stanza>=1.8->-r requirements.txt (line 10)) (2026.9.0)
+#28 581.3 Collecting hf-xet<2.0.0,>=1.6.0 (from huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 581.4   Downloading hf_xet-1.8.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+#28 581.9 Collecting httpx2<3,>=2.0.0 (from huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 581.9   Using cached httpx2-2.16.0-py3-none-any.whl.metadata (10 kB)
+#28 582.2 Collecting anyio>=4.10 (from httpx2<3,>=2.0.0->huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 582.2   Using cached anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+#28 582.3 Collecting httpcore2==2.16.0 (from httpx2<3,>=2.0.0->huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 582.3   Using cached httpcore2-2.16.0-py3-none-any.whl.metadata (27 kB)
+#28 582.3 Collecting truststore>=0.10 (from httpx2<3,>=2.0.0->huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 582.3   Using cached truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+#28 582.5 Collecting h11>=0.16 (from httpcore2==2.16.0->httpx2<3,>=2.0.0->huggingface-hub->stanza>=1.8->-r requirements.txt (line 10))
+#28 582.5   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 582.6 Collecting threadpoolctl>=3.5.0 (from scikit-learn>=1.1.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 582.7   Downloading threadpoolctl-3.7.0-py3-none-any.whl.metadata (24 kB)
+#27 588.8 Collecting cloudpickle>=3.0 (from joblib>=1.4.0->scikit-learn>=1.1.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 588.9   Downloading cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
+#27 589.4 Requirement already satisfied: setuptools>=77.0.3 in /usr/local/lib/python3.13/site-packages (from torch>=2.2->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (84.2.1)
+#27 589.5 Requirement already satisfied: sympy>=1.13.3 in /usr/local/lib/python3.13/site-packages (from torch>=2.2->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (1.14.0)
+#27 589.5 Requirement already satisfied: networkx>=2.5.1 in /usr/local/lib/python3.13/site-packages (from torch>=2.2->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (3.7)
+#27 589.5 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.13/site-packages (from sympy>=1.13.3->torch>=2.2->sentence-transformers>=3.0.0->-r requirements.txt (line 3)) (1.3.0)
+#27 590.0 Collecting shellingham>=1.3.0 (from typer->transformers<6.0.0,>=5.0.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 590.1   Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 583.0 Collecting psutil (from peft>=0.10->-r requirements.txt (line 19))
+#28 583.1   Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)
+#28 589.1 Collecting accelerate>=0.21.0 (from peft>=0.10->-r requirements.txt (line 19))
+#28 589.2   Downloading accelerate-1.15.0-py3-none-any.whl.metadata (19 kB)
+#28 589.6 Collecting prompt_toolkit>=3.0.36 (from click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#28 589.6   Using cached prompt_toolkit-3.0.53-py3-none-any.whl.metadata (6.4 kB)
+#28 589.9 Collecting httpcore==1.* (from httpx>=0.24.0->weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 9))
+#28 590.0   Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+#28 590.5 Collecting cloudpickle>=3.0 (from joblib>=1.4.0->scikit-learn>=1.3->-r requirements.txt (line 15))
+#28 590.7   Downloading cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
+#28 591.0 Collecting wcwidth>=0.1.4 (from prompt_toolkit>=3.0.36->click-repl>=0.2.0->celery==5.4.0->-r requirements.txt (line 1))
+#28 591.0   Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+#28 591.0 Collecting markdown-it-py>=2.2.0 (from rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 591.0   Using cached markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+#28 591.0 Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 591.0   Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+#28 591.0 Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 9))
+#28 591.0   Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 591.1 Collecting annotated-doc>=0.0.2 (from typer->transformers<6.0.0,>=5.0.0->sentence-transformers>=3.0.0->-r requirements.txt (line 3))
+#27 591.3   Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2141.9 Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.8.0->typer<1.0.0,>=0.3.0->spacy>=3.7->-r requirements.txt (line 46))
+#23 2142.0   Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+#23 2148.2 Collecting MarkupSafe>=2.0 (from jinja2->spacy>=3.7->-r requirements.txt (line 46))
+#23 2148.3   Downloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+#23 2148.7 Downloading fastapi-0.115.6-py3-none-any.whl (94 kB)
+#23 2149.4 Downloading pydantic-2.10.4-py3-none-any.whl (431 kB)
+#23 2150.0 Downloading uvicorn-0.34.0-py3-none-any.whl (62 kB)
+#23 2150.9 Downloading pydantic_settings-2.6.1-py3-none-any.whl (28 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 591.5 Collecting wrapt (from smart-open>=5.2.1->smart-open[http]>=5.2.1->weasel<2.0.0,>=1.0.1->spacy>=3.7->-r requirements.txt (line 9))
+#28 591.5   Downloading wrapt-2.5.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (7.6 kB)
+#28 592.5 Requirement already satisfied: sympy>=1.13.3 in /usr/local/lib/python3.13/site-packages (from torch>=1.13.0->stanza>=1.8->-r requirements.txt (line 10)) (1.14.0)
+#28 592.6 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.13/site-packages (from sympy>=1.13.3->torch>=1.13.0->stanza>=1.8->-r requirements.txt (line 10)) (1.3.0)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2156.2 Using cached SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+#23 2158.2 Downloading alembic-1.14.1-py3-none-any.whl (233 kB)
+#23 2160.4 Downloading asyncpg-0.30.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.6 MB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 599.2 Collecting httptools>=0.5.0 (from uvicorn[standard]>=0.12.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 599.3   Downloading httptools-0.9.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+#27 602.2 Collecting python-dotenv>=0.13 (from uvicorn[standard]>=0.12.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 602.4   Downloading python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2162.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 1.4 MB/s  0:00:02
+#23 2162.9 Using cached pgvector-0.3.5-py3-none-any.whl (24 kB)
+#23 2162.9 Using cached psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+#23 2163.0 Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+#23 2163.8 Downloading python_jose-3.3.0-py2.py3-none-any.whl (33 kB)
+#23 2164.5 Downloading passlib-1.7.4-py2.py3-none-any.whl (525 kB)
+#23 2165.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 525.6/525.6 kB 284.1 kB/s  0:00:00
+#23 2165.6 Downloading bcrypt-4.0.1-cp36-abi3-manylinux_2_28_x86_64.whl (593 kB)
+#23 2167.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 593.7/593.7 kB 204.0 kB/s  0:00:01
+#23 2167.3 Downloading python_multipart-0.0.20-py3-none-any.whl (24 kB)
+#23 2168.2 Downloading slowapi-0.1.9-py3-none-any.whl (14 kB)
+#23 2169.0 Using cached celery-5.4.0-py3-none-any.whl (425 kB)
+#23 2169.0 Using cached redis-5.2.1-py3-none-any.whl (261 kB)
+#23 2169.2 Downloading langgraph-0.2.44-py3-none-any.whl (118 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 601.0 Collecting udapi>=0.5.0 (from udtools>=0.2.4->stanza>=1.8->-r requirements.txt (line 10))
+#28 601.1   Downloading udapi-0.5.2-py3-none-any.whl.metadata (2.0 kB)
+#28 604.2 Collecting colorama (from udapi>=0.5.0->udtools>=0.2.4->stanza>=1.8->-r requirements.txt (line 10))
+#28 604.3   Downloading colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+#28 605.9 Collecting termcolor (from udapi>=0.5.0->udtools>=0.2.4->stanza>=1.8->-r requirements.txt (line 10))
+#28 606.0   Downloading termcolor-3.3.0-py3-none-any.whl.metadata (6.5 kB)
+#28 607.2 Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.13/site-packages (from jinja2->spacy>=3.7->-r requirements.txt (line 9)) (3.0.3)
+#28 607.3 Using cached celery-5.4.0-py3-none-any.whl (425 kB)
+#28 607.5 Downloading kombu-5.4.2-py3-none-any.whl (201 kB)
+#28 608.9 Using cached vine-5.1.0-py3-none-any.whl (9.6 kB)
+#28 609.0 Using cached redis-5.2.1-py3-none-any.whl (261 kB)
+#28 609.2 Using cached requests-2.32.3-py3-none-any.whl (64 kB)
+#28 609.3 Using cached psycopg2_binary-2.9.10-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+#28 609.5 Using cached amqp-5.4.2-py3-none-any.whl (51 kB)
+#28 609.6 Using cached billiard-4.3.2-py3-none-any.whl (90 kB)
+#28 609.6 Using cached charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)
+#28 609.6 Using cached click-8.5.0-py3-none-any.whl (125 kB)
+#28 609.6 Using cached idna-3.20-py3-none-any.whl (69 kB)
+#28 609.7 Using cached urllib3-2.8.0-py3-none-any.whl (135 kB)
+#28 609.8 Downloading sqlalchemy-2.1.8-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.7 MB)
+#28 612.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 1.6 MB/s  0:00:02
+#28 612.8 Downloading spacy-3.8.18-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (35.2 MB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2171.4 Downloading python_dotenv-1.0.1-py3-none-any.whl (19 kB)
+#23 2172.1 Downloading boto3-1.40.61-py3-none-any.whl (139 kB)
+#23 2173.2 Downloading aioboto3-15.5.0-py3-none-any.whl (35 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 605.3 Collecting uvloop!=0.15.0,!=0.15.1,>=0.14.0 (from uvicorn[standard]>=0.12.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 605.4   Downloading uvloop-0.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.1 kB)
+#27 607.5 Collecting watchfiles>=0.13 (from uvicorn[standard]>=0.12.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 607.6   Downloading watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+#27 610.4 Collecting websockets>=10.4 (from uvicorn[standard]>=0.12.0->fastapi==0.111.0->-r requirements.txt (line 1))
+#27 610.6   Downloading websockets-17.4-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+#27 612.1 Collecting optimum-onnx[onnxruntime] (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 612.2   Downloading optimum_onnx-0.0.3-py3-none-any.whl.metadata (4.6 kB)
+#27 613.3 INFO: pip is looking at multiple versions of optimum-onnx[onnxruntime] to determine which version is compatible with other requirements. This could take a while.
+#27 613.4   Downloading optimum_onnx-0.0.2-py3-none-any.whl.metadata (4.6 kB)
+#27 614.4   Downloading optimum_onnx-0.0.1-py3-none-any.whl.metadata (4.7 kB)
+#27 617.9 Collecting optimum[onnxruntime]>=1.20.0 (from -r requirements.txt (line 4))
+#27 618.0   Downloading optimum-2.2.0-py3-none-any.whl.metadata (14 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2176.7 Downloading aiobotocore-2.25.1-py3-none-any.whl (86 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 625.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.2/35.2 MB 2.8 MB/s  0:00:12
+#28 625.3 Downloading catalogue-2.0.10-py3-none-any.whl (17 kB)
+#28 627.8 Downloading confection-1.3.4-py3-none-any.whl (35 kB)
+#28 629.5 Downloading cymem-2.0.16-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (266 kB)
+#28 630.0 Downloading murmurhash-1.0.16-cp313-cp313-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (131 kB)
+#28 630.5 Downloading preshed-3.0.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (893 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 626.9 INFO: pip is still looking at multiple versions of optimum-onnx[onnxruntime] to determine which version is compatible with other requirements. This could take a while.
+#27 627.1   Downloading optimum-2.1.0-py3-none-any.whl.metadata (14 kB)
+#27 628.0   Downloading optimum-2.0.0-py3-none-any.whl.metadata (14 kB)
+#27 629.5 INFO: This is taking longer than usual. You might need to provide the dependency resolver with stricter constraints to reduce runtime. See https://pip.pypa.io/warnings/backtracking for guidance. If you want to abort this run, press Ctrl + C.
+#27 629.6   Downloading optimum-1.27.0-py3-none-any.whl.metadata (16 kB)
+#27 630.8 Collecting onnx (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 630.9   Downloading onnx-1.23.2-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (8.7 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 634.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 893.3/893.3 kB 153.2 kB/s  0:00:04
+#28 634.8 Downloading pydantic-2.14.2-py3-none-any.whl (490 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2186.2 Downloading pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.0 MB)
+#23 2188.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 914.6 kB/s  0:00:01
+#23 2188.3 Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl (25.8 MB)
+#23 2197.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.8/25.8 MB 2.9 MB/s  0:00:08
+#23 2197.2 Downloading aiohttp-3.14.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.9 MB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 638.8 Downloading pydantic_core-2.50.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.2 MB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2201.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.9/1.9 MB 357.0 kB/s  0:00:04
+#23 2201.9 Downloading aioitertools-0.13.0-py3-none-any.whl (24 kB)
+#23 2204.4 Using cached billiard-4.3.2-py3-none-any.whl (90 kB)
+#23 2204.6 Downloading botocore-1.40.61-py3-none-any.whl (14.1 MB)
+#23 2207.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.1/14.1 MB 5.1 MB/s  0:00:02
+#23 2207.6 Using cached click-8.5.0-py3-none-any.whl (125 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 638.8 Collecting datasets>=1.2.1 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 638.9   Downloading datasets-5.1.0-py3-none-any.whl.metadata (24 kB)
+#27 647.0 Collecting protobuf>=3.20.1 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 647.1   Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 645.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 293.6 kB/s  0:00:06
+#28 645.7 Downloading spacy_legacy-3.0.12-py2.py3-none-any.whl (29 kB)
+#28 646.5 Downloading spacy_loggers-1.0.5-py3-none-any.whl (22 kB)
+#28 647.0 Downloading srsly-2.5.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.2 MB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2216.0 Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+#23 2218.5 Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+#23 2220.6 Using cached kombu-5.7.0-py3-none-any.whl (266 kB)
+#23 2220.8 Using cached vine-5.1.0-py3-none-any.whl (9.6 kB)
+#23 2220.9 Downloading langchain_core-0.3.86-py3-none-any.whl (461 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 660.6 Collecting onnxruntime>=1.11.0 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 660.7   Downloading onnxruntime-1.31.1-cp313-cp313-manylinux_2_28_x86_64.whl.metadata (5.8 kB)
+#27 662.1 Collecting optimum[onnxruntime]>=1.20.0 (from -r requirements.txt (line 4))
+#27 662.2   Downloading optimum-1.26.1-py3-none-any.whl.metadata (16 kB)
+#27 662.5 INFO: pip is looking at multiple versions of optimum[onnxruntime] to determine which version is compatible with other requirements. This could take a while.
+#27 662.6   Downloading optimum-1.26.0-py3-none-any.whl.metadata (16 kB)
+#27 663.1   Downloading optimum-1.25.3-py3-none-any.whl.metadata (16 kB)
+#27 663.8   Downloading optimum-1.25.2-py3-none-any.whl.metadata (16 kB)
+#27 664.5   Downloading optimum-1.25.1-py3-none-any.whl.metadata (16 kB)
+#27 664.9   Downloading optimum-1.25.0-py3-none-any.whl.metadata (14 kB)
+#27 665.5   Downloading optimum-1.24.0-py3-none-any.whl.metadata (21 kB)
+#27 668.5 Collecting evaluate (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 668.7   Downloading evaluate-0.4.6-py3-none-any.whl.metadata (9.5 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 658.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 82.6 kB/s  0:00:11
+#28 658.9 Downloading thinc-8.3.14-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (4.3 MB)
+#28 661.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.3/4.3 MB 1.5 MB/s  0:00:02
+#28 661.7 Using cached numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+#28 662.4 Downloading blis-1.3.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (14.3 MB)
+#28 670.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.3/14.3 MB 1.8 MB/s  0:00:07
+#28 670.3 Downloading tqdm-4.70.1-py3-none-any.whl (80 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 670.3 INFO: pip is still looking at multiple versions of optimum[onnxruntime] to determine which version is compatible with other requirements. This could take a while.
+#27 670.3 Collecting optimum[onnxruntime]>=1.20.0 (from -r requirements.txt (line 4))
+#27 670.5   Downloading optimum-1.23.3-py3-none-any.whl.metadata (20 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 680.9 Downloading typer-0.27.3-py3-none-any.whl (123 kB)
+#28 682.5 Downloading wasabi-1.1.3-py3-none-any.whl (27 kB)
+#28 683.4 Downloading weasel-1.0.1-py3-none-any.whl (51 kB)
+#28 684.7 Downloading stanza-1.15.0-py3-none-any.whl (2.0 MB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 683.3 Collecting coloredlogs (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 683.4   Downloading coloredlogs-15.0.1-py2.py3-none-any.whl.metadata (12 kB)
+#27 684.3 Collecting optimum[onnxruntime]>=1.20.0 (from -r requirements.txt (line 4))
+#27 684.4   Downloading optimum-1.23.2-py3-none-any.whl.metadata (20 kB)
+#27 685.3   Downloading optimum-1.23.1-py3-none-any.whl.metadata (20 kB)
+#27 687.7   Downloading optimum-1.23.0-py3-none-any.whl.metadata (20 kB)
+#27 688.5   Downloading optimum-1.22.0-py3-none-any.whl.metadata (20 kB)
+#27 689.2 INFO: This is taking longer than usual. You might need to provide the dependency resolver with stricter constraints to reduce runtime. See https://pip.pypa.io/warnings/backtracking for guidance. If you want to abort this run, press Ctrl + C.
+#27 689.4   Downloading optimum-1.21.4-py3-none-any.whl.metadata (19 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2240.3 Downloading jsonpatch-1.42-py3-none-any.whl (23 kB)
+#23 2242.0 Downloading langgraph_checkpoint-2.1.2-py3-none-any.whl (45 kB)
+#23 2243.7 Downloading langgraph_sdk-0.1.74-py3-none-any.whl (50 kB)
+#23 2246.1 Downloading langsmith-0.14.17-py3-none-any.whl (940 kB)
+#23 2250.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 940.8/940.8 kB 221.7 kB/s  0:00:03
+#23 2250.1 Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 691.8   Downloading optimum-1.21.3-py3-none-any.whl.metadata (19 kB)
+#27 693.4   Downloading optimum-1.21.2-py3-none-any.whl.metadata (19 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 687.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 637.8 kB/s  0:00:02
+#28 687.7 Downloading scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2250.8 Downloading distro-1.9.0-py3-none-any.whl (20 kB)
+#23 2252.4 Downloading httpx2-2.16.0-py3-none-any.whl (97 kB)
+#23 2257.0 Downloading httpcore2-2.16.0-py3-none-any.whl (85 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 698.3   Downloading optimum-1.21.1-py3-none-any.whl.metadata (19 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 705.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 2.0 MB/s  0:00:17
+#28 705.1 Downloading scikit_learn-1.9.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (9.1 MB)
+#28 709.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.1/9.1 MB 2.3 MB/s  0:00:03
+#28 709.1 Downloading rapidfuzz-3.14.6-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (3.2 MB)
+#28 710.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 1.8 MB/s  0:00:01
+#28 710.8 Downloading transformers-5.22.1-py3-none-any.whl (13.1 MB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 705.7   Downloading optimum-1.21.0-py3-none-any.whl.metadata (19 kB)
+#27 706.6   Downloading optimum-1.20.0-py3-none-any.whl.metadata (19 kB)
+#27 709.6 INFO: pip is looking at multiple versions of optimum to determine which version is compatible with other requirements. This could take a while.
+#27 709.6 Collecting sentence-transformers>=3.0.0 (from -r requirements.txt (line 3))
+#27 709.7   Downloading sentence_transformers-6.1.0-py3-none-any.whl.metadata (20 kB)
+#27 711.1 Collecting huggingface_hub>=0.8.0 (from optimum>=1.20.0->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 711.2   Downloading huggingface_hub-1.33.0-py3-none-any.whl.metadata (16 kB)
+#27 712.9 Collecting sentence-transformers>=3.0.0 (from -r requirements.txt (line 3))
+#27 713.0   Downloading sentence_transformers-6.0.1-py3-none-any.whl.metadata (20 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 715.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.1/13.1 MB 3.0 MB/s  0:00:04
+#28 715.2 Downloading huggingface_hub-2.4.0-py3-none-any.whl (857 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2264.4 Downloading multidict-6.9.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (336 kB)
+#23 2267.6 Downloading packaging-25.0-py3-none-any.whl (66 kB)
+#23 2268.1 Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+#23 2269.7 Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+#23 2272.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.6/801.6 kB 186.3 kB/s  0:00:03
+#23 2272.8 Downloading s3transfer-0.14.0-py3-none-any.whl (85 kB)
+#23 2274.2 Downloading starlette-0.41.3-py3-none-any.whl (73 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 715.4 Collecting transformers>=4.29 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 715.5   Downloading transformers-4.57.6-py3-none-any.whl.metadata (43 kB)
+#27 717.1 Collecting huggingface_hub>=0.8.0 (from optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 717.2   Downloading huggingface_hub-0.36.2-py3-none-any.whl.metadata (15 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 716.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 857.0/857.0 kB 379.4 kB/s  0:00:01
+#28 716.9 Downloading hf_xet-1.8.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.3 MB)
+#28 721.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.3/4.3 MB 833.9 kB/s  0:00:04
+#28 721.8 Using cached httpx2-2.16.0-py3-none-any.whl (97 kB)
+#28 721.8 Using cached httpcore2-2.16.0-py3-none-any.whl (85 kB)
+#28 721.9 Downloading tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.4 MB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 722.2 Collecting requests (from transformers>=4.29->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 722.3   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+#27 723.1 Collecting tokenizers<=0.23.0,>=0.22.0 (from transformers>=4.29->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 723.2   Downloading tokenizers-0.22.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2275.7 Downloading tenacity-9.2.1-py3-none-any.whl (32 kB)
+#23 2276.4 Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#23 2276.5 Using cached urllib3-2.8.0-py3-none-any.whl (135 kB)
+#23 2276.6 Downloading uuid_utils-0.19.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (330 kB)
+#23 2280.8 Downloading wrapt-1.17.3-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (88 kB)
+#23 2281.8 Downloading yarl-1.25.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (117 kB)
+#23 2282.7 Using cached greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (623 kB)
+#23 2284.3 Downloading python_magic-0.4.27-py2.py3-none-any.whl (13 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 722.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 3.0 MB/s  0:00:01
+#28 723.0 Downloading peft-0.21.2-py3-none-any.whl (835 kB)
+#28 723.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 835.4/835.4 kB 1.0 MB/s  0:00:00
+#28 723.7 Downloading torchao-0.18.0-cp310-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (3.4 MB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 730.1 Collecting sentence-transformers>=3.0.0 (from -r requirements.txt (line 3))
+#27 730.2   Downloading sentence_transformers-6.0.0-py3-none-any.whl.metadata (20 kB)
+#27 732.8 INFO: pip is looking at multiple versions of sentence-transformers to determine which version is compatible with other requirements. This could take a while.
+#27 733.0   Downloading sentence_transformers-5.7.0-py3-none-any.whl.metadata (18 kB)
+#27 735.6 Collecting flatbuffers (from onnxruntime>=1.11.0->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 735.7   Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2291.5 Downloading python_docx-1.2.0-py3-none-any.whl (252 kB)
+#23 2292.9 Using cached spacy-3.8.18-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (35.2 MB)
+#23 2292.9 Using cached catalogue-2.0.10-py3-none-any.whl (17 kB)
+#23 2292.9 Using cached confection-1.3.4-py3-none-any.whl (35 kB)
+#23 2292.9 Using cached cymem-2.0.16-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (266 kB)
+#23 2292.9 Using cached murmurhash-1.0.16-cp313-cp313-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (131 kB)
+#23 2292.9 Using cached preshed-3.0.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (893 kB)
+#23 2293.0 Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+#23 2293.9 Using cached charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)
+#23 2294.0 Using cached idna-3.20-py3-none-any.whl (69 kB)
+#23 2294.0 Using cached spacy_legacy-3.0.12-py2.py3-none-any.whl (29 kB)
+#23 2294.0 Using cached spacy_loggers-1.0.5-py3-none-any.whl (22 kB)
+#23 2294.0 Using cached srsly-2.5.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.2 MB)
+#23 2294.0 Using cached thinc-8.3.14-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (4.3 MB)
+#23 2294.1 Using cached blis-1.3.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (14.3 MB)
+#23 2294.1 Using cached numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+#23 2297.0 Using cached tqdm-4.70.1-py3-none-any.whl (80 kB)
+#23 2297.0 Using cached typer-0.27.3-py3-none-any.whl (123 kB)
+#23 2297.0 Using cached wasabi-1.1.3-py3-none-any.whl (27 kB)
+#23 2297.1 Using cached weasel-1.0.1-py3-none-any.whl (51 kB)
+#23 2297.1 Downloading aiofiles-25.1.0-py3-none-any.whl (14 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 738.5 Collecting ml_dtypes>=0.5.4 (from onnx->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 738.6   Downloading ml_dtypes-0.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (8.8 kB)
+#27 741.6 Collecting charset_normalizer<4,>=2 (from requests->transformers>=4.29->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 741.8   Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 732.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 346.3 kB/s  0:00:09
+#28 732.9 Downloading accelerate-1.15.0-py3-none-any.whl (394 kB)
+#28 734.8 Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+#28 735.7 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#28 737.4 Using cached anyio-4.16.0-py3-none-any.whl (134 kB)
+#28 737.5 Using cached certifi-2026.10.23-py3-none-any.whl (135 kB)
+#28 737.8 Using cached click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+#28 737.8 Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+#28 738.1 Using cached click_repl-0.4.1-py3-none-any.whl (14 kB)
+#28 738.3 Downloading cloudpathlib-0.26.0-py3-none-any.whl (66 kB)
+#28 739.0 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#28 741.1 Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+#28 741.1 Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+#28 741.2 Downloading joblib-1.6.0-py3-none-any.whl (306 kB)
+#28 742.4 Downloading cloudpickle-3.1.2-py3-none-any.whl (22 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2297.8 Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+#23 2300.1 Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+#23 2300.8 Using cached amqp-5.4.2-py3-none-any.whl (51 kB)
+#23 2300.8 Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+#23 2300.8 Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#23 2300.9 Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+#23 2301.6 Using cached certifi-2026.10.23-py3-none-any.whl (135 kB)
+#23 2301.6 Using cached click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+#23 2301.6 Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+#23 2301.6 Using cached click_repl-0.4.1-py3-none-any.whl (14 kB)
+#23 2301.6 Using cached cloudpathlib-0.26.0-py3-none-any.whl (66 kB)
+#23 2301.7 Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+#23 2303.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 2.4 MB/s  0:00:01
+#23 2303.7 Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+#23 2305.3 Downloading ecdsa-0.19.2-py2.py3-none-any.whl (150 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 743.5 Downloading narwhals-2.28.0-py3-none-any.whl (490 kB)
+#28 744.3 Using cached prompt_toolkit-3.0.53-py3-none-any.whl (392 kB)
+#28 744.4 Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+#28 745.4 Using cached python_dateutil-4.0.0-py3-none-any.whl (92 kB)
+#28 745.7 Using cached pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+#28 745.8 Downloading regex-2026.9.29-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+#28 747.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 382.6 kB/s  0:00:01
+#28 747.3 Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+#28 747.8 Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+#28 748.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 3.0 MB/s  0:00:00
+#28 748.3 Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+#28 750.4 Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+#28 752.0 Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (516 kB)
+#28 752.6 Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+#28 753.7 Downloading smart_open-9.0.2-py3-none-any.whl (76 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 743.7 Collecting urllib3<3,>=1.26 (from requests->transformers>=4.29->optimum[onnxruntime]>=1.20.0->-r requirements.txt (line 4))
+#27 743.8   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#27 744.5 Downloading fastapi-0.111.0-py3-none-any.whl (91 kB)
+#27 745.5 Downloading uvicorn-0.30.1-py3-none-any.whl (62 kB)
+#27 747.3 Downloading pydantic-2.14.2-py3-none-any.whl (490 kB)
+#27 747.9 Downloading pydantic_core-2.50.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.2 MB)
+#27 748.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 2.7 MB/s  0:00:00
+#27 750.3 Downloading starlette-0.37.2-py3-none-any.whl (71 kB)
+#27 752.1 Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+#27 752.6 Downloading optimum-2.1.0-py3-none-any.whl (161 kB)
+#27 753.6 Downloading transformers-4.57.6-py3-none-any.whl (12.0 MB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 754.2 Downloading threadpoolctl-3.7.0-py3-none-any.whl (26 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2306.1 Downloading frozenlist-1.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (234 kB)
+#23 2306.6 Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+#23 2306.7 Downloading httptools-0.9.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (520 kB)
+#23 2307.3 Downloading jsonpointer-3.8-py3-none-any.whl (10 kB)
+#23 2310.4 Downloading limits-5.8.0-py3-none-any.whl (60 kB)
+#23 2311.0 Downloading deprecated-3.0.1-py3-none-any.whl (22 kB)
+#23 2311.5 Downloading lxml-6.1.3-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.2 MB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 760.8 Downloading truststore-0.10.5-py3-none-any.whl (19 kB)
+#28 762.6 Downloading typing_inspection-0.4.5-py3-none-any.whl (14 kB)
+#28 764.3 Using cached tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+#28 764.4 Downloading udtools-0.2.9-py3-none-any.whl (822 kB)
+#28 765.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 822.5/822.5 kB 529.2 kB/s  0:00:01
+#28 765.6 Downloading udapi-0.5.2-py3-none-any.whl (418 kB)
+#28 766.9 Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (785 kB)
+#28 767.2 Downloading colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2320.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 563.8 kB/s  0:00:08
+#23 2320.4 Downloading orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (130 kB)
+#23 2322.9 Downloading ormsgpack-1.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (255 kB)
+#23 2323.8 Using cached prompt_toolkit-3.0.53-py3-none-any.whl (392 kB)
+#23 2323.9 Downloading propcache-0.5.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (234 kB)
+#23 2324.4 Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl (54 kB)
+#23 2325.7 Using cached rich-15.0.0-py3-none-any.whl (310 kB)
+#23 2325.7 Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+#23 2325.7 Using cached markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+#23 2325.7 Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+#23 2325.7 Using cached shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+#23 2325.8 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+#23 2326.8 Using cached smart_open-9.0.2-py3-none-any.whl (76 kB)
+#23 2326.8 Using cached truststore-0.10.5-py3-none-any.whl (19 kB)
+#23 2326.8 Using cached tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+#23 2327.1 Downloading uvloop-0.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.5 MB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 769.5 Downloading emoji-2.16.0-py3-none-any.whl (610 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 761.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.0/12.0 MB 1.5 MB/s  0:00:08
+#27 761.7 Downloading sentence_transformers-5.7.0-py3-none-any.whl (611 kB)
+#27 764.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 611.3/611.3 kB 144.8 kB/s  0:00:02
+#27 764.3 Downloading optimum_onnx-0.1.0-py3-none-any.whl (194 kB)
+#27 765.5 Downloading huggingface_hub-0.36.2-py3-none-any.whl (566 kB)
+#27 766.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 566.4/566.4 kB 259.1 kB/s  0:00:01
+#27 766.8 Downloading hf_xet-1.8.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.3 MB)
+#27 768.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.3/4.3 MB 2.4 MB/s  0:00:01
+#27 768.6 Downloading tokenizers-0.22.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+#27 772.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 897.8 kB/s  0:00:03
+#27 772.1 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 772.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 610.9/610.9 kB 138.2 kB/s  0:00:02
+#28 772.0 Using cached orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (130 kB)
+#28 772.1 Downloading platformdirs-4.14.5-py3-none-any.whl (35 kB)
+#28 774.9 Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+#28 775.8 Downloading termcolor-3.3.0-py3-none-any.whl (7.7 kB)
+#28 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2330.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 1.2 MB/s  0:00:03
+#23 2330.8 Downloading watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (458 kB)
+#23 2334.0 Using cached wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (785 kB)
+#23 2334.1 Downloading websockets-17.4-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (226 kB)
+#23 2334.9 Downloading xxhash-4.0.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (268 kB)
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 775.4 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#27 776.1 Downloading email_validator-2.3.0-py3-none-any.whl (35 kB)
+#27 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 796.7 Downloading wrapt-2.5.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (248 kB)
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 801.1 Downloading dnspython-2.9.2-py3-none-any.whl (360 kB)
+#27 803.3 Downloading fastapi_cli-0.0.32-py3-none-any.whl (14 kB)
+#27 804.4 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#27 805.3 Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2359.8 Downloading zstandard-0.25.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+#23 2362.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.5/5.5 MB 2.4 MB/s  0:00:02
+#23 2362.1 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#23 2363.6 Downloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (23 kB)
+#23 2364.3 Downloading mako-1.4.3-py3-none-any.whl (80 kB)
+#23 ...
+
+#31 [worker-fast] exporting to image
+#31 exporting layers 360.5s done
+#31 exporting manifest sha256:1784d3eba0093d90dabde57c6dae67455b10a2c972ee4e4c7f930a3b1ae0c195 6.3s done
+#31 exporting config sha256:acd094834edeebdc92efcf5544dabc749105aeb667f9a28de3113518939bb928
+#31 ...
+
+#32 [worker-heavy] exporting to image
+#32 exporting layers 360.4s done
+#32 exporting manifest sha256:88fb9cb34c50ac00e30868cb7a313665b24b629446def97f97912551dde454b5
+#32 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 814.7 Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+#27 815.9 Downloading idna-3.20-py3-none-any.whl (69 kB)
+#27 819.3 Downloading numpy-2.5.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+#27 ...
+
+#31 [worker-fast] exporting to image
+#31 exporting config sha256:acd094834edeebdc92efcf5544dabc749105aeb667f9a28de3113518939bb928 11.0s done
+#31 ...
+
+#32 [worker-heavy] exporting to image
+#32 exporting manifest sha256:88fb9cb34c50ac00e30868cb7a313665b24b629446def97f97912551dde454b5 11.7s done
+#32 exporting config sha256:53b6f47ccf04a95945c9a05e1f57386f1ea0e293e2935aa569950e19298e204c 6.2s done
+#32 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2373.6 Downloading pyasn1-0.6.5-py3-none-any.whl (84 kB)
+#23 2374.7 Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+#23 2378.1 Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+#23 2378.6 Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+#23 ...
+
+#28 [worker-nlp worker-nlp 4/6] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#28 815.2 Installing collected packages: torchao, wrapt, wcwidth, wasabi, vine, urllib3, tzdata, typing-inspection, truststore, tqdm, threadpoolctl, termcolor, sqlalchemy, spacy-loggers, spacy-legacy, shellingham, safetensors, regex, redis, rapidfuzz, pyyaml, pygments, pydantic-core, psycopg2-binary, psutil, protobuf, platformdirs, orjson, numpy, narwhals, murmurhash, mdurl, idna, hf-xet, h11, emoji, cymem, confection, colorama, cloudpickle, cloudpathlib, click, charset-normalizer, certifi, catalogue, billiard, annotated-types, annotated-doc, udapi, srsly, smart-open, scipy, requests, python-dateutil, pydantic, prompt_toolkit, preshed, markdown-it-py, joblib, httpcore2, httpcore, click-plugins, click-didyoumean, blis, anyio, amqp, udtools, thinc, scikit-learn, rich, kombu, httpx2, httpx, click-repl, typer, huggingface-hub, celery, weasel, tokenizers, stanza, accelerate, transformers, spacy, peft
+#28 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 824.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 3.1 MB/s  0:00:05
+#27 824.8 Downloading onnxruntime-1.31.1-cp313-cp313-manylinux_2_28_x86_64.whl (23.8 MB)
+#27 ...
+
+#23 [fastapi backend 3/4] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#23 2388.5 Installing collected packages: passlib, zstandard, xxhash, wrapt, websockets, wcwidth, wasabi, vine, uvloop, uuid-utils, urllib3, tzdata, typing-extensions, truststore, tqdm, tenacity, spacy-loggers, spacy-legacy, sniffio, six, shellingham, redis, pyyaml, python-multipart, python-magic, python-dotenv, PyMuPDF, pygments, pycparser, pyasn1, psycopg2-binary, propcache, packaging, ormsgpack, orjson, numpy, murmurhash, multidict, mdurl, MarkupSafe, lxml, jsonpointer, jmespath, idna, httptools, h11, greenlet, frozenlist, distro, cymem, confection, cloudpathlib, click, charset_normalizer, certifi, catalogue, billiard, bcrypt, attrs, asyncpg, annotated-types, annotated-doc, aioitertools, aiohappyeyeballs, aiofiles, yarl, uvicorn, srsly, sqlalchemy, smart-open, rsa, requests, python-docx, python-dateutil, pydantic-core, prompt_toolkit, preshed, pgvector, markdown-it-py, Mako, jsonpatch, jinja2, httpcore2, httpcore, ecdsa, deprecated, click-plugins, click-didyoumean, cffi, blis, anyio, amqp, aiosignal, watchfiles, starlette, rich, requests-toolbelt, python-jose, pydantic, limits, kombu, httpx2, httpx, cryptography, click-repl, botocore, alembic, aiohttp, typer, thinc, slowapi, s3transfer, pydantic-settings, langsmith, langgraph-sdk, fastapi, celery, aiobotocore, weasel, langchain-core, boto3, spacy, langgraph-checkpoint, langgraph, aioboto3
+#23 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 833.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.8/23.8 MB 2.7 MB/s  0:00:08
+#27 833.8 Downloading orjson-3.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (130 kB)
+#27 835.4 Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+#27 838.2 Downloading python_multipart-0.0.33-py3-none-any.whl (32 kB)
+#27 ...
+
+#31 [worker-fast] exporting to image
+#31 exporting attestation manifest sha256:95857f34d7611b20491d53fb813901aa1174da152356c284b7412a3ad3be89b1
+#31 ...
+
+#32 [worker-heavy] exporting to image
+#32 exporting attestation manifest sha256:45929fbd2d6d445686ca50502b4a624da446ce088c1662b499a5260730f79282
+#32 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 845.8 Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+#27 851.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.6/801.6 kB 100.0 kB/s  0:00:05
+#27 851.3 Downloading regex-2026.9.29-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+#27 ...
+
+#31 [worker-fast] exporting to image
+#31 exporting attestation manifest sha256:95857f34d7611b20491d53fb813901aa1174da152356c284b7412a3ad3be89b1 19.0s done
+#31 exporting manifest list sha256:d9e1086cd3b9122506b555f2a7bda27f9a78a8bc04f3d288204cbc283c6bc46a
+#31 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 853.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 252.0 kB/s  0:00:02
+#27 853.7 Downloading rich_toolkit-0.20.6-py3-none-any.whl (39 kB)
+#27 855.3 Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+#27 ...
+
+#32 [worker-heavy] exporting to image
+#32 exporting attestation manifest sha256:45929fbd2d6d445686ca50502b4a624da446ce088c1662b499a5260730f79282 19.4s done
+#32 exporting manifest list sha256:4281eabacd3daac16f40439b2ea647c58d37edc2a2b7bff94404faaea766b27a
+#32 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 1243.0 Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+#27 1394.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB ?  0:02:31
+#27 1395.0 Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+#27 ...
+
+#31 [worker-fast] exporting to image
+#31 exporting manifest list sha256:d9e1086cd3b9122506b555f2a7bda27f9a78a8bc04f3d288204cbc283c6bc46a 542.4s done
+#31 naming to docker.io/library/geno-cgt-worker-fast:latest
+#31 naming to docker.io/library/geno-cgt-worker-fast:latest 0.8s done
+#31 unpacking to docker.io/library/geno-cgt-worker-fast:latest
+#31 ...
+
+#32 [worker-heavy] exporting to image
+#32 exporting manifest list sha256:4281eabacd3daac16f40439b2ea647c58d37edc2a2b7bff94404faaea766b27a 542.2s done
+#32 naming to docker.io/library/geno-cgt-worker-heavy:latest 0.3s done
+#32 unpacking to docker.io/library/geno-cgt-worker-heavy:latest
+#32 ...
+
+#27 [tei tei 5/8] RUN --mount=type=cache,target=/root/.cache/pip     pip install -r requirements.txt
+#27 1395.8 Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+#27 1396.4 Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (516 kB)
+#27 1397.8 Downloading scikit_learn-1.9.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (9.1 MB)

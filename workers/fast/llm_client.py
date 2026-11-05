@@ -73,39 +73,10 @@ CACHE_TAIL_MARKER = "[contenido variable: ver mensaje del usuario]"
 
 # ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
 # These are also defined in config.py; kept here for worker self-containment.
-
-_MODEL_FLASH = model_id_of("flash")
-_MODEL_PRO = model_id_of("pro")
-
-_TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": _MODEL_FLASH,
-    "PRO": _MODEL_PRO,
-}
-
-_TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": TierSettings.for_tier("flash").max_tokens,
-    "PRO": TierSettings.for_tier("pro").max_tokens,
-}
-
-_TIER_TEMPERATURE: dict[ModelTier, float] = {
-    "FLASH": TierSettings.for_tier("flash").temperature,
-    "PRO": TierSettings.for_tier("pro").temperature,
-}
-
-_TIER_REPETITION_PENALTY: dict[ModelTier, float] = {
-    "FLASH": TierSettings.for_tier("flash").repetition_penalty,
-    "PRO": TierSettings.for_tier("pro").repetition_penalty,
-}
-
-_TIER_FREQUENCY_PENALTY: dict[ModelTier, float] = {
-    "FLASH": TierSettings.for_tier("flash").frequency_penalty,
-    "PRO": TierSettings.for_tier("pro").frequency_penalty,
-}
-
-_TIER_TOP_P: dict[ModelTier, float] = {
-    "FLASH": TierSettings.for_tier("flash").top_p,
-    "PRO": TierSettings.for_tier("pro").top_p,
-}
+#
+# No se cachean en constantes de módulo: `TierSettings.for_tier()` y
+# `model_id_of()` se resuelven en cada llamada para que un cambio en el panel
+# de configuración (⚙) surta efecto sin reiniciar el worker.
 
 PROMPTS_DIR = get_config_value(
     "PROMPTS_DIR", default="/app/prompts", env_var="PROMPTS_DIR"
@@ -478,15 +449,15 @@ class LLMClient:
 
         model_tier: ModelTier = resolve_model_tier(parsed["metadata"], agent_id)
 
-        defaults = None
+        settings = TierSettings.for_tier(model_tier)
         if max_tokens is None:
-            max_tokens = _TIER_MAX_TOKENS[model_tier]
+            max_tokens = settings.max_tokens
         if temperature is None:
-            temperature = _TIER_TEMPERATURE[model_tier]
+            temperature = settings.temperature
 
-        repetition_penalty = _TIER_REPETITION_PENALTY[model_tier]
-        frequency_penalty = _TIER_FREQUENCY_PENALTY[model_tier]
-        top_p = _TIER_TOP_P[model_tier]
+        repetition_penalty = settings.repetition_penalty
+        frequency_penalty = settings.frequency_penalty
+        top_p = settings.top_p
 
         logger.info(
             "Agent %s → tier=%s tokens=%d temp=%.2f rep_pen=%.2f freq_pen=%.2f top_p=%.2f",
@@ -511,7 +482,7 @@ class LLMClient:
             system_prompt = system_prompt.replace("{" + k + "}", str(v))
 
         schema = parsed["schema"]
-        model = _TIER_MODELS[model_tier]
+        model = model_id_of(model_tier)
         return self._call_llm(
             model_tier,
             model,

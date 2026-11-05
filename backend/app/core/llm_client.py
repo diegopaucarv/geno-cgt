@@ -125,11 +125,16 @@ class TierSettings:
         upper = (tier or "pro").upper()
         values: dict[str, float] = {}
         # Defaults mirror the historical per-worker tables so behaviour is stable.
+        # ``FREQUENCY_PENALTY`` stays neutral on both tiers: reasoning models
+        # (DeepSeek V4, Nemotron) degenerate when it is applied — the model
+        # avoids repeating tokens by emitting whitespace, burning the output
+        # budget until ``finish_reason=length`` returns empty ``content``.
+        # ``REPETITION_PENALTY`` covers the same ground without that failure.
         fallbacks = {
             "MAX_TOKENS": "8192" if upper == "PRO" else "4096",
             "TEMPERATURE": "0.3" if upper == "PRO" else "0.1",
             "REPETITION_PENALTY": "1.0" if upper == "PRO" else "1.1",
-            "FREQUENCY_PENALTY": "0.0" if upper == "PRO" else "1.15",
+            "FREQUENCY_PENALTY": "0.0",
             "TOP_P": "1.0" if upper == "PRO" else "0.9",
         }
         for knob in _TIER_CONFIG_KEYS:

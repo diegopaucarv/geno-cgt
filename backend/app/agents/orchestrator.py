@@ -202,7 +202,13 @@ class OrchestratorRuleEngine:
         return {"passed": len(missing) == 0, "missing": missing}
 
     def _llm_fallback(self, current_step: str, state: dict[str, Any]) -> str:
-        """Ultimo recurso: preguntar al LLM (FLASH, ~50 tokens)."""
+        """Ultimo recurso: preguntar al LLM (FLASH).
+
+        Nota: los modelos de razonamiento actuales emiten ``reasoning_content``
+        antes del contenido visible (~87 caracteres medidos en Nemotron). Con un
+        presupuesto de 20 tokens la respuesta llega vacia con
+        ``finish_reason=length`` y el router cae siempre a ``final_report``.
+        """
         if self.llm is None:
             return "final_report"
 
@@ -224,7 +230,7 @@ Responde SOLO el nombre del proximo nodo, sin explicacion.
         response = self.llm.chat(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=20,
+            max_tokens=256,
         )
         content = response.get("content", "").strip().lower()
 

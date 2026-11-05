@@ -26,6 +26,7 @@ from app.core.llm_client import (
     TierSettings,
     api_base_url,
     model_id_of,
+    tier_of,
 )
 from app.core.runtime_config import get_config_value
 
@@ -166,24 +167,10 @@ class AgentOutput:
 
 
 # ── Model configuration — SINGLE SOURCE: runtime_config + env vars ──
-
-_MODEL_FLASH = model_id_of("flash")
-_MODEL_PRO = model_id_of("pro")
-
-_TIER_MODELS: dict[ModelTier, str] = {
-    "FLASH": model_id_of("flash"),
-    "PRO": model_id_of("pro"),
-}
-
-_TIER_MAX_TOKENS: dict[ModelTier, int] = {
-    "FLASH": TierSettings.for_tier("flash").max_tokens,
-    "PRO": TierSettings.for_tier("pro").max_tokens,
-}
-
-_TIER_TEMPERATURE: dict[ModelTier, float] = {
-    "FLASH": float(get_config_value("MODEL_FLASH_TEMPERATURE", default="0.1")),
-    "PRO": float(get_config_value("MODEL_PRO_TEMPERATURE", default="0.3")),
-}
+#
+# No se cachean los valores en constantes de módulo: `TierSettings.for_tier()`
+# y `model_id_of()` se resuelven en cada llamada para que un cambio en el panel
+# de configuración (⚙) surta efecto sin reiniciar el worker.
 
 PROMPTS_DIR = get_config_value(
     "PROMPTS_DIR", default="/app/prompts", env_var="PROMPTS_DIR"
@@ -590,7 +577,7 @@ class LLMClient:
         messages: list[dict],
         model: str | None = None,
         temperature: float = 0.3,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         cache_key: str | None = None,
     ) -> dict[str, Any]:
         """Simple chat interface for agents (orchestrator, plan_executor, react).
@@ -598,13 +585,23 @@ class LLMClient:
         Compatible with backend TogetherLLM.chat() interface. ``cache_key`` se
         envía como ``x-session-affinity`` para que las llamadas de un mismo lote
         caigan en la misma réplica y aprovechen la caché de prompt de Fireworks.
+
+        ``max_tokens=None`` se resuelve al presupuesto del tier
+        (``MODEL_PRO_MAX_TOKENS`` / ``MODEL_FLASH_MAX_TOKENS``), igual que
+        :meth:`run_agent`. Antes había aquí un default fijo de 4096 que se
+        aplicaba en silencio: los prompts de razonamiento agotaban el budget
+        razonando y devolvían ``content`` vacío, indistinguible de un fallo real.
         """
         if self.is_mock:
             return {
                 "content": self._provider.mock_answer(),
                 "reasoning_content": "",
+                "finish_reason": "stop",
                 "usage": {"total_tokens": 0},
             }
+
+        if max_tokens is None:
+            max_tokens = TierSettings.for_tier(tier_of(model)).max_tokens
 
         try:
             response: LLMResponse = self._provider.chat(
@@ -617,6 +614,7 @@ class LLMClient:
             return {
                 "content": response.content,
                 "reasoning_content": response.reasoning_content or "",
+                "finish_reason": response.finish_reason,
                 "usage": {"total_tokens": response.usage.get("total_tokens", 0)},
             }
         except Exception as e:
@@ -624,6 +622,7 @@ class LLMClient:
             return {
                 "content": "",
                 "reasoning_content": "",
+                "finish_reason": "error",
                 "usage": {"total_tokens": 0},
             }
 
@@ -714,11 +713,11 @@ class LLMClient:
 
         model_tier: ModelTier = resolve_model_tier(parsed["metadata"], agent_id)
 
-        defaults = None
+        settings = TierSettings.for_tier(model_tier)
         if max_tokens is None:
-            max_tokens = _TIER_MAX_TOKENS[model_tier]
+            max_tokens = settings.max_tokens
         if temperature is None:
-            temperature = _TIER_TEMPERATURE[model_tier]
+            temperature = settings.temperature
 
         logger.info(
             "Agent %s → tier=%s tokens=%d temp=%.2f",
@@ -773,7 +772,7 @@ class LLMClient:
                 schema = json.loads(schema_str)
             except Exception:
                 pass  # graceful fallback
-        model = _TIER_MODELS[model_tier]
+        model = model_id_of(model_tier)
 
         # ── Log populated prompt before sending to LLM ───────────────
         try:

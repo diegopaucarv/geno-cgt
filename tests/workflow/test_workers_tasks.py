@@ -412,3 +412,26 @@ def test_heavy_worker_configures_result_backend():
         "stay PENDING for the frontend and end in a 120s timeout even though "
         "the DB state advances"
     )
+
+
+def test_a14_main_concern_binds_processing_verb_forms():
+    """``task_a14_main_concern`` forwards processing_verb/gerund to the prompt.
+
+    Both names were referenced in the ``fc_main_concern_proposer`` variables but
+    never assigned anywhere in the function, so the task raised ``NameError``
+    before the LLM call. They must be read from ``population_assumption`` like the
+    sibling tasks do.
+    """
+    _, tree = _read(HEAVY_TASKS)
+    func = _function(tree, "task_a14_main_concern")
+
+    assigned = {
+        node.id
+        for node in ast.walk(func)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+    }
+    for name in ("processing_verb", "processing_gerund"):
+        assert name in assigned, (
+            f"{name} is passed to fc_main_concern_proposer but never bound in "
+            "task_a14_main_concern"
+        )

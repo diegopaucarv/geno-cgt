@@ -30,6 +30,7 @@ from algorithmic_checks import (
 from context_utils import inject_chosen_context
 from database import SessionLocal
 from glaser_classifier import (
+    ClassificationUnavailable,
     classify_document_with_validation,
 )
 from llm_client import LLMClient
@@ -666,6 +667,15 @@ def _classify_glaser_types_for_doc(
         result.get("baseline_tags_count", 0),
         result.get("segments_classified", 0),
     )
+
+    if result.get("status") == "degraded":
+        # Seguir adelante dejaría el documento con TODOS los segmentos en
+        # baseline_data y la extracción de incidentes produciría ruido a partir
+        # de eso. Mejor fallar el paso y dejar el documento reintentable.
+        raise ClassificationUnavailable(
+            f"Clasificación Glaser degradada doc={documento_id[:8]}: "
+            f"{result.get('reason') or 'sin detalle'}"
+        )
 
     return result.get("segments_classified", 0)
 
@@ -2119,6 +2129,18 @@ def task_a14_main_concern(proyecto_id: str) -> dict:
         )
         operational_question = rq_data.get("operational_question", "")
         research_question = rq_data.get("question", "")  # the full question Q1+Q2
+        # `fc_main_concern_proposer` uses both verb forms in its prompt; they
+        # live in population_assumption (written by create_project).
+        processing_verb = (
+            pa_data.get("processing_verb", "resolve")
+            if isinstance(pa_data, dict)
+            else "resolve"
+        )
+        processing_gerund = (
+            pa_data.get("processing_gerund", "resolving")
+            if isinstance(pa_data, dict)
+            else "resolving"
+        )
 
         codes = s.execute(
             text("SELECT nombre, definicion FROM categorias WHERE proyecto_id=:pid"),
@@ -2899,6 +2921,21 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
             llm_client=llm,
             max_validation_rounds=3,
         )
+
+        if result.get("status") == "degraded":
+            # Degradado NO es éxito: el documento no puede pasar a 'clasificado'
+            # con todos los segmentos en baseline sin que el investigador lo
+            # sepa. Se deja en 'error' (reintentable desde la UI) y se lanza
+            # para que Celery lo reporte como FAILURE.
+            session.execute(
+                text("UPDATE documentos SET estado = 'error' WHERE id = :did"),
+                {"did": documento_id},
+            )
+            session.commit()
+            raise ClassificationUnavailable(
+                f"Clasificación degradada para doc {documento_id[:8]}: "
+                f"{result.get('reason') or 'sin detalle'}"
+            )
 
         if result.get("status") in ("ok", "warning", "completed"):
             session.execute(

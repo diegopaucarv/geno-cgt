@@ -164,12 +164,28 @@ def transition(
 
     # ── 3. Si llegó a estado de batch-ready, verificar Phase B + Iteration ──
     if next_state in ("listo", "incidentes_extraidos"):
-        # Phase B: >=3 docs listos/incidentes_extraidos → synthesis
-        result = _maybe_trigger_phase_b(session, proyecto_id)
-        if result:
-            return result
-        # Iteration: nuevo doc en proyecto avanzado → re-ejecutar pipeline
-        return _maybe_trigger_iteration(session, proyecto_id)
+        # Los triggers por lote son efectos secundarios advisory: el estado del
+        # documento YA quedó commiteado en el paso 1. Si fallan (p.ej. la clave
+        # de idempotencia no cabe en processing_states.step) no deben demover
+        # el documento — antes la excepción escapaba hasta el `except` de
+        # process_document_agents_a, que lo devolvía a 'segmentado' con los
+        # incidentes ya extraídos.
+        try:
+            # Phase B: >=3 docs listos/incidentes_extraidos → synthesis
+            result = _maybe_trigger_phase_b(session, proyecto_id)
+            if result:
+                return result
+            # Iteration: nuevo doc en proyecto avanzado → re-ejecutar pipeline
+            return _maybe_trigger_iteration(session, proyecto_id)
+        except Exception:
+            session.rollback()
+            logger.exception(
+                "Batch trigger falló tras llevar doc=%s a '%s'; "
+                "se conserva el estado del documento.",
+                documento_id,
+                next_state,
+            )
+            return None
 
     return None
 

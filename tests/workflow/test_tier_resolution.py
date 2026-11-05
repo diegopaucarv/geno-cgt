@@ -249,3 +249,110 @@ def test_missing_tier_defaults_to_pro_and_warns(resolver, caplog):
         assert resolver({}, agent_id="agent-y") == "PRO"
 
     assert "agent-y" in caplog.text
+
+
+# ── Tier settings must be resolved per call, not at import ──────────────
+#
+# Both adapters used to freeze the tier knobs in module-level dicts
+# (``_TIER_MODELS``, ``_TIER_MAX_TOKENS``, ``_TIER_TEMPERATURE``). A change made
+# from the ⚙ configuration panel therefore never reached a running worker: the
+# process kept using whatever ``runtime.json`` said at import time. The dicts
+# are gone; ``TierSettings.for_tier()`` / ``model_id_of()`` are read on every
+# ``run_agent`` call.
+
+FROZEN_TIER_CONSTANTS = (
+    "_TIER_MODELS",
+    "_TIER_MAX_TOKENS",
+    "_TIER_TEMPERATURE",
+    "_TIER_REPETITION_PENALTY",
+    "_TIER_FREQUENCY_PENALTY",
+    "_TIER_TOP_P",
+)
+
+
+@pytest.mark.parametrize(
+    "adapter", WORKER_ADAPTERS, ids=lambda p: f"{p.parent.parent.name}/{p.parent.name}"
+)
+def test_tier_knobs_are_not_frozen_at_import(adapter: Path):
+    """No adapter may cache tier knobs in module-level dicts."""
+    source = adapter.read_text(encoding="utf-8")
+    for name in FROZEN_TIER_CONSTANTS:
+        assert not re.search(rf"^{name}\s*[:=]", source, re.MULTILINE), (
+            f"{name} is cached at import time in {adapter.name}; config changes "
+            "made from the UI would not reach the running worker"
+        )
+
+    assert "TierSettings.for_tier(model_tier)" in source, (
+        f"{adapter.name}'s run_agent must resolve the tier settings per call"
+    )
+    assert "model_id_of(model_tier)" in source, (
+        f"{adapter.name}'s run_agent must resolve the model id per call"
+    )
+
+
+_LIVE_TIER_PROBE = r"""
+import sys
+
+sys.path.insert(0, "/app")
+
+import llm_client
+from app.core.llm_client import TierSettings, model_id_of
+
+captured = {}
+
+
+def fake_load_prompt(agent_id, tier):
+    return {"metadata": {"tier": "pro"}, "prompt": "hola {language_code}", "schema": None}
+
+
+def fake_call_llm(self, *args, **kwargs):
+    captured["tier"] = args[0]
+    captured["model"] = args[1]
+    captured["max_tokens"] = args[4]
+    captured["temperature"] = args[5]
+    return ({}, [])
+
+
+real_for_tier = TierSettings.__dict__["for_tier"].__func__
+
+
+def fake_for_tier(cls, tier):
+    base = real_for_tier(cls, tier)
+    return type(base)(
+        max_tokens=12345,
+        temperature=0.77,
+        repetition_penalty=base.repetition_penalty,
+        frequency_penalty=base.frequency_penalty,
+        top_p=base.top_p,
+    )
+
+
+llm_client._load_agent_prompt = fake_load_prompt
+llm_client.LLMClient._call_llm = fake_call_llm
+llm_client.TierSettings.for_tier = classmethod(fake_for_tier)
+
+client = llm_client.LLMClient(api_key="sk-tier-probe")
+client.run_agent("probe_agent", variables={})
+
+assert captured.get("max_tokens") == 12345, captured
+assert abs(captured.get("temperature", 0) - 0.77) < 1e-9, captured
+assert captured.get("tier") == "PRO", captured
+assert captured.get("model") == model_id_of("pro"), captured
+
+print("ok")
+"""
+
+WORKER_SERVICES = ("worker-heavy", "worker-fast")
+
+
+@pytest.mark.parametrize("service", WORKER_SERVICES)
+def test_run_agent_reads_tier_settings_at_call_time(docker: bool, service: str):
+    """A budget changed at runtime must reach the very next ``run_agent``."""
+    from tests.workflow.conftest import docker_compose_exec
+
+    proc = docker_compose_exec(service, "python", "-c", _LIVE_TIER_PROBE, timeout=90)
+    assert proc.returncode == 0, (
+        f"{service} still freezes tier settings at import time:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:1200]}"
+    )
+    assert "ok" in proc.stdout

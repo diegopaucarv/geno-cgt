@@ -148,7 +148,137 @@ def test_heavy_worker_build_payload_wraps_json_schema(docker):
 
 # ── Source-level invariants (no container needed) ──────────────────────
 
+# A non-neutral ``frequency_penalty`` makes reasoning models (DeepSeek V4,
+# Nemotron) degenerate: they avoid repeating tokens by emitting whitespace and
+# burn the whole output budget, so ``finish_reason=length`` returns empty
+# ``content``. Measured on Nemotron-3.5-Super-VL at frequency_penalty=1.15:
+#   max_tokens 32768 -> 27 794 chars of whitespace-stuffed JSON
+#   max_tokens  2048 -> truncated, JSON parse fails
+#   max_tokens  1024 -> empty content
+# With the knob neutral the same prompts return clean JSON (~700-980 tokens).
+# ``repetition_penalty`` covers the same ground without that failure mode.
+FLASH_PENALTY_PROBE = r"""
+from app.core.llm_client import LLMProvider
+
+provider = LLMProvider(api_key="sk-penalty-probe")
+payload = provider.build_payload(
+    model="flash", messages=[{"role": "user", "content": "hola"}]
+)
+if "frequency_penalty" in payload:
+    raise SystemExit(
+        "flash tier must not send frequency_penalty; got "
+        f"{payload['frequency_penalty']!r}"
+    )
+if payload.get("repetition_penalty") != 1.1:
+    raise SystemExit(
+        "flash tier must fall back to repetition_penalty=1.1; got "
+        f"{payload.get('repetition_penalty')!r}"
+    )
+
+print("ok")
+"""
+
+
+def test_flash_tier_sends_only_repetition_penalty(docker):
+    """The flash payload must carry repetition_penalty, never frequency_penalty."""
+    proc = docker_compose_exec("fastapi", "python", "-c", FLASH_PENALTY_PROBE)
+    assert proc.returncode == 0, (
+        "flash build_payload would return empty content from a reasoning model:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:800]}"
+    )
+    assert "ok" in proc.stdout
+
+
+# ── Worker shim: output-budget resolution ───────────────────────────────
+#
+# ``glaser_classifier._step1_classify_xml`` calls ``llm_client.chat()`` without
+# a ``max_tokens`` override on purpose: the PRO tier budget is the only value
+# that leaves room for a reasoning model to emit its ``reasoning_content`` and
+# still produce the XML. The worker shim used to have a hardcoded
+# ``max_tokens: int = 4096`` default, so the request went out with 4 096 tokens
+# anyway — the reasoning consumed all of it and the classifier silently degraded
+# every segment to ``<baseline_data>``. Measured on a 3 591-char document:
+#   max_tokens  4096 -> 0 chars of content, ~32 000 chars of reasoning
+#   max_tokens 32768 -> 4 388 chars of XML
+#   tier budget      -> 4 388 chars of XML
+WORKER_CHAT_BUDGET_PROBE = r"""
+import sys
+
+sys.path.insert(0, "/app")
+
+import llm_client
+from app.core.llm_client import TierSettings
+
+captured = {}
+
+
+def _fake_provider_chat(self, **kwargs):
+    captured.update(kwargs)
+    raise RuntimeError("probe: stop before the network call")
+
+
+llm_client.LLMProvider.chat = _fake_provider_chat
+client = llm_client.LLMClient(api_key="sk-budget-probe")
+messages = [{"role": "user", "content": "hola"}]
+
+client.chat(messages=messages, model=None)
+sent = captured.get("max_tokens")
+expected = TierSettings.for_tier("pro").max_tokens
+assert sent == expected, (
+    "LLMClient.chat must forward the PRO tier budget when max_tokens is "
+    f"omitted; forwarded {sent!r}, tier budget is {expected}"
+)
+assert sent >= 32768, (
+    "the PRO budget must leave room for reasoning models; got " f"{sent}"
+)
+
+captured.clear()
+client.chat(messages=messages, model="flash")
+expected_flash = TierSettings.for_tier("flash").max_tokens
+assert captured.get("max_tokens") == expected_flash, (
+    "the flash tier must resolve its own budget; got "
+    f"{captured.get('max_tokens')!r}, expected {expected_flash}"
+)
+
+print("ok")
+"""
+
+
+def test_worker_chat_uses_tier_budget_when_max_tokens_omitted(docker):
+    """Omitting ``max_tokens`` must mean "tier budget", not a silent 4096."""
+    proc = docker_compose_exec("worker-heavy", "python", "-c", WORKER_CHAT_BUDGET_PROBE)
+    assert proc.returncode == 0, (
+        "the heavy worker shim does not resolve the tier budget, so reasoning "
+        "prompts return empty content:\n"
+        f"{proc.stdout.strip()}\n{proc.stderr.strip()[:1200]}"
+    )
+    assert "ok" in proc.stdout
+
+
 ADAPTER = REPO_ROOT / "backend" / "app" / "core" / "llm_client_adapter.py"
+DEFAULTS = REPO_ROOT / "backend" / "app" / "core" / "defaults.py"
+LLM_CLIENT = REPO_ROOT / "backend" / "app" / "core" / "llm_client.py"
+
+
+def _default_value(name: str) -> str:
+    """Read a literal out of the EDITABLE_DEFAULTS dict."""
+    tree = ast.parse(DEFAULTS.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        for key, value in zip(node.keys, node.values):
+            if isinstance(key, ast.Constant) and key.value == name:
+                assert isinstance(value, ast.Constant), ast.dump(value)
+                return value.value
+    raise AssertionError(f"{name} not found in defaults.py")
+
+
+def test_flash_frequency_penalty_defaults_to_neutral():
+    """Neither the config default nor the code fallback may reinstate 1.15."""
+    assert _default_value("MODEL_FLASH_FREQUENCY_PENALTY") == "0.0"
+    assert "1.15" not in LLM_CLIENT.read_text(encoding="utf-8"), (
+        "llm_client.py reintroduced a non-neutral frequency_penalty fallback"
+    )
 
 
 def _find_function(tree: ast.AST, name: str) -> ast.FunctionDef:
