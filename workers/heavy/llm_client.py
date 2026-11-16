@@ -535,6 +535,26 @@ MOCK_RESPONSES: dict[str, dict] = {
             "confidence": "MEDIUM",
         },
     },
+    "fa_segment_classifier": {
+        "classifications": [
+            {
+                "segment_id": 1,
+                "category": "baseline_data",
+                "confidence": "HIGH",
+                "rationale": "[MOCK] Descripción concreta de una acción situada.",
+            }
+        ]
+    },
+    "fa_segment_and_classify": {
+        "segments": [
+            {
+                "position": 1,
+                "text": "[MOCK] segmento de ejemplo",
+                "category": "baseline_data",
+                "confidence": "MEDIUM",
+            }
+        ]
+    },
 }
 
 

@@ -346,11 +346,17 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
 
     For each category that has an incident group:
       1. Find its incident group (matched by label name)
-      2. For each incident, read its segment_refs from preguntas_glaser_json
+      2. For each incident, read the segments it cites in `incident_segmentos`
       3. Insert codigos_segmento rows (confidence = 1.0)
 
     NO embeddings. NO similarity threshold. The link is deterministic:
     if an incident is grouped under a category, its segments ARE evidence.
+
+    Se lee `incident_segmentos` y no `preguntas_glaser_json.segment_refs`:
+    esas refs eran ordinales 1-based sobre los segmentos `baseline_data` del
+    documento, no `posicion`, así que resolverlas por `posicion` en todo el
+    proyecto apuntaba al segmento equivocado (0/27 aciertos medidos). La tabla
+    de enlaces guarda UUIDs reales y además respeta las citas añadidas a mano.
     """
     session = SessionLocal()
     try:
@@ -399,47 +405,25 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
             if not incident_ids:
                 continue
 
-            # Get segment_refs for all incidents in this group
+            # Segments cited by the incidents in this group
             seg_rows = session.execute(
                 text(
-                    "SELECT preguntas_glaser_json "
-                    "FROM extracted_incidents "
-                    "WHERE id::text = ANY(:iids) "
-                    "AND proyecto_id = :pid"
+                    "SELECT DISTINCT x.segmento_id "
+                    "FROM incident_segmentos x "
+                    "JOIN extracted_incidents ei ON ei.id = x.incident_id "
+                    "WHERE ei.id::text = ANY(:iids) "
+                    "AND ei.proyecto_id = :pid"
                 ),
                 {"iids": incident_ids, "pid": proyecto_id},
             ).fetchall()
 
-            assigned_segs = set()
-            for sr in seg_rows:
-                meta = sr[0] if isinstance(sr[0], dict) else {}
-                seg_refs = meta.get("segment_refs", [])
-                for ref in seg_refs:
-                    if isinstance(ref, int):
-                        assigned_segs.add(ref)
-                    elif isinstance(ref, str) and ref.isdigit():
-                        assigned_segs.add(int(ref))
+            assigned_segs = [str(r[0]) for r in seg_rows]
 
             if not assigned_segs:
                 continue
 
-            # Resolve segment numbers to UUIDs
-            seg_map_rows = session.execute(
-                text(
-                    "SELECT s.id, s.posicion FROM segmentos s "
-                    "JOIN documentos d ON s.documento_id = d.id "
-                    "WHERE d.proyecto_id = :pid AND s.posicion = ANY(:positions)"
-                ),
-                {"pid": proyecto_id, "positions": list(assigned_segs)},
-            ).fetchall()
-
-            seg_map = {row[1]: str(row[0]) for row in seg_map_rows}
-
             assigned_for_code = 0
-            for pos in assigned_segs:
-                seg_uuid = seg_map.get(pos)
-                if not seg_uuid:
-                    continue
+            for seg_uuid in assigned_segs:
                 try:
                     session.execute(
                         text(
@@ -455,7 +439,7 @@ def b2_5_assign_codes_to_segments(proyecto_id: str) -> dict:
                     logger.warning(
                         "Grounding insert failed for cat=%s seg=%s: %s",
                         cat_name,
-                        pos,
+                        seg_uuid,
                         e,
                     )
 

@@ -48,8 +48,12 @@ class ExtractedIncident(Base, TimestampMixin):
     """¿Hay más patrones en este segmento? False = segmento agotado."""
 
     tipo_dato_glaser: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    """baseline | properline | interpreted | vague.
-    Confirmado o corregido por glaser_data_classifier (⚙️+FLASH)."""
+    """baseline_data | properline_data | interpreted_data | vague_data |
+    document_context. Confirmado o corregido por glaser_data_classifier."""
+
+    origen: Mapped[str] = mapped_column(String(20), default="ia", server_default="ia")
+    """'ia' | 'manual'. Cualquier escritura humana lo promueve a 'manual', y
+    eso es lo que hace que una re-extracción conserve el trabajo curado."""
 
     preguntas_glaser_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     """Respuestas estructuradas a las 4 preguntas de Glaser:
@@ -66,6 +70,34 @@ class ExtractedIncident(Base, TimestampMixin):
     )
     """FK al DocumentProcess. Vincula este incidente con el patrón individual
     del participante (core_pattern_extractor, PRO, per-documento)."""
+
+
+class IncidentSegmento(Base, TimestampMixin):
+    """Cita: un incidente se apoya en N segmentos, cada uno con su categoría.
+
+    `tipo_dato_glaser` es una ANOTACIÓN de la cita, no una reclasificación del
+    segmento: una cita `vague_data` puede ilustrar un incidente sin tocar
+    `segmentos.tipo_dato_glaser` ni `documentos.metadatos.glaser_blocks`. NULL
+    significa "heredar la categoría del segmento" — nunca se inventa una.
+
+    Esta tabla es la fuente de verdad de "qué texto sostiene este incidente".
+    `extracted_incidents.segmento_id` queda como cita primaria denormalizada.
+    """
+
+    __tablename__ = "incident_segmentos"
+
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("extracted_incidents.id", ondelete="CASCADE"), primary_key=True
+    )
+    segmento_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("segmentos.id"), primary_key=True, index=True
+    )
+
+    tipo_dato_glaser: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    """Categoría de ESTA cita. NULL = heredar de `segmentos.tipo_dato_glaser`."""
+
+    is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    """True si el par lo creó el investigador a mano (no el extractor)."""
 
 
 class IncidentComparison(Base, TimestampMixin):

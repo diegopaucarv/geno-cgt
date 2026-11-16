@@ -21,6 +21,7 @@ You are a data-type classifier for Classic Grounded Theory (Barney Glaser). You 
 ### Your task
 
 For EACH segment in the batch, determine:
+
 1. **Who is speaking?** Author or participant?
 2. **What Glaser data type?** (only for participant speech)
 3. **Confidence** in your classification (0.0 to 1.0)
@@ -37,7 +38,7 @@ For EACH segment in the batch, determine:
 
 - **baseline_data**: Spontaneous, honest narrative of real experience. Fluid, unfiltered. The "gold" of analysis. This is what the participant actually lives.
 - **properline_data**: Normative, socially desirable discourse. What is "supposed" to be said. Hedging language, general opinions disconnected from concrete experience.
-- **interpreted_data**: Response clearly forced by the interviewer's question. Solicited opinion, not spontaneous. The participant is answering because they were asked.
+- **interpreted_data**: Material the researcher or document author introduces ABOUT the population of interest: their own framing, interpretation, explanation or theoretical claim. Second-order data — it speaks about the participants, but the population did not produce it (the author's voice outside quotations, analytic passages, editorial summaries).
 - **vague_data**: Evasive. Short responses, topic changes, "I don't know", "I don't remember". The participant is avoiding the question.
 
 ### Special type
@@ -91,7 +92,13 @@ Classify ALL segments in the JSON array below. Return ONE classification per seg
           },
           "glaser_data_type": {
             "type": "string",
-            "enum": ["baseline_data", "properline_data", "interpreted_data", "vague_data", "interviewer_context"],
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data",
+              "interviewer_context"
+            ],
             "description": "Glaser data type. Use interviewer_context for interviewer speech or metadata."
           },
           "is_interviewer": {

@@ -79,7 +79,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const error = new Error(err.detail || `HTTP ${res.status}`) as Error & {
+      status?: number;
+    };
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -116,10 +120,6 @@ export interface ProjectConfig {
   config_segmentacion: Record<string, any>;
   mutation_policy: Record<string, string>;
   pending_suggestions: ConfigSuggestion[];
-  // ── Prompt Glaser por proyecto ("" = sin override) ──
-  glaser_classifier_prompt?: string;
-  glaser_classifier_prompt_effective?: string;
-  glaser_classifier_prompt_source?: "project" | "global" | "builtin";
 }
 
 export interface ConfigHistoryEntry {
@@ -154,6 +154,16 @@ export interface ConfigSuggestion {
   timestamp: string | null;
 }
 
+/** One Glaser-classified span as returned flattened by the backend. */
+export interface GlaserBlock {
+  class: string;
+  start_pos: number;
+  end_pos: number;
+  segment_positions: number[];
+  confidence?: string;
+  text: string;
+}
+
 export interface Document {
   id: string;
   proyecto_id: string;
@@ -170,6 +180,8 @@ export interface Document {
   texto_original?: string;
   preprocess_warning?: string;
   sort_order?: number;
+  glaser_blocks?: GlaserBlock[];
+  glaser_used_fallback?: boolean;
 }
 
 export interface PipelineStatus {
@@ -192,12 +204,25 @@ export interface DocPipelineLog {
     coded: boolean;
     agents_done: boolean;
     synthesis_done: boolean;
+    /** Classification metadata persisted (absent in older backends). */
+    classified?: boolean;
+    /** At least one extracted incident (absent in older backends). */
+    incidents?: boolean;
   };
   segments_count: number;
   codes_count: number;
+  /** `metadatos.glaser_blocks`/`texto_clasificado` present in the DB. */
+  has_classification: boolean;
+  /** Segments carrying a Glaser tag. */
+  classified_count: number;
+  /** Rows in `extracted_incidents` for this document. */
+  incidents_count: number;
+  /** State combinations the classify-first ladder cannot produce. */
+  inconsistencies: string[];
   next_action:
     | "extract_text"
     | "segment"
+    | "classify"
     | "run_agents"
     | "run_synthesis"
     | "done"
@@ -216,6 +241,8 @@ export interface PipelineLog {
   summary: {
     total: number;
     need_segment: number;
+    /** Docs that still need Glaser classification (absent in older logs). */
+    need_classify?: number;
     need_agents: number;
     need_synthesis: number;
     sintetizados: number;
@@ -226,6 +253,21 @@ export interface PipelineLog {
     categories: number;
     project_state: string;
     playground_ready: boolean;
+    /** UI agent ids with a task still in flight (derived server-side). */
+    running_agents?: string[];
+    /** UI agent ids whose last task succeeded within the 4 h window. Lets the
+     *  UI show ↻ (re-run) instead of ▶ after reloading mid-run. */
+    succeeded_agents?: string[];
+    /** Stage keys whose phase orchestrator is in flight. Phase tasks are not
+     *  individual agents, so they spin the whole stage instead. */
+    running_phases?: string[];
+    /** Runs still marked 'running'. If nothing is in flight they are leftovers
+     *  from a dead worker and the UI offers to close them. */
+    open_runs?: number;
+    /** Documents whose state contradicts the classify-first ladder. */
+    docs_inconsistent?: number;
+    /** Documents whose next step is Glaser classification. */
+    docs_need_classify?: number;
   };
 }
 
@@ -246,6 +288,7 @@ export interface Segment {
   posicion: number;
   conteo_tokens: number;
   es_anomalia: boolean;
+  tipo_dato_glaser?: string | null;
 }
 
 // ── Auth ────────────────────────────────────────────────────────────
@@ -322,23 +365,6 @@ export async function deleteAllDocuments(projectId: string) {
 
 export async function getProjectConfig(projectId: string) {
   return request<ProjectConfig>(`/projects/${projectId}/config`);
-}
-
-export async function updateGlaserPrompt(
-  projectId: string,
-  prompt: string | null,
-) {
-  return request<{
-    status: string;
-    message: string;
-    glaser_classifier_prompt: string;
-    glaser_classifier_prompt_effective: string;
-    glaser_classifier_prompt_source: "project" | "global" | "builtin";
-    warnings?: string[];
-  }>(`/projects/${projectId}/config/glaser-prompt`, {
-    method: "PUT",
-    body: JSON.stringify({ prompt }),
-  });
 }
 
 export async function getProjectConfigHistory(
@@ -547,11 +573,215 @@ export async function segmentDocument(documentId: string) {
   );
 }
 
-export async function deleteDocumentSegments(documentId: string) {
+export async function deleteDocumentSegments(
+  documentId: string,
+  opts?: { keepClassification?: boolean },
+) {
+  // Bajo la escalera classify-first los segmentos derivan del texto ya
+  // clasificado, así que borrarlos puede conservar la clasificación.
+  const query = opts?.keepClassification ? "?keep_classification=true" : "";
   return request<{ status: string; message: string }>(
-    `/documents/${documentId}/segments`,
+    `/documents/${documentId}/segments${query}`,
     { method: "DELETE" },
   );
+}
+
+export async function deleteDocumentIncidents(documentId: string) {
+  return request<{ status: string; deleted: number }>(
+    `/documents/${documentId}/incidents`,
+    { method: "DELETE" },
+  );
+}
+
+// ── Document curation: clasificación y segmentos ─────────────────────
+
+export interface ClassificationBlockUpdate {
+  /** Índice en `metadatos.glaser_blocks`, tal cual lo ve la UI. */
+  index: number;
+  /** `null` = borrar la categoría del bloque (el texto sigue visible). */
+  class: string | null;
+}
+
+export interface ClassificationPatchResult {
+  status: string;
+  blocks: GlaserBlock[];
+  /** Cuántos bloques cambiaron realmente. */
+  changed: number;
+  /** Cuántos segmentos cambiaron de etiqueta al re-derivarla. */
+  segments_updated: number;
+  texto_clasificado: string;
+  baseline_tags_count: number;
+}
+
+export async function patchDocumentClassification(
+  documentId: string,
+  blocks: ClassificationBlockUpdate[],
+) {
+  return request<ClassificationPatchResult>(
+    `/documents/${documentId}/classification`,
+    { method: "PATCH", body: JSON.stringify({ blocks }) },
+  );
+}
+
+export interface DeleteSegmentResult {
+  status: string;
+  /** `merged` = el texto sobrevivió en el segmento siguiente. */
+  action: "merged" | "deleted";
+  removed_id: string;
+  survivor_id: string | null;
+  /** Incidentes que se quedaron sin ninguna cita y se borraron. */
+  incidents_deleted: number;
+  incidents_updated: number;
+  segments: Segment[];
+}
+
+export async function deleteDocumentSegment(
+  documentId: string,
+  segmentId: string,
+) {
+  return request<DeleteSegmentResult>(
+    `/documents/${documentId}/segments/${segmentId}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listDocumentIncidents(
+  documentId: string,
+): Promise<IncidentsPayload> {
+  return request<IncidentsPayload>(`/documents/${documentId}/incidents`);
+}
+
+// ── Incident curation ───────────────────────────────────────────────
+
+export interface IncidentQuotePayload {
+  segmento_id: string;
+  posicion: number;
+  texto: string;
+  /** Categoría efectiva de la cita (override propio o la del segmento). */
+  categoria: string | null;
+  /** De dónde sale `categoria`: del segmento o de una anotación de la cita. */
+  categoria_origen: "segment" | "override";
+  is_manual: boolean;
+  /** Cita primaria denormalizada (`extracted_incidents.segmento_id`). */
+  primario: boolean;
+}
+
+export interface IncidentPayload {
+  id: string;
+  segmento_id: string | null;
+  jot_text: string | null;
+  keep_moving: boolean;
+  tipo_dato_glaser: string | null;
+  origen: "ia" | "manual" | string;
+  preguntas_glaser_json: Record<string, unknown>;
+  segments: IncidentQuotePayload[];
+  categorias: Record<string, number>;
+  mixto: boolean;
+}
+
+export interface IncidentsPayload {
+  incidents: IncidentPayload[];
+  prime_mover: string | null;
+  prime_mover_confidence: string | null;
+}
+
+export interface UnassignedSegmentPayload {
+  id: string;
+  posicion: number;
+  tipo_dato_glaser: string | null;
+  texto: string;
+  first_10: string | null;
+  start_char: number | null;
+  end_char: number | null;
+}
+
+export interface UnassignedPayload {
+  document_id: string;
+  segments: UnassignedSegmentPayload[];
+  counts: {
+    total: number;
+    unassigned: number;
+    baseline: number;
+    non_baseline: number;
+  };
+}
+
+/** Toda mutación de curación devuelve el mismo payload que el GET. */
+export type IncidentMutationResult = IncidentsPayload & { status: string };
+
+export interface IncidentSegmentRef {
+  segmento_id: string;
+  tipo_dato_glaser?: string | null;
+}
+
+export async function listUnassignedSegments(
+  documentId: string,
+): Promise<UnassignedPayload> {
+  return request<UnassignedPayload>(
+    `/documents/${documentId}/unassigned-segments`,
+  );
+}
+
+export async function createIncident(
+  documentId: string,
+  body: {
+    segmentos: IncidentSegmentRef[];
+    jot_text?: string | null;
+    keep_moving?: boolean;
+  },
+): Promise<IncidentMutationResult & { incident_id: string }> {
+  return request(`/documents/${documentId}/incidents`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function attachIncidentSegments(
+  incidentId: string,
+  body: { segmentos: IncidentSegmentRef[]; mode?: "move" | "add" },
+): Promise<
+  IncidentMutationResult & { added: string[]; already_assigned: string[] }
+> {
+  return request(`/incidents/${incidentId}/segments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function detachIncidentSegment(
+  incidentId: string,
+  segmentId: string,
+): Promise<IncidentMutationResult & { segment_now_unassigned: boolean }> {
+  return request(`/incidents/${incidentId}/segments/${segmentId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function patchIncidentSegment(
+  incidentId: string,
+  segmentId: string,
+  body: { tipo_dato_glaser: string | null },
+): Promise<IncidentMutationResult> {
+  return request(`/incidents/${incidentId}/segments/${segmentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchIncident(
+  incidentId: string,
+  body: { jot_text?: string; keep_moving?: boolean },
+): Promise<IncidentMutationResult> {
+  return request(`/incidents/${incidentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteIncident(
+  incidentId: string,
+): Promise<IncidentMutationResult & { freed_segment_ids: string[] }> {
+  return request(`/incidents/${incidentId}`, { method: "DELETE" });
 }
 
 export async function resetDocsToCrudo(projectId: string) {
@@ -625,6 +855,28 @@ export async function getAgentMemos(projectId: string) {
   return request<{ memos: any[]; total: number; families: any[] }>(
     `/projects/${projectId}/agent-memos`,
   );
+}
+
+export interface AgentMemosDeletion {
+  deleted: number;
+  by_table: Record<string, number>;
+  family: string;
+}
+
+/** Bulk-deletes the agent memos of a project (optionally one family only). */
+export async function deleteAgentMemos(projectId: string, family?: string) {
+  const query = family ? `?family=${encodeURIComponent(family)}` : "";
+  return request<AgentMemosDeletion>(
+    `/projects/${projectId}/agent-memos${query}`,
+    { method: "DELETE" },
+  );
+}
+
+/** Deletes a single agent memo (`pc-*`, `dp-*`, `cat-*`). 404 if missing. */
+export async function deleteAgentOutput(id: string) {
+  return request<{ deleted: number }>(`/agent-outputs/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export interface AgentDispatchResponse {
@@ -969,6 +1221,15 @@ export async function stopProjectPipeline(projectId: string) {
   }>(`/admin/projects/${projectId}/stop`, { method: "POST" });
 }
 
+/** Marca como cerrados los runs que quedaron en 'running' sin nada en vuelo.
+ *  Solo arregla la columna de estado: no revoca tareas ni toca documentos. */
+export async function closeIdlePipelineRuns(projectId: string) {
+  return request<{ closed: number }>(
+    `/projects/${projectId}/pipeline/close-idle-runs`,
+    { method: "POST" },
+  );
+}
+
 export async function cancelTask(taskId: string) {
   return request<{
     status: string;
@@ -1064,6 +1325,330 @@ export async function getHitlDetail(
   return request(`/projects/${projectId}/hitl/${gateName}/detail`);
 }
 
+// ── HITL: CRUD de decisiones ─────────────────────────────────────────
+// Sobre hitl_decisions. Convive con los gates (pending/detail/decide):
+// aquí el investigador puede crear, leer, editar y borrar decisiones
+// sueltas sin pasar por el flujo de propuesta → crítico → decisión.
+
+export type HitlStatus = "pending" | "accepted" | "modified" | "rejected";
+
+export interface HitlDecisionFull {
+  id: string;
+  project_id: string;
+  gate_name: string;
+  status: HitlStatus;
+  proposal: Record<string, unknown>;
+  critic_verdict: Record<string, unknown>;
+  researcher_decision: string | null;
+  researcher_note: string | null;
+  researcher_feedback: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface HitlStatusCounts {
+  pending: number;
+  accepted: number;
+  modified: number;
+  rejected: number;
+}
+
+export interface HitlDecisionList {
+  items: HitlDecisionFull[];
+  total: number;
+  counts: HitlStatusCounts;
+}
+
+export interface HitlDecisionCreateBody {
+  gate_name: string;
+  note?: string;
+  proposal?: Record<string, unknown>;
+  critic_verdict?: Record<string, unknown>;
+  status?: HitlStatus;
+}
+
+export interface HitlDecisionUpdateBody {
+  note?: string;
+  feedback?: string | null;
+  status?: HitlStatus;
+  gate_name?: string;
+}
+
+export interface HitlDecisionBulkDeleteBody {
+  ids?: string[];
+  status?: HitlStatus;
+  gate_name?: string;
+}
+
+export async function listHitlDecisions(
+  projectId: string,
+  opts: {
+    status?: HitlStatus;
+    gateName?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
+): Promise<HitlDecisionList> {
+  const qs = new URLSearchParams();
+  if (opts.status) qs.set("status", opts.status);
+  if (opts.gateName) qs.set("gate_name", opts.gateName);
+  if (opts.limit !== undefined) qs.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) qs.set("offset", String(opts.offset));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<HitlDecisionList>(
+    `/projects/${projectId}/hitl/decisions${suffix}`,
+  );
+}
+
+export async function getHitlDecision(
+  projectId: string,
+  decisionId: string,
+): Promise<HitlDecisionFull> {
+  return request<HitlDecisionFull>(
+    `/projects/${projectId}/hitl/decisions/${decisionId}`,
+  );
+}
+
+export async function createHitlDecision(
+  projectId: string,
+  body: HitlDecisionCreateBody,
+): Promise<HitlDecisionFull> {
+  return request<HitlDecisionFull>(`/projects/${projectId}/hitl/decisions`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateHitlDecision(
+  projectId: string,
+  decisionId: string,
+  body: HitlDecisionUpdateBody,
+): Promise<HitlDecisionFull> {
+  return request<HitlDecisionFull>(
+    `/projects/${projectId}/hitl/decisions/${decisionId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export async function deleteHitlDecision(
+  projectId: string,
+  decisionId: string,
+): Promise<{ status: string; deleted: number }> {
+  return request<{ status: string; deleted: number }>(
+    `/projects/${projectId}/hitl/decisions/${decisionId}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function bulkDeleteHitlDecisions(
+  projectId: string,
+  body: HitlDecisionBulkDeleteBody,
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>(`/projects/${projectId}/hitl/decisions`, {
+    method: "DELETE",
+    body: JSON.stringify(body),
+  });
+}
+
+// ── HITL: gate unificado de codificación abierta ─────────────────────
+// Concern principal + población + categorías centrales. Es el único gate
+// HITL que no depende de que un worker haya insertado una fila pendiente:
+// se puede abrir en cualquier momento y se guarda en proyectos
+// (chosen_concern / chosen_population) + hitl_decisions.
+
+export interface ConcernCandidate {
+  label: string;
+  supporting_codes: string[];
+  rationale: string;
+}
+
+export interface PopulationProposal {
+  description: string;
+  source_batch: number;
+}
+
+export interface UnifiedCategory {
+  id: string;
+  label: string;
+  definition: string;
+  is_core_candidate: boolean;
+}
+
+export interface UnifiedHypothesis {
+  id: string;
+  text: string;
+  concern_relevance: string;
+  is_core_candidate: boolean;
+}
+
+export interface OpenCodingHitlStatus {
+  docs_processed: number;
+  total_docs: number;
+  batch_number: number;
+  concern_candidates: ConcernCandidate[];
+  population_proposals: PopulationProposal[];
+  unified_categories: UnifiedCategory[];
+  unified_hypotheses: UnifiedHypothesis[];
+  chosen_concern: string | null;
+  chosen_population: string | null;
+  can_proceed: boolean;
+}
+
+export interface OpenCodingHitlDecision {
+  chosen_concern: string;
+  chosen_population: string;
+  core_category_ids: string[];
+  confirmed: boolean;
+  researcher_note: string;
+}
+
+export interface OpenCodingHitlDecisionResponse {
+  status: string;
+  chosen_concern: string;
+  chosen_population: string;
+  core_categories_set: number;
+  confirmed: boolean;
+}
+
+export async function getOpenCodingHitlStatus(
+  projectId: string,
+): Promise<OpenCodingHitlStatus> {
+  return request<OpenCodingHitlStatus>(
+    `/projects/${projectId}/hitl/open-coding/status`,
+  );
+}
+
+export async function decideOpenCodingHitl(
+  projectId: string,
+  body: OpenCodingHitlDecision,
+): Promise<OpenCodingHitlDecisionResponse> {
+  return request<OpenCodingHitlDecisionResponse>(
+    `/projects/${projectId}/hitl/open-coding/decide`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+// ── Hypotheses CRUD + duplicates ─────────────────────────────────────
+
+export interface HypothesisItem {
+  id: string;
+  text: string;
+  level: string;
+  confidence: number;
+  status: string;
+  code_id: string | null;
+  parent_hypothesis_id: string | null;
+  concern_labels: string[];
+  batch_number: number | null;
+}
+
+export interface HypothesisListResponse {
+  items: HypothesisItem[];
+  total: number;
+  by_status: Record<string, number>;
+}
+
+export interface CreateHypothesisBody {
+  project_id: string;
+  text: string;
+  level?: string;
+  confidence?: number;
+  status?: string;
+  code_id?: string | null;
+  concern_labels?: string[];
+}
+
+export interface UpdateHypothesisBody {
+  text?: string;
+  level?: string;
+  confidence?: number;
+  status?: string;
+  concern_labels?: string[];
+}
+
+export interface HypothesisDuplicateItem {
+  id: string;
+  text: string;
+  level: string;
+  status: string;
+  confidence: number;
+  similarity: number;
+  is_suggested_keep: boolean;
+}
+
+export interface HypothesisDuplicateCluster {
+  cluster_id: number;
+  size: number;
+  items: HypothesisDuplicateItem[];
+}
+
+export interface HypothesisDuplicatesResponse {
+  threshold: number;
+  total_hypotheses: number;
+  clusters: HypothesisDuplicateCluster[];
+  redundant_count: number;
+}
+
+export async function getHypothesesByProject(
+  projectId: string,
+  params: { status?: string; level?: string } = {},
+): Promise<HypothesisListResponse> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.level) qs.set("level", params.level);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<HypothesisListResponse>(
+    `/hypotheses/by-project/${projectId}${suffix}`,
+  );
+}
+
+export async function createHypothesis(
+  body: CreateHypothesisBody,
+): Promise<HypothesisItem> {
+  return request<HypothesisItem>("/hypotheses", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateHypothesis(
+  hypothesisId: string,
+  body: UpdateHypothesisBody,
+): Promise<HypothesisItem> {
+  return request<HypothesisItem>(`/hypotheses/${hypothesisId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteHypothesis(
+  hypothesisId: string,
+): Promise<{ deleted: boolean; id: string }> {
+  return request<{ deleted: boolean; id: string }>(
+    `/hypotheses/${hypothesisId}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function bulkDeleteHypotheses(
+  ids: string[],
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/hypotheses/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export async function getHypothesisDuplicates(
+  projectId: string,
+  threshold = 0.8,
+): Promise<HypothesisDuplicatesResponse> {
+  return request<HypothesisDuplicatesResponse>(
+    `/hypotheses/duplicates/${projectId}?threshold=${threshold}`,
+  );
+}
+
 // ── User Memos ────────────────────────────────────────────────────────
 
 export interface MemoTypeItem {
@@ -1073,7 +1658,8 @@ export interface MemoTypeItem {
   color: string;
   description: string;
   requires_agent?: string;
-  agent_status?: "not_run" | "completed";
+  agent_status?: string;
+  stage_available?: boolean;
 }
 
 export interface AvailableMemoTypes {
@@ -1086,20 +1672,25 @@ export interface AvailableMemoTypes {
 
 export async function getAvailableMemoTypes(
   projectId: string,
+  lang?: string,
 ): Promise<AvailableMemoTypes> {
-  return request(`/projects/${projectId}/available-memo-types`);
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  return request(`/projects/${projectId}/available-memo-types${query}`);
 }
 
-export async function getEntityTypeColors(): Promise<{
+export async function getEntityTypeColors(lang?: string): Promise<{
   types: Array<{
     key: string;
     label: string;
     icon: string;
     color: string;
     description: string;
+    requires_agent?: string;
+    stage_available?: boolean;
   }>;
 }> {
-  return request("/entity-type-colors");
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  return request(`/entity-type-colors${query}`);
 }
 
 export async function createMemo(
@@ -1109,6 +1700,8 @@ export async function createMemo(
     contenido: string;
     es_confidencial: boolean;
     structured_fields?: Record<string, unknown>;
+    /** Nombre de la categoría a crear (solo tipo CATEGORIA). */
+    nombre?: string;
   },
 ): Promise<{ id: string; tipo: string; stage: string; user_created: boolean }> {
   return request(`/projects/${projectId}/memos`, {
@@ -1128,15 +1721,6 @@ export async function getStaleUserEntities(
   return request(
     `/projects/${projectId}/stale-user-entities?current_stage=${currentStage}`,
   );
-}
-
-export async function deleteMemosByType(
-  projectId: string,
-  tipo: string,
-): Promise<{ deleted: number; tipo: string }> {
-  return request(`/projects/${projectId}/memos?tipo=${tipo}`, {
-    method: "DELETE",
-  });
 }
 
 export async function getPipelineDecisions(projectId: string): Promise<{

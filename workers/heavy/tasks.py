@@ -29,11 +29,13 @@ from algorithmic_checks import (
 )
 from context_utils import inject_chosen_context
 from database import SessionLocal
-from glaser_classifier import (
-    ClassificationUnavailable,
-    classify_document_with_validation,
-)
+from glaser_classifier import ClassificationUnavailable
 from llm_client import LLMClient
+from segment_classifier import (
+    _documento_metadatos,
+    classify_text_spans,
+    normalizar_etiquetas_legacy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +151,17 @@ app.conf.update(
         Queue("nlp", Exchange("nlp", type="direct"), routing_key="nlp"),
     ),
 )
+
+# Cierra el pipeline_run en cuanto termina su última tarea en vuelo. Sin esto,
+# el último run de cada sesión se queda 'running' hasta que alguien vuelve a
+# mirar el proyecto (ver app/services/pipeline_run_close.py).
+try:
+    from app.services.pipeline_run_close import register_run_close_hook
+
+    register_run_close_hook(app)
+except Exception:  # pragma: no cover - nunca romper el registro de tareas
+    logger.warning("No se pudo registrar el cierre de runs", exc_info=True)
+
 llm = LLMClient()
 
 # ── Batch configuration (overridable via env var) ──
@@ -607,27 +620,26 @@ BATCH_SIZE = 25  # segments per AI call for large documents
 def _classify_glaser_types_for_doc(
     session, documento_id: str, use_llm_fallback: bool = True
 ) -> int:
-    """F2.1: Clasifica documento via 3-step Glaser classifier con validator loop.
+    """F2.1: Clasifica el TEXTO del documento (classify-first).
 
-    Delega en classify_document_with_validation() que ejecuta:
-    Step 1 (PRO): XML tag classification del texto completo
-    Step 2 (FLASH): Structure validator + algorithmic fallback
-    Step 3: Baseline selection
+    Envoltorio fino sobre ``classify_text_spans``: el clasificador etiqueta el
+    texto completo y persiste ``metadatos.glaser_blocks`` **sin crear
+    segmentos**. La segmentación posterior hereda esos tags por segmento.
 
-    Con validator loop: validate → feedback → re-classify → ... hasta max 3 rounds.
+    Se conserva el nombre porque hay tests/imports que lo referencian.
 
-    Persiste:
-    - documentos.metadatos->>'texto_clasificado': XML-tagged full text
-    - documentos.metadatos->>'baseline_tags': baseline text segments
-    - segmentos.tipo_dato_glaser: per-segment Glaser type
+    Idempotencia: se salta el trabajo cuando ``metadatos`` ya tiene
+    ``glaser_blocks`` no vacíos. El guard anterior
+    (``contar_segmentos_sin_clasificar`` con ``n_segs > 0``) ya no vale: bajo
+    classify-first la clasificación ocurre ANTES de que exista ningún segmento,
+    así que ``n_segs > 0`` significa justo lo contrario de "ya clasificado".
 
     Returns:
-        Número de segmentos clasificados.
+        Número de bloques clasificados (o de segmentos marcados en el modo
+        offline ``use_llm_fallback=False``).
     """
     if not use_llm_fallback:
-        # Conservative fallback: mark all segments as baseline_data
-        # E6: No baseline_data filter — fallback operates on ALL segments (the classification
-        # itself will set tipo_dato_glaser on each segment).
+        # Modo conservador/offline: marcar todos los segmentos como baseline.
         result = session.execute(
             text("SELECT id FROM segmentos WHERE documento_id = :did"),
             {"did": documento_id},
@@ -651,33 +663,130 @@ def _classify_glaser_types_for_doc(
         return 0
     proyecto_id = str(proj_row[0])
 
-    # Run the 3-step classifier with validator loop
-    result = classify_document_with_validation(
-        documento_id=documento_id,
-        proyecto_id=proyecto_id,
-        session=session,
-        llm_client=llm,
-        max_validation_rounds=3,
-    )
+    meta = _documento_metadatos(session, documento_id)
+    bloques_existentes = meta.get("glaser_blocks") or []
+    if bloques_existentes:
+        logger.info(
+            "Glaser ya clasificado doc=%s: %d bloques en metadatos",
+            documento_id[:8],
+            len(bloques_existentes),
+        )
+        return len(bloques_existentes)
+
+    result = classify_text_spans(session, documento_id, proyecto_id, llm)
 
     logger.info(
-        "Glaser 3-step result: status=%s, rounds=%d, baseline_tags=%d, segments=%d",
+        "Glaser classify-first: status=%s, blocks=%d, baseline_tags=%d",
         result.get("status"),
-        result.get("validation_rounds", 0),
+        len(result.get("blocks") or []),
         result.get("baseline_tags_count", 0),
-        result.get("segments_classified", 0),
     )
 
     if result.get("status") == "degraded":
-        # Seguir adelante dejaría el documento con TODOS los segmentos en
-        # baseline_data y la extracción de incidentes produciría ruido a partir
-        # de eso. Mejor fallar el paso y dejar el documento reintentable.
+        # Seguir adelante dejaría el documento sin clasificar y la extracción de
+        # incidentes se quedaría sin segmentos baseline. Mejor fallar el paso y
+        # dejar el documento reintentable.
         raise ClassificationUnavailable(
             f"Clasificación Glaser degradada doc={documento_id[:8]}: "
             f"{result.get('reason') or 'sin detalle'}"
         )
 
-    return result.get("segments_classified", 0)
+    return len(result.get("blocks") or [])
+
+
+def _inherit_glaser_tags_for_doc(session, documento_id: str) -> int:
+    """Repara ``segmentos.tipo_dato_glaser`` desde ``metadatos.glaser_blocks``.
+
+    Clasificar y segmentar son pasos distintos, así que un segmento puede llegar
+    aquí sin etiqueta (p.ej. segmentado antes de la clasificación, o una corrida
+    interrumpida). Este pase rellena SÓLO los ``NULL`` usando el rango de
+    caracteres de su bloque de origen.
+
+    NO llama al LLM y NO crea segmentos: sin bloques, el documento no está
+    clasificado y esta reparación no puede inventar etiquetas.
+
+    Antes de heredar se normalizan las etiquetas legacy de los segmentos ya
+    clasificados (``processual_data`` → ``baseline_data``,
+    ``contextual_data`` → ``vague_data``): la extracción filtra por igualdad
+    contra ``baseline_data``, así que una etiqueta vieja dejaría el segmento
+    fuera de la extracción para siempre.
+
+    Returns:
+        Número de segmentos etiquetados.
+    """
+    try:
+        from services.glaser_inheritance import blocks_from_metadatos, inherit_tags
+    except Exception as exc:  # noqa: BLE001 - backend mal montado en el worker
+        logger.error(
+            "Herencia Glaser no disponible en worker-heavy doc=%s: %s",
+            documento_id[:8],
+            exc,
+        )
+        return 0
+
+    try:
+        legacy = normalizar_etiquetas_legacy(session, documento_id)
+        if legacy.get("changed"):
+            logger.info(
+                "Herencia Glaser: doc=%s, %d etiquetas legacy normalizadas",
+                documento_id[:8],
+                legacy["changed"],
+            )
+    except Exception as exc:  # noqa: BLE001 - reparación best-effort
+        session.rollback()
+        logger.warning("Normalización legacy falló doc=%s: %s", documento_id[:8], exc)
+
+    meta = _documento_metadatos(session, documento_id)
+    blocks = blocks_from_metadatos(meta)
+    if not blocks:
+        logger.warning(
+            "Herencia Glaser: doc=%s sin glaser_blocks; los segmentos siguen sin tag",
+            documento_id[:8],
+        )
+        return 0
+
+    rows = session.execute(
+        text(
+            "SELECT id, texto FROM segmentos "
+            "WHERE documento_id = :did AND tipo_dato_glaser IS NULL "
+            "ORDER BY posicion"
+        ),
+        {"did": documento_id},
+    ).fetchall()
+    if not rows:
+        return 0
+
+    full_text = (
+        meta.get("texto_preprocesado")
+        or meta.get("texto_extraido")
+        or meta.get("texto_original")
+        or ""
+    )
+    textos = [str(row[1] or "") for row in rows]
+    try:
+        tags = inherit_tags(textos, blocks, full_text)
+    except Exception as exc:  # noqa: BLE001 - reparación best-effort
+        logger.warning("Herencia Glaser falló doc=%s: %s", documento_id[:8], exc)
+        return 0
+
+    updated = 0
+    for row, tag in zip(rows, tags):
+        if not tag:
+            continue
+        session.execute(
+            text("UPDATE segmentos SET tipo_dato_glaser = :tipo WHERE id = :sid"),
+            {"tipo": tag, "sid": str(row[0])},
+        )
+        updated += 1
+    session.commit()
+
+    logger.info(
+        "Herencia Glaser: doc=%s, %d/%d segmentos etiquetados",
+        documento_id[:8],
+        updated,
+        len(rows),
+    )
+    return updated
 
 
 def _anchor_segments(session, documento_id: str, full_text: str) -> None:
@@ -940,8 +1049,10 @@ def process_document_agents_a(
         if STEP not in completed:
             checkpoint(session, documento_id, STEP, "in_progress")
             _ensure_segmented(session, documento_id)
-            # F2.1: Pre-clasificar tipo de dato Glaser para cada segmento
-            _classify_glaser_types_for_doc(session, documento_id, use_llm_fallback=True)
+            # La clasificación ya se hizo ANTES de segmentar (estado
+            # 'clasificado'). Aquí sólo se REPARA la etiqueta de los segmentos
+            # que llegaron sin tag (NULL): sin LLM y sin crear segmentos.
+            _inherit_glaser_tags_for_doc(session, documento_id)
             checkpoint(session, documento_id, STEP, "completed")
 
         # ── Paso 0.25: marcar 'extrayendo' de forma idempotente ───────────────
@@ -1079,8 +1190,9 @@ def process_document_agents_a(
         reset_after_cancel(session, documento_id)
         return {"status": "cancelled", "documento_id": documento_id}
     except Exception as e:
-        # Una extracción fallida vuelve a 'segmentado' (reintentable desde el
-        # mismo botón de la UI) en vez de quedar en 'error' o en 'extrayendo'.
+        # Una extracción fallida vuelve a 'segmentado' (el estado desde el que
+        # arranca la tarea: clasificado + segmentado, reintentable con el mismo
+        # botón de la UI) en vez de quedar en 'error' o en 'extrayendo'.
         transit(
             session,
             documento_id,
@@ -2893,15 +3005,13 @@ def task_main_concern_pipeline(proyecto_id: str) -> dict:
 
 @app.task(name="run_glaser_classifier", base=AbortableTask, bind=True)
 def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dict:
-    """Runs the 3-step Glaser classification on a single document.
+    """Clasifica el TEXTO del documento (classify-first).
 
-    Step 1 (PRO): XML tag classification of full document text.
-    Step 2 (FLASH): Structure validator + algorithmic fallback.
-    Step 3: Baseline selection.
+    Llama a `classify_text_spans`, que etiqueta el texto completo y persiste
+    `glaser_blocks` / `texto_clasificado` / `baseline_tags` **sin crear ni
+    borrar segmentos**: la segmentación es el paso siguiente, no el anterior.
 
-    Validator loop: validate -> feedback -> re-classify -> until correct (max 3 rounds).
-
-    Updates document estado to 'clasificado' on success.
+    Updates document estado to 'clasificado' on success, 'error' if degraded.
     """
     if self._aborted:
         raise TaskCancelledError()
@@ -2914,13 +3024,7 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
             proyecto_id[:8],
         )
 
-        result = classify_document_with_validation(
-            documento_id=documento_id,
-            proyecto_id=proyecto_id,
-            session=session,
-            llm_client=llm,
-            max_validation_rounds=3,
-        )
+        result = classify_text_spans(session, documento_id, proyecto_id, llm)
 
         if result.get("status") == "degraded":
             # Degradado NO es éxito: el documento no puede pasar a 'clasificado'
@@ -2955,6 +3059,12 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
                 documento_id[:8],
             )
 
+        # Contadores útiles para el caller. result["blocks"] se devuelve tal cual.
+        result.setdefault("documento_id", documento_id)
+        result.setdefault("estado", "clasificado")
+        result["blocks_count"] = len(result.get("blocks") or [])
+        result["used_fallback"] = bool(result.get("used_fallback"))
+
         return result
 
     except TaskCancelledError:
@@ -2964,6 +3074,94 @@ def task_run_glaser_classifier(self, documento_id: str, proyecto_id: str) -> dic
         logger.exception("run_glaser_classifier failed for doc=%s", documento_id)
         # Re-raise so Celery marks the task FAILURE; returning an error dict
         # would report SUCCESS and the UI would show "Clasificado" on failure.
+        raise
+    finally:
+        session.close()
+
+
+@app.task(name="segmentar_documento_llm", base=AbortableTask, bind=True)
+def task_segmentar_documento_llm(self, documento_id: str, proyecto_id: str) -> dict:
+    """Segmenta en worker-heavy cuando no hay ningún worker-nlp registrado.
+
+    Existe porque `_resolve_next` sustituye `segmentar_documento` por esta tarea
+    si `segmenters_available()` es False: el pipeline no puede quedarse parado
+    en 'clasificado' esperando a un worker que no está. Hace el mismo trabajo
+    que `workers/nlp/tasks.py::segmentar_documento` (reemplazar segmentos +
+    estado 'segmentado' + transición al siguiente paso), pero sin embeddings:
+    worker-heavy no habla con TEI y el LLM no los produce.
+
+    Recibe `(documento_id, proyecto_id)`: `_dispatch_next` sólo pasa el texto a
+    `segmentar_documento`, así que esta tarea cae en la rama genérica.
+    """
+    if self._aborted:
+        raise TaskCancelledError()
+
+    from agents.transitions import transition as transit
+    from segment_classifier import (
+        _persistir_segmentos_fallback,
+        _raw_text_de,
+        llm_segment_and_classify,
+    )
+
+    session = SessionLocal()
+    try:
+        logger.info(
+            "segmentar_documento_llm: doc=%s, project=%s sin worker-nlp",
+            documento_id[:8],
+            proyecto_id[:8],
+        )
+
+        meta = _documento_metadatos(session, documento_id)
+        raw_text = _raw_text_de(meta)
+        if not raw_text:
+            raise RuntimeError(f"doc {documento_id} sin texto para segmentar")
+
+        segments = llm_segment_and_classify(raw_text, proyecto_id, llm)
+        if not segments:
+            raise RuntimeError("fa_segment_and_classify no devolvió segmentos")
+
+        _persistir_segmentos_fallback(session, documento_id, segments)
+        # `_persistir_segmentos_fallback` ya escribe tipo_dato_glaser por span;
+        # la reparación sólo rellena los que quedaron en NULL.
+        _inherit_glaser_tags_for_doc(session, documento_id)
+
+        session.execute(
+            text("UPDATE documentos SET estado = 'segmentado' WHERE id = :did"),
+            {"did": documento_id},
+        )
+        # agent_id del paso lógico ('segmentar_documento'): es el id que la UI y
+        # `pipelineChains.ts` esperan para marcar la etapa como hecha.
+        session.execute(
+            text(
+                "INSERT INTO document_stage_progress (documento_id, agent_id) "
+                "VALUES (:did, 'segmentar_documento') ON CONFLICT DO NOTHING"
+            ),
+            {"did": documento_id},
+        )
+        session.commit()
+
+        # Misma transición que hace `segmentar_documento` al terminar.
+        transit(
+            session,
+            documento_id,
+            proyecto_id,
+            "segmentado",
+            "segmentar_documento_llm",
+            True,
+        )
+
+        return {
+            "status": "ok",
+            "documento_id": documento_id,
+            "num_segmentos": len(segments),
+        }
+
+    except TaskCancelledError:
+        logger.warning("segmentar_documento_llm cancelled for doc=%s", documento_id)
+        return {"status": "cancelled", "documento_id": documento_id}
+    except Exception:
+        logger.exception("segmentar_documento_llm failed for doc=%s", documento_id)
+        # Re-raise para que Celery marque FAILURE en lugar de SUCCESS.
         raise
     finally:
         session.close()

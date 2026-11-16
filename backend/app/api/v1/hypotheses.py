@@ -14,15 +14,17 @@ Flujo:
 
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 from app.db.database import get_db
+from app.models.domain.project import Proyecto
 from app.models.domain.synthesis import Hypothesis
 from app.models.domain.user import Usuario
 from app.services.auth import get_current_user
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/hypotheses", tags=["hypotheses"])
@@ -71,6 +73,109 @@ class SplitRequest(BaseModel):
     justification: str = Field(default="", max_length=500)
 
 
+class HypothesisOut(BaseModel):
+    """Representación plana usada por el panel de hipótesis (CRUD + duplicados)."""
+
+    id: str
+    text: str
+    level: str
+    confidence: float
+    status: str
+    code_id: str | None = None
+    parent_hypothesis_id: str | None = None
+    concern_labels: list = Field(default_factory=list)
+    batch_number: int | None = None
+
+
+class HypothesisCreate(BaseModel):
+    project_id: UUID
+    text: str = Field(..., min_length=1, max_length=4000)
+    level: str = Field(default="emergent", pattern="^(general|specific|emergent)$")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    status: str = Field(default="candidate", max_length=50)
+    code_id: UUID | None = None
+    concern_labels: list[str] = Field(default_factory=list)
+
+
+class HypothesisPatch(BaseModel):
+    """Actualización parcial: todos los campos son opcionales."""
+
+    text: str | None = Field(default=None, min_length=1, max_length=4000)
+    level: str | None = Field(default=None, pattern="^(general|specific|emergent)$")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    status: str | None = Field(default=None, max_length=50)
+    concern_labels: list[str] | None = None
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(..., min_length=1, max_length=500)
+
+
+def _to_out(hyp: Hypothesis) -> HypothesisOut:
+    """Serializa la fila ORM sin dejar escapar UUID ni tipos no JSON."""
+    return HypothesisOut(
+        id=str(hyp.id),
+        text=hyp.text,
+        level=hyp.level,
+        confidence=float(hyp.confidence),
+        status=hyp.status,
+        code_id=str(hyp.code_id) if hyp.code_id else None,
+        parent_hypothesis_id=(
+            str(hyp.parent_hypothesis_id) if hyp.parent_hypothesis_id else None
+        ),
+        concern_labels=hyp.concern_labels or [],
+        batch_number=hyp.batch_number,
+    )
+
+
+# Stopwords mínimas: artículos, preposiciones y conectores frecuentes (ES + EN).
+_STOPWORDS = {
+    "de",
+    "la",
+    "el",
+    "los",
+    "las",
+    "que",
+    "y",
+    "en",
+    "a",
+    "un",
+    "una",
+    "del",
+    "se",
+    "por",
+    "con",
+    "para",
+    "al",
+    "es",
+    "su",
+    "lo",
+    "como",
+    "mas",
+    "o",
+    "sus",
+    "no",
+    "si",
+    "the",
+    "of",
+    "to",
+}
+
+# Conserva letras acentuadas del español: son discriminativas en las hipótesis.
+_TOKEN_RE = re.compile(r"[^0-9a-záéíóúñü ]")
+
+
+def _tokens(texto: str) -> set[str]:
+    clean = _TOKEN_RE.sub(" ", (texto or "").lower())
+    return {t for t in clean.split() if len(t) > 2 and t not in _STOPWORDS}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
 # ═══════════════════════════════════════════════════════════════
 # Endpoints
 # ═══════════════════════════════════════════════════════════════
@@ -97,6 +202,225 @@ async def list_candidates(
         .order_by(Hypothesis.confidence.desc())
     )
     return result.scalars().all()
+
+
+# ───────────────────────────────────────────────────────────────
+# CRUD / panel de hipótesis
+# Rutas literales declaradas antes que las dinámicas para evitar shadowing.
+# ───────────────────────────────────────────────────────────────
+
+
+@router.post("", response_model=HypothesisOut, status_code=201)
+async def create_hypothesis(
+    body: HypothesisCreate = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Crea una hipótesis suelta (sin penalización de confianza ni HITL)."""
+    if not await db.get(Proyecto, body.project_id):
+        raise HTTPException(404, "Proyecto no encontrado")
+
+    hyp = Hypothesis(
+        project_id=body.project_id,
+        code_id=body.code_id,
+        text=body.text,
+        level=body.level,
+        confidence=body.confidence,
+        status=body.status,
+        concern_labels=list(body.concern_labels),
+    )
+    db.add(hyp)
+    await db.commit()
+    await db.refresh(hyp)
+    return _to_out(hyp)
+
+
+@router.get("/by-project/{project_id}")
+async def list_by_project(
+    project_id: UUID,
+    status: str | None = Query(None, description="Filtrar por estado"),
+    level: str | None = Query(None, description="general|specific|emergent"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lista todas las hipótesis del proyecto con filtros opcionales.
+
+    `by_status` cuenta por estado sobre el proyecto (respetando `level` pero
+    ignorando `status`) para que el frontend pueda pintar contadores de tabs.
+    La tabla no tiene timestamp: se ordena por confianza y luego texto.
+    """
+    stmt = select(Hypothesis).where(Hypothesis.project_id == project_id)
+    if status:
+        stmt = stmt.where(Hypothesis.status == status)
+    if level:
+        stmt = stmt.where(Hypothesis.level == level)
+    stmt = stmt.order_by(Hypothesis.confidence.desc(), Hypothesis.text.asc())
+    rows = (await db.execute(stmt)).scalars().all()
+
+    count_stmt = select(Hypothesis.status, func.count()).where(
+        Hypothesis.project_id == project_id
+    )
+    if level:
+        count_stmt = count_stmt.where(Hypothesis.level == level)
+    count_stmt = count_stmt.group_by(Hypothesis.status)
+    by_status = {st: int(n) for st, n in (await db.execute(count_stmt)).all()}
+
+    return {
+        "items": [_to_out(h) for h in rows],
+        "total": len(rows),
+        "by_status": by_status,
+    }
+
+
+@router.get("/duplicates/{project_id}")
+async def get_hypothesis_duplicates(
+    project_id: UUID,
+    threshold: float = Query(0.8, description="Umbral Jaccard; se acota a [0.5, 1.0]"),
+    max_items: int = Query(2000, description="Máximo de hipótesis a comparar"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Detecta hipótesis casi duplicadas con Jaccard de tokens (sin pg_trgm).
+
+    Se agrupan por clausura transitiva (union-find): A~B y B~C implican un solo
+    clúster A,B,C. Solo se devuelven clústeres de tamaño >= 2.
+    """
+    thr = max(0.5, min(1.0, float(threshold)))
+    limit = max(1, min(int(max_items), 5000))
+
+    result = await db.execute(
+        select(Hypothesis)
+        .where(Hypothesis.project_id == project_id)
+        .where(Hypothesis.status.not_in(["rejected", "split"]))
+        .order_by(Hypothesis.confidence.desc(), Hypothesis.text.asc())
+        .limit(limit)
+    )
+    rows = list(result.scalars().all())
+
+    token_sets = [_tokens(h.text) for h in rows]
+    n = len(rows)
+
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(n):
+        if not token_sets[i]:
+            continue
+        for j in range(i + 1, n):
+            if _jaccard(token_sets[i], token_sets[j]) >= thr:
+                ri, rj = find(i), find(j)
+                if ri != rj:
+                    parent[rj] = ri
+
+    # dict conserva el orden de inserción (i ascendente) → clústeres deterministas
+    grouped: dict[int, list[int]] = {}
+    for i in range(n):
+        grouped.setdefault(find(i), []).append(i)
+
+    clusters = []
+    for idxs in grouped.values():
+        if len(idxs) < 2:
+            continue
+        base_tokens = token_sets[idxs[0]]
+        items = []
+        for pos, idx in enumerate(idxs):
+            h = rows[idx]
+            sim = 1.0 if pos == 0 else _jaccard(base_tokens, token_sets[idx])
+            items.append(
+                {
+                    "id": str(h.id),
+                    "text": h.text,
+                    "level": h.level,
+                    "status": h.status,
+                    "confidence": float(h.confidence),
+                    "similarity": round(sim, 4),
+                    "is_suggested_keep": pos == 0,
+                }
+            )
+        clusters.append(
+            {"cluster_id": len(clusters) + 1, "size": len(items), "items": items}
+        )
+
+    return {
+        "threshold": thr,
+        "total_hypotheses": n,
+        "clusters": clusters,
+        "redundant_count": sum(c["size"] for c in clusters) - len(clusters),
+    }
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_hypotheses(
+    body: BulkDeleteRequest = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Borra en lote; antes desengancha las hijas para no violar el self-FK."""
+    await db.execute(
+        update(Hypothesis)
+        .where(Hypothesis.parent_hypothesis_id.in_(body.ids))
+        .values(parent_hypothesis_id=None)
+        .execution_options(synchronize_session=False)
+    )
+    result = await db.execute(
+        delete(Hypothesis)
+        .where(Hypothesis.id.in_(body.ids))
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    return {"deleted": int(result.rowcount or 0)}
+
+
+@router.patch("/{hypothesis_id}", response_model=HypothesisOut)
+async def update_hypothesis(
+    hypothesis_id: UUID,
+    body: HypothesisPatch = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Actualización parcial sin penalización de confianza ni cambio de estado."""
+    hyp = await db.get(Hypothesis, hypothesis_id)
+    if not hyp:
+        raise HTTPException(404, "Hipótesis no encontrada")
+
+    for campo, valor in body.model_dump(exclude_unset=True).items():
+        if valor is not None:
+            setattr(hyp, campo, valor)
+
+    await db.commit()
+    await db.refresh(hyp)
+    return _to_out(hyp)
+
+
+@router.delete("/{hypothesis_id}")
+async def delete_hypothesis(
+    hypothesis_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Borrado físico; las hijas quedan huérfanas en la raíz del árbol."""
+    hyp = await db.get(Hypothesis, hypothesis_id)
+    if not hyp:
+        raise HTTPException(404, "Hipótesis no encontrada")
+
+    await db.execute(
+        update(Hypothesis)
+        .where(Hypothesis.parent_hypothesis_id == hypothesis_id)
+        .values(parent_hypothesis_id=None)
+        .execution_options(synchronize_session=False)
+    )
+    await db.execute(
+        delete(Hypothesis)
+        .where(Hypothesis.id == hypothesis_id)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    return {"deleted": True, "id": str(hypothesis_id)}
 
 
 @router.post("/{hypothesis_id}/accept")

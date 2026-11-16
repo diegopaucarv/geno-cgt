@@ -108,6 +108,15 @@ app.conf.update(
     task_reject_on_worker_lost=True,
 )
 
+# Cierra el pipeline_run en cuanto termina su última tarea en vuelo (ver
+# app/services/pipeline_run_close.py).
+try:
+    from app.services.pipeline_run_close import register_run_close_hook
+
+    register_run_close_hook(app)
+except Exception:  # pragma: no cover - nunca romper el registro de tareas
+    logger.warning("No se pudo registrar el cierre de runs", exc_info=True)
+
 
 @app.task(name="update_saturation")
 def update_saturation(proyecto_id: str, code_id: str | None = None) -> dict:
@@ -322,30 +331,145 @@ def segmentar_documento(
                     "UPDATE documentos SET estado = 'segmentando' WHERE id = %s",
                     (documento_id,),
                 )
+                # La clasificación Glaser corre ANTES de segmentar (classify-first):
+                # este paso NO borra `glaser_blocks` / `texto_clasificado` /
+                # `baseline_tags`. Los segmentos nuevos heredan su categoría del
+                # tramo de texto original del que salieron.
+                # Hijas primero: sus FK a segmentos.id no tienen ON DELETE.
+                cur.execute(
+                    "DELETE FROM extracted_incidents WHERE segmento_id IN "
+                    "(SELECT id FROM segmentos WHERE documento_id = %s)",
+                    (documento_id,),
+                )
+                cur.execute(
+                    "DELETE FROM codigos_segmento WHERE segmento_id IN "
+                    "(SELECT id FROM segmentos WHERE documento_id = %s)",
+                    (documento_id,),
+                )
                 # Eliminar segmentos previos para evitar duplicados
                 cur.execute(
                     "DELETE FROM segmentos WHERE documento_id = %s",
                     (documento_id,),
                 )
-                segment_ids = []
-                for i, seg in enumerate(segmentos):
-                    seg_text = (
-                        seg if isinstance(seg, str) else seg.get("texto", str(seg))
+
+                # Leer los bloques clasificados ANTES de insertar: la herencia
+                # de tags se calcula sobre el texto completo, no sobre los
+                # segmentos (que acabamos de borrar).
+                cur.execute(
+                    "SELECT metadatos FROM documentos WHERE id = %s", (documento_id,)
+                )
+                _meta_row = cur.fetchone()
+                meta = _meta_row[0] if _meta_row else {}
+                if isinstance(meta, str):
+                    try:
+                        import json as _json_meta
+
+                        meta = _json_meta.loads(meta)
+                    except Exception:
+                        meta = {}
+                if not isinstance(meta, dict):
+                    meta = {}
+
+                # Import perezoso y protegido: si `services.glaser_inheritance`
+                # no se pudiera cargar, la segmentación debe seguir funcionando
+                # (con tags NULL) en lugar de tumbar worker-nlp al arrancar.
+                blocks: list[dict] = []
+                _inherit = None
+                try:
+                    from services.glaser_inheritance import (
+                        blocks_from_metadatos,
                     )
+                    from services.glaser_inheritance import (
+                        inherit_tags as _inherit_tags,
+                    )
+
+                    _inherit = _inherit_tags
+                    blocks = blocks_from_metadatos(meta)
+                except Exception as _ie:
+                    logger.error(
+                        "Herencia Glaser no disponible (segmentos sin tag): %s", _ie
+                    )
+
+                full_text = (
+                    meta.get("texto_preprocesado")
+                    or meta.get("texto_extraido")
+                    or meta.get("texto_original")
+                    or ""
+                ).strip() or texto
+
+                seg_texts = [
+                    (
+                        seg if isinstance(seg, str) else seg.get("texto", str(seg))
+                    ).strip()
+                    for seg in segmentos
+                ]
+                tags: list[str | None] = [None] * len(seg_texts)
+                inheritance = {
+                    "matched": 0,
+                    "unmatched": len(seg_texts),
+                    "total": len(seg_texts),
+                }
+                if blocks and seg_texts and _inherit is not None:
+                    try:
+                        heredados = _inherit(seg_texts, blocks, full_text)
+                        if len(heredados) == len(seg_texts):
+                            tags = heredados
+                    except Exception as exc:
+                        # La segmentación nunca falla por culpa del etiquetado.
+                        logger.warning(
+                            "Herencia Glaser falló doc=%s (segmentos sin tag): %s",
+                            documento_id,
+                            exc,
+                        )
+                    matched = sum(1 for tag in tags if tag)
+                    inheritance = {
+                        "matched": matched,
+                        "unmatched": len(tags) - matched,
+                        "total": len(tags),
+                    }
+
+                segment_ids = []
+                for i, seg_text in enumerate(seg_texts):
                     sid = str(_uuid.uuid4())
-                    segment_ids.append((sid, seg_text.strip(), i))
+                    segment_ids.append((sid, seg_text, i))
                     cur.execute(
-                        "INSERT INTO segmentos (id, documento_id, texto, posicion, conteo_tokens, es_anomalia) "
-                        "VALUES (%s, %s, %s, %s, %s, false)",
+                        "INSERT INTO segmentos (id, documento_id, texto, posicion, "
+                        "conteo_tokens, tipo_dato_glaser, es_anomalia) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, false)",
                         (
                             sid,
                             documento_id,
-                            seg_text.strip(),
+                            seg_text,
                             i + 1,
                             len(seg_text.split()),
+                            tags[i],
                         ),
                     )
                 conn.commit()
+
+                # Contadores de herencia (best-effort, transacción aparte):
+                # la clasificación ya está persistida y no debe perderse si
+                # este UPDATE falla.
+                try:
+                    import json as _json_meta
+
+                    cur.execute(
+                        "UPDATE documentos SET metadatos = "
+                        "COALESCE(metadatos, '{}'::jsonb) || CAST(%s AS jsonb) "
+                        "WHERE id = %s",
+                        (
+                            _json_meta.dumps({"glaser_inheritance": inheritance}),
+                            documento_id,
+                        ),
+                    )
+                    conn.commit()
+                except Exception as _me:
+                    conn.rollback()
+                    logger.warning(
+                        "No se pudo registrar glaser_inheritance doc=%s: %s",
+                        documento_id,
+                        _me,
+                    )
 
                 # Compute embeddings via TEI (outside the insert loop)
                 if TEI_URL and segment_ids:

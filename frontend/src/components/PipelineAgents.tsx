@@ -172,15 +172,22 @@ export default function PipelineAgents({
   }
 
   function renderAgent(agent: AgentDef) {
+    // Agents absent from agentDocCounts are project-level (open coding and
+    // later stages): they have no per-document work queue, so their done-ness
+    // comes from completedAgents instead of doc estados.
+    const isPerDoc = agentDocCounts[agent.id] !== undefined;
     const docCount = agentDocCounts[agent.id];
     const doneCount = docCount?.done ?? 0;
     const totalDocs = docCount?.total ?? 0;
     const hasWork = totalDocs > 0;
     const eligible = (eligibleDocCounts[agent.id] ?? 0) > 0;
+    const completed = completedAgents.has(agent.id);
 
     const isExternallyRunning =
       (agentStatuses[agent.id] || "pending") === "running";
-    const allDone = hasWork && doneCount >= totalDocs && !eligible;
+    const allDone = isPerDoc
+      ? hasWork && doneCount >= totalDocs && !eligible
+      : completed;
     const status: string = allDone
       ? "done"
       : isExternallyRunning
@@ -193,7 +200,10 @@ export default function PipelineAgents({
     // An agent with depsMet but no eligible docs still shows as clickable
     // because its dependency already produced output — downstream agents
     // can see it as "passed".
-    const canRun = depsMet && !pipelineRunning;
+    // Project-level agents are launched manually and their task is
+    // idempotent; dependency gating here would hide the button after a
+    // reload because completedAgents is client-side state.
+    const canRun = (isPerDoc ? depsMet : true) && !pipelineRunning;
     const isHovered = hoveredAgent === agent.id;
     const isRunning = isExternallyRunning;
     const tierColor = FAMILY_COLORS[agent.tier] || "#8B949E";
@@ -236,14 +246,8 @@ export default function PipelineAgents({
         >
           {isRunning ? (
             <span
-              style={{
-                display: "inline-block",
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "#A371F7",
-                animation: "stagePulse 1.5s ease-in-out infinite",
-              }}
+              className="spinner"
+              style={{ width: 8, height: 8, borderWidth: 1.5 }}
             />
           ) : (
             statusIcon(status)
@@ -291,48 +295,60 @@ export default function PipelineAgents({
           )}
         </span>
 
-        {/* Play: canRun + eligible = run new docs. canRun + !eligible = re-run. */}
-        {isHovered && !isRunning && canRun && eligible && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRunAgent(agent.id);
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#3FB950",
-              cursor: "pointer",
-              fontSize: 12,
-              padding: "0 2px",
-              lineHeight: 1,
-            }}
-            title="Ejecutar agente"
-          >
-            ▶
-          </button>
-        )}
-        {/* Re-run: all done (nothing left to process) but user may want to redo */}
-        {isHovered && !isRunning && canRun && !eligible && allDone && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRunAgent(agent.id);
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#D29922",
-              cursor: "pointer",
-              fontSize: 11,
-              padding: "0 2px",
-              lineHeight: 1,
-            }}
-            title="Re-ejecutar agente"
-          >
-            ↻
-          </button>
-        )}
+        {/* Play: per-doc agents run new docs when eligible; project-level agents
+            (projectRunnable) show ▶ until they complete. */}
+        {isHovered &&
+          !isRunning &&
+          canRun &&
+          (isPerDoc ? eligible : agent.projectRunnable && !completed) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRunAgent(agent.id);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#3FB950",
+                cursor: "pointer",
+                fontSize: 12,
+                padding: "0 2px",
+                lineHeight: 1,
+              }}
+              title="Ejecutar agente"
+            >
+              ▶
+            </button>
+          )}
+        {/* Re-run: per-doc agents re-run when nothing is left to process but
+            work exists already (if some docs are still upstream-blocked they
+            will never reach `allDone`, so `doneCount > 0` is the real signal).
+            Project-level agents (projectRunnable) show ↻ once completed. */}
+        {isHovered &&
+          !isRunning &&
+          canRun &&
+          (isPerDoc
+            ? !eligible && (allDone || doneCount > 0)
+            : agent.projectRunnable && completed) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRunAgent(agent.id);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#D29922",
+                cursor: "pointer",
+                fontSize: 11,
+                padding: "0 2px",
+                lineHeight: 1,
+              }}
+              title="Re-ejecutar agente"
+            >
+              ↻
+            </button>
+          )}
         {isHovered && isRunning && (
           <button
             onClick={(e) => {

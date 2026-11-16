@@ -8,7 +8,7 @@ with Markdown comment tags delimiting sections by Glaser data type:
     <!-- properline_data -->...<!-- /properline_data -->
     <!-- interpreted_data -->...<!-- /interpreted_data -->
     <!-- vague_data -->...<!-- /vague_data -->
-    <!-- interviewer_context -->...<!-- /interviewer_context -->
+    <!-- document_context -->...<!-- /document_context -->
 
 Only baseline_data is extracted for segmentation. Other types are stored as metadata.
 Includes a retry loop (max 3 attempts) for when the LLM fails to tag correctly.
@@ -29,12 +29,12 @@ GLASER_TYPES = [
     "properline_data",
     "interpreted_data",
     "vague_data",
-    "interviewer_context",
+    "document_context",
 ]
 
 # Regex to extract tagged sections. Uses DOTALL so newlines inside tags are captured.
 TAG_PATTERN = re.compile(
-    r"<!--\s*(baseline_data|properline_data|interpreted_data|vague_data|interviewer_context)\s*-->\s*"
+    r"<!--\s*(baseline_data|properline_data|interpreted_data|vague_data|document_context|interviewer_context)\s*-->\s*"
     r"(.*?)"
     r"<!--\s*/\1\s*-->",
     re.DOTALL,
@@ -62,7 +62,7 @@ def parse_glaser_tags(
                 "properline_data": str,
                 "interpreted_data": str,
                 "vague_data": str,
-                "interviewer_context": str,
+                "document_context": str,
             },
             "error": str | None,
             "retries": int,
@@ -74,7 +74,10 @@ def parse_glaser_tags(
         matches = TAG_PATTERN.findall(tagged_text)
         sections: dict[str, str] = {t: "" for t in GLASER_TYPES}
 
+        # El XML puede venir clasificado con la taxonomía anterior.
+        normalize = {"interviewer_context": "document_context"}
         for tag_type, content in matches:
+            tag_type = normalize.get(tag_type, tag_type)
             cleaned = content.strip()
             if cleaned:
                 sections[tag_type] = (

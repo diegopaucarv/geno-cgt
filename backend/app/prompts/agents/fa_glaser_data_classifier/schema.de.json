@@ -21,13 +21,14 @@
               "baseline_data",
               "properline_data",
               "interpreted_data",
-              "vague_data"
+              "vague_data",
+              "document_context"
             ],
-            "description": "Glaser-Datentyp für dieses Segment."
+            "description": "Kanonischer Glaser-Datentyp. baseline_data = die authentischen Äußerungen, die DIREKTE Belege zur Beantwortung der Forschungsfrage liefern: Erfahrung aus erster Hand, nicht erkennbar durch die Wirkung der Anwesenheit des Forschers auf Gefallen hin geformt. properline_data = die Linie des Richtigen. Sie stammt NICHT aus der Authentizität der sprechenden Person: Es ist organisationaler, professioneller oder gesellschaftlicher Diskurs, den die Person wiedergibt — die offizielle Version dessen, was man sagen, tun oder sein soll. Sie klingt nach Institution, Ministerium, Berufsstand oder «alle Welt», nie nach dem Alltag genau dieser Person. Ihre Funktion ist, zu verdecken, was die Person tatsächlich tut und fühlt: Die Norm wird aufgesagt, statt die Erfahrung zu erzählen. Merkmale: institutionelle oder politische Sprache, Slogans, Lehrbuchformulierungen, Berufung auf «was alle tun» oder «was die Regeln sagen», das kollektive «wir» einer Organisation, Antworten, die jedes Mitglied dieser Institution hätte geben können. Ein Abschnitt ist NICHT allein deshalb properline_data, weil er «sollte», «muss» oder eine Beschwerde enthält: eine Forderung, ein Wunsch, eine Frustration oder ein Urteil über die eigene Arbeit oder das eigene Leben ist baseline_data. interpreted_data = Information, gefiltert durch die Sicht eines Professionellen (Forscher, Autor), der ÜBER die Population spricht; die Population hat sie nicht produziert. vague_data = Ausweichen: leere, umherschweifende oder übermäßig breite Antworten, weil der Teilnehmer keinen Bezug zum Thema, keinen Nutzen im Offenlegen oder keinen Grund zu sprechen sieht. document_context = die Struktur, die dem Dokument seine Form gibt (Überschriften, interne Unterteilungen, Metadaten, Fragen und Impulse des Forschers), niemals seine Substanz; niemals Teilnehmerdaten und niemals die Analyse des Autors."
           },
           "is_interviewer": {
             "type": "boolean",
-            "description": "true wenn dieses Segment Interviewer-Rede ist (Frage, Anweisung, Metadaten)."
+            "description": "true, wenn dieses Segment Dokumentstruktur ist, die vom Forscher oder Autor geschrieben wurde (Überschriften, Fragen, Metadaten)."
           },
           "confidence": {
             "type": "string",

@@ -23,9 +23,11 @@ class Segmento(Base):
     # ── Clasificación Glaser ────────────────────────
     tipo_dato_glaser: Mapped[str | None] = mapped_column(String(50), nullable=True)
     """
-    baseline_data | properline_data | interpreted_data | vague_data | interviewer_context.
+    baseline_data | properline_data | interpreted_data | vague_data | document_context.
     Clasificado por IA en batch (classify_segments_batch).
-    interviewer_context = pregunta del autor, título, o metadata.
+    document_context = estructura del documento: encabezados, divisiones internas,
+    metadatos y las preguntas o intervenciones del investigador. Nunca dato del
+    participante y nunca el análisis del autor.
     """
 
     # ── Reconstrucción determinista (A2 — Hacedor de texto) ──

@@ -12,14 +12,8 @@
     },
     "data_classification": {
       "type": "string",
-      "enum": [
-        "baseline",
-        "properline",
-        "interpreted",
-        "vague",
-        "mixed"
-      ],
-      "description": "Predominant data type. baseline: honest. properline: social desirability. interpreted: forced. vague: evasive. mixed: various."
+      "enum": ["baseline", "properline", "interpreted", "vague", "mixed"],
+      "description": "Predominant data type. baseline: honest experience. properline: social desirability. interpreted: the author's framing of the population. vague: evasive. mixed: various."
     },
     "similarity_to_previous": {
       "type": "string",

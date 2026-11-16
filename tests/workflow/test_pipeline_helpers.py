@@ -244,11 +244,12 @@ def test_project_level_task_names_guard_exists() -> None:
 
 
 def test_open_coding_stage_dispatches_only_segmentado() -> None:
-    """pin: 'crudo' / 'segmentando' dispatches always failed.
+    """pin: 'crudo' / 'clasificado' / 'segmentando' dispatches always failed.
 
     ``process_document_agents_a`` calls ``_ensure_segmented``, which raises when
-    the document has no segments. Documents in ``crudo`` or ``segmentando`` were
-    therefore guaranteed to fail; only truly ``segmentado`` docs are dispatched.
+    the document has no segments, and it assumes the segments already carry a
+    Glaser category. Under the classify-first ladder a document only owns both
+    after ``segmentado``, so that is the only estado dispatched here.
     """
     branch = _stage_branch(_source(PIPELINE), "open_coding")
 
@@ -264,7 +265,7 @@ def test_open_coding_stage_dispatches_only_segmentado() -> None:
         "the open_coding guard is a membership test again; only ('segmentado',) "
         "may pass, and an equality check is what pins that"
     )
-    assert not re.search(r"strip\(\)\s+in\s*\([^)]*segmentado", branch), (
+    assert not re.search(r"strip\(\)\s+in\s*\([^)]*(?:clasificado|crudo)", branch), (
         "another estado was added alongside 'segmentado' in the open_coding "
         "guard; those dispatches fail inside _ensure_segmented"
     )
@@ -384,6 +385,35 @@ def test_start_pipeline_direct_phase_b_trigger_requires_full_batch() -> None:
     )
     assert re.search(r"_maybe_trigger_phase_b\(", body), (
         "start_pipeline no longer triggers Phase B when all docs are ready"
+    )
+
+
+def test_start_pipeline_is_classify_first() -> None:
+    """pin: clasificar → segmentar → extraer, en ese orden.
+
+    ``clasificado`` deja la clasificación en ``metadatos.glaser_blocks`` sin
+    crear segmentos, así que la decisión no puede empezar por ``n_segs``: un
+    documento crudo tiene 0 segmentos y aun así su primer paso es clasificar.
+    """
+    body = _function_source(_source(ORCHESTRATOR), ORCHESTRATOR, "start_pipeline")
+
+    assert "has_classification" in body, (
+        "start_pipeline no longer reads the classification out of metadatos; "
+        "without it the first step degrades to segmentation"
+    )
+    classify_pos = body.find("not has_classification")
+    segment_pos = body.find("n_segs == 0 or n_classified == 0")
+    extract_pos = body.find("n_incidents == 0 and n_codes == 0")
+    assert -1 not in (classify_pos, segment_pos, extract_pos), (
+        "start_pipeline lost one of its three dispatch branches "
+        "(classify / segment / extract)"
+    )
+    assert classify_pos < segment_pos < extract_pos, (
+        "start_pipeline dispatch order is no longer classify → segment → extract"
+    )
+    assert "_count_incidents" in body, (
+        "start_pipeline no longer checks extracted incidents; docs whose "
+        "incidents already exist would be re-dispatched"
     )
 
 

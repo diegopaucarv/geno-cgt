@@ -29,12 +29,23 @@ Routes under test (``backend/app/api/v1/pipeline.py``, prefix ``/api/v1``):
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 import pytest
 
 PIPELINE = "/api/v1/projects/{pid}/pipeline"
 AGENT_LOGS = "/api/v1/projects/{pid}/agent-logs"
 AGENT_MEMOS = "/api/v1/projects/{pid}/agent-memos"
+
+REPO = Path(__file__).resolve().parents[2]
+PIPELINE_SOURCE = REPO / "backend" / "app" / "api" / "v1" / "pipeline.py"
+
+INCONSISTENCY_CODES = (
+    "missing_classified",
+    "missing_segmented",
+    "segmented_without_segments",
+    "segments_unclassified",
+)
 
 # (path template, expected top-level JSON type, required keys)
 GET_CONTRACTS = [
@@ -219,3 +230,89 @@ def test_run_stage_unknown_stage_returns_400(api, project_id):
     body = resp.json()
     assert "detail" in body, f"missing detail field: {resp.text}"
     assert "unknown stage" in str(body["detail"]).lower(), resp.text
+
+
+# ── Classify-first ladder ─────────────────────────────────────────────
+
+
+def test_log_payload_exposes_classification_and_inconsistencies(api, project_id):
+    """Each document reports classification, incidents and inconsistencies.
+
+    ``classified_count``/``incidents_count`` feed the per-document badges and
+    ``inconsistencies`` feeds the detector that warns about states the
+    classify-first ladder cannot produce.
+    """
+    resp = api.get(PIPELINE.format(pid=project_id) + "/log")
+    assert resp.status_code == 200, resp.text
+
+    body = resp.json()
+    summary = body["summary"]
+    assert isinstance(summary.get("docs_inconsistent"), int), resp.text
+    assert isinstance(summary.get("docs_need_classify"), int), resp.text
+    # The pre-existing keys must keep their type.
+    assert isinstance(summary["need_classify"], int), resp.text
+    assert isinstance(summary["total"], int), resp.text
+
+    for doc in body["documents"]:
+        assert isinstance(doc.get("has_classification"), bool), resp.text
+        assert isinstance(doc.get("classified_count"), int), resp.text
+        assert isinstance(doc.get("incidents_count"), int), resp.text
+        assert isinstance(doc.get("inconsistencies"), list), resp.text
+
+        assert isinstance(doc["steps"].get("classified"), bool), resp.text
+        assert isinstance(doc["steps"].get("incidents"), bool), resp.text
+        # Si el detector reporta una inconsistencia, tiene que ser un código
+        # conocido por la UI.
+        for code in doc["inconsistencies"]:
+            assert code in INCONSISTENCY_CODES, f"unknown code {code!r}: {resp.text}"
+
+
+def test_next_action_ladder_checks_classification_before_segments():
+    """Source pin: the ladder is classify-first.
+
+    Under classify-first the classifier runs on the text and segmentation
+    derives from it, so a document without classification metadata is a
+    ``classify`` case even when it already has segments. Checking ``n_segs``
+    first would send a classify-first document straight to segmentation.
+    """
+    src = PIPELINE_SOURCE.read_text(encoding="utf-8")
+
+    class_start = src.index("async def get_pipeline_log(")
+    classify_at = src.index("elif not has_classification:", class_start)
+    segment_at = src.index("elif not n_segs:", class_start)
+    assert classify_at < segment_at, (
+        "get_pipeline_log must test `not has_classification` before `not n_segs`"
+    )
+
+    # Classification is read from the DB, not inferred from estado;
+    # texto_clasificado cubre los documentos legacy.
+    assert "metadatos ? 'glaser_blocks'" in src, (
+        "has_classification must come from metadatos ? 'glaser_blocks'"
+    )
+    assert "metadatos ? 'texto_clasificado'" in src, (
+        "legacy documents store the classification in texto_clasificado"
+    )
+
+    for code in INCONSISTENCY_CODES:
+        assert f'"{code}"' in src, f"inconsistency code {code!r} missing from the log"
+
+
+def test_extractor_guard_accepts_segmented_documents():
+    """Source pin: the 409 guard mirrors EXTRACTOR_STATES under classify-first.
+
+    ``process_document_agents_a`` consumes segments that already carry their
+    Glaser tag, so ``segmentado`` is the normal entry point and ``clasificado``
+    (no segments yet) is not.
+    """
+    src = PIPELINE_SOURCE.read_text(encoding="utf-8")
+    guard_at = src.index('if task_name == "process_document_agents_a"')
+    guard = src[guard_at : src.index("task = celery_app.send_task", guard_at)]
+
+    assert '"segmentado"' in guard, (
+        "the extractor guard must accept segmentado, the normal classify-first "
+        "input (segments already tagged)"
+    )
+    assert "Segmentá el texto ya clasificado antes de extraer." in guard, (
+        "the guard message must explain that the text has to be classified and "
+        "segmented first"
+    )

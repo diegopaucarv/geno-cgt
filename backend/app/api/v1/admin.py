@@ -18,6 +18,33 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
+# Estados transitorios de la cadena classify-first: mientras el doc está en uno
+# de ellos nada lo avanza por sí solo, así que un rollback nunca debe dejarlo
+# ahí.
+TRANSIENT_ESTADOS = frozenset(
+    {
+        "preprocesando",
+        "clasificando",
+        "segmentando",
+        "procesando",
+        "extrayendo",
+        "resumiendo",
+        "codificando",
+    }
+)
+
+
+def _rollback_target(doc_estado_before: str | None) -> str:
+    """Estado al que vuelve un documento cancelado: el previo a la tarea.
+
+    Las filas viejas de ``pipeline_tasks`` guardaban el estado DESTINO
+    (transitorio) en vez del previo; devolverlas a ese valor no las sacaría del
+    limbo, así que en ese caso se resetean a 'crudo' — el mismo destino del
+    reset sin run activo.
+    """
+    before = (doc_estado_before or "").strip()
+    return "crudo" if before in TRANSIENT_ESTADOS else before
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Workers — stop individuales
@@ -126,15 +153,19 @@ async def stop_project_pipeline(
     3. Rollback de cada tarea (restaura doc_estado_before)
     4. Limpia logs de Redis
     """
-    # 1. Buscar run activo
-    run = (
-        await db.execute(
-            select(PipelineRun).where(
-                PipelineRun.project_id == project_id,
-                PipelineRun.status == "running",
-            )
+    # 1. Buscar el run activo más reciente. Puede haber varios 'running' (runs
+    # que nadie cerró), y scalar_one_or_none() lanzaba MultipleResultsFound,
+    # así que el botón "Detener" devolvía 500. Se ordena y se toma uno solo.
+    result = await db.execute(
+        select(PipelineRun)
+        .where(
+            PipelineRun.project_id == project_id,
+            PipelineRun.status == "running",
         )
-    ).scalar_one_or_none()
+        .order_by(PipelineRun.creado_en.desc(), PipelineRun.id.desc())
+        .limit(1)
+    )
+    run = result.scalars().first()
 
     if not run:
         # Sin run activo — revocar todo + purgar colas + resetear docs
@@ -157,13 +188,16 @@ async def stop_project_pipeline(
             await r.close()
         except Exception:
             pass
-        # Reset intermediate doc estados
+        # Reset de los estados transitorios del proyecto. Sin el filtro por
+        # proyecto, detener uno devolvía a 'crudo' los documentos de todos.
         await db.execute(
             text(
-                "UPDATE documentos SET estado = 'crudo' WHERE estado IN "
-                "('preprocesando', 'segmentando', 'procesando', 'resumiendo', "
-                " 'extrayendo', 'clasificando', 'codificando')"
+                "UPDATE documentos SET estado = 'crudo' "
+                "WHERE proyecto_id = :pid AND estado IN "
+                "('preprocesando', 'clasificando', 'segmentando', 'procesando', "
+                " 'extrayendo', 'resumiendo', 'codificando')"
             ),
+            {"pid": str(project_id)},
         )
         await db.commit()
         return {
@@ -226,7 +260,7 @@ async def stop_project_pipeline(
                 await db.execute(
                     text("UPDATE documentos SET estado = :estado WHERE id = :did"),
                     {
-                        "estado": task.doc_estado_before,
+                        "estado": _rollback_target(task.doc_estado_before),
                         "did": task.document_id,
                     },
                 )
@@ -310,7 +344,7 @@ async def cancel_task(
             await db.execute(
                 text("UPDATE documentos SET estado = :estado WHERE id = :did"),
                 {
-                    "estado": task_record.doc_estado_before,
+                    "estado": _rollback_target(task_record.doc_estado_before),
                     "did": task_record.document_id,
                 },
             )

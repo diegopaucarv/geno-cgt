@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["segments"],
+  "properties": {
+    "segments": {
+      "type": "array",
+      "description": "Ordered segments that, concatenated, reproduce the whole input window. Never empty when the input has text.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["position", "text", "category"],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "description": "1-based position inside this window. Increases by exactly one."
+          },
+          "text": {
+            "type": "string",
+            "description": "Exact verbatim substring of the input window. Copied character for character: no paraphrasing, cleaning or translation."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data",
+              "document_context"
+            ],
+            "description": "Canonical Glaser data category. baseline_data = the authentic expressions that provide DIRECT evidence toward answering the research question: first-hand experience, not evidently shaped to please by the effect of the researcher's presence. properline_data = the line of the proper. It does NOT come from the speaker's own authenticity: it is organisational, professional or social discourse that the speaker reproduces — the official version of what one is supposed to say, do or be. It sounds like the institution, the ministry, the profession or 'everyone', never like this particular person's day. Its function is to mask what the person actually does and actually feels: the rule is recited instead of the experience being told. Markers: institutional or policy language, slogans, textbook formulations, appeals to what 'everyone does' or 'the rules say', the collective 'we' of an organisation, answers that any member of that institution could have given. A segment is NOT properline_data merely because it contains 'should', 'must', 'ought' or a complaint: a demand, a wish, a frustration or a judgement about the speaker's own work or daily life is baseline_data. interpreted_data = information filtered through the lens of a professional (researcher, author) speaking ABOUT the population; the population did not produce it. vague_data = vaguing out: empty, meandering or overly broad answers because the participant sees no connection, no benefit in disclosing, or no reason to speak. document_context = the structure that gives the document its shape (headers, internal divisions, metadata, researcher questions and prompts), never its substance; never participant data and never the author's analysis."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Confidence in the assigned category."
+          }
+        }
+      }
+    }
+  }
+}

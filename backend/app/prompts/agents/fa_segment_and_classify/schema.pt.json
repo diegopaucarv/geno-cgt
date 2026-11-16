@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["segments"],
+  "properties": {
+    "segments": {
+      "type": "array",
+      "description": "Segmentos ordenados que, concatenados, reproduzem a janela de entrada inteira. Nunca vazio quando a entrada tem texto.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["position", "text", "category"],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "description": "Posição baseada em 1 dentro desta janela. Aumenta exatamente de um em um."
+          },
+          "text": {
+            "type": "string",
+            "description": "Subcadeia literal exata da janela de entrada. Copiada palavra por palavra: sem parafrasear, limpar ou traduzir."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "baseline_data",
+              "properline_data",
+              "interpreted_data",
+              "vague_data",
+              "document_context"
+            ],
+            "description": "Categoria canônica de dado segundo Glaser. baseline_data = as expressões autênticas que fornecem evidência DIRETA para responder à pergunta de pesquisa: experiência em primeira mão, não moldada de forma evidente para agradar pelo efeito da presença do pesquisador. properline_data = a linha do correto. NÃO vem da autenticidade de quem fala: é discurso organizacional, profissional ou social que a pessoa reproduz — a versão oficial do que se supõe que se deve dizer, fazer ou ser. Soa a instituição, a ministério, a profissão ou a «todo mundo», nunca ao dia a dia dessa pessoa concreta. Sua função é mascarar o que a pessoa realmente faz e sente: recita-se a norma em vez de contar a experiência. Marcadores: linguagem institucional ou de política, slogans, formulações de manual, apelos ao que «todo mundo faz» ou «dizem as regras», o «nós» coletivo de uma organização, respostas que qualquer membro dessa instituição poderia ter dado. Um segmento NÃO é properline_data só porque contém «deveria», «tem que» ou uma queixa: uma demanda, um desejo, uma frustração ou um julgamento sobre o próprio trabalho ou a própria vida é baseline_data. interpreted_data = informação filtrada pela lente de um profissional (pesquisador, autor) que fala SOBRE a população; a população não a produziu. vague_data = evasão: respostas vazias, divagantes ou excessivamente amplas porque o participante não sente conexão com o tema, não vê benefício em revelar ou não tem motivo para falar. document_context = a estrutura que dá forma ao documento (cabeçalhos, divisões internas, metadados, perguntas e intervenções do pesquisador), nunca sua substância; nunca dado do participante nem análise do autor."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"],
+            "description": "Confiança na categoria atribuída."
+          }
+        }
+      }
+    }
+  }
+}

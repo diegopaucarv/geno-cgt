@@ -305,6 +305,11 @@ services:
     networks:
       - gt_network
       - default
+    environment:
+      # Ventana de sondeo por paso del pipeline (ms). Vacío = default de
+      # `frontend/src/config/timeouts.ts` (60 min). Súbelo en una máquina
+      # lenta, p. ej. VITE_STEP_TIMEOUT_MS=7200000 (2 h) en el .env raíz.
+      VITE_STEP_TIMEOUT_MS: ${VITE_STEP_TIMEOUT_MS:-}
     command: sh -c "npm install && npm run dev"
 
 volumes:

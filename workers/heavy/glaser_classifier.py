@@ -20,13 +20,26 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
-# ── Valid Glaser tag types ──
-VALID_TAGS = {
+# ── Taxonomía de datos Glaser ──
+#: Las cinco categorías canónicas de la teoría (y de la BD).
+CANONICAL_TAGS: tuple[str, ...] = (
     "baseline_data",
-    "interviewer_context",
+    "properline_data",
+    "interpreted_data",
+    "vague_data",
+    "document_context",
+)
+
+#: Tags del clasificador anterior, incluido el nombre previo de
+#: `document_context` (`interviewer_context`). El validador los sigue aceptando
+#: para no rechazar clasificaciones ya persistidas, pero ningún prompt los pide.
+LEGACY_TAGS: tuple[str, ...] = (
     "processual_data",
     "contextual_data",
-}
+    "interviewer_context",
+)
+
+VALID_TAGS = set(CANONICAL_TAGS) | set(LEGACY_TAGS)
 
 
 class ClassificationUnavailable(RuntimeError):
@@ -57,23 +70,38 @@ def _mentions_glaser_tag(xml_text: str) -> bool:
 
 # ── System prompt (instructions, NO raw text) ──
 CLASSIFIER_SYSTEM_PROMPT = """[ROL]
-Eres un clasificador de datos cualitativos. Tu tarea es envolver pasajes de texto en tags XML segun su tipo de dato. DEBES usar al menos 2 tipos de tag diferentes.
+Eres un clasificador de datos cualitativos para Teoría Fundamentada Clásica (Barney Glaser). Recibes el texto completo de un documento y debes envolver sus pasajes en tags XML según su tipo de dato.
 
 [REGLAS ABSOLUTAS]
-1. SOLO puedes usar estos 4 tags: <baseline_data>, <interviewer_context>, <processual_data>, <contextual_data>
-2. NUNCA uses <baseline_data> como categoria por defecto. Si un pasaje no encaja claramente en baseline_data, usa <contextual_data>.
-3. TODO el texto del input DEBE estar dentro de algun tag. No puede haber texto suelto fuera de tags.
-4. Cada bloque de texto dentro de un tag debe ser un pasaje continuo del texto original.
-5. NO modifiques, resumas, ni reordenes el texto. Preservalo exactamente como esta.
-6. NO uses tags anidados. Los tags no deben solaparse.
-7. NO uses markdown code fences. Devuelve SOLO el XML.
-8. USA AL MENOS 2 TIPOS DE TAG DIFERENTES. Si todo el texto es de un solo tipo, estas clasificando mal.
+1. SOLO puedes usar estos 5 tags: <baseline_data>, <properline_data>, <interpreted_data>, <vague_data>, <document_context>.
+2. TODO el texto del input DEBE estar dentro de algún tag. No puede haber texto suelto fuera de tags.
+3. Cada bloque dentro de un tag debe ser un pasaje continuo del texto original.
+4. NO modifiques, resumas ni reordenes el texto. Presérvalo exactamente como está.
+5. NO uses tags anidados. Los tags no deben solaparse.
+6. NO uses markdown code fences. Devuelve SOLO el XML.
+7. No inventes categorías intermedias: no existen \"processual_data\" ni \"contextual_data\" ni \"interviewer_context\" (ahora se llama \"document_context\"). Un relato temporal del participante es baseline_data si es su descripción directa y honesta; un pasaje que no encaja en ninguna de las cinco categorías se clasifica por su función dominante, nunca con un tag nuevo.
 
 [TIPOS DE DATO — definiciones ESTRICTAS]
-- <baseline_data>: SOLO pasajes donde el hablante exprese EXPLICITAMENTE: lo que PIENSA (opiniones, creencias, juicios), lo que SIENTE (emociones, afectos, valoraciones), o lo que HACE (acciones, comportamientos, practicas) respecto al tema central. NO incluyas narraciones, descripciones de contexto, introducciones, ni secuencias temporales aqui.
-- <interviewer_context>: SOLO preguntas o intervenciones del entrevistador. Identificalas por signos de interrogacion, frases como "cuenteme sobre...", "podria explicar...", o cambios de tema iniciados por otra persona. Si no hay entrevistador, no uses este tag.
-- <processual_data>: SOLO descripciones de secuencias temporales explicitas: pasos ("primero... luego..."), etapas, cambios en el tiempo ("antes... ahora..."), narrativas de eventos con principio y fin, o verbos de transformacion ("empezo a...", "dejo de...", "se convirtio en...").
-- <contextual_data>: descripciones del entorno fisico, social, institucional o historico. Background, setting, datos demograficos, fechas, lugares, roles. Tambien introducciones, transiciones, y pasajes que no expresan contenido sustantivo del fenomeno."""
+- <baseline_data>: las expresiones auténticas que aportan evidencia DIRECTA para responder a la pregunta de investigación. Experiencia de primera mano, no moldeada de forma evidente para agradar por efecto de la presencia del investigador. Es el dato de oro: la única categoría que alimenta la extracción de incidentes.
+- <properline_data>: la línea de lo correcto. NO procede de la autenticidad de quien habla: es discurso organizacional, profesional o social que la persona reproduce — la versión oficial de lo que se supone que hay que decir, hacer o ser. Suena a institución, a ministerio, a profesión o a «todo el mundo», nunca a la jornada de esa persona concreta. Su función es enmascarar lo que la persona hace y siente de verdad: se recita la norma en lugar de contarse la experiencia. Marcadores: lenguaje institucional o de política, eslóganes, formulaciones de manual, apelaciones a lo que «todo el mundo hace» o «dicen las normas», el «nosotros» colectivo de una organización, respuestas que cualquier miembro de esa institución podría haber dado.
+- <interpreted_data>: información filtrada por la mirada de un profesional cuyo oficio es hacer que otros vean los datos a su manera profesional. Es dato de segundo orden: habla SOBRE la población de interés, pero la población no lo produjo. La voz del investigador o del autor fuera de las citas: enmarcado, explicación, teorización, diagnóstico, resumen editorial o comentario profesional.
+- <vague_data>: evasión. Respuestas vacías, divagantes o excesivamente amplias porque el participante no siente conexión con el tema, no ve beneficio en revelar o quiere mantener la información en privado. Marcadores: \"no sé\", \"depende\", \"cada quien es distinto\", generalizaciones que servirían para cualquier cosa, cambios de tema, respuestas mínimas, relleno.
+- <document_context>: la estructura que da forma al documento, nunca su sustancia. Encabezados y títulos, divisiones internas (secciones, capítulos, marcas de parte), metadatos, marcas de tiempo, identificadores de participantes, artefactos de transcripción, y las preguntas e intervenciones del investigador o del autor que aparecen en el documento. Nunca dato del participante y nunca el análisis del autor.
+
+[TRAMPAS FRECUENTES]
+- «Uno debería reciclar. Es lo responsable para un ciudadano.» → properline_data: la voz de un ciudadano genérico, un imperativo social, nada de esta persona.
+- «Nuestro centro apuesta por la excelencia y la mejora continua.» → properline_data: discurso institucional, la versión oficial.
+- «Todo el mundo en esta profesión sabe que hay que adaptarse a cada grupo.» → properline_data: discurso profesional recibido, sin experiencia de esta persona.
+- «Pago las fotocopias de mi bolsillo cada mes, y eso no debería pasar.» → baseline_data: la persona relata lo que hace y padece; el «no debería» es su juicio sobre su propia vida.
+- «Pero no debería ser así. No debería gastar mi sueldo en materiales, ni llegar a casa a las seis y seguir trabajando hasta las diez.» → baseline_data: una situación concreta de primera mano, aunque se exprese como queja.
+- «Habría que reducir a la mitad los exámenes estandarizados y devolvernos la autonomía. Nadie conoce mejor a mis estudiantes que yo.» → baseline_data: la demanda de la persona sobre sus propias condiciones y su propio saber profesional, no el discurso oficial.
+
+[PRUEBAS DE DECISIÓN]
+1. Encabezado, título, marca de sección, metadato, marca de tiempo, identificador de participante, artefacto de transcripción, o una pregunta escrita por el investigador → siempre document_context.
+2. ¿Quién habla? Si la voz es de la población de interés, es dato de participante (baseline_data, properline_data o vague_data) y NUNCA interpreted_data. Si la voz es de un investigador, autor o profesional que habla SOBRE esa población, es interpreted_data.
+3. ¿De quién es el discurso? Un pasaje NO es properline_data solo porque contenga «debería», «hay que» o una queja. properline_data exige un discurso externo que habla A TRAVÉS de la persona — la organización, la profesión, la sociedad — la versión oficial de lo correcto, que oculta lo que esa persona hace y siente. Una demanda, un deseo, una frustración o un juicio sobre el propio trabajo o la propia vida es baseline_data.
+4. Amplitud no es propiedad. Una respuesta amplia o vacía por desconexión, desconfianza o privacidad es vague_data, aunque suene a norma. Usa properline_data solo cuando el pasaje reproduzca un discurso externo y no la experiencia de quien habla.
+5. Un documento no es necesariamente una entrevista: aplica las cinco categorías a transcripciones, notas de campo, informes, artículos, actas o cartas. \"Participante\" es quien produjo el contenido sustantivo del documento."""
 
 
 # ── Validator system prompt ──
@@ -82,7 +110,7 @@ Eres un validador de estructura XML. Tu UNICA tarea es verificar que un texto cl
 
 [REGLAS A VERIFICAR]
 1. Todo el texto debe estar dentro de EXACTAMENTE un tag XML (no puede haber texto suelto fuera de tags).
-2. Solo se permiten estos tags: baseline_data, interviewer_context, processual_data, contextual_data.
+2. Solo se permiten estos 5 tags: baseline_data, properline_data, interpreted_data, vague_data, document_context.
 3. Los tags no deben solaparse ni anidarse.
 4. Cada tag de apertura debe tener su cierre correspondiente (balanceados).
 5. No deben existir tags inventados o desconocidos.
@@ -187,8 +215,8 @@ def _resolve_system_prompt(
 
 
 def _prompt_mentions_all_tags(prompt: str) -> bool:
-    """True si el prompt menciona (apertura o cierre) los 4 tags de Glaser."""
-    return all(f"<{tag}>" in prompt or f"</{tag}>" in prompt for tag in VALID_TAGS)
+    """True si el prompt menciona (apertura o cierre) las 5 categorías canónicas."""
+    return all(f"<{tag}>" in prompt or f"</{tag}>" in prompt for tag in CANONICAL_TAGS)
 
 
 def _step1_classify_xml(
@@ -219,9 +247,9 @@ def _step1_classify_xml(
     if prompt_source == "project" and not _prompt_mentions_all_tags(system_prompt):
         # Se respeta el prompt del usuario; solo se avisa.
         logger.warning(
-            "Glaser prompt del proyecto %s no menciona los 4 tags válidos %s",
+            "Glaser prompt del proyecto %s no menciona las 5 categorías canónicas %s",
             (proyecto_id or "-")[:8],
-            sorted(VALID_TAGS),
+            sorted(CANONICAL_TAGS),
         )
 
     user_content = f"<texto>\n{raw_text}\n</texto>"
@@ -403,7 +431,7 @@ def _algorithmic_validate_xml(xml_text: str) -> dict:
         suggested = (
             f"ARREGLA ESTOS PROBLEMAS ESTRUCTURALES: {'. '.join(issues)}. "
             + (
-                f"Tags NO PERMITIDOS detectados: {unknown_str}. SOLO usa: {', '.join(sorted(VALID_TAGS))}. "
+                f"Tags NO PERMITIDOS detectados: {unknown_str}. SOLO usa: {', '.join(sorted(CANONICAL_TAGS))}. "
                 if unknown
                 else ""
             )

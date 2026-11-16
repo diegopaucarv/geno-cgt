@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ModificationPanel from "./theory/ModificationPanel";
-import {
-  deleteMemosByType,
-  getEntityTypeColors,
-  type MemoTypeItem,
-} from "../api/client";
+import { getEntityTypeColors, type MemoTypeItem } from "../api/client";
 import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -316,17 +312,24 @@ export function MemoCard({
   originalPrompt,
   onMemoModified,
   entityTypes,
+  onToggleSelect,
+  selected,
 }: {
   memo: MemoEntry;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, field: string, value: string) => void;
   projectId: string;
   originalPrompt?: string;
   onMemoModified?: () => void;
   entityTypes: EntityTypeInfo[];
+  /** Renders the selection checkbox when provided. */
+  onToggleSelect?: (id: string) => void;
+  selected?: boolean;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -349,11 +352,23 @@ export function MemoCard({
     setEditingField(null);
   }
 
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    try {
+      await onDelete(memo.id);
+    } catch {
+      // The parent reports the failure with a toast; keep the card visible.
+    } finally {
+      setDeleting(false);
+      setConfirmDel(false);
+    }
+  }
+
   return (
     <div
       style={{
-        background: "#161B22",
-        border: `1px solid ${typeColor}33`,
+        background: selected ? "#58A6FF0D" : "#161B22",
+        border: selected ? "1px solid #58A6FF" : `1px solid ${typeColor}33`,
         borderRadius: 8,
         marginBottom: 8,
         overflow: "hidden",
@@ -400,6 +415,21 @@ export function MemoCard({
           borderBottom: expanded ? "1px solid #21262D" : "none",
         }}
       >
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(memo.id)}
+            onClick={(e) => e.stopPropagation()}
+            title={t("memo.selectMemo")}
+            aria-label={t("memo.selectMemo")}
+            style={{
+              cursor: "pointer",
+              accentColor: "#58A6FF",
+              flexShrink: 0,
+            }}
+          />
+        )}
         <span
           style={{
             fontSize: 10,
@@ -455,27 +485,81 @@ export function MemoCard({
           {memo.documentName}
         </span>
         <span style={{ fontSize: 9, color: "#484F58" }}>{memo.timestamp}</span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm(t("memo.deleteOutputConfirm"))) {
-              onDelete(memo.id);
-            }
-          }}
-          style={{
-            background: "transparent",
-            border: "1px solid #F8514944",
-            borderRadius: 4,
-            color: "#F85149",
-            fontSize: 10,
-            padding: "2px 6px",
-            cursor: "pointer",
-            opacity: 0.7,
-          }}
-          title={t("memo.deletePermanentlyTitle")}
-        >
-          ✕
-        </button>
+        {confirmDel ? (
+          <span
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 6px",
+              borderRadius: 999,
+              border: "1px solid #F8514944",
+              background: "#F8514922",
+              fontSize: 10,
+              color: "#F85149",
+            }}
+          >
+            <span>{t("memo.deleteOutputConfirm")}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleConfirmDelete();
+              }}
+              disabled={deleting}
+              style={{
+                padding: "1px 5px",
+                borderRadius: 4,
+                border: "none",
+                background: "#F85149",
+                color: "#fff",
+                fontSize: 9,
+                fontWeight: 600,
+                cursor: deleting ? "not-allowed" : "pointer",
+                opacity: deleting ? 0.6 : 1,
+              }}
+            >
+              {deleting ? t("memo.deleting") : t("memo.confirmYes")}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDel(false);
+              }}
+              style={{
+                padding: "1px 5px",
+                borderRadius: 4,
+                border: "none",
+                background: "#21262D",
+                color: "#8B949E",
+                fontSize: 9,
+                cursor: "pointer",
+              }}
+            >
+              {t("memo.confirmNo")}
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmDel(true);
+            }}
+            style={{
+              background: "transparent",
+              border: "1px solid #F8514944",
+              borderRadius: 4,
+              color: "#F85149",
+              fontSize: 10,
+              padding: "2px 6px",
+              cursor: "pointer",
+              opacity: 0.7,
+            }}
+            title={t("memo.deletePermanentlyTitle")}
+          >
+            ✕
+          </button>
+        )}
         <span style={{ fontSize: 11, color: "#484F58" }}>
           {expanded ? "▲" : "▼"}
         </span>
@@ -695,46 +779,56 @@ export function MemoCard({
   );
 }
 
-// ── DeleteByTypeButton ─────────────────────────────────────────────────
+// ── ConfirmDeleteButton ────────────────────────────────────────────────
+// Pill → inline "confirm / cancel" step. No native confirm(): the inline
+// step is the only way to confirm, so it works when `window.confirm` is
+// blocked.
 
-export function DeleteByTypeButton({
-  projectId,
-  tipo,
+export function ConfirmDeleteButton({
   label,
-  onDeleted,
+  title,
+  confirmText,
+  disabled,
+  busyText,
+  onConfirm,
 }: {
-  projectId: string;
-  tipo: string;
-  label?: string;
-  onDeleted: () => void;
+  label: string;
+  title?: string;
+  confirmText: string;
+  disabled?: boolean;
+  busyText?: string;
+  onConfirm: () => Promise<void> | void;
 }) {
   const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const handleDelete = async () => {
-    setDeleting(true);
+  // A disabled trigger must not leave an armed confirmation behind.
+  useEffect(() => {
+    if (disabled) setConfirming(false);
+  }, [disabled]);
+
+  const handleConfirm = async () => {
+    setBusy(true);
     try {
-      await deleteMemosByType(projectId, tipo);
-      onDeleted();
-    } catch (e: any) {
-      alert(e.message || t("memo.deleteError"));
+      await onConfirm();
+    } catch {
+      // The parent already reports the failure with a toast.
     } finally {
-      setDeleting(false);
+      setBusy(false);
       setConfirming(false);
     }
   };
-
-  const btnLabel = label || t("memo.deleteMemosOfType", { type: tipo });
 
   if (!confirming) {
     return (
       <button
         onClick={(e) => {
           e.stopPropagation();
-          setConfirming(true);
+          if (!disabled) setConfirming(true);
         }}
-        title={t("memo.deleteAllMemosOfTypeTitle", { type: tipo })}
+        disabled={disabled}
+        title={title ?? label}
         style={{
           padding: "3px 8px",
           borderRadius: 999,
@@ -742,11 +836,11 @@ export function DeleteByTypeButton({
           background: "#F8514918",
           color: "#F85149",
           fontSize: 10,
-          cursor: "pointer",
-          marginLeft: 4,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.5 : 1,
         }}
       >
-        {t("memo.deleteButtonIcon")} {btnLabel}
+        {`${t("memo.deleteButtonIcon")}${label}`}
       </button>
     );
   }
@@ -757,7 +851,6 @@ export function DeleteByTypeButton({
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        marginLeft: 4,
         padding: "3px 8px",
         borderRadius: 999,
         border: "1px solid #F8514944",
@@ -766,13 +859,13 @@ export function DeleteByTypeButton({
         color: "#F85149",
       }}
     >
-      <span>{t("memo.confirmDeleteType", { type: tipo })}</span>
+      <span>{confirmText}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
-          handleDelete();
+          handleConfirm();
         }}
-        disabled={deleting}
+        disabled={busy || disabled}
         style={{
           padding: "1px 5px",
           borderRadius: 4,
@@ -781,11 +874,11 @@ export function DeleteByTypeButton({
           color: "#fff",
           fontSize: 9,
           fontWeight: 600,
-          cursor: deleting ? "not-allowed" : "pointer",
-          opacity: deleting ? 0.6 : 1,
+          cursor: busy ? "not-allowed" : "pointer",
+          opacity: busy ? 0.6 : 1,
         }}
       >
-        {deleting ? t("memo.deleting") : t("memo.confirmYes")}
+        {busy ? (busyText ?? t("memo.deleting")) : t("memo.confirmYes")}
       </button>
       <button
         onClick={(e) => {
@@ -814,7 +907,11 @@ interface MemoHistoryProps {
   memos: MemoEntry[];
   activeFilter: string;
   onFilterChange: (typeKey: string) => void;
-  onDeleteMemo: (id: string) => void;
+  onDeleteMemo: (id: string) => Promise<void> | void;
+  /** Batch delete. Falls back to sequential `onDeleteMemo` when absent. */
+  onDeleteMemos?: (ids: string[]) => Promise<void>;
+  /** Disables batch deletion (e.g. while the pipeline is running). */
+  deleteDisabled?: boolean;
   onUpdateMemo: (id: string, field: string, value: string) => void;
   projectId: string;
   originalPrompt?: string;
@@ -826,25 +923,95 @@ export function MemoHistory({
   activeFilter,
   onFilterChange,
   onDeleteMemo,
+  onDeleteMemos,
+  deleteDisabled,
   onUpdateMemo,
   projectId,
   originalPrompt,
   onMemoModified,
 }: MemoHistoryProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [entityTypes, setEntityTypes] = useState<EntityTypeInfo[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // The catalogue is resolved in the UI language, so reload it on language change.
   useEffect(() => {
-    getEntityTypeColors()
+    getEntityTypeColors(language)
       .then((r) => setEntityTypes(r.types))
       .catch(() => {});
-  }, []);
+  }, [language]);
+
+  // A deleted memo leaves its id behind in the selection; drop ghosts only
+  // when the set actually changes, to avoid a re-render loop.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const alive = new Set(memos.map((m) => m.id));
+      const next = new Set([...prev].filter((memoId) => alive.has(memoId)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [memos]);
 
   const filtered = memos.filter((m) => {
     if (activeFilter !== "all" && getMemoEntityType(m) !== activeFilter)
       return false;
     return true;
   });
+
+  // Deletion only ever touches what is on screen: a selection left over from
+  // another filter must not be deleted behind the user's back.
+  const selectedVisible = filtered.filter((m) => selected.has(m.id));
+  const selectedCount = selectedVisible.length;
+
+  const allSelected =
+    filtered.length > 0 && filtered.every((m) => selected.has(m.id));
+
+  // The confirm panel is hidden when nothing visible is selected; without this
+  // it would reappear already armed if the user selects something later.
+  useEffect(() => {
+    if (selectedCount === 0) setBulkConfirm(false);
+  }, [selectedCount]);
+
+  function toggleMemo(memoId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(memoId)) next.delete(memoId);
+      else next.add(memoId);
+      return next;
+    });
+  }
+
+  // "Select all" acts on the visible (filtered) memos only.
+  function toggleAllVisible(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) filtered.forEach((m) => next.add(m.id));
+      else filtered.forEach((m) => next.delete(m.id));
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = selectedVisible.map((m) => m.id);
+    if (ids.length === 0) {
+      setBulkConfirm(false);
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      if (onDeleteMemos) await onDeleteMemos(ids);
+      else for (const memoId of ids) await onDeleteMemo(memoId);
+      // Do not clear the selection here: the purge effect drops the ids that
+      // really disappeared, so a failed memo stays selected for a retry.
+    } catch {
+      // The parent reports the failure with a toast.
+    } finally {
+      setBulkDeleting(false);
+      setBulkConfirm(false);
+    }
+  }
 
   return (
     <div>
@@ -858,50 +1025,156 @@ export function MemoHistory({
           alignItems: "center",
         }}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFilterChange("all");
-          }}
+        {/* Filter dropdown — one compact control instead of a pill per category */}
+        <select
+          value={activeFilter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          title={t("memo.filterByType")}
+          aria-label={t("memo.filterByType")}
           style={{
-            padding: "3px 8px",
-            borderRadius: 999,
-            border: `1px solid ${activeFilter === "all" ? "#8B949E44" : "#21262D"}`,
-            background: activeFilter === "all" ? "#8B949E22" : "#21262D",
-            color: activeFilter === "all" ? "#E6EDF3" : "#8B949E",
-            fontSize: 10,
+            padding: "4px 8px",
+            borderRadius: 6,
+            border: "1px solid #21262D",
+            background: "#161B22",
+            color: "#E6EDF3",
+            fontSize: 11,
             cursor: "pointer",
-            fontWeight: activeFilter === "all" ? 600 : 400,
+            maxWidth: 260,
           }}
         >
-          {t("memo.filterAll")}
-        </button>
-        {entityTypes.map((t) => {
-          const isActive = activeFilter === t.key;
-          return (
+          <option value="all">
+            {`${t("memo.allCategories")} (${memos.length})`}
+          </option>
+          {entityTypes.map((et) => {
+            const count = memos.filter(
+              (m) => getMemoEntityType(m) === et.key,
+            ).length;
+            return (
+              <option key={et.key} value={et.key}>
+                {`${et.icon} ${et.label} (${count})`}
+              </option>
+            );
+          })}
+        </select>
+        {/* Selection + batch delete (right side of the filter row) */}
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {filtered.length > 0 && (
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = selectedCount > 0 && !allSelected;
+                }}
+                onChange={(e) => toggleAllVisible(e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                title={t("memo.selectAll")}
+                aria-label={t("memo.selectAll")}
+                style={{
+                  margin: 0,
+                  cursor: "pointer",
+                  accentColor: "#58A6FF",
+                }}
+              />
+              <span style={{ fontSize: 11, color: "#8B949E" }}>
+                {t("memo.selectAll")}
+              </span>
+            </label>
+          )}
+          {selectedCount > 0 && !confirmBulk && (
             <button
-              key={t.key}
               onClick={(e) => {
                 e.stopPropagation();
-                onFilterChange(t.key);
+                if (!deleteDisabled) setBulkConfirm(true);
               }}
-              title={t.description}
+              disabled={deleteDisabled}
+              title={deleteDisabled ? t("memo.pipelineBusy") : undefined}
               style={{
                 padding: "3px 8px",
                 borderRadius: 999,
-                border: `1px solid ${isActive ? t.color + "44" : "#21262D"}`,
-                background: isActive ? t.color + "22" : "#21262D",
-                color: t.color,
+                border: "1px solid #F8514933",
+                background: "#F8514918",
+                color: "#F85149",
                 fontSize: 10,
-                cursor: "pointer",
-                fontWeight: isActive ? 600 : 400,
+                cursor: deleteDisabled ? "not-allowed" : "pointer",
+                opacity: deleteDisabled ? 0.5 : 1,
               }}
             >
-              {t.icon} {t.label}
+              {`🗑 ${t("memo.deleteSelected", { n: selectedCount })}`}
             </button>
-          );
-        })}
-        {/* DeleteByTypeButton removed — now in Project.tsx header */}
+          )}
+          {confirmBulk && selectedCount > 0 && (
+            <span
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "3px 8px",
+                borderRadius: 999,
+                border: "1px solid #F8514944",
+                background: "#F8514922",
+                fontSize: 10,
+                color: "#F85149",
+              }}
+            >
+              <span>
+                {t("memo.deleteSelectedConfirm", { n: selectedCount })}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleBulkDelete();
+                }}
+                disabled={bulkDeleting}
+                style={{
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "none",
+                  background: "#F85149",
+                  color: "#fff",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  cursor: bulkDeleting ? "not-allowed" : "pointer",
+                  opacity: bulkDeleting ? 0.6 : 1,
+                }}
+              >
+                {bulkDeleting ? t("memo.deleting") : t("memo.confirmYes")}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBulkConfirm(false);
+                }}
+                style={{
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "none",
+                  background: "#21262D",
+                  color: "#8B949E",
+                  fontSize: 9,
+                  cursor: "pointer",
+                }}
+              >
+                {t("memo.confirmNo")}
+              </button>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Memo list */}
@@ -927,6 +1200,8 @@ export function MemoHistory({
             originalPrompt={originalPrompt}
             onMemoModified={onMemoModified}
             entityTypes={entityTypes}
+            selected={selected.has(memo.id)}
+            onToggleSelect={toggleMemo}
           />
         ))
       )}

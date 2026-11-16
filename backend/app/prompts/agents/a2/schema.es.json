@@ -12,14 +12,8 @@
     },
     "data_classification": {
       "type": "string",
-      "enum": [
-        "baseline",
-        "properline",
-        "interpreted",
-        "vague",
-        "mixed"
-      ],
-      "description": "Tipo de dato predominante. baseline: honesto. properline: deseabilidad social. interpreted: forzado. vague: evasivo. mixed: variado."
+      "enum": ["baseline", "properline", "interpreted", "vague", "mixed"],
+      "description": "Tipo de dato predominante. baseline: experiencia honesta. properline: deseabilidad social. interpreted: el marco interpretativo del autor sobre la población. vague: evasivo. mixed: variado."
     },
     "similarity_to_previous": {
       "type": "string",

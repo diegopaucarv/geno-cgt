@@ -4,7 +4,8 @@
 //   open_coding:     cada 3 documentos (acumulativo, con HITL gate unificado)
 //
 // Principios:
-//   - glaser classifier corre PRE-segmentación (tags markdown) — filtra antes de segmentar
+//   - glaser classifier corre PRE-segmentación (tags markdown) — filtra antes de segmentar;
+//     el segmentador hereda el tag de cada span (classify-first)
 //   - A2 (fa_prime_mover_extractor) extrae patrón de interés por documento desde baseline
 //   - A3 (fa_population_context) se acumula cada 3 docs, lanza propuestas cada 3
 //   - fc_main_concern_proposer/critic corren elaborativamente cada 3 docs
@@ -12,7 +13,7 @@
 //   - {chosen_concern} y {chosen_population} se inyectan condicionalmente en prompts downstream
 //
 // Agentes ignorados (duplicados): fa_process_identifier, fa_sense_maker,
-//   fb_indicators_extractor, fb_pattern_labeler, fa_document_pattern_extractor
+//   fb_indicators_extractor, fb_pattern_labeler
 
 export interface AgentDef {
   id: string;
@@ -23,6 +24,9 @@ export interface AgentDef {
   chainOrder?: number;
   independent?: boolean;
   iterationKey?: string;
+  /** True when this project-level (non per-document) agent maps to a real
+   *  Celery task and can therefore be launched manually from the UI. */
+  projectRunnable?: boolean;
 }
 
 export interface ChainDef {
@@ -65,7 +69,9 @@ export const FAMILY_COLORS: Record<string, string> = {
 
 export const PIPELINE_STAGES: StageDef[] = [
   // ═══ 1. DATA MANAGEMENT — Por documento (secuencial) ═══
-  // Orden: Punctuator → Clasificador Glaser (tags markdown) → Segmentador (solo baseline)
+  // Orden: Punctuator → Clasificador Glaser (sobre el texto completo)
+  //        → Segmentador (hereda el tag del span) → Extractor de incidentes
+  //        (baseline, sobre los segmentos ya clasificados)
   {
     key: "data_management",
     icon: "📥",
@@ -92,6 +98,14 @@ export const PIPELINE_STAGES: StageDef[] = [
         label: "pipeline.agent.segmentar_documento",
         tier: "NLP",
         dependencies: ["fa_glaser_data_classifier"],
+        independent: true,
+        iterationKey: "data_mgmt",
+      },
+      {
+        id: "fa_document_pattern_extractor",
+        label: "pipeline.agent.fa_document_pattern_extractor",
+        tier: "PRO",
+        dependencies: ["segmentar_documento"],
         independent: true,
         iterationKey: "data_mgmt",
       },
@@ -122,6 +136,14 @@ export const PIPELINE_STAGES: StageDef[] = [
             label: "pipeline.agent.segmentar_documento",
             tier: "NLP",
             dependencies: ["fa_glaser_data_classifier"],
+            independent: true,
+            iterationKey: "data_mgmt",
+          },
+          {
+            id: "fa_document_pattern_extractor",
+            label: "pipeline.agent.fa_document_pattern_extractor",
+            tier: "PRO",
+            dependencies: ["segmentar_documento"],
             independent: true,
             iterationKey: "data_mgmt",
           },
@@ -158,6 +180,7 @@ export const PIPELINE_STAGES: StageDef[] = [
         dependencies: ["segmentar_documento"],
         independent: true,
         iterationKey: "open_coding",
+        projectRunnable: true,
       },
       // ── B1: Agrupador de incidentes (todos los docs) ──
       {
@@ -168,6 +191,7 @@ export const PIPELINE_STAGES: StageDef[] = [
         chain: "B1 → Códigos → S1",
         chainOrder: 1,
         iterationKey: "open_coding",
+        projectRunnable: true,
       },
       // ── B2: Generador de códigos desde grupos ──
       {
@@ -178,6 +202,7 @@ export const PIPELINE_STAGES: StageDef[] = [
         chain: "B1 → Códigos → S1",
         chainOrder: 2,
         iterationKey: "open_coding",
+        projectRunnable: true,
       },
       // ── B3: Crítico de etiquetas (por código, FLASH) ──
       {
@@ -198,6 +223,7 @@ export const PIPELINE_STAGES: StageDef[] = [
         chain: "S1 — Síntesis",
         chainOrder: 1,
         iterationKey: "open_coding",
+        projectRunnable: true,
       },
       // ── Línea paralela: Hipótesis ──
       {
@@ -236,6 +262,7 @@ export const PIPELINE_STAGES: StageDef[] = [
         dependencies: ["fd_category_synthesizer", "fd_hypothesis_synthesizer"],
         independent: true,
         iterationKey: "open_coding",
+        projectRunnable: true,
       },
       // ── HITL: Concern Proposer → Concern Critic ──
       {

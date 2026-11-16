@@ -44,6 +44,77 @@ class HitlPendingItem(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# CRUD completo de hitl_decisions — listado, detalle, alta y edición
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class HitlDecisionFull(BaseModel):
+    """Representación completa de una fila de ``hitl_decisions``.
+
+    Lleva el proposal/critic_verdict crudos y todas las marcas del investigador,
+    para que el CRUD no tenga que recortarlos como hace el listado de pendientes.
+    """
+
+    id: UUID
+    project_id: UUID
+    gate_name: str
+    status: str
+    proposal: dict
+    critic_verdict: dict
+    researcher_decision: str | None
+    researcher_note: str | None
+    researcher_feedback: str | None
+    decided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class HitlDecisionListResponse(BaseModel):
+    """Respuesta paginada de GET /hitl/decisions.
+
+    ``counts`` se calcula sobre todo el proyecto (sin aplicar el filtro) porque
+    alimenta las pastillas del filtro; ``total`` sí respeta el filtro.
+    """
+
+    items: list[HitlDecisionFull]
+    total: int
+    counts: dict[str, int]
+
+
+class HitlDecisionCreate(BaseModel):
+    """Body de POST /hitl/decisions."""
+
+    gate_name: str = Field(..., min_length=1, max_length=100)
+    note: str = Field(default="", max_length=2000)
+    proposal: dict = Field(default_factory=dict)
+    critic_verdict: dict = Field(default_factory=dict)
+    status: str = Field(
+        default="pending", pattern="^(pending|accepted|modified|rejected)$"
+    )
+
+
+class HitlDecisionUpdate(BaseModel):
+    """Body de PATCH /hitl/decisions/{id} — solo se aplican los campos presentes."""
+
+    note: str | None = Field(default=None, max_length=2000)
+    feedback: str | None = Field(default=None, max_length=2000)
+    status: str | None = Field(
+        default=None, pattern="^(pending|accepted|modified|rejected)$"
+    )
+    gate_name: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class HitlDecisionBulkDelete(BaseModel):
+    """Body de DELETE /hitl/decisions — ids explícitos y/o filtros."""
+
+    ids: list[UUID] = Field(default_factory=list)
+    status: str | None = None
+    gate_name: str | None = None
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Open Coding HITL Gate — unified concern / population / categories gate
 # ═══════════════════════════════════════════════════════════════════════
 

@@ -1,79 +1,189 @@
 # backend/app/core/memo_types.py
-"""Tipos de memo disponibles por etapa del proyecto.
+"""Fuente única del catálogo de categorías de memo, localizado a en/es/de/pt.
 
-Usado por:
-- GET /available-memo-types: dropdown del frontend
-- POST /memos: validación de tipo permitido
-- MemoHistory: filtros por entity type
+Cada entrada de ``META`` define icono, color, agente requerido y las
+etiquetas/descripciones en los cuatro idiomas soportados. Usado por:
+- GET /entity-type-colors: filtros y badges del historial de memos
+- GET /available-memo-types: dropdown del modal "Añadir memo"
+- POST/PATCH /memos: validación de tipo
 """
+
+SUPPORTED_LANGS = ("en", "es", "de", "pt")
+DEFAULT_LANG = "es"
 
 META = {
     "HIPOTESIS": {
-        "label": "Hipótesis",
         "icon": "💡",
         "color": "#D29922",
-        "description": "Hipótesis emergente sobre relaciones entre conceptos",
         "requires_agent": "fb_hypothesis_generator",
+        "labels": {
+            "en": "Hypothesis",
+            "es": "Hipótesis",
+            "de": "Hypothese",
+            "pt": "Hipótese",
+        },
+        "descriptions": {
+            "en": "Emerging hypothesis about relationships between concepts",
+            "es": "Hipótesis emergente sobre relaciones entre conceptos",
+            "de": "Aufkommende Hypothese über Beziehungen zwischen Konzepten",
+            "pt": "Hipótese emergente sobre relações entre conceitos",
+        },
     },
     "CATEGORIA": {
-        "label": "Categoría",
         "icon": "🏷️",
         "color": "#A371F7",
-        "description": "Categoría de investigación. Se persiste en la tabla categorias.",
         "requires_agent": "fd_category_synthesizer",
+        "labels": {
+            "en": "Category",
+            "es": "Categoría",
+            "de": "Kategorie",
+            "pt": "Categoria",
+        },
+        "descriptions": {
+            "en": "Research category. It is persisted to the categorias table.",
+            "es": "Categoría de investigación. Se persiste en la tabla categorias.",
+            "de": "Forschungskategorie. Sie wird in der Tabelle categorias gespeichert.",
+            "pt": "Categoria de investigação. É persistida na tabela categorias.",
+        },
     },
     "PROPIEDAD": {
-        "label": "Propiedad",
         "icon": "📐",
         "color": "#58A6FF",
-        "description": "Propiedad o dimensión de una categoría existente",
         "requires_agent": "fb_code_generator",
+        "labels": {
+            "en": "Property",
+            "es": "Propiedad",
+            "de": "Eigenschaft",
+            "pt": "Propriedade",
+        },
+        "descriptions": {
+            "en": "Property or dimension of an existing category",
+            "es": "Propiedad o dimensión de una categoría existente",
+            "de": "Eigenschaft oder Dimension einer bestehenden Kategorie",
+            "pt": "Propriedade ou dimensão de uma categoria existente",
+        },
     },
     "RELACION": {
-        "label": "Relación",
         "icon": "🔗",
         "color": "#3FB950",
-        "description": "Relación conceptual entre categorías",
         "requires_agent": "fd_category_synthesizer",
+        "labels": {
+            "en": "Relationship",
+            "es": "Relación",
+            "de": "Beziehung",
+            "pt": "Relação",
+        },
+        "descriptions": {
+            "en": "Conceptual relationship between categories",
+            "es": "Relación conceptual entre categorías",
+            "de": "Konzeptionelle Beziehung zwischen Kategorien",
+            "pt": "Relação conceitual entre categorias",
+        },
     },
     "METODOLOGICO": {
-        "label": "Metodológico",
         "icon": "📋",
         "color": "#8B949E",
-        "description": "Nota sobre el método, decisiones de muestreo, ajustes al diseño",
+        "labels": {
+            "en": "Methodological",
+            "es": "Metodológico",
+            "de": "Methodisch",
+            "pt": "Metodológico",
+        },
+        "descriptions": {
+            "en": "Note about the method, sampling decisions, design adjustments",
+            "es": "Nota sobre el método, decisiones de muestreo, ajustes al diseño",
+            "de": "Notiz zur Methode, zu Sampling-Entscheidungen, Design-Anpassungen",
+            "pt": "Nota sobre o método, decisões de amostragem, ajustes ao desenho",
+        },
     },
     "MUESTREO": {
-        "label": "Muestreo",
         "icon": "🎯",
         "color": "#FF6B35",
-        "description": "Criterios de inclusión/exclusión, dimensiones de muestreo teórico",
+        "labels": {
+            "en": "Sampling",
+            "es": "Muestreo",
+            "de": "Sampling",
+            "pt": "Amostragem",
+        },
+        "descriptions": {
+            "en": "Inclusion/exclusion criteria, theoretical sampling dimensions",
+            "es": "Criterios de inclusión/exclusión, dimensiones de muestreo teórico",
+            "de": "Ein-/Ausschlusskriterien, Dimensionen des theoretischen Samplings",
+            "pt": "Critérios de inclusão/exclusão, dimensões de amostragem teórica",
+        },
     },
     "GENERAL": {
-        "label": "General",
         "icon": "📝",
         "color": "#79C0FF",
-        "description": "Observación, idea, o reflexión no categorizada",
+        "labels": {
+            "en": "General",
+            "es": "General",
+            "de": "General",
+            "pt": "General",
+        },
+        "descriptions": {
+            "en": "Uncategorized observation, idea, or reflection",
+            "es": "Observación, idea, o reflexión no categorizada",
+            "de": "Nicht kategorisierte Beobachtung, Idee oder Reflexion",
+            "pt": "Observação, ideia ou reflexão não categorizada",
+        },
     },
     "TEORICO": {
-        "label": "Código Teórico",
         "icon": "🔬",
         "color": "#FF6B35",
-        "description": "Familia teórica personalizada (las 12 built-in no se tocan). Requiere structured_fields.",
         "requires_agent": "fc_main_concern_proposer",
+        "labels": {
+            "en": "Theoretical code",
+            "es": "Código Teórico",
+            "de": "Theoretischer Code",
+            "pt": "Código teórico",
+        },
+        "descriptions": {
+            "en": "Custom theoretical family (the 12 built-in ones are left untouched). "
+            "Requires structured_fields.",
+            "es": "Familia teórica personalizada (las 12 built-in no se tocan). "
+            "Requiere structured_fields.",
+            "de": "Benutzerdefinierte theoretische Familie (die 12 eingebauten bleiben "
+            "unberührt). Erfordert structured_fields.",
+            "pt": "Família teórica personalizada (as 12 built-in não são alteradas). "
+            "Requer structured_fields.",
+        },
     },
     "DATABASE_NODE": {
-        "label": "Nodo (DB A)",
         "icon": "🟦",
         "color": "#79C0FF",
-        "description": "Nodo del modelo teórico plano. Requiere entity_type.",
         "requires_agent": "ff_database_a_proposer",
+        "labels": {
+            "en": "Node (DB A)",
+            "es": "Nodo (DB A)",
+            "de": "Knoten (DB A)",
+            "pt": "Nó (DB A)",
+        },
+        "descriptions": {
+            "en": "Node of the flat theoretical model. Requires entity_type.",
+            "es": "Nodo del modelo teórico plano. Requiere entity_type.",
+            "de": "Knoten des flachen theoretischen Modells. Erfordert entity_type.",
+            "pt": "Nó do modelo teórico plano. Requer entity_type.",
+        },
     },
     "DATABASE_EDGE": {
-        "label": "Edge (DB B)",
         "icon": "➡️",
         "color": "#3FB950",
-        "description": "Relación del modelo teórico. Requiere source/target + relationship_type.",
         "requires_agent": "ff_database_b_proposer",
+        "labels": {
+            "en": "Edge (DB B)",
+            "es": "Edge (DB B)",
+            "de": "Kante (DB B)",
+            "pt": "Aresta (DB B)",
+        },
+        "descriptions": {
+            "en": "Relationship of the theoretical model. Requires source/target + "
+            "relationship_type.",
+            "es": "Relación del modelo teórico. Requiere source/target + relationship_type.",
+            "de": "Beziehung des theoretischen Modells. Erfordert source/target + "
+            "relationship_type.",
+            "pt": "Relação do modelo teórico. Requer source/target + relationship_type.",
+        },
     },
 }
 
@@ -156,15 +266,42 @@ MEMO_TYPES_BY_STAGE: dict[str, list[str]] = {
 }
 
 
-def get_types_for_stage(stage: str) -> list[dict]:
+def _normalize_lang(lang: str | None) -> str:
+    if lang and lang.lower() in SUPPORTED_LANGS:
+        return lang.lower()
+    return DEFAULT_LANG
+
+
+def _localized(key: str, lang: str | None = None) -> dict:
+    """Entrada del catálogo con label/description resueltos al idioma pedido."""
+    lang = _normalize_lang(lang)
+    meta = META[key]
+    entry = {
+        "key": key,
+        "label": meta["labels"][lang],
+        "icon": meta["icon"],
+        "color": meta["color"],
+        "description": meta["descriptions"][lang],
+    }
+    if meta.get("requires_agent"):
+        entry["requires_agent"] = meta["requires_agent"]
+    return entry
+
+
+def get_all_types(lang: str | None = None) -> list[dict]:
+    """Todos los tipos con metadata (para filtros del frontend)."""
+    return [_localized(k, lang) for k in META]
+
+
+def get_types_for_stage(stage: str, lang: str | None = None) -> list[dict]:
     """Devuelve tipos disponibles enriquecidos con metadata."""
     keys = MEMO_TYPES_BY_STAGE.get(stage, MEMO_TYPES_BY_STAGE["collecting"])
-    return [{"key": k, **META[k]} for k in keys if k in META]
+    return [_localized(k, lang) for k in keys if k in META]
 
 
-def get_all_types() -> list[dict]:
-    """Todos los tipos con metadata (para filtros del frontend)."""
-    return [{"key": k, **v} for k, v in META.items()]
+def get_all_type_keys() -> list[str]:
+    """Claves de todas las categorías del catálogo."""
+    return list(META)
 
 
 def get_stage_index(stage: str) -> int:

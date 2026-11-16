@@ -21,13 +21,14 @@
               "baseline_data",
               "properline_data",
               "interpreted_data",
-              "vague_data"
+              "vague_data",
+              "document_context"
             ],
-            "description": "Tipo de dato Glaser para este segmento."
+            "description": "Tipo de dato canónico según Glaser. baseline_data = las expresiones auténticas que aportan evidencia DIRECTA para responder a la pregunta de investigación: experiencia de primera mano, no moldeada de forma evidente para agradar por efecto de la presencia del investigador. properline_data = la línea de lo correcto. NO procede de la autenticidad de quien habla: es discurso organizacional, profesional o social que la persona reproduce — la versión oficial de lo que se supone que hay que decir, hacer o ser. Suena a institución, a ministerio, a profesión o a «todo el mundo», nunca a la jornada de esa persona concreta. Su función es enmascarar lo que la persona hace y siente de verdad: se recita la norma en lugar de contarse la experiencia. Marcadores: lenguaje institucional o de política, eslóganes, formulaciones de manual, apelaciones a lo que «todo el mundo hace» o «dicen las normas», el «nosotros» colectivo de una organización, respuestas que cualquier miembro de esa institución podría haber dado. Un segmento NO es properline_data solo porque contenga «debería», «hay que» o una queja: una demanda, un deseo, una frustración o un juicio sobre el propio trabajo o la propia vida es baseline_data. interpreted_data = información filtrada por la mirada de un profesional (investigador, autor) que habla SOBRE la población; la población no la produjo. vague_data = evasión: respuestas vacías, divagantes o excesivamente amplias porque el participante no siente conexión con el tema, no ve beneficio en revelar o no tiene motivo para hablar. document_context = la estructura que da forma al documento (encabezados, divisiones internas, metadatos, preguntas e intervenciones del investigador), nunca su sustancia; nunca dato del participante ni análisis del autor."
           },
           "is_interviewer": {
             "type": "boolean",
-            "description": "true si este segmento es habla del entrevistador (pregunta, instrucción, metadata)."
+            "description": "true si este segmento es estructura del documento escrita por el investigador o el autor (encabezados, preguntas, metadatos)."
           },
           "confidence": {
             "type": "string",

@@ -221,9 +221,10 @@ def test_begin_extraction_only_accepts_transient_states() -> None:
         r"\s*,\s*['\"]error['\"]\s*\)",
         func_source,
     ), (
-        "begin_extraction must only move a doc from "
-        "('segmentado', 'procesando', 'error'); anything broader would regress "
-        "a terminal document"
+        "begin_extraction must move a doc from "
+        "('segmentado', 'procesando', 'error'); anything broader would regress a "
+        "terminal document. 'segmentado' is the normal entry point now that "
+        "classification runs before segmentation (classify-first)."
     )
     # The UPDATE really targets the estado column.
     assert re.search(
@@ -241,8 +242,49 @@ def test_reset_after_cancel_defaults_to_segmentado() -> None:
     assert "to_state" in defaults, "reset_after_cancel lost its to_state parameter"
     default = defaults["to_state"]
     assert isinstance(default, ast.Constant) and default.value == "segmentado", (
-        "reset_after_cancel must default to to_state='segmentado'"
+        "reset_after_cancel must default to to_state='segmentado': extraction "
+        "runs after classification AND segmentation, so a cancelled run must land "
+        "back on the segmented document (tags already inherited)"
     )
+
+
+def _next_table() -> dict[str, tuple]:
+    """Read the module-level NEXT table out of transitions.py."""
+    for node in _tree(_source(TRANSITIONS), TRANSITIONS).body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "NEXT":
+                return ast.literal_eval(node.value)
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "NEXT"
+            for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("transitions.py has no module-level NEXT table")
+
+
+def test_next_table_is_classify_first() -> None:
+    """pin: el clasificador corre ANTES del segmentador (classify-first)."""
+    table = _next_table()
+
+    for estado in ("crudo", "preprocesado"):
+        assert table[estado][:2] == ("clasificando", "run_glaser_classifier"), (
+            f"'{estado}' must go to ('clasificando', 'run_glaser_classifier'): the "
+            "text is classified before it is split"
+        )
+    assert table["clasificando"][0] == "clasificado", (
+        "the classifier worker writes 'clasificado' itself"
+    )
+    assert table["clasificado"] == ("segmentando", "segmentar_documento", "nlp"), (
+        "classification must be followed by segmentation, not the other way round"
+    )
+    assert table["segmentando"][0] == "segmentado"
+    assert table["segmentado"][:2] == ("procesando", "process_document_agents_a"), (
+        "extraction must start from 'segmentado' (tags already inherited)"
+    )
+
+    # Semantic ordering: every path reaches the classifier before the segmenter.
+    assert table["crudo"][1] != "segmentar_documento"
+    assert table["preprocesado"][1] != "segmentar_documento"
 
 
 def test_transition_accepts_keyword_only_fail_to() -> None:

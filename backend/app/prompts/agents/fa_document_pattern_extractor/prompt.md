@@ -25,7 +25,7 @@ You are an Open Coding analyst for Classic Grounded Theory. You receive ALL base
 [OBJECTIVE]
 Extract THREE things from this document's segments:
 
-1. **PATTERNS** — {label_name} codes that name recurring behavioral processes evidenced across multiple segments. Pattern names are {label_name}s of 2-6 words. Each pattern has a definition and references the segments that evidence it.
+1. **PATTERNS** — {label_name} recurring everyday behavioral processes that seem to be indicated by one or multiple segments. Pattern names are {label_name}s of 2-6 words. Each pattern has a definition and references the segments that evidence it.
 
 2. **INCIDENTS** — evidence one-liners describing specific things the participant did, said, felt, or experienced. Incidents are NOT codes — they are raw evidentiary units. Each incident links to the pattern(s) it supports and the segment(s) it comes from. NO {label_name}s in incident descriptions.
 
@@ -51,8 +51,9 @@ The researcher is investigating: **{object_of_study}**
 - ISOLATED: only use segments from THIS document.
 - {label_name_upper} only for pattern names ({label_format}). NEVER abstract nouns or theoretical jargon.
 - INCIDENT descriptions are plain evidence: "the teacher arrived at 5am", "the recycler hid materials from the inspector". NO {label_name}s in incident descriptions.
-- segment_refs are 1-based integers matching the order of segments in the input.
-- pattern_refs in incidents use the 0-based index of the pattern in the patterns array.
+- segment_refs are 1-based integers matching the order of segments in the input. This is how an incident is bound to the text it comes from: never omit it.
+- The `patterns` array in an incident uses 0-based indices of the patterns array above; omit it when no pattern applies.
+- All segments you receive are already labelled baseline_data. Never re-classify them and never discard a segment because of its category.
 - If the data is too sparse, produce fewer patterns and incidents rather than forcing low-quality output.
 - Do NOT use scoring, counting, or quantitative heuristics. Pure qualitative reasoning.
 
@@ -66,7 +67,7 @@ The researcher is investigating: **{object_of_study}**
   "properties": {
     "patterns": {
       "type": "array",
-      "description": "{label_name} codes naming recurring behavioral processes. Each pattern is evidenced by multiple segments.",
+      "description": "{label_name} recurring everyday behaviors of thought or action deduced from one or more segments. Each pattern is evidenced by one or more segments.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -79,7 +80,7 @@ The researcher is investigating: **{object_of_study}**
         "properties": {
           "pattern_name": {
             "type": "string",
-            "description": "{label_name} name of 2-6 words. Captures the recurring behavioral process. Examples: 'Negotiating access to resources', 'Balancing visibility and risk', 'Calibrating response to threats'."
+            "description": "{label_name} name of 2-6 words. Captures the recurring behavioral process."
           },
           "definition": {
             "type": "string",
@@ -100,7 +101,7 @@ The researcher is investigating: **{object_of_study}**
     },
     "incidents": {
       "type": "array",
-      "description": "Evidence one-liners. Concrete things the participant did, said, felt, or experienced. NOT codes — raw evidentiary units.",
+      "description": "Evidence one-liners. Concrete things the participant did, said, felt, or experienced. NOT codes — raw evidentiary units that relate segments to patterns",
       "items": {
         "type": "object",
         "additionalProperties": false,

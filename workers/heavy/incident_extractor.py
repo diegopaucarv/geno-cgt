@@ -106,9 +106,9 @@ _INCIDENT_SCHEMA: dict[str, Any] = {
             "enum": ["baseline", "properline", "interpreted", "vague"],
             "description": (
                 "Clasificación Glaser del dato: "
-                "baseline = dato espontáneo del participante, "
-                "properline = dato esperado/socialmente deseable, "
-                "interpreted = interpretación del autor, "
+                "baseline = dato espontáneo del participante que refleja su autenticidad; "
+                "properline = dato esperado/socialmente deseable, que refleja mandatos de la organización o normas sociales (no contribuyen a responder la pregunta de investigación); "
+                "interpreted = interpretación del autor; "
                 "vague = dato ambiguo o vago."
             ),
         },
@@ -298,19 +298,21 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
                     "sid": segment_id,
                     "did": documento_id,
                     "pid": proyecto_id,
-                    "jot": response.get("jot_text", "[MOCK] Procesando incidente"),
+                    "jot": response_data.get("jot_text", "[MOCK] Procesando incidente"),
                     "tdg": "vague",
                     "pgj": json.dumps(
                         {
-                            "what_is_this_about": response.get(
+                            "what_is_this_about": response_data.get(
                                 "what_is_this_about", ""
                             ),
-                            "what_category": response.get("what_category", ""),
-                            "what_is_happening": response.get("what_is_happening", ""),
-                            "participants_pattern": response.get(
+                            "what_category": response_data.get("what_category", ""),
+                            "what_is_happening": response_data.get(
+                                "what_is_happening", ""
+                            ),
+                            "participants_pattern": response_data.get(
                                 "participants_pattern", ""
                             ),
-                            "confidence": response.get("confidence", 0.3),
+                            "confidence": response_data.get("confidence", 0.3),
                             "note": "mock_fallback",
                         }
                     ),
@@ -322,7 +324,9 @@ def extract_incident(segment_id: str, proyecto_id: str) -> dict:
                 "incident_id": incident_id,
                 "segmento_id": segment_id,
                 "documento_id": documento_id,
-                "jot_text": response.get("jot_text", "[MOCK] Procesando incidente"),
+                "jot_text": response_data.get(
+                    "jot_text", "[MOCK] Procesando incidente"
+                ),
                 "keep_moving": True,
                 "mock": True,
             }

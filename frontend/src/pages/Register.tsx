@@ -125,7 +125,7 @@ export default function Register() {
                 fontWeight: 500,
               }}
             >
-              {t("auth.nameLabel") || "Name"}
+              {t("auth.namePlaceholder") || "Name"}
             </label>
             <input
               placeholder={t("auth.namePlaceholder")}
@@ -148,7 +148,7 @@ export default function Register() {
                 fontWeight: 500,
               }}
             >
-              {t("auth.emailLabel") || "Email"}
+              {t("auth.emailPlaceholder") || "Email"}
             </label>
             <input
               type="email"
@@ -172,7 +172,7 @@ export default function Register() {
                 fontWeight: 500,
               }}
             >
-              {t("auth.passwordLabel") || "Password"}
+              {t("auth.passwordPlaceholder") || "Password"}
             </label>
             <input
               type="password"

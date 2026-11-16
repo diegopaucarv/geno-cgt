@@ -42,7 +42,7 @@ ES = {
     "Detail of the suggested action: what to split, how to refine, or why to keep. Empty string if not applicable.": "Detalle de la acción sugerida: qué dividir, cómo refinar o por qué mantener. Cadena vacía si no aplica.",
     # ===== Common (2x) — a2 =====
     "The central process this participant continuously tries to {processing_verb}, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'": "El proceso central que este participante intenta continuamente {processing_verb}, expresado como gerundio. Explica en 2-3 oraciones qué acciones concretas revelan este proceso. Si los segmentos no permiten identificar un proceso claro: 'Evidencia insuficiente.'",
-    "Predominant data type. baseline: honest. properline: social desirability. interpreted: forced. vague: evasive. mixed: various.": "Tipo de dato predominante. baseline: honesto. properline: deseabilidad social. interpreted: forzado. vague: evasivo. mixed: variado.",
+    "Predominant data type. baseline: honest experience. properline: social desirability. interpreted: the author's framing of the population. vague: evasive. mixed: various.": "Tipo de dato predominante. baseline: experiencia honesta. properline: deseabilidad social. interpreted: el marco interpretativo del autor sobre la población. vague: evasivo. mixed: variado.",
     "How it is SIMILAR to the previous one. If it is the first participant: 'N/A — first participant'.": "En qué se PARECE al anterior. Si es el primer participante: 'N/A — primer participante'.",
     "How it DIFFERS from the previous one. If it is the first participant: 'N/A — first participant'.": "En qué se DIFERENCIA del anterior. Si es el primer participante: 'N/A — primer participante'.",
     # ===== Common (2x) — a3 =====
@@ -174,7 +174,7 @@ ES = {
     "What dimension or property it captures that the current name omits.": "Qué dimensión o propiedad captura que el nombre actual omite.",
     "If the name is inspired by a participant's exact words, quote them here. Empty string if not.": "Si el nombre está inspirado en palabras exactas de un participante, citarlas aquí. Cadena vacía si no.",
     # ===== Common (2x) — glaser_data_classifier =====
-    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: forced response. vague_data: evasive.": "baseline_data: experiencia real espontánea. properline_data: discurso normativo. interpreted_data: respuesta forzada. vague_data: evasivo.",
+    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: the author's framing of the population. vague_data: evasive.": "baseline_data: experiencia real espontánea. properline_data: discurso normativo. interpreted_data: el marco interpretativo del autor sobre la población. vague_data: evasivo.",
     "One sentence justifying the classification with textual evidence.": "Una oración justificando la clasificación con evidencia textual.",
     "Confidence level in the classification.": "Nivel de confianza en la clasificación.",
     # ===== Common (2x) — fa_core_pattern_extractor =====
@@ -686,7 +686,7 @@ DE = {
     "Detail of the suggested action: what to split, how to refine, or why to keep. Empty string if not applicable.": "Detail der vorgeschlagenen Maßnahme: was aufteilen, wie verfeinern oder warum behalten. Leerer String wenn nicht zutreffend.",
     # a2
     "The central process this participant continuously tries to {processing_verb}, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'": "Der zentrale Prozess, den dieser Teilnehmer kontinuierlich zu {processing_verb} versucht, ausgedrückt als Gerundium. Erklären Sie in 2-3 Sätzen, welche konkreten Handlungen diesen Prozess offenbaren. Wenn die Segmente keinen klaren Prozess erkennen lassen: 'Ungenügende Evidenz.'",
-    "Predominant data type. baseline: honest. properline: social desirability. interpreted: forced. vague: evasive. mixed: various.": "Vorherrschender Datentyp. baseline: ehrlich. properline: soziale Erwünschtheit. interpreted: erzwungen. vague: ausweichend. mixed: verschieden.",
+    "Predominant data type. baseline: honest experience. properline: social desirability. interpreted: the author's framing of the population. vague: evasive. mixed: various.": "Vorherrschender Datentyp. baseline: ehrliche Erfahrung. properline: soziale Erwünschtheit. interpreted: die Deutung des Autors über die Population. vague: ausweichend. mixed: verschieden.",
     "How it is SIMILAR to the previous one. If it is the first participant: 'N/A — first participant'.": "Worin es dem vorherigen ÄHNLICH ist. Wenn es der erste Teilnehmer ist: 'N/A — erster Teilnehmer'.",
     "How it DIFFERS from the previous one. If it is the first participant: 'N/A — first participant'.": "Worin es sich vom vorherigen UNTERSCHEIDET. Wenn es der erste Teilnehmer ist: 'N/A — erster Teilnehmer'.",
     # a3
@@ -818,7 +818,7 @@ DE = {
     "What dimension or property it captures that the current name omits.": "Welche Dimension oder Eigenschaft es erfasst, die der aktuelle Name auslässt.",
     "If the name is inspired by a participant's exact words, quote them here. Empty string if not.": "Wenn der Name von den exakten Worten eines Teilnehmers inspiriert ist, diese hier zitieren. Leerer String wenn nicht.",
     # glaser_data_classifier
-    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: forced response. vague_data: evasive.": "baseline_data: spontane reale Erfahrung. properline_data: normativer Diskurs. interpreted_data: erzwungene Antwort. vague_data: ausweichend.",
+    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: the author's framing of the population. vague_data: evasive.": "baseline_data: spontane reale Erfahrung. properline_data: normativer Diskurs. interpreted_data: die Deutung des Autors über die Population. vague_data: ausweichend.",
     "One sentence justifying the classification with textual evidence.": "Ein Satz zur Rechtfertigung der Klassifikation mit textueller Evidenz.",
     "Confidence level in the classification.": "Konfidenzniveau der Klassifikation.",
     # fa_core_pattern_extractor
@@ -1331,7 +1331,7 @@ PT = {
     "Detail of the suggested action: what to split, how to refine, or why to keep. Empty string if not applicable.": "Detalhe da ação sugerida: o que dividir, como refinar ou por que manter. String vazia se não aplicável.",
     # a2
     "The central process this participant continuously tries to {processing_verb}, expressed as a gerund. Explain in 2-3 sentences what concrete actions reveal this process. If the segments do not allow identifying a clear process: 'Insufficient evidence.'": "O processo central que este participante tenta continuamente {processing_verb}, expresso como gerúndio. Explique em 2-3 frases quais ações concretas revelam este processo. Se os segmentos não permitirem identificar um processo claro: 'Evidência insuficiente.'",
-    "Predominant data type. baseline: honest. properline: social desirability. interpreted: forced. vague: evasive. mixed: various.": "Tipo de dado predominante. baseline: honesto. properline: desejabilidade social. interpreted: forçado. vague: evasivo. mixed: variado.",
+    "Predominant data type. baseline: honest experience. properline: social desirability. interpreted: the author's framing of the population. vague: evasive. mixed: various.": "Tipo de dado predominante. baseline: experiência honesta. properline: desejabilidade social. interpreted: o enquadramento do autor sobre a população. vague: evasivo. mixed: variado.",
     "How it is SIMILAR to the previous one. If it is the first participant: 'N/A — first participant'.": "Como é SEMELHANTE ao anterior. Se for o primeiro participante: 'N/A — primeiro participante'.",
     "How it DIFFERS from the previous one. If it is the first participant: 'N/A — first participant'.": "Como DIFERE do anterior. Se for o primeiro participante: 'N/A — primeiro participante'.",
     # a3
@@ -1463,7 +1463,7 @@ PT = {
     "What dimension or property it captures that the current name omits.": "Qual dimensão ou propriedade captura que o nome atual omite.",
     "If the name is inspired by a participant's exact words, quote them here. Empty string if not.": "Se o nome for inspirado nas palavras exatas de um participante, citá-las aqui. String vazia se não.",
     # glaser_data_classifier
-    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: forced response. vague_data: evasive.": "baseline_data: experiência real espontânea. properline_data: discurso normativo. interpreted_data: resposta forçada. vague_data: evasivo.",
+    "baseline_data: spontaneous real experience. properline_data: normative discourse. interpreted_data: the author's framing of the population. vague_data: evasive.": "baseline_data: experiência real espontânea. properline_data: discurso normativo. interpreted_data: o enquadramento do autor sobre a população. vague_data: evasivo.",
     "One sentence justifying the classification with textual evidence.": "Uma frase justificando a classificação com evidência textual.",
     "Confidence level in the classification.": "Nível de confiança na classificação.",
     # fa_core_pattern_extractor

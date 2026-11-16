@@ -172,7 +172,7 @@ def classify_document_glaser(
                 "properline_data": str,      # metadata
                 "interpreted_data": str,     # metadata
                 "vague_data": str,           # metadata
-                "interviewer_context": str,  # metadata
+                "document_context": str,  # estructura del documento (metadata)
             },
             "baseline_text": str,  # alias de conveniencia
             "error": str | None,

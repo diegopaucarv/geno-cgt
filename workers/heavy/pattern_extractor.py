@@ -98,15 +98,36 @@ def extract_patterns_and_incidents(
             ) from exc
 
         # ── 1. Fetch baseline segments ───────────────────────────
+        # Sólo `baseline_data`: bajo classify-first los segmentos SIEMPRE están
+        # etiquetados antes de llegar aquí, así que aceptar `IS NULL` colaría
+        # texto sin patrones en la extracción de incidentes.
         seg_rows = session.execute(
             text(
                 "SELECT id, texto, posicion FROM segmentos "
                 "WHERE documento_id = :did "
-                "AND (tipo_dato_glaser = 'baseline_data' OR tipo_dato_glaser IS NULL) "
+                "AND tipo_dato_glaser = 'baseline_data' "
                 "ORDER BY posicion"
             ),
             {"did": documento_id},
         ).fetchall()
+
+        # Segmentos sin etiqueta: no se pueden extraer (no son baseline) y son
+        # la señal de que la herencia de tags falló. Se registran para que el
+        # fallo no pase desapercibido.
+        untagged = session.execute(
+            text(
+                "SELECT COUNT(*) FROM segmentos "
+                "WHERE documento_id = :did AND tipo_dato_glaser IS NULL"
+            ),
+            {"did": documento_id},
+        ).fetchone()[0]
+        if untagged:
+            logger.warning(
+                "Pattern extraction: doc=%s tiene %d segmento(s) sin tag Glaser; "
+                "se omiten (sólo se lee baseline_data)",
+                documento_id[:8],
+                untagged,
+            )
 
         if not seg_rows:
             logger.warning("No baseline segments for doc=%s", documento_id[:8])
@@ -228,10 +249,13 @@ def extract_patterns_and_incidents(
         seg_map = {i + 1: str(r[0]) for i, r in enumerate(seg_rows)}
 
         # ── 7a. Replace this document's previous extraction ───────
-        # Both incident_comparisons FKs are NO ACTION (confdeltype='a'), not
-        # CASCADE, so the dependent rows must be removed before their
-        # incidents. Deferred until after the mock/error guard above so a
-        # failed LLM call never wipes existing data.
+        # Los incidentes con `origen = 'manual'` los creó una persona: una
+        # re-extracción no los toca. Las comparaciones que los involucran sí se
+        # van si el otro lado era de la IA, porque ese lado desaparece.
+        # `incident_comparisons` cae en cascada desde 020, así que este DELETE
+        # explícito es sólo una red por si la migración no corrió todavía.
+        # Deferred until after the mock/error guard above so a failed LLM call
+        # never wipes existing data.
         if replace_existing:
             deleted_comparisons = (
                 session.execute(
@@ -239,10 +263,12 @@ def extract_patterns_and_incidents(
                         "DELETE FROM incident_comparisons "
                         "WHERE incident_a_id IN ("
                         "SELECT id FROM extracted_incidents "
-                        "WHERE documento_id = :did AND proyecto_id = :pid) "
+                        "WHERE documento_id = :did AND proyecto_id = :pid "
+                        "AND origen <> 'manual') "
                         "OR incident_b_id IN ("
                         "SELECT id FROM extracted_incidents "
-                        "WHERE documento_id = :did AND proyecto_id = :pid)"
+                        "WHERE documento_id = :did AND proyecto_id = :pid "
+                        "AND origen <> 'manual')"
                     ),
                     {"did": documento_id, "pid": proyecto_id},
                 ).rowcount
@@ -253,7 +279,8 @@ def extract_patterns_and_incidents(
                 session.execute(
                     text(
                         "DELETE FROM extracted_incidents "
-                        "WHERE documento_id = :did AND proyecto_id = :pid"
+                        "WHERE documento_id = :did AND proyecto_id = :pid "
+                        "AND origen <> 'manual'"
                     ),
                     {"did": documento_id, "pid": proyecto_id},
                 ).rowcount
@@ -316,7 +343,12 @@ def extract_patterns_and_incidents(
 
             meta = {
                 "patterns": pattern_ids,
-                "segment_refs": seg_refs_clean,
+                # `segment_refs` guarda UUIDs, no ordinales: un ordinal 1..N se
+                # repite en todos los documentos del proyecto y confunde a
+                # cualquier lector que lo trate como `posicion`. Los ordinales
+                # originales quedan en `segment_refs_ordinals` por trazabilidad.
+                "segment_refs": segment_ids,
+                "segment_refs_ordinals": seg_refs_clean,
                 "exact_quote": exact_quote,
                 "method": "unified_pattern_extractor",
             }
@@ -324,14 +356,16 @@ def extract_patterns_and_incidents(
                 meta["unlinked"] = True
 
             try:
-                session.execute(
+                inserted = session.execute(
                     text(
                         "INSERT INTO extracted_incidents "
                         "(id, segmento_id, documento_id, proyecto_id, "
-                        "jot_text, keep_moving, tipo_dato_glaser, "
+                        "jot_text, keep_moving, tipo_dato_glaser, origen, "
                         "preguntas_glaser_json) "
                         "VALUES (gen_random_uuid(), :sid, :did, :pid, "
-                        ":desc, true, 'baseline_data', CAST(:meta AS jsonb))"
+                        ":desc, true, 'baseline_data', 'ia', "
+                        "CAST(:meta AS jsonb)) "
+                        "RETURNING id"
                     ),
                     {
                         "sid": primary_seg,
@@ -340,7 +374,21 @@ def extract_patterns_and_incidents(
                         "desc": description,
                         "meta": json.dumps(meta),
                     },
-                )
+                ).fetchone()
+                incident_id = inserted[0]
+
+                # Una fila por cita. `tipo_dato_glaser` NULL = heredar la del
+                # segmento; nunca se inventa una categoría acá.
+                for seg_id in segment_ids:
+                    session.execute(
+                        text(
+                            "INSERT INTO incident_segmentos "
+                            "(incident_id, segmento_id, tipo_dato_glaser, is_manual) "
+                            "VALUES (:iid, :sid, NULL, false) "
+                            "ON CONFLICT (incident_id, segmento_id) DO NOTHING"
+                        ),
+                        {"iid": incident_id, "sid": seg_id},
+                    )
                 persisted_incidents += 1
             except Exception as e:
                 failed_inserts += 1
@@ -421,6 +469,7 @@ def extract_patterns_and_incidents(
             "incidents_count": persisted_incidents,
             "document_signals": doc_signals,
             "segments_omitted": segments_omitted,
+            "segments_untagged": int(untagged),
             "mock": False,
         }
 

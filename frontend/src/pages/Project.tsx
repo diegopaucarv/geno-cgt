@@ -13,15 +13,20 @@ import {
   deleteDocument,
   deleteAllDocuments,
   deleteDocumentSegments,
-  resetDocsToCrudo,
+  deleteDocumentIncidents,
   restoreDocumentOriginal,
   getPipelineLog,
   getAgentMemos,
+  deleteAgentOutput,
+  deleteAgentMemos,
   getPendingHitl,
   decideHitl,
+  getOpenCodingHitlStatus,
+  getHypothesisDuplicates,
   ping,
   clearToken,
   stopProjectPipeline,
+  closeIdlePipelineRuns,
   restartFailedTasks,
   updateProject,
   updatePopulationAssumption,
@@ -31,23 +36,31 @@ import {
   Document,
   Category,
   Segment,
+  GlaserBlock,
   PipelineLog,
   DocPipelineLog,
   HitlPendingItem,
+  OpenCodingHitlStatus,
 } from "../api/client";
 import {
   MemoHistory,
   type MemoEntry,
-  DeleteByTypeButton,
+  ConfirmDeleteButton,
 } from "../components/MemoHistory";
 import { Toast } from "../components/Toast";
 import HITLModal from "../components/HITLModal";
+import OpenCodingHITLModal from "../components/OpenCodingHITLModal";
+import HitlDecisionsPanel from "../components/HitlDecisionsPanel";
 import AddMemoModal from "../components/AddMemoModal";
 import ProjectConfigPanel from "../components/ProjectConfigPanel";
 import PipelineAgents from "../components/PipelineAgents";
 import AgentModal from "../components/AgentModal";
+import IncidentsPanel from "../components/incidents/IncidentsPanel";
+import ClassifiedBlockEditor from "../components/curation/ClassifiedBlockEditor";
+import SegmentsMergeList from "../components/curation/SegmentsMergeList";
 import { getAgentLogs, type AgentLogEntry } from "../api/client";
 import { PIPELINE_STAGES, FAMILY_COLORS } from "../config/pipelineChains";
+import { STEP_TIMEOUT_MS, STEP_TIMEOUT_MINUTES } from "../config/timeouts";
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -62,7 +75,96 @@ const btnSmall: React.CSSProperties = {
 };
 
 type StageStatus = "pending" | "running" | "done" | "error";
-type ViewMode = "original" | "segmented";
+
+/** Per-interview pipeline steps, in classify-first order.
+ *
+ *  `original → preprocessed → classified → segmented → incidents`: the Glaser
+ *  classifier tags the TEXT first, segments are created afterwards and inherit
+ *  their tag, and only then does the extractor consume `baseline_data`. */
+const DOC_STEPS = [
+  "original",
+  "preprocessed",
+  "classified",
+  "segmented",
+  "incidents",
+] as const;
+type DocStepKey = (typeof DOC_STEPS)[number];
+
+/** Estados que implican que el texto ya pasó por el preprocesado. */
+const PREPROCESSED_ESTADOS = [
+  "preprocesado",
+  "clasificando",
+  "clasificado",
+  "segmentando",
+  "segmentado",
+  "procesando",
+  "extrayendo",
+  "incidentes_extraidos",
+  "procesado",
+  "codificando",
+  "codificado",
+  "listo",
+];
+
+/** Estados en los que la extracción de incidentes ya corrió (o terminó). */
+const INCIDENT_TERMINAL_ESTADOS = [
+  "incidentes_extraidos",
+  "procesado",
+  "codificado",
+  "listo",
+];
+
+const STEP_LABEL_KEYS: Record<DocStepKey, string> = {
+  original: "project.original",
+  preprocessed: "project.stepPreprocessed",
+  classified: "project.stepClassified",
+  segmented: "project.stepSegmented",
+  incidents: "project.stepIncidents",
+};
+
+const STEP_ICONS: Record<DocStepKey, string> = {
+  original: "\uD83D\uDCC4",
+  preprocessed: "\uD83D\uDCDD",
+  classified: "\uD83C\uDFF7\uFE0F",
+  segmented: "\u2702\uFE0F",
+  incidents: "\uD83D\uDD0D",
+};
+
+const STEP_COLORS: Record<DocStepKey, string> = {
+  original: "#8B949E",
+  preprocessed: "#A371F7",
+  classified: "#3FB950",
+  segmented: "#58A6FF",
+  incidents: "#D29922",
+};
+
+/** Inconsistency codes the pipeline log may report per document. */
+const INCONSISTENCY_LABEL_KEYS: Record<string, string> = {
+  missing_classified: "project.stepMissingClassified",
+  missing_segmented: "project.stepMissingSegmented",
+  segmented_without_segments: "project.stepSegmentedWithoutSegments",
+  segments_unclassified: "project.stepSegmentsUnclassified",
+};
+
+/** Single-line, length-capped preview for compact segment lists. */
+function shorten(text: string, max = 160): string {
+  const clean = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean.length > max ? clean.slice(0, max) + "…" : clean;
+}
+
+/** Per-document pipeline log as extended by the classify-first backend. */
+type ExtendedDocLog = DocPipelineLog & {
+  has_classification?: boolean;
+  classified_count?: number;
+  incidents_count?: number;
+  inconsistencies?: string[];
+  steps: DocPipelineLog["steps"] & {
+    classified?: boolean;
+    incidents?: boolean;
+  };
+};
 
 /** Estados transitorios mientras un worker procesa el documento. */
 const IN_FLIGHT_DOC_STATES = [
@@ -72,6 +174,7 @@ const IN_FLIGHT_DOC_STATES = [
   "procesando",
   "extrayendo",
   "codificando",
+  "resumiendo",
 ];
 
 // ── Component ─────────────────────────────────────────────────────
@@ -90,13 +193,15 @@ export default function ProjectDetail() {
   const punctTaskRef = useRef<string | null>(null);
   const runningOp = useRef<{
     docId: string;
-    op: "punctuate" | "classify" | "segment";
+    op: "punctuate" | "classify" | "segment" | "extract";
   } | null>(null);
 
   // ── Modular cancel: each operation reverts ONLY its own step ──
   // punctuate: restore → crudo
-  // classify:  clear classified text → preprocesado
-  // segment:   delete segs → clasificado
+  // segment:   delete segs → preprocesado
+  // classify:  clear classified text → segmentado
+  // extract:   nothing to revert (the backend cancel already restores estado,
+  //            and deleting segments here would destroy classification work)
   const OP_ROLLBACK: Record<
     string,
     Array<"restore" | "deleteSegs" | "clearClassified">
@@ -104,16 +209,43 @@ export default function ProjectDetail() {
     punctuate: ["restore"],
     classify: ["clearClassified"],
     segment: ["deleteSegs"],
+    extract: [],
   };
 
   // ── Unified agent state definitions ──
   // Each per-doc agent: input estado (what it consumes), output estado (what it produces).
   // canRun = docs exist in input state. done = no docs in input state AND some docs at output+.
+  // Classify-first: punctuator → Glaser classifier (tags the TEXT) → segmenter
+  // (segments inherit the tag) → incident extractor (consumes `baseline_data`).
   const PER_DOC_AGENTS = {
     util_punctuator: { input: "crudo", output: "preprocesado" },
-    fa_glaser_data_classifier: { input: "preprocesado", output: "clasificado" },
+    fa_glaser_data_classifier: {
+      input: "preprocesado",
+      output: "clasificado",
+    },
     segmentar_documento: { input: "clasificado", output: "segmentado" },
+    fa_document_pattern_extractor: {
+      input: "segmentado",
+      output: "incidentes_extraidos",
+    },
   } as const;
+
+  /** Estados desde los que el extractor de incidentes puede arrancar.
+   *
+   * Espejo del guard 409 de `run_single_agent` (backend/app/api/v1/pipeline.py).
+   * Con el orden classify-first el extractor consume segmentos ya etiquetados,
+   * así que su estado natural de entrada es "segmentado". La UI además exige
+   * `hasSegments(doc)`, de modo que un doc "clasificado" sin segmentos nunca
+   * llega a la cola aunque el backend lo aceptara.
+   */
+  const EXTRACTOR_STATES: ReadonlyArray<string> = [
+    "clasificado",
+    "segmentado",
+    "incidentes_extraidos",
+    "procesado",
+    "listo",
+    "error",
+  ];
 
   /** All estados that are at or beyond a given output estado */
   const BEYOND: Record<string, string[]> = {
@@ -208,7 +340,7 @@ export default function ProjectDetail() {
         }).catch(() => {});
       }
     }
-    refreshDocs();
+    refreshAll();
   }
 
   /** Unified task dispatch + poll + refresh. All per-doc handlers and the
@@ -217,7 +349,7 @@ export default function ProjectDetail() {
     docId: string,
     endpoint: string,
     signal: { current: boolean },
-    maxWaitMs = 360_000,
+    maxWaitMs = STEP_TIMEOUT_MS,
   ): Promise<"success" | "failed" | "aborted" | "timeout"> {
     console.log("[runDocTask] POST", endpoint, "docId:", docId);
     const token = `Bearer ${localStorage.getItem("access_token")}`;
@@ -249,7 +381,7 @@ export default function ProjectDetail() {
     const taskId = res.task_id;
     punctTaskRef.current = taskId;
     if (!taskId) {
-      refreshDocs();
+      refreshAll();
       return "success";
     }
 
@@ -261,12 +393,12 @@ export default function ProjectDetail() {
         const ts = await getTaskStatus(taskId);
         if (ts.status === "SUCCESS") {
           // Surface the real estado without requiring a manual reload.
-          refreshDocs();
+          refreshAll();
           return "success";
         }
         if (ts.status === "FAILURE" || ts.status === "REVOKED") {
           // The worker may still have advanced state before failing/cancelling.
-          refreshDocs();
+          refreshAll();
           return "failed";
         }
         // STARTED / RETRY / PENDING: keep polling.
@@ -276,7 +408,7 @@ export default function ProjectDetail() {
     }
     // Even on timeout the task may have completed server-side; surface the
     // real estado instead of leaving the UI stale until a manual reload.
-    refreshDocs();
+    refreshAll();
     return signal.current ? "aborted" : "timeout";
   }
 
@@ -290,13 +422,8 @@ export default function ProjectDetail() {
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
   const confirmResolve = useRef<((ok: boolean) => void) | null>(null);
   function safeConfirm(msg: string): Promise<boolean> {
-    // Try native confirm first
-    const start = performance.now();
-    const ok = window.confirm(msg);
-    if (ok || performance.now() - start > 100) {
-      return Promise.resolve(ok);
-    }
-    // Native confirm blocked — show floating bar
+    // Always use the floating bar: a blocked native confirm() resolves falsy
+    // and would silently answer "no".
     return new Promise((resolve) => {
       confirmResolve.current = resolve;
       setConfirmMsg(msg);
@@ -316,12 +443,9 @@ export default function ProjectDetail() {
   const [stoppingWorkers, setStoppingWorkers] = useState(false);
   const [openCodingRunning, setOpenCodingRunning] = useState(false);
 
-  // ── Global view switch ──
-  const [globalViewMode, setGlobalViewMode] = useState<ViewMode>("original");
-  // Per-doc overrides (only used when user explicitly toggles a doc)
-  const [viewModeOverride, setViewModeOverride] = useState<
-    Record<string, ViewMode>
-  >({});
+  // ── Global view switch REMOVED ──
+  // The viewed step is now shared by every interview (see `globalStep`), so
+  // there is no "original vs segmented" switch to keep in sync.
 
   // ── Execution log ──
   const [pipelineFailed, setPipelineFailed] = useState(false);
@@ -340,6 +464,12 @@ export default function ProjectDetail() {
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
   const [showHITLModal, setShowHITLModal] = useState(false);
+  // Gate de codificación abierta (concern / población / categorías centrales)
+  const [ocHitl, setOcHitl] = useState<OpenCodingHitlStatus | null>(null);
+  const [ocHitlOpen, setOcHitlOpen] = useState(false);
+  // Aviso de hipótesis duplicadas (se revisan/anulan en el gate HITL abierto)
+  const [dupClusters, setDupClusters] = useState(0);
+  const [dupRedundant, setDupRedundant] = useState(0);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
 
@@ -352,7 +482,7 @@ export default function ProjectDetail() {
 
   // ── Agent monitoring ──
   const [sidebarViewMode, setSidebarViewMode] = useState<
-    "stages" | "agents" | "logs"
+    "stages" | "agents" | "logs" | "hitl"
   >("agents");
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([]);
   /** Ephemeral: agent IDs currently executing (pulse animation).
@@ -360,16 +490,36 @@ export default function ProjectDetail() {
   const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(
     new Set(),
   );
+  /** Derived from /pipeline/log (running_agents). Survives a reload, whereas
+   *  runningAgentIds only reflects what this browser session dispatched. */
+  const [serverRunningAgentIds, setServerRunningAgentIds] = useState<
+    Set<string>
+  >(new Set());
+  const isAgentRunning = (agentId: string) =>
+    runningAgentIds.has(agentId) || serverRunningAgentIds.has(agentId);
+  /** Etapas cuyo orquestador de fase (A/B) está en vuelo en el servidor. */
+  const runningPhases = new Set(pipelineLog?.summary?.running_phases ?? []);
+  const phaseRunning = runningPhases.size > 0;
+  /** Borrar entidades mientras corre el pipeline pelea con los agentes que
+   *  las escriben (el servidor lo rechaza con 409). `pipelineRunning` solo
+   *  sabe de las ejecuciones lanzadas desde esta pestaña; esto sí refleja
+   *  el estado del servidor. */
+  const entitiesLocked =
+    pipelineRunning || phaseRunning || serverRunningAgentIds.size > 0;
   /** Synthesized: "running" if in runningAgentIds, else "pending".
    *  PipelineAgents derives done/canRun from agentDocCounts internally. */
   const agentStatuses: Record<
     string,
     "pending" | "running" | "done" | "error"
   > = {};
-  for (const agentId of Object.keys(PER_DOC_AGENTS)) {
-    agentStatuses[agentId] = runningAgentIds.has(agentId)
-      ? "running"
-      : "pending";
+  // Cover every agent in every stage, not just PER_DOC_AGENTS — otherwise
+  // open-coding agents read "pending" forever and can never show a spinner.
+  for (const stage of PIPELINE_STAGES) {
+    for (const agent of stage.agents) {
+      agentStatuses[agent.id] = isAgentRunning(agent.id)
+        ? "running"
+        : "pending";
+    }
   }
 
   const [agentModalOpen, setAgentModalOpen] = useState(false);
@@ -389,7 +539,11 @@ export default function ProjectDetail() {
   const [customLabel, setCustomLabel] = useState("");
 
   // ── Text editing state ──
-  const [textEdits, setTextEdits] = useState<Record<string, string>>({});
+  /** Pending edit per document. The step is pinned when the editor opens, so
+   *  navigating elsewhere cannot redirect the save to another field. */
+  const [textEdits, setTextEdits] = useState<
+    Record<string, { text: string; step: "original" | "preprocessed" }>
+  >({});
   const [textSaving, setTextSaving] = useState<Record<string, boolean>>({});
 
   // ── Per-document error state (for routing retries) ──
@@ -401,9 +555,14 @@ export default function ProjectDetail() {
   const dragDoc = useRef<string | null>(null);
 
   // ── Agent execution state ──
+  // Las claves de localStorage se indexan por proyecto: una clave global
+  // mezclaba el avance de proyectos distintos (el botón ↻ aparecía para
+  // agentes que nunca corrieron en el proyecto abierto).
+  const completedAgentsKey = `gt_completed_agents:${id ?? "none"}`;
+  const iterationsKey = `gt_iterations:${id ?? "none"}`;
   const [completedAgents, setCompletedAgents] = useState<Set<string>>(() => {
     try {
-      const raw = localStorage.getItem("gt_completed_agents");
+      const raw = localStorage.getItem(`gt_completed_agents:${id ?? "none"}`);
       return raw ? new Set(JSON.parse(raw)) : new Set();
     } catch {
       return new Set();
@@ -416,7 +575,7 @@ export default function ProjectDetail() {
   const [runningOps, setRunningOps] = useState<Record<string, string>>({});
   const [iterations, setIterations] = useState<Record<string, number>>(() => {
     try {
-      const raw = localStorage.getItem("gt_iterations");
+      const raw = localStorage.getItem(`gt_iterations:${id ?? "none"}`);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -437,24 +596,128 @@ export default function ProjectDetail() {
     // not for data_management agents.
   }, [docs, id]);
 
+  // Re-seed per-project state when the route changes: react-router reuses this
+  // component for /projects/:id, so state would otherwise carry over from the
+  // previously open project. Declared BEFORE the persist effects so it reads
+  // the target key before they write to it.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(completedAgentsKey);
+      setCompletedAgents(raw ? new Set(JSON.parse(raw)) : new Set());
+    } catch {
+      setCompletedAgents(new Set());
+    }
+    try {
+      const raw = localStorage.getItem(iterationsKey);
+      setIterations(raw ? JSON.parse(raw) : {});
+    } catch {
+      setIterations({});
+    }
+  }, [completedAgentsKey, iterationsKey]);
+
   // Persist completed agents to localStorage
   useEffect(() => {
     localStorage.setItem(
-      "gt_completed_agents",
+      completedAgentsKey,
       JSON.stringify([...completedAgents]),
     );
-  }, [completedAgents]);
+  }, [completedAgents, completedAgentsKey]);
 
   useEffect(() => {
-    localStorage.setItem("gt_iterations", JSON.stringify(iterations));
-  }, [iterations]);
+    localStorage.setItem(iterationsKey, JSON.stringify(iterations));
+  }, [iterations, iterationsKey]);
 
-  // ── Text view mode (original / preprocesado / clasificado / segmented / incidents) ──
-  const [textViewMode, setTextViewMode] = useState<
-    "original" | "preprocessed" | "classified" | "segmented" | "incidents"
-  >("original");
+  // ── Running state derived from the server ──
+  // Keeps spinners alive across reloads. The identity of the Set is preserved
+  // when the content is unchanged so the polling effect below is not restarted
+  // on every refresh.
+  useEffect(() => {
+    const server = pipelineLog?.summary?.running_agents ?? [];
+    const next = new Set(server);
+    setServerRunningAgentIds((prev) => {
+      if (prev.size === next.size && [...next].every((a) => prev.has(a))) {
+        return prev;
+      }
+      return next;
+    });
+  }, [pipelineLog]);
+
+  // Agents the server finished successfully (last 4 h) count as completed, so
+  // a reload in the middle of a manual run still yields ↻ instead of ▶.
+  useEffect(() => {
+    const succeeded = pipelineLog?.summary?.succeeded_agents ?? [];
+    if (succeeded.length === 0) return;
+    setCompletedAgents((prev) => {
+      if (succeeded.every((a) => prev.has(a))) return prev;
+      const next = new Set(prev);
+      succeeded.forEach((a) => next.add(a));
+      return next;
+    });
+  }, [pipelineLog]);
+
+  // Poll only while something is in flight, so idle pages cost nothing.
+  useEffect(() => {
+    if (!id) return;
+    if (
+      runningAgentIds.size === 0 &&
+      serverRunningAgentIds.size === 0 &&
+      !phaseRunning
+    )
+      return;
+    const timer = setInterval(() => {
+      getPipelineLog(id)
+        .then(setPipelineLog)
+        .catch(() => {});
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [id, runningAgentIds, serverRunningAgentIds, phaseRunning]);
+
+  // ── Step navigation (classify-first) ──
+  // `globalStep` is the viewed step for EVERY interview in view. Absent = auto:
+  // each interview shows its own last step with data (`completedThrough`).
+  // Every card clamps it to [0, completedThrough + 1].
+  const [globalStep, setGlobalStep] = useState<number | null>(null);
+  /** Document whose inline "redo this step" confirmation panel is open. */
+  const [redoConfirmFor, setRedoConfirmFor] = useState<string | null>(null);
+  /** Panel list visibility. Collapsing keeps the header and its counter. */
+  const [docsOpen, setDocsOpen] = useState(true);
+  /** Documents ticked for the batch actions. */
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
+  /** Progress of the sequential batch run; `null` when idle. */
+  const [batchRun, setBatchRun] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  /** Batch reset/delete in flight: disables those two buttons and keeps them
+   *  in place while their own requests run. */
+  const [docsBusy, setDocsBusy] = useState(false);
+  /** Progress of the sequential batch reset; `null` when idle. */
+  const [resetRun, setResetRun] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+
+  // A deleted document leaves its id behind in the selection, and a ghost id
+  // would keep the toolbar in batch mode with nothing to act on.
+  useEffect(() => {
+    setSelectedDocs((prev) => {
+      if (prev.size === 0) return prev;
+      const alive = new Set(docs.map((d) => d.id));
+      const next = new Set([...prev].filter((docId) => alive.has(docId)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [docs]);
 
   const hitlPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** Runs que el servidor sigue dando por abiertos. Si además no hay nada en
+   *  vuelo, son restos de un worker que murió sin cerrarlos: se ofrecen para
+   *  cerrar a mano en vez de quedar como un "pipeline en ejecución" fantasma. */
+  const hasStaleRun =
+    (pipelineLog?.summary?.open_runs ?? 0) > 0 &&
+    !entitiesLocked &&
+    !batchRun &&
+    !docsBusy;
 
   // ── Cleanup on unmount — clear local intervals ──
   useEffect(() => {
@@ -544,14 +807,22 @@ export default function ProjectDetail() {
         }
       };
 
-      // data_management: done if no docs need segmentation
-      if (summary.need_segment === 0 && summary.total > 0)
+      // data_management: done once every doc is segmented, classified and has
+      // its incidents extracted (segmentation alone is not enough).
+      if (
+        (summary.need_segment ?? 0) === 0 &&
+        (summary.need_classify ?? 0) === 0 &&
+        (summary.need_agents ?? 0) === 0 &&
+        summary.total > 0
+      )
         setIfForward("data_management", "done");
 
-      // open_coding: done if need_agents === 0 && need_segment === 0
+      // open_coding: done once nothing is left to segment, classify or delegate
+      // to an agent (mirrors the data_management condition).
       if (
-        summary.need_agents === 0 &&
-        summary.need_segment === 0 &&
+        (summary.need_segment ?? 0) === 0 &&
+        (summary.need_classify ?? 0) === 0 &&
+        (summary.need_agents ?? 0) === 0 &&
         summary.total > 0
       )
         setIfForward("open_coding", "done");
@@ -612,6 +883,45 @@ export default function ProjectDetail() {
     }
   }, [id]); // ✅ only on mount / id change, not every render
 
+  // ── Open-coding HITL status polling ──
+  useEffect(() => {
+    if (!id) return;
+    const load = () =>
+      getOpenCodingHitlStatus(id)
+        .then(setOcHitl)
+        .catch(() => {});
+    load();
+    const poll = setInterval(load, 30000);
+    return () => clearInterval(poll);
+  }, [id]);
+
+  // ── Duplicate-hypotheses polling ──
+  useEffect(() => {
+    if (!id) return;
+    const load = () =>
+      getHypothesisDuplicates(id)
+        .then((d) => {
+          setDupClusters(d.clusters.length);
+          setDupRedundant(d.redundant_count);
+        })
+        .catch(() => {});
+    load();
+    const poll = setInterval(load, 60000);
+    return () => clearInterval(poll);
+  }, [id]);
+
+  // Al cerrar el gate refrescamos el aviso: dentro se pueden haber borrado
+  // duplicados y el poll de 60 s llegaría tarde.
+  useEffect(() => {
+    if (!id || ocHitlOpen) return;
+    getHypothesisDuplicates(id)
+      .then((d) => {
+        setDupClusters(d.clusters.length);
+        setDupRedundant(d.redundant_count);
+      })
+      .catch(() => {});
+  }, [ocHitlOpen, id]);
+
   // ── HITL polling ──
   useEffect(() => {
     if (!id) return;
@@ -630,7 +940,9 @@ export default function ProjectDetail() {
   function refreshDocs(): Promise<void> {
     if (!id) return Promise.resolve();
     return listDocuments(id)
-      .then(setDocs)
+      .then((list) => {
+        setDocs(list);
+      })
       .catch((e: any) => {
         console.error("[refreshDocs] failed:", e);
         showErrorToast(
@@ -640,16 +952,80 @@ export default function ProjectDetail() {
       });
   }
 
+  /** Refresca documentos Y log del pipeline.
+   *
+   * El chip de cada entrevista y los contadores del sidebar leen el log
+   * (`segments_count`, `incidents_count`, `next_action`, `has_classification`),
+   * así que refrescar sólo `docs` los dejaba congelados hasta recargar.
+   */
+  function refreshAll(): Promise<void> {
+    const log = id
+      ? getPipelineLog(id)
+          .then(setPipelineLog)
+          .catch(() => {})
+      : Promise.resolve();
+    return Promise.all([refreshDocs(), log]).then(() => undefined);
+  }
+
   async function toggleSegments(docId: string) {
     if (expandedDoc === docId) {
       setExpandedDoc(null);
       return;
     }
     setExpandedDoc(docId);
-    // Always reload segments when expanding
-    const segs = await listSegments(docId).catch(() => []);
-    setSegments((prev) => ({ ...prev, [docId]: segs }));
+    // Force a fresh segment fetch on expand; the lazy-load effect takes care of
+    // whatever else the currently viewed step needs.
+    loadSegments(docId);
   }
+
+  /** Loaders currently in flight, keyed `<docId>:<kind>`. Without this the
+   *  lazy-load effect can fire the same request twice while the first is still
+   *  running (the pipeline log polls every 6 s and re-runs it). */
+  const inFlightLoads = useRef<Set<string>>(new Set());
+
+  /** Drop the cached payload of one document so the lazy-load effect refetches
+   *  it. Used after any agent run that can change segments or incidents. */
+  function invalidateDocCaches(docId: string) {
+    setSegments((prev) => {
+      if (!(docId in prev)) return prev;
+      const n = { ...prev };
+      delete n[docId];
+      return n;
+    });
+  }
+
+  /** Reload the segment cache for one document. */
+  async function loadSegments(docId: string) {
+    const key = `${docId}:segments`;
+    if (inFlightLoads.current.has(key)) return;
+    inFlightLoads.current.add(key);
+    try {
+      const segs = await listSegments(docId).catch(() => [] as Segment[]);
+      setSegments((prev) => ({ ...prev, [docId]: segs }));
+    } finally {
+      inFlightLoads.current.delete(key);
+    }
+  }
+
+  // The expanded card renders whatever step it is viewing: make sure that
+  // step's data is in cache. Without this, a card that opens directly on
+  // `incidents` (the default for a finished interview) would sit on "loading"
+  // forever, because nothing else triggers the lazy load.
+  useEffect(() => {
+    if (!expandedDoc) return;
+    const doc = docs.find((d) => d.id === expandedDoc);
+    if (!doc) return;
+    const step = viewedStepOf(doc);
+    if (
+      (step === "classified" || step === "segmented" || step === "incidents") &&
+      !segments[doc.id]
+    )
+      loadSegments(doc.id);
+    // The caches ARE deps on purpose: `viewedStepOf` reads them, so when the
+    // segments arrive a card can move from `classified` to `incidents` and we
+    // must re-run to load the incidents. No loop: the loader always writes a
+    // value (`[]` on failure) and the in-flight guard blocks duplicates.
+  }, [expandedDoc, docs, pipelineLog, globalStep, segments]);
 
   function hasSegments(doc: Document): boolean {
     // Check loaded segments first
@@ -660,12 +1036,58 @@ export default function ProjectDetail() {
     return false;
   }
 
-  // Resolve view mode for a specific document
-  function docViewMode(doc: Document): ViewMode {
-    if (viewModeOverride[doc.id]) return viewModeOverride[doc.id];
-    if (globalViewMode === "segmented" && !hasSegments(doc)) return "original";
-    return globalViewMode;
+  /** ¿Puede este documento alimentar al agente per-doc?
+   *
+   * Se basa en el material disponible, no en el `estado`: el clasificador Glaser
+   * reutiliza los segmentos existentes (camino 1) y, si no los hay, segmenta el
+   * texto preprocesado (camino 2). Comparar el estado estrictamente marcaba como
+   * "no elegible" a los docs ya clasificados, y re-clasificar terminaba en 0/0.
+   */
+  function canProcessDoc(doc: Document, agentId: string): boolean {
+    const hasText = !!(
+      doc.texto_preprocesado ||
+      doc.texto_original ||
+      doc.texto_extraido
+    );
+    // El clasificador consume segmentos si existen; el texto es el respaldo.
+    if (agentId === "fa_glaser_data_classifier")
+      return hasSegments(doc) || hasText;
+    // El extractor de incidentes trabaja sobre segmentos ya clasificados: el
+    // worker no segmenta por su cuenta (`_ensure_segmented` lanza sin filas en
+    // `segmentos`) y el backend rechaza el resto de estados con 409.
+    if (agentId === "fa_document_pattern_extractor")
+      return (
+        hasSegments(doc) &&
+        EXTRACTOR_STATES.includes(String(doc.estado ?? "").trim())
+      );
+    return hasText;
   }
+
+  /** ¿Este documento todavía necesita al agente?
+   *
+   * Para el clasificador se usa el `next_action` del backend: un doc en
+   * 'clasificado' cuyos segmentos siguen sin categoría vuelve a contar como
+   * pendiente, aunque su `estado` ya sea el de salida. Sin ese dato se cae al
+   * criterio por estado.
+   */
+  function needsAgent(doc: Document, agentId: string): boolean {
+    const log = getDocLog(doc.id);
+    if (agentId === "fa_glaser_data_classifier" && log) {
+      // 'error' también cuenta: el doc es reintentable, no está terminado.
+      if (log.next_action === "error") return true;
+      return log.next_action === "classify";
+    }
+    const target = PER_DOC_AGENTS[agentId as keyof typeof PER_DOC_AGENTS];
+    if (!target) return false;
+    // Sólo un doc que YA alcanzó el estado de salida del agente deja de
+    // necesitarlo. Contar como "terminado" uno que todavía no puede procesarse
+    // (p. ej. en `crudo`, sin segmentos) inflaba el contador: la barra mostraba
+    // "4/5" con cero incidentes extraídos.
+    return !(BEYOND[target.output] || []).includes(doc.estado);
+  }
+
+  // Per-document view mode resolution removed: the viewed step is resolved by
+  // `clampedStepIndex(doc)` from the single `globalStep`.
 
   // ── Preprocesar (puntuación) ────────────────────────────────────
 
@@ -725,7 +1147,7 @@ export default function ProjectDetail() {
       if (res.status === "ok" && !res.task_id) {
         // Backend determined no punctuation needed — already well-punctuated.
         // Backend now sets estado='preprocesado' even without changes.
-        refreshDocs();
+        refreshAll();
         setPunctStatus((prev) => ({
           ...prev,
           [docId]: t("project.preprocessingOK"),
@@ -740,7 +1162,10 @@ export default function ProjectDetail() {
           ...prev,
           [docId]: t("project.preprocessingProcessing") + "…",
         }));
-        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+        // Ventana de sondeo global (ver `src/config/timeouts.ts`): antes eran
+        // 60 x 2s = 2 min fijos, insuficientes en máquinas lentas.
+        const maxPolls = Math.ceil(STEP_TIMEOUT_MS / 2000);
+        for (let poll = 0; poll < maxPolls && !abortRef.current; poll++) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
             const ts = await getTaskStatus(res.task_id);
@@ -780,7 +1205,7 @@ export default function ProjectDetail() {
               // The worker owns the estado transition (crudo -> preprocesado).
               // Always refetch, even when punctuation did not change, otherwise
               // the card keeps showing 'crudo' until a manual reload.
-              await refreshDocs();
+              await refreshAll();
               return "success";
             }
             if (ts.status === "FAILURE") {
@@ -795,9 +1220,10 @@ export default function ProjectDetail() {
             // polling error, keep trying
           }
         }
-        // Timeout after 120s
         if (!abortRef.current) {
-          return fail("Timeout: el preprocesado no respondio en 120s");
+          return fail(
+            `Timeout: el preprocesado no respondió en ${STEP_TIMEOUT_MINUTES} minutos`,
+          );
         }
         return "cancelled";
       }
@@ -808,7 +1234,7 @@ export default function ProjectDetail() {
           ...prev,
           [docId]: t("project.preprocessingImproved"),
         }));
-        refreshDocs();
+        refreshAll();
         setSegments((prev) => {
           const n = { ...prev };
           delete n[docId];
@@ -821,7 +1247,7 @@ export default function ProjectDetail() {
           ...prev,
           [docId]: t("project.preprocessingOK"),
         }));
-        refreshDocs();
+        refreshAll();
         return "success";
       }
       return fail(
@@ -895,7 +1321,7 @@ export default function ProjectDetail() {
             Authorization: `Bearer ${localStorage.getItem("access_token")}`,
           },
         })
-          .then(() => refreshDocs())
+          .then(() => refreshAll())
           .catch(() => {});
       }
       return;
@@ -941,31 +1367,96 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Render classified XML text: tags as tiny labels, content colored per type. */
-  function renderClassifiedText(xmlText: string): string {
-    if (!xmlText) return '<span style="color:#484F58">Sin clasificacion</span>';
-    var tagColors: Record<string, string> = {
-      baseline_data: "#3FB950",
-      interviewer_context: "#D29922",
-      processual_data: "#58A6FF",
-      contextual_data: "#8B949E",
-    };
-    var escaped = xmlText
+  /** Canonical Glaser classes (the only five the backend stores). */
+  const GLASER_TAG_COLORS: Record<string, string> = {
+    baseline_data: "#3FB950",
+    properline_data: "#58A6FF",
+    interpreted_data: "#A371F7",
+    vague_data: "#8B949E",
+    document_context: "#D29922",
+  };
+
+  /** Taxonomía vieja que aún puede aparecer en datos clasificados antes del renombrado. */
+  const LEGACY_GLASER_ALIASES: Record<string, string> = {
+    processual_data: "baseline_data",
+    contextual_data: "vague_data",
+    // `interviewer_context` era el nombre anterior de `document_context`.
+    interviewer_context: "document_context",
+  };
+
+  function canonicalGlaserTag(tag: string): string {
+    return LEGACY_GLASER_ALIASES[tag] || tag;
+  }
+
+  function escapeHtml(value: string): string {
+    return value
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-    var tagNames = Object.keys(tagColors);
+  }
+
+  /** Render one classified block (shared shape for XML and flattened blocks). */
+  function renderGlaserBlockHtml(rawTag: string, inner: string): string {
+    const tag = canonicalGlaserTag(rawTag);
+    const color = GLASER_TAG_COLORS[tag] || "#8B949E";
+    return (
+      '<div style="margin:6px 0;padding:6px 8px;border-left:3px solid ' +
+      color +
+      ";background:" +
+      color +
+      '11;border-radius:0 4px 4px 0">' +
+      '<div style="margin-bottom:3px">' +
+      '<span style="font-size:9px;color:' +
+      color +
+      ';opacity:0.6;font-weight:600">' +
+      tag +
+      "</span>" +
+      "</div>" +
+      '<span style="color:' +
+      color +
+      ';line-height:1.6">' +
+      inner +
+      "</span>" +
+      "</div>"
+    );
+  }
+
+  /** Render the flattened `glaser_blocks` returned by the documents endpoint. */
+  function renderGlaserBlocks(blocks: GlaserBlock[]): string {
+    if (!blocks.length) {
+      return '<span style="color:#484F58">Sin clasificacion</span>';
+    }
+    return blocks
+      .map((block) =>
+        renderGlaserBlockHtml(
+          block.class,
+          escapeHtml(block.text).replace(/\n/g, "<br>"),
+        ),
+      )
+      .join("");
+  }
+
+  /** Render classified XML text: tags as tiny labels, content colored per type. */
+  function renderClassifiedText(xmlText: string): string {
+    if (!xmlText) return '<span style="color:#484F58">Sin clasificacion</span>';
+    // Datos clasificados con la taxonomía vieja: se muestran como su categoría
+    // canónica equivalente en vez de como tag crudo sin color.
+    var normalizedXml = xmlText.replace(
+      /<\/?(processual_data|contextual_data|interviewer_context)[^>]*>/g,
+      (match, name: string) =>
+        (match.indexOf("</") === 0 ? "</" : "<") +
+        canonicalGlaserTag(name) +
+        ">",
+    );
+    var escaped = normalizedXml
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    var tagNames = Object.keys(GLASER_TAG_COLORS);
     for (var i = 0; i < tagNames.length; i++) {
       var tag = tagNames[i];
-      var color = tagColors[tag];
       var openTag = "&lt;" + tag + "&gt;";
       var closeTag = "&lt;/" + tag + "&gt;";
-      var tagLabel =
-        '<span style="font-size:9px;color:' +
-        color +
-        ';opacity:0.6;font-weight:600">' +
-        tag +
-        "</span>";
       var parts = escaped.split(openTag);
       var result2 = parts[0];
       for (var j = 1; j < parts.length; j++) {
@@ -973,22 +1464,7 @@ export default function ProjectDetail() {
         if (closeIdx >= 0) {
           var inner = parts[j].substring(0, closeIdx);
           var after = parts[j].substring(closeIdx + closeTag.length);
-          result2 +=
-            '<div style="margin:6px 0;padding:6px 8px;border-left:3px solid ' +
-            color +
-            ";background:" +
-            color +
-            '11;border-radius:0 4px 4px 0">' +
-            '<div style="margin-bottom:3px">' +
-            tagLabel +
-            "</div>" +
-            '<span style="color:' +
-            color +
-            ';line-height:1.6">' +
-            inner +
-            "</span>" +
-            "</div>" +
-            after;
+          result2 += renderGlaserBlockHtml(tag, inner) + after;
         } else {
           result2 += openTag + parts[j];
         }
@@ -996,6 +1472,17 @@ export default function ProjectDetail() {
       escaped = result2;
     }
     return escaped;
+  }
+
+  /** Prefer flattened blocks, fall back to parsing the classified XML. */
+  function renderClassified(doc: Document): string {
+    const blocks = doc.glaser_blocks;
+    if (blocks && blocks.length) return renderGlaserBlocks(blocks);
+    return renderClassifiedText(
+      doc.texto_clasificado ||
+        ((doc as any).metadatos && (doc as any).metadatos.texto_clasificado) ||
+        "",
+    );
   }
 
   /** Classify a single document via Glaser classifier (3-step + validator loop) */
@@ -1019,9 +1506,11 @@ export default function ProjectDetail() {
       );
       return;
     }
-    if (estado !== "preprocesado") {
+    // Classify-first: the classifier reads the preprocessed TEXT, so
+    // `preprocesado` is a valid input state (segments are created afterwards).
+    if (!["preprocesado", "segmentado", "clasificado"].includes(estado)) {
       fail(
-        `No se puede clasificar: estado actual "${doc.estado}". Se esperaba "preprocesado".`,
+        `No se puede clasificar: estado actual "${doc.estado}". El documento debe estar preprocesado primero (se esperaba "preprocesado").`,
       );
       return;
     }
@@ -1039,7 +1528,7 @@ export default function ProjectDetail() {
             Authorization: `Bearer ${localStorage.getItem("access_token")}`,
           },
         })
-          .then(() => refreshDocs())
+          .then(() => refreshAll())
           .catch(() => {});
       }
       return;
@@ -1085,7 +1574,9 @@ export default function ProjectDetail() {
 
       if (res.task_id) {
         punctTaskRef.current = res.task_id;
-        for (let poll = 0; poll < 60 && !abortRef.current; poll++) {
+        // Misma ventana global que el resto de pasos.
+        const maxPolls = Math.ceil(STEP_TIMEOUT_MS / 2000);
+        for (let poll = 0; poll < maxPolls && !abortRef.current; poll++) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
             const ts = await getTaskStatus(res.task_id);
@@ -1101,7 +1592,8 @@ export default function ProjectDetail() {
                 return;
               }
               markAgentDone("clasificado");
-              await refreshDocs();
+              invalidateDocCaches(docId);
+              await refreshAll();
               setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
               return;
             }
@@ -1118,7 +1610,9 @@ export default function ProjectDetail() {
           }
         }
         if (!abortRef.current) {
-          fail("Timeout: la clasificación no respondió en 120s.");
+          fail(
+            `Timeout: la clasificación no respondió en ${STEP_TIMEOUT_MINUTES} minutos.`,
+          );
         }
         return;
       }
@@ -1133,7 +1627,8 @@ export default function ProjectDetail() {
 
       // Synchronous completion — no task_id
       markAgentDone("clasificado");
-      await refreshDocs();
+      invalidateDocCaches(docId);
+      await refreshAll();
       setPunctStatus((prev) => ({ ...prev, [docId]: "✓ Clasificado" }));
     } catch (e: any) {
       if (!abortRef.current) {
@@ -1167,7 +1662,11 @@ export default function ProjectDetail() {
     // Per-doc agents: no-op.
   }
 
-  /** Route action based on doc estado */
+  /** Route action based on doc estado.
+   *
+   *  The card header no longer shows a "next step" button (the user moves with
+   *  `<` / `>` and runs from the empty step). This remains as the retry/error
+   *  entry point and as a fallback for the first missing step. */
   async function handleDocAction(docId: string) {
     const d = docs.find((x) => x.id === docId);
     if (!d) {
@@ -1203,7 +1702,7 @@ export default function ProjectDetail() {
     // A document marked 'error' by the state machine has no retry path in the
     // pipeline; route to the restore flow instead of a no-op "✓ Completo".
     if (estado === "error") {
-      return handleRestoreStep(docId);
+      return handleRestoreError(docId);
     }
 
     // Cancel running operation (modular)
@@ -1212,28 +1711,17 @@ export default function ProjectDetail() {
       return;
     }
 
-    // Route action based on document estado
-    switch (estado) {
-      case "crudo":
-        return handlePunctuate(docId);
-      case "preprocesado":
-        return handleClassify(docId);
-      case "clasificado":
-        return handleSegment(docId);
-      case "segmentado":
-        // Trigger incident extraction (F2.3) via the pipeline orchestrator
-        return handleExtractIncidents(docId);
-      default:
-        showErrorToast(`Acción no disponible para el estado "${d.estado}"`);
-        return;
-    }
+    // Fallback: run the first step without data (classify-first order).
+    const nextIdx = completedThrough(d) + 1;
+    if (nextIdx < DOC_STEPS.length) return runStep(d, DOC_STEPS[nextIdx]);
+    showErrorToast(`Acción no disponible para el estado "${d.estado}"`);
   }
 
   /** Trigger F2.3: extract patterns & incidents */
   async function handleExtractIncidents(docId: string) {
     abortRef.current = false;
     setPunctRunning(docId);
-    runningOp.current = { docId, op: "segment" as const };
+    runningOp.current = { docId, op: "extract" };
     try {
       const outcome = await runDocTask(
         docId,
@@ -1250,14 +1738,16 @@ export default function ProjectDetail() {
         setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
         showErrorToast(message);
       } else if (outcome === "timeout") {
-        const message =
-          "Timeout: la extracción de incidentes no respondió en 6 minutos.";
+        const message = `Timeout: la extracción de incidentes no respondió en ${STEP_TIMEOUT_MINUTES} minutos.`;
         setDocError((prev) => ({
           ...prev,
           [docId]: { action: "extract", message },
         }));
         setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
         showErrorToast(message);
+      } else {
+        // New incidents: drop the cache so an open panel refetches them.
+        invalidateDocCaches(docId);
       }
     } catch (e: any) {
       if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
@@ -1283,7 +1773,7 @@ export default function ProjectDetail() {
       if (outcome === "failed" || outcome === "timeout") {
         const message =
           outcome === "timeout"
-            ? "Timeout: la segmentación no respondió en 6 minutos."
+            ? `Timeout: la segmentación no respondió en ${STEP_TIMEOUT_MINUTES} minutos.`
             : "La segmentación falló en el worker. Revisa los logs de worker-nlp.";
         setDocError((prev) => ({
           ...prev,
@@ -1291,6 +1781,9 @@ export default function ProjectDetail() {
         }));
         setPunctStatus((prev) => ({ ...prev, [docId]: "❌ " + message }));
         showErrorToast(message);
+      } else {
+        // Segments changed: drop the cache so the panel refetches them.
+        invalidateDocCaches(docId);
       }
     } catch (e: any) {
       if (!abortRef.current) showErrorToast("Error: " + (e.message || ""));
@@ -1305,11 +1798,15 @@ export default function ProjectDetail() {
     }
   }
 
-  /** Restore one step back based on current estado.
-   *  Chain: crudo -> preprocesado -> clasificado -> segmentado -> ...
-   *  Each step undoes exactly one layer, clears stage_progress, and
-   *  syncs the sidebar agent status. */
-  async function handleRestoreStep(docId: string) {
+  /** Restore a document the state machine marked as `error`.
+   *
+   *  This is the error-recovery path only: it is reached from
+   *  `handleDocAction` (and the header button) exclusively for
+   *  `estado === "error"`. The general per-document ↻ restore was replaced by
+   *  the per-state redo (`handleRedoStep`), which spells out what it erases.
+   *  Chain (classify-first): crudo → preprocesado → clasificado → segmentado →
+   *  incidentes. Each branch undoes exactly one layer. */
+  async function handleRestoreError(docId: string) {
     if (!(await safeConfirm(t("project.restoreOriginalConfirm")))) return;
     try {
       const doc = docs.find((d) => d.id === docId);
@@ -1324,20 +1821,25 @@ export default function ProjectDetail() {
         }).catch(() => {});
         clearAgentsFrom("preprocesado");
       } else if (doc.estado === "clasificado") {
+        // Classification lives in the text metadata (and later in the segment
+        // tags, which do not exist yet at this point): back to preprocesado.
         await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
           method: "DELETE",
           headers: { Authorization: token },
         }).catch(() => {});
         clearAgentsFrom("clasificado");
       } else if (doc.estado === "segmentado") {
-        await deleteDocumentSegments(docId).catch(() => {});
+        // Keep the Glaser tags: drop segments only, back to clasificado.
+        await deleteDocumentSegments(docId, {
+          keepClassification: true,
+        }).catch(() => {});
         clearAgentsFrom("segmentado");
       } else if (
         doc.estado === "incidentes_extraidos" ||
         doc.estado === "procesado" ||
         doc.estado === "listo"
       ) {
-        // For post-segmentation states: restore to crudo (full reset)
+        // For post-extraction states: restore to crudo (full reset)
         await restoreDocumentOriginal(docId);
         await deleteDocumentSegments(docId).catch(() => {});
         await fetch(`/api/v1/documents/${docId}/classify-glaser`, {
@@ -1355,7 +1857,7 @@ export default function ProjectDetail() {
         delete n[docId];
         return n;
       });
-      refreshDocs();
+      refreshAll();
     } catch (e: any) {
       showErrorToast("Error: " + (e.message || ""));
     }
@@ -1450,14 +1952,86 @@ export default function ProjectDetail() {
     return clone;
   }
 
+  /** 404 from `DELETE /agent-outputs/{id}`: someone else already removed it. */
+  function memoAlreadyGone(e: any) {
+    if (e?.status === 404) return true;
+    return /no encontrado|not found/i.test(e?.message || "");
+  }
+
   async function handleDeleteMemo(memoId: string) {
-    const token = localStorage.getItem("access_token");
-    await fetch(`/api/v1/agent-outputs/${memoId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setAgentMemos((prev) => prev.filter((m) => m.id !== memoId));
-    showToast(t("project.memoDeleted"));
+    if (!id) return;
+    if (entitiesLocked) {
+      showToast(t("memo.pipelineBusy"), "error");
+      return;
+    }
+    try {
+      await deleteAgentOutput(memoId);
+      setAgentMemos((prev) => prev.filter((m) => m.id !== memoId));
+      showToast(t("project.memoDeleted"));
+      refreshMemos();
+    } catch (e: any) {
+      // Already gone (404): the end state is the one the user asked for.
+      if (memoAlreadyGone(e)) {
+        setAgentMemos((prev) => prev.filter((m) => m.id !== memoId));
+        showToast(t("project.memoDeleted"));
+        refreshMemos();
+        return;
+      }
+      showToast(`${t("memo.deleteError")}: ${e?.message || ""}`, "error");
+    }
+  }
+
+  /** Batch delete, one request per memo: one failure must not stop the rest. */
+  async function handleDeleteMemos(memoIds: string[]) {
+    if (!id) return;
+    if (entitiesLocked) {
+      showToast(t("memo.pipelineBusy"), "error");
+      return;
+    }
+    const removed: string[] = [];
+    for (const memoId of memoIds) {
+      try {
+        await deleteAgentOutput(memoId);
+        removed.push(memoId);
+      } catch (e: any) {
+        // A memo someone else already deleted is not a failure.
+        if (memoAlreadyGone(e)) removed.push(memoId);
+        // Otherwise counted below; a failed memo stays in the list.
+      }
+    }
+    if (removed.length > 0) {
+      const gone = new Set(removed);
+      setAgentMemos((prev) => prev.filter((m) => !gone.has(m.id)));
+    }
+    const failed = memoIds.length - removed.length;
+    if (failed > 0) {
+      showToast(
+        `${t("memo.deleteError")}: ${failed}/${memoIds.length}`,
+        "error",
+      );
+    } else {
+      showToast(t("memo.deletedCount", { n: removed.length }));
+    }
+    refreshMemos();
+  }
+
+  /** Deletes every agent memo (all families) in one transactional call. */
+  async function handleDeleteAllMemos() {
+    if (!id) return;
+    if (entitiesLocked) {
+      showToast(t("memo.pipelineBusy"), "error");
+      return;
+    }
+    try {
+      const r = await deleteAgentMemos(id);
+      setAgentMemos([]);
+      refreshMemos();
+      showToast(t("memo.deletedCount", { n: r.deleted }));
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (/pipeline/i.test(msg)) showToast(t("memo.pipelineBusy"), "error");
+      else showToast(`${t("memo.deleteError")}: ${msg}`, "error");
+    }
   }
 
   async function handleUpdateMemo(
@@ -1497,35 +2071,51 @@ export default function ProjectDetail() {
 
   // ── Save edited document text ──
   async function saveDocText(docId: string) {
-    const newText = textEdits[docId];
-    if (newText === undefined) return;
+    const edit = textEdits[docId];
+    if (!edit) return;
     setTextSaving((prev) => ({ ...prev, [docId]: true }));
     try {
-      var field = "texto_original";
-      if (textViewMode === "preprocessed") field = "texto_preprocesado";
-      else if (textViewMode === "classified") field = "texto_clasificado";
-      await fetch(`/api/v1/documents/${docId}/text`, {
+      // The field follows the step the edit STARTED on, not the step being
+      // viewed now: navigating away while editing must not misroute the write.
+      const field =
+        edit.step === "preprocessed" ? "texto_preprocesado" : "texto_original";
+      const res = await fetch(`/api/v1/documents/${docId}/text`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
-        body: JSON.stringify({ [field]: newText }),
+        body: JSON.stringify({ [field]: edit.text }),
       });
+      // `fetch` does not throw on 4xx: without this the save looked successful
+      // while the backend had rejected the field.
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail || `HTTP ${res.status}`);
+      }
       setTextEdits((prev) => {
         const next = { ...prev };
         delete next[docId];
         return next;
       });
-      refreshDocs();
+      await refreshAll();
     } catch (e: any) {
-      showErrorToast("Error al guardar: " + (e.message || ""));
+      showErrorToast(t("project.textSaveError") + ": " + (e?.message || ""));
     } finally {
       setTextSaving((prev) => ({ ...prev, [docId]: false }));
     }
   }
 
   // ── Modification callback ───────────────────
+
+  /** Re-reads the memo list (the truth is the backend, not the local guess). */
+  async function refreshMemos() {
+    if (!id) return;
+    try {
+      const r = await getAgentMemos(id);
+      setAgentMemos(r.memos || []);
+    } catch {}
+  }
 
   function handleMemoModified() {
     if (id) {
@@ -1584,7 +2174,12 @@ export default function ProjectDetail() {
     }, 5000);
 
     // ── Check for work BEFORE starting workers ──
-    const isContinue = !forceAll && docsNeedSegment === 0 && docsNeedAgents > 0;
+    // A classify-only project is also a continuation: segmentation is done but
+    // data-management work remains, so this is not a fresh start.
+    const isContinue =
+      !forceAll &&
+      docsNeedSegment === 0 &&
+      (docsNeedClassify > 0 || docsNeedAgents > 0);
 
     // Fetch pipeline log first to determine work
     const freshLog = await getPipelineLog(id!).catch(() => null);
@@ -1650,6 +2245,9 @@ export default function ProjectDetail() {
     }
 
     let pipelineOk = false;
+    // Si el orquestador no despachó ninguna tarea nueva, no hay progreso que
+    // esperar (todos los docs ya están en un estado terminal).
+    let dispatched = false;
     setPipelineFailed(false);
 
     try {
@@ -1720,8 +2318,19 @@ export default function ProjectDetail() {
           setPipelineMsg(t("project.pipelinePhaseB"));
         }
 
-        // Poll until complete
-        for (let poll = 0; poll < 120 && !abortRef.current; poll++) {
+        dispatched =
+          ((res.task_ids?.segment as unknown[])?.length ?? 0) > 0 ||
+          ((res.task_ids?.agents as unknown[])?.length ?? 0) > 0 ||
+          Boolean((res as any).task_ids?.phase_b);
+        if (!dispatched) setPipelineMsg(t("project.pipelineAllProcessed"));
+
+        // Poll until complete — mismo techo global que el resto de pasos.
+        const maxPipelinePolls = Math.ceil(STEP_TIMEOUT_MS / 5000);
+        for (
+          let poll = 0;
+          dispatched && poll < maxPipelinePolls && !abortRef.current;
+          poll++
+        ) {
           await new Promise((r) => setTimeout(r, 5000));
           const status = await getPipelineLog(id!).catch(() => null);
           if (status) {
@@ -1798,7 +2407,7 @@ export default function ProjectDetail() {
         resetStages();
         setPipelineMsg(t("project.pipelineCancelled"));
       }
-    } else if (pipelineOk) {
+    } else if (pipelineOk && dispatched) {
       // Pipeline completed normally
       updateStage("data_management", "done");
       updateStage("open_coding", "done");
@@ -1833,21 +2442,188 @@ export default function ProjectDetail() {
         .then(setPipelineLog)
         .catch(() => {});
     } catch (err: any) {
-      alert(err.message);
+      showErrorToast(err?.message || t("common.error"));
     }
     e.target.value = "";
   }
 
-  async function handleDeleteAllDocs() {
-    if (!id) return;
-    if (!(await safeConfirm(t("project.deleteAllDocsConfirm")))) return;
+  /** Documents the batch actions apply to: the ticked ones, or all of them. */
+  function batchTargets(): Document[] {
+    if (selectedDocs.size === 0) return docs;
+    return docs.filter((d) => selectedDocs.has(d.id));
+  }
+
+  /** The selection covers the whole list, so the project-wide endpoint is the
+   *  exact equivalent of the per-document one. */
+  function isFullSelection(): boolean {
+    return selectedDocs.size > 0 && selectedDocs.size === docs.length;
+  }
+
+  /** True while this interview has a step in flight, whether the op was
+   *  dispatched from this tab (`runningOps` / `punctRunning`) or the server
+   *  reports it through `estado` after a reload. */
+  function docRunning(doc: Document): boolean {
+    return (
+      punctRunning === doc.id ||
+      !!runningOps[doc.id] ||
+      IN_FLIGHT_DOC_STATES.includes(String(doc.estado ?? "").trim())
+    );
+  }
+
+  /** True while ANY processing is in flight in the project: pipeline or phase
+   *  runs, agent tasks on the server, a per-doc op, or the batch run.
+   *  Destructive controls (redo, delete) hide until this goes quiet, otherwise
+   *  they race with the worker that is writing the very data they erase. */
+  function anyStepRunning(): boolean {
+    return (
+      entitiesLocked ||
+      runningAgentIds.size > 0 ||
+      punctRunning !== null ||
+      Object.keys(runningOps).length > 0 ||
+      batchRun !== null ||
+      docsBusy
+    );
+  }
+
+  /** `anyStepRunning` plus the interviews the SERVER still reports in flight.
+   *  After a reload there is no local op state, so only `estado` remembers the
+   *  worker. Batch destructive controls use this: they rewrite several
+   *  documents at once, so one busy card is reason enough to stay away. */
+  function anyDocProcessing(): boolean {
+    return anyStepRunning() || docs.some((d) => docRunning(d));
+  }
+
+  /** Targets the batch-run button would actually fire on right now: the ticked
+   *  documents (or all of them) that sit exactly on the viewed step and are
+   *  not already running. */
+  function runTargets(): Document[] {
+    const step = DOC_STEPS[globalStepBase()];
+    if (step === "original") return [];
+    return batchTargets().filter(
+      (d) =>
+        isOnEmptyStep(d) &&
+        viewedStepOf(d) === step &&
+        punctRunning !== d.id &&
+        !runningOps[d.id],
+    );
+  }
+
+  /** Run the viewed step on every target sitting exactly on it.
+   *
+   *  Sequential on purpose: each step spawns worker tasks and firing them all
+   *  at once floods the queue. Documents that already have the step, are behind
+   *  it or have an op in flight are skipped without a word. */
+  async function handleRunOnTargets() {
+    if (batchRun) return;
+    const step = DOC_STEPS[globalStepBase()];
+    if (step === "original") return;
+    const targets = runTargets();
+    if (targets.length === 0) return;
+    setBatchRun({ done: 0, total: targets.length });
     try {
-      const result = await deleteAllDocuments(id);
-      showToast(t("project.deleteAllDocsSuccess", { count: result.count }));
-      refreshDocs();
-      resetStages();
-    } catch (err: any) {
-      alert(err.message);
+      for (const doc of targets) {
+        try {
+          await runStep(doc, step);
+        } catch {
+          // `runStep` reports its own error: one failure must not stop the batch.
+        }
+        setBatchRun((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+      }
+    } finally {
+      setBatchRun(null);
+    }
+  }
+
+  /** Undo, on every target document, only its LAST completed step.
+   *
+   *  This is the batch form of the per-card ↺ redo (`handleRedoStep`): each
+   *  interview walks back exactly one layer, so a mixed selection stays mixed
+   *  — a segmented document goes back to `clasificado`, a classified one to
+   *  `preprocesado` — instead of every card collapsing to `crudo`.
+   *  Documents that only have the uploaded file are skipped: `original` is the
+   *  one step that cannot be undone. */
+  async function handleResetLastStep() {
+    if (!id || anyDocProcessing()) return;
+    const targets = batchTargets()
+      .map((doc) => ({ doc, step: DOC_STEPS[completedThrough(doc)] }))
+      .filter((t) => t.step !== "original");
+    if (targets.length === 0) {
+      showToast(t("project.resetNothingToUndo"));
+      return;
+    }
+    const question = isFullSelection()
+      ? t("project.resetDocsConfirm")
+      : t("project.resetSelectedConfirm", { count: targets.length });
+    if (!(await safeConfirm(question))) return;
+    setDocsBusy(true);
+    setResetRun({ done: 0, total: targets.length });
+    let failed = 0;
+    try {
+      // Sequential on purpose: one erase per document, same as the per-card ↺.
+      for (const { doc, step } of targets) {
+        try {
+          await eraseStep(doc, step);
+        } catch {
+          failed += 1; // one failure must not stop the batch
+        }
+        setResetRun((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+      }
+      // Drop the caches that no longer reflect the server state.
+      const touched = new Set(targets.map(({ doc }) => doc.id));
+      setSegments((prev) => {
+        const n = { ...prev };
+        touched.forEach((docId) => delete n[docId]);
+        return n;
+      });
+      setDocError((prev) => {
+        const n = { ...prev };
+        touched.forEach((docId) => delete n[docId]);
+        return n;
+      });
+      await refreshAll();
+      getPipelineLog(id)
+        .then(setPipelineLog)
+        .catch(() => {});
+      if (failed > 0)
+        showErrorToast(
+          `${t("project.resetDocsError")} (${failed}/${targets.length})`,
+        );
+      else showToast(t("project.resetDocsSuccess", { count: targets.length }));
+    } catch (e: any) {
+      showErrorToast(
+        t("project.resetDocsError") + (e?.message ? ": " + e.message : ""),
+      );
+    } finally {
+      setResetRun(null);
+      setDocsBusy(false);
+    }
+  }
+
+  async function handleDeleteSelected() {
+    // Re-read at click time: a run may have started after this render.
+    if (!id || anyDocProcessing()) return;
+    const all = isFullSelection();
+    const count = all ? docs.length : selectedDocs.size;
+    const question = all
+      ? t("project.deleteAllDocsConfirm")
+      : t("project.deleteSelectedConfirm", { count });
+    if (!(await safeConfirm(question))) return;
+    setDocsBusy(true);
+    try {
+      if (all) {
+        await deleteAllDocuments(id);
+        resetStages();
+      } else {
+        for (const docId of [...selectedDocs]) await deleteDocument(docId);
+      }
+      setSelectedDocs(new Set());
+      setGlobalStep(null);
+      await refreshAll();
+      showToast(t("project.deleteAllDocsSuccess", { count }));
+    } catch (e: any) {
+      showErrorToast(t("projects.deleteError") + (e?.message ? e.message : ""));
+    } finally {
+      setDocsBusy(false);
     }
   }
 
@@ -1943,22 +2719,262 @@ export default function ProjectDetail() {
 
   const logSummary = pipelineLog?.summary;
   const docsNeedSegment = logSummary?.need_segment ?? 0;
+  const docsNeedClassify = logSummary?.need_classify ?? 0;
   const docsNeedAgents = logSummary?.need_agents ?? 0;
   const docsDone = logSummary?.done ?? 0;
-  const docsPendientes = docsNeedSegment + docsNeedAgents;
+  const docsPendientes = docsNeedSegment + docsNeedClassify + docsNeedAgents;
   const pipelineParcial = docsDone > 0 && docsPendientes > 0;
   const playgroundReady = logSummary?.playground_ready ?? cats.length > 0;
 
-  // Next pipeline stage (dynamic, from PIPELINE_STAGES)
-  const nextStageKey = docsNeedSegment > 0 ? "data_management" : "open_coding";
+  // Next pipeline stage (dynamic, from PIPELINE_STAGES). Classification is a
+  // data_management task, so docs that only need classify keep it selected.
+  const nextStageKey =
+    docsNeedSegment > 0 || docsNeedClassify > 0
+      ? "data_management"
+      : "open_coding";
   const nextStage = PIPELINE_STAGES.find((s) => s.key === nextStageKey)!;
   const nextStageCount =
-    nextStageKey === "data_management" ? docsNeedSegment : docsNeedAgents;
+    nextStageKey === "data_management"
+      ? docsNeedSegment + docsNeedClassify
+      : docsNeedAgents;
 
-  function getDocLog(docId: string): DocPipelineLog | undefined {
-    return pipelineLog?.documents.find((d) => d.document_id === docId);
+  function getDocLog(docId: string): ExtendedDocLog | undefined {
+    return pipelineLog?.documents.find((d) => d.document_id === docId) as
+      ExtendedDocLog | undefined;
   }
 
+  // ── Per-interview step model (classify-first) ─────────────────
+  // Steps: original → preprocessed → classified → segmented → incidents.
+  // A missing step stops the chain: that gap is what the project-level
+  // inconsistency banner surfaces.
+
+  /** Human label for a step, in the active locale. */
+  function stepLabel(step: DocStepKey): string {
+    return t(STEP_LABEL_KEYS[step]);
+  }
+
+  /** ¿Existe dato para este paso de esta entrevista? */
+  function hasStep(doc: Document, step: DocStepKey): boolean {
+    const log = getDocLog(doc.id);
+    const estado = String(doc.estado ?? "").trim();
+    switch (step) {
+      case "original":
+        return true;
+      case "preprocessed":
+        // The automatic pipeline can segment straight from `crudo`, so a doc
+        // past preprocessing counts even without `texto_preprocesado` (the
+        // view falls back to the extracted text).
+        return (
+          !!(doc as any).texto_preprocesado ||
+          PREPROCESSED_ESTADOS.includes(estado)
+        );
+      case "classified":
+        // Backend flag wins; otherwise derive from the stored classification.
+        return (
+          log?.has_classification ??
+          (!!doc.glaser_blocks?.length ||
+            !!(doc as any).texto_clasificado ||
+            // Classification may live only in `segmentos.tipo_dato_glaser`.
+            !!segments[doc.id]?.some((s) => !!s.tipo_dato_glaser))
+        );
+      case "segmented":
+        return hasSegments(doc);
+      case "incidents":
+        return (
+          (log?.incidents_count ?? 0) > 0 ||
+          INCIDENT_TERMINAL_ESTADOS.includes(estado)
+        );
+    }
+  }
+
+  /** Highest step index such that steps 0..i are ALL present.
+   *  A gap stops progress — that is what makes inconsistencies visible. */
+  function completedThrough(doc: Document): number {
+    let last = 0;
+    for (let i = 0; i < DOC_STEPS.length; i++) {
+      if (!hasStep(doc, DOC_STEPS[i])) return i - 1;
+      last = i;
+    }
+    return last;
+  }
+
+  /** Clamp the shared override to [0, completedThrough + 1]. */
+  function clampedStepIndex(doc: Document): number {
+    const through = completedThrough(doc);
+    const maxIdx = Math.min(through + 1, DOC_STEPS.length - 1);
+    const raw = globalStep ?? through;
+    return Math.max(0, Math.min(raw, maxIdx));
+  }
+
+  /** Step currently shown for this interview (last run step by default). */
+  function viewedStepOf(doc: Document): DocStepKey {
+    return DOC_STEPS[clampedStepIndex(doc)];
+  }
+
+  /** True when the user moved past the last step that has data: the only
+   *  place where the run button is allowed to appear. */
+  function isOnEmptyStep(doc: Document): boolean {
+    return clampedStepIndex(doc) === completedThrough(doc) + 1;
+  }
+
+  /** Editable text of one of the two plain-text steps. */
+  function stepTextRaw(doc: Document, step: DocStepKey): string {
+    if (step === "preprocessed")
+      return (doc as any).texto_preprocesado || doc.texto_extraido || "";
+    return (doc as any).texto_original || doc.texto_extraido || "";
+  }
+
+  /** Raw text of a text step, escaped for `dangerouslySetInnerHTML`. */
+  function stepTextHtml(doc: Document, step: DocStepKey): string {
+    const raw = stepTextRaw(doc, step);
+    if (!raw)
+      return `<span style="color:#484F58">${escapeHtml(t("project.noTextAvailable"))}</span>`;
+    return escapeHtml(raw).replace(/\n/g, "<br>");
+  }
+
+  /** The only step whose text the editor owns: the LAST of the two text steps
+   *  that has data. Editing the raw text after preprocessing would leave a
+   *  second, stale copy behind, so the older one stays read-only. */
+  function textEditStepOf(doc: Document): "original" | "preprocessed" {
+    return hasStep(doc, "preprocessed") ? "preprocessed" : "original";
+  }
+
+  /** Why the editor may not open right now, or `null` when it may.
+   *
+   *  The editor belongs to the two steps that precede classification. Once the
+   *  text is classified, `glaser_blocks` carries character offsets into this
+   *  very string: editing underneath them would silently invalidate the
+   *  classification, so the supported way back is the ↺ redo of that step. */
+  function textEditBlockedReason(doc: Document): string | null {
+    if (hasStep(doc, "classified"))
+      return t("project.textEditLockedClassified");
+    if (docRunning(doc)) return t("project.textEditLockedRunning");
+    return null;
+  }
+
+  /** Highest step index reachable in the current view. Per-document chains are
+   *  clamped to their own `completedThrough + 1`, so the global navigator must
+   *  not promise a step that no card can actually display. */
+  function globalStepMax(): number {
+    const last = DOC_STEPS.length - 1;
+    if (docs.length === 0) return last;
+    return Math.max(
+      ...docs.map((d) => Math.min(completedThrough(d) + 1, last)),
+    );
+  }
+
+  /** Step index the global navigator points at. In auto mode it is the MOST
+   *  advanced interview: then `<` and `>` never move a card against the arrow. */
+  function globalStepBase(): number {
+    const max = globalStepMax();
+    const base =
+      globalStep !== null
+        ? globalStep
+        : docs.length === 0
+          ? 0
+          : Math.max(...docs.map((d) => clampedStepIndex(d)));
+    return Math.max(0, Math.min(base, max));
+  }
+
+  /** Move the viewed step of ALL interviews at once (panel-level navigator).
+   *  Each card still clamps to its own chain, so a document that is behind
+   *  lands on its first empty step — which is exactly where its run button is. */
+  function stepNavAll(delta: number) {
+    const next = Math.max(
+      0,
+      Math.min(globalStepBase() + delta, globalStepMax()),
+    );
+    setGlobalStep(next);
+    const step = DOC_STEPS[next];
+    if (step !== "classified" && step !== "segmented" && step !== "incidents")
+      return;
+    // Show the data: stepping through implies looking at it.
+    docs.forEach((d) => {
+      if (!segments[d.id]) loadSegments(d.id);
+    });
+  }
+
+  /** Run the agent that produces a given step for one interview. */
+  function runStep(doc: Document, step: DocStepKey) {
+    if (step === "preprocessed") return handlePunctuate(doc.id);
+    if (step === "classified") return handleClassify(doc.id);
+    if (step === "segmented") return handleSegment(doc.id);
+    if (step === "incidents") return handleExtractIncidents(doc.id);
+    return undefined;
+  }
+
+  /** Erase the data produced by `step`, and implicitly everything derived from
+   *  it: the chain is linear, so a single call walks the document back one
+   *  layer. This is the ONLY place that spells out what "undo a step" means;
+   *  the per-card ↺ (`handleRedoStep`) and the batch reset both go through it,
+   *  so the two can never drift apart again. */
+  async function eraseStep(doc: Document, step: DocStepKey) {
+    if (step === "preprocessed") {
+      // Wipes everything: back to `crudo`.
+      return restoreDocumentOriginal(doc.id);
+    }
+    if (step === "classified") {
+      // Default DELETE also strips the classification: back to `preprocesado`.
+      return deleteDocumentSegments(doc.id);
+    }
+    if (step === "segmented") {
+      // Keep the Glaser tags: back to `clasificado`.
+      return deleteDocumentSegments(doc.id, { keepClassification: true });
+    }
+    if (step === "incidents") return deleteDocumentIncidents(doc.id);
+    return undefined;
+  }
+
+  /** Erase this interview's last step, i.e. the redo of that step.
+   *  Only one layer goes away: the erase itself cascades downstream. */
+  async function handleRedoStep(doc: Document, step: DocStepKey) {
+    if (step === "original") return; // the uploaded file is not regenerable
+    // Never race a worker that is writing the data this erases.
+    if (anyStepRunning()) return;
+    try {
+      await eraseStep(doc, step);
+    } catch (e: any) {
+      showErrorToast("Error al rehacer el paso: " + (e?.message || ""));
+      return;
+    }
+    // Drop the caches that no longer reflect the server state.
+    setSegments((prev) => {
+      const n = { ...prev };
+      delete n[doc.id];
+      return n;
+    });
+    setRedoConfirmFor(null);
+    setDocError((prev) => {
+      const n = { ...prev };
+      delete n[doc.id];
+      return n;
+    });
+    await refreshAll();
+    if (id)
+      getPipelineLog(id)
+        .then(setPipelineLog)
+        .catch(() => {});
+  }
+
+  /** Inconsistency codes for one interview.
+   *
+   * Backend codes win; if the log lacks the field we derive the two cheap
+   * ones client-side (segmented but unclassified, terminal without segments). */
+  function docInconsistencies(doc: Document): string[] {
+    const log = getDocLog(doc.id);
+    if (Array.isArray(log?.inconsistencies))
+      return log!.inconsistencies!.map(String);
+    const out: string[] = [];
+    const segmented = hasSegments(doc);
+    const estado = String(doc.estado ?? "").trim();
+    if (segmented && !hasStep(doc, "classified"))
+      out.push("missing_classified");
+    if (INCIDENT_TERMINAL_ESTADOS.includes(estado) && !segmented)
+      out.push("missing_segmented");
+    return out;
+  }
+
+  /** Segments of a document whose Glaser tag is missing or not `baseline_data`. */
   // ── Memo builder (legacy, replaced by agent-memos API) ──
 
   function buildMemosFromLog(
@@ -2023,6 +3039,13 @@ export default function ProjectDetail() {
       if (op === "segment") {
         return { text: "Segmentando…", color: "#58A6FF", bg: "#58A6FF22" };
       }
+      if (op === "extract") {
+        return {
+          text: t("project.statusExtracting"),
+          color: "#D29922",
+          bg: "#D2992222",
+        };
+      }
       return {
         text: t("project.statusPreprocessing"),
         color: "#A371F7",
@@ -2078,6 +3101,12 @@ export default function ProjectDetail() {
           text: t("project.statusSegmented"),
           color: "#58A6FF",
           bg: "#58A6FF22",
+        };
+      case "procesando":
+        return {
+          text: t("project.statusExtracting"),
+          color: "#D29922",
+          bg: "#D2992222",
         };
       case "extrayendo":
         return {
@@ -2155,6 +3184,38 @@ export default function ProjectDetail() {
 
   const hasCats = cats.length > 0;
 
+  // ── Chain inconsistencies per interview (classify-first) ──
+  // Driven by the log's `inconsistencies` codes, falling back to a local
+  // derivation when the field is absent. Grouped by reason so the banner lists
+  // every affected interview next to the step it is missing.
+  const inconsistentDocs = docs
+    .map((doc) => ({ doc, codes: docInconsistencies(doc) }))
+    .filter((x) => x.codes.length > 0);
+  // Known codes first (stable order), then any unexpected code the backend may
+  // still report — dropping those would hide an inconsistency we cannot label.
+  const inconsistencyCodes = Array.from(
+    new Set([
+      ...Object.keys(INCONSISTENCY_LABEL_KEYS),
+      ...inconsistentDocs.flatMap((x) => x.codes),
+    ]),
+  );
+  const inconsistencyGroups = inconsistencyCodes
+    .map((code) => ({
+      code,
+      docs: inconsistentDocs
+        .filter((x) => x.codes.includes(code))
+        .map((x) => x.doc),
+    }))
+    .filter((group) => group.docs.length > 0);
+
+  // El gate de codificación abierta está disponible en cuanto hay documentos
+  // procesados y todavía nadie fijó el concern principal.
+  const ocHitlReady =
+    !!ocHitl &&
+    !ocHitl.chosen_concern &&
+    (ocHitl.total_docs ?? 0) > 0 &&
+    (ocHitl.docs_processed ?? 0) > 0;
+
   return (
     <div
       style={{
@@ -2191,6 +3252,18 @@ export default function ProjectDetail() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={() => setOcHitlOpen(true)}
+              title="Decisión HITL de codificación abierta: concern principal, población y categorías centrales"
+              style={{
+                ...btnSmall,
+                fontSize: 11,
+                border: `1px solid ${ocHitlReady ? "#D29922" : "#21262D"}`,
+                color: ocHitlReady ? "#D29922" : "#8B949E",
+              }}
+            >
+              {ocHitlReady ? "◆ HITL" : "◇ HITL"}
+            </button>
             <span
               style={{
                 fontSize: 11,
@@ -2245,21 +3318,94 @@ export default function ProjectDetail() {
                             : hitlPending[0].gate_name}
               </strong>
             </span>
-            <button
-              onClick={() => setShowHITLModal(true)}
-              style={{
-                padding: "6px 16px",
-                borderRadius: 6,
-                border: "none",
-                background: "#D29922",
-                color: "#0D1117",
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {t("project.resolveButton")}
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                onClick={() => setShowHITLModal(true)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#D29922",
+                  color: "#0D1117",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {t("project.resolveButton")}
+              </button>
+              <button
+                onClick={() => setSidebarViewMode("hitl")}
+                title={t("hitlCrud.title")}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #D2992244",
+                  background: "transparent",
+                  color: "#D29922",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ⚖
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Open Coding HITL Banner ── */}
+        {ocHitlReady && hitlPending.length === 0 && (
+          <div
+            style={{
+              padding: "10px 16px",
+              marginBottom: 12,
+              borderRadius: 8,
+              background: "#A371F718",
+              border: "1px solid #A371F744",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#A371F7" }}>
+              ◆ Decisión HITL pendiente: concern principal, población y
+              categorías centrales.
+            </span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                onClick={() => setOcHitlOpen(true)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#A371F7",
+                  color: "#0D1117",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Revisar
+              </button>
+              <button
+                onClick={() => setSidebarViewMode("hitl")}
+                title={t("hitlCrud.title")}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #A371F744",
+                  background: "transparent",
+                  color: "#A371F7",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ⚖
+              </button>
+            </div>
           </div>
         )}
 
@@ -2418,7 +3564,7 @@ export default function ProjectDetail() {
                     method: "DELETE",
                     headers: { Authorization: auth },
                   });
-                  refreshDocs();
+                  refreshAll();
                   setSegments({});
                   getPipelineLog(id!)
                     .then(setPipelineLog)
@@ -3148,53 +4294,301 @@ export default function ProjectDetail() {
               gap: 8,
             }}
           >
-            <h3 style={{ margin: 0 }}>
-              {t("project.documentsHeading", { count: docs.length })}
-            </h3>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => setDocsOpen((open) => !open)}
+                aria-expanded={docsOpen}
+                title={
+                  docsOpen
+                    ? t("project.docsCollapseTitle")
+                    : t("project.docsExpandTitle")
+                }
+                style={{
+                  ...btnSmall,
+                  padding: "2px 7px",
+                  lineHeight: 1,
+                  background: "transparent",
+                  border: "0px solid #30363D",
+                }}
+              >
+                {docsOpen ? "\u25BE" : "\u25B8"}
+              </button>
+
+              {/* ── Global step navigator ──
+                  ONE control for every interview in view: `<` / `>` move
+                  the viewed step of all cards at once. Each card clamps to
+                  its own chain, so the document that is behind stops on
+                  its first empty step (where its run button lives). */}
+              {/* Only without a selection: with one, the panel works on the
+                  ticked documents instead of moving everybody. */}
+              {docs.length > 0 &&
+                (() => {
+                  const base = globalStepBase();
+                  const step = DOC_STEPS[base];
+                  const color = STEP_COLORS[step];
+                  const canPrev = base > 0;
+                  const canNext = base < globalStepMax();
+                  const navStyle: React.CSSProperties = {
+                    ...btnSmall,
+                    padding: "2px 7px",
+                    lineHeight: 1,
+                    background: "transparent",
+                    border: "1px solid #30363D",
+                  };
+                  return (
+                    <>
+                      <button
+                        onClick={() => stepNavAll(-1)}
+                        disabled={!canPrev}
+                        title={
+                          canPrev
+                            ? t("project.stepNavAllPrev")
+                            : t("project.stepAtFirst")
+                        }
+                        style={{
+                          ...navStyle,
+                          color: canPrev ? "#E6EDF3" : "#484F58",
+                          cursor: canPrev ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {"<"}
+                      </button>
+                      <span
+                        title={t("project.stepNavAllTitle", {
+                          step: stepLabel(step),
+                          index: base + 1,
+                          total: DOC_STEPS.length,
+                          count: docs.length,
+                        })}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: `${color}22`,
+                          color,
+                          border: `1px solid ${color}44`,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {STEP_ICONS[step]} {stepLabel(step)}
+                      </span>
+                      <button
+                        onClick={() => stepNavAll(1)}
+                        disabled={!canNext}
+                        title={
+                          canNext
+                            ? t("project.stepNavAllNext")
+                            : t("project.stepAtLast")
+                        }
+                        style={{
+                          ...navStyle,
+                          color: canNext ? "#E6EDF3" : "#484F58",
+                          cursor: canNext ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {">"}
+                      </button>
+                    </>
+                  );
+                })()}
+
+              {/* {docs.length > 0 && (
+                <input
+                  type="checkbox"
+                  checked={isFullSelection()}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        selectedDocs.size > 0 && !isFullSelection();
+                  }}
+                  onChange={(e) =>
+                    setSelectedDocs(
+                      e.target.checked
+                        ? new Set(docs.map((d) => d.id))
+                        : new Set(),
+                    )
+                  }
+                  title={t("project.selectAllDocs")}
+                  aria-label={t("project.selectAllDocs")}
+                  style={{
+                    margin: 0,
+                    cursor: "pointer",
+                    accentColor: "#A371F7",
+                  }}
+                />
+              )}
+              <h3 style={{ margin: 0 }}>
+                {t("project.documentsHeading", { count: docs.length })}
+              </h3> */}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               {docs.length > 0 && (
                 <>
-                  <button
-                    onClick={async () => {
-                      if (!(await safeConfirm(t("project.resetDocsConfirm"))))
-                        return;
-                      resetDocsToCrudo(id!).then(() => refreshDocs());
-                    }}
-                    style={{
-                      background: "#D2992218",
-                      border: "1px solid #D2992233",
-                      borderRadius: 6,
-                      color: "#D29922",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: "3px 10px",
-                      cursor: "pointer",
-                    }}
-                    title={t("project.resetDocsTitle")}
-                  >
-                    {t("project.resetDocsButton")}
-                  </button>
-                  <button
-                    onClick={handleDeleteAllDocs}
-                    style={{
-                      background: "#F8514918",
-                      border: "1px solid #F8514933",
-                      borderRadius: 6,
-                      color: "#F85149",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: "3px 10px",
-                      cursor: "pointer",
-                    }}
-                    title={t("project.deleteAllDocsTitle")}
-                  >
-                    {t("project.deleteAllDocsButton")}
-                  </button>
+                  {selectedDocs.size > 0 && (
+                    <>
+                      {(!anyDocProcessing() || resetRun !== null) &&
+                        (() => {
+                          // The navigator can sit on a step nobody has produced
+                          // yet (the panel moved past every card's last step).
+                          // Undo there would silently reach back into the
+                          // previous step, so the header offers only the run
+                          // button. Never applies to its own progress counter.
+                          if (
+                            resetRun === null &&
+                            !batchTargets().some((d) =>
+                              hasStep(d, DOC_STEPS[globalStepBase()]),
+                            )
+                          )
+                            return null;
+                          // Only documents with a completed step change; the
+                          // rest would be skipped, so they do not count here.
+                          const undoable = batchTargets().filter(
+                            (d) => completedThrough(d) > 0,
+                          ).length;
+                          // Every target is still `crudo`: undo would do nothing.
+                          if (undoable === 0 && resetRun === null) return null;
+                          return (
+                            <button
+                              onClick={handleResetLastStep}
+                              disabled={docsBusy}
+                              style={{
+                                background: "#D2992218",
+                                border: "1px solid #D2992233",
+                                borderRadius: 6,
+                                color: "#D29922",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                padding: "3px 10px",
+                                cursor: docsBusy ? "not-allowed" : "pointer",
+                                opacity: docsBusy ? 0.6 : 1,
+                              }}
+                              title={t(
+                                isFullSelection()
+                                  ? "project.resetDocsTitle"
+                                  : "project.resetSelectedTitle",
+                              )}
+                            >
+                              {resetRun
+                                ? `${resetRun.done}/${resetRun.total}`
+                                : `${t("project.resetDocsButton")} (${undoable})`}
+                            </button>
+                          );
+                        })()}
+                      {(!anyDocProcessing() || docsBusy) && (
+                        <button
+                          onClick={handleDeleteSelected}
+                          disabled={docsBusy}
+                          style={{
+                            background: "#F8514918",
+                            border: "1px solid #F8514933",
+                            borderRadius: 6,
+                            color: "#F85149",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "3px 10px",
+                            cursor: docsBusy ? "not-allowed" : "pointer",
+                            opacity: docsBusy ? 0.6 : 1,
+                          }}
+                          title={t(
+                            isFullSelection()
+                              ? "project.deleteAllDocsTitle"
+                              : "project.deleteSelectedTitle",
+                          )}
+                        >
+                          {`${t("project.deleteAllDocsButton")} (${selectedDocs.size})`}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </>
               )}
+              {/* Always visible: runs the viewed step on the targets that
+                  sit exactly on it, one after another. */}
+              {(() => {
+                const step = DOC_STEPS[globalStepBase()];
+                const color = STEP_COLORS[step];
+                // Documents the batch would really fire on. In auto mode
+                // (`globalStep === null`) every card clamps to its own last
+                // step with data, so none of them sits on an empty step and
+                // this is 0 until the navigator moves the view onto one.
+                const runnableCount =
+                  batchRun === null ? runTargets().length : 0;
+                const canRun = runnableCount > 0;
+                return (
+                  <button
+                    onClick={handleRunOnTargets}
+                    disabled={!canRun}
+                    title={
+                      runnableCount > 0
+                        ? t("project.stepRun", { step: stepLabel(step) })
+                        : t("project.stepRunNone", { step: stepLabel(step) })
+                    }
+                    style={{
+                      ...btnSmall,
+                      background: canRun ? color : "#30363D",
+                      color: canRun ? "#FFF" : "#484F58",
+                      border: "none",
+                      cursor: canRun ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {batchRun
+                      ? `${batchRun.done}/${batchRun.total}`
+                      : runnableCount > 0
+                        ? `▶ ${t("project.stepRunBatch", {
+                            count: runnableCount,
+                          })}`
+                        : `▶ ${t("project.stepRun", {
+                            step: stepLabel(step),
+                          })}`}
+                  </button>
+                );
+              })()}
             </div>
           </div>
-          <ul style={{ listStyle: "none", padding: 0 }}>
+
+          {/* ── Project-level inconsistency warning ──
+              One line per missing step, listing the interviews affected. */}
+          {inconsistencyGroups.length > 0 && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                borderRadius: 6,
+                background: "#D2992218",
+                border: "1px solid #D2992233",
+                color: "#D29922",
+                fontSize: 12,
+                lineHeight: 1.6,
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                ⚠️ {t("project.stepInconsistent")}
+              </div>
+              {inconsistencyGroups.map((group) => (
+                <div key={group.code}>
+                  <strong>
+                    {t(INCONSISTENCY_LABEL_KEYS[group.code] ?? group.code)}:
+                  </strong>{" "}
+                  {group.docs.map((doc) => doc.original_filename).join(", ")}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              display: docsOpen ? undefined : "none",
+            }}
+          >
             {docs.map((d) => {
               return (
                 <li
@@ -3276,6 +4670,26 @@ export default function ProjectDetail() {
                         flexWrap: "wrap",
                       }}
                     >
+                      <input
+                        type="checkbox"
+                        checked={selectedDocs.has(d.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          setSelectedDocs((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(d.id);
+                            else next.delete(d.id);
+                            return next;
+                          })
+                        }
+                        title={t("project.selectDoc")}
+                        aria-label={t("project.selectDoc")}
+                        style={{
+                          margin: 0,
+                          cursor: "pointer",
+                          accentColor: "#A371F7",
+                        }}
+                      />
                       <strong style={{ color: "#E6EDF3" }}>
                         {d.original_filename}
                       </strong>
@@ -3330,96 +4744,106 @@ export default function ProjectDetail() {
                     <div
                       style={{ display: "flex", gap: 6, alignItems: "center" }}
                     >
-                      {/* Unified per-document action button */}
+                      {/* ── Step navigator: ONE pill for the whole interview ──
+                          Shows the step being viewed (by default the LAST run
+                          step). `<` / `>` move through the chain and reveal
+                          that step's data; the run button only exists on the
+                          empty step reached by pressing `>`. */}
                       {(() => {
+                        const through = completedThrough(d);
+                        const idx = clampedStepIndex(d);
+                        const step = DOC_STEPS[idx];
+                        const isEmpty = idx === through + 1;
                         // Both sources matter: handlePunctuate records the op in
-                        // runningOps, while classify/segment set punctRunning.
-                        // Checking only one of them leaves the button inert
-                        // during single-document preprocessing.
-                        const estado = d.estado;
-                        // Worker-side estados are in flight even when no local
-                        // op/tracked task has been recorded yet (e.g. after a
-                        // reload while the worker is still running).
-                        const isInFlight =
-                          IN_FLIGHT_DOC_STATES.includes(estado);
-                        const isRunning =
-                          punctRunning === d.id ||
-                          !!runningOps[d.id] ||
-                          isInFlight;
+                        // runningOps, while classify/segment set punctRunning;
+                        // after a reload only the server-reported `estado` knows.
+                        const isRunning = docRunning(d);
+                        // Only a locally-tracked op can be revoked from here.
+                        const canCancel =
+                          punctRunning === d.id || !!runningOps[d.id];
                         const err = docError[d.id];
+                        const isError =
+                          String(d.estado ?? "").trim() === "error";
                         const hasText = !!(
                           (d as any).texto_original || d.texto_extraido
                         );
-                        const isCrudo = estado === "crudo";
-                        const isError = estado === "error";
-                        const isProcesado =
-                          estado === "incidentes_extraidos" ||
-                          estado === "procesado" ||
-                          estado === "listo";
-                        const isCodificado = estado === "codificado";
-
-                        const label = err
-                          ? "\u26A0 Reintentar"
-                          : isRunning
-                            ? t("project.statusInProgress")
-                            : isError
-                              ? "\u26A0 Error \u2014 Restaurar"
-                              : isCrudo
-                                ? t("project.preprocessButton")
-                                : estado === "preprocesado"
-                                  ? "Clasificar"
-                                  : estado === "clasificado"
-                                    ? "Segmentar"
-                                    : estado === "segmentado"
-                                      ? "Extraer incidentes"
-                                      : isProcesado
-                                        ? "\u2713 Incidentes extra\u00eddos"
-                                        : isCodificado
-                                          ? "\u2713 Codificado"
-                                          : "\u2713 Completo";
-                        const bg = err
-                          ? "#F85149"
-                          : isRunning
-                            ? "#21262D"
-                            : isError
-                              ? "#F85149"
-                              : isCrudo
-                                ? hasText
-                                  ? "#A371F7"
-                                  : "#30363D"
-                                : estado === "preprocesado"
-                                  ? "#3FB950"
-                                  : estado === "clasificado"
-                                    ? "#58A6FF"
-                                    : estado === "segmentado"
-                                      ? "#D29922"
-                                      : "#3FB950";
-                        // While running the primary action is inert: a second
-                        // click must not re-dispatch nor silently cancel.
-                        const disabled =
-                          isRunning ||
-                          (!err &&
-                            !isError &&
-                            ((isCrudo && !hasText) ||
-                              isProcesado ||
-                              isCodificado));
-
+                        const color = STEP_COLORS[step];
+                        const runDisabled = step === "preprocessed" && !hasText;
+                        // Destructive controls wait for the project to go idle.
+                        const canRedo = !isRunning && !anyStepRunning();
                         return (
                           <>
-                            <button
-                              onClick={() => handleDocAction(d.id)}
-                              disabled={disabled}
+                            {/*<span
+                              title={`${stepLabel(step)} (${idx + 1}/${DOC_STEPS.length})`}
                               style={{
-                                ...btnSmall,
-                                background: bg,
-                                color: isRunning ? "#8B949E" : "#FFF",
-                                border: "none",
-                                cursor: disabled ? "not-allowed" : "pointer",
+                                fontSize: 10,
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                background: `${color}22`,
+                                color,
+                                border: `1px solid ${color}44`,
+                                whiteSpace: "nowrap",
                               }}
                             >
-                              {label}
-                            </button>
-                            {isRunning && (
+                              {STEP_ICONS[step]} {stepLabel(step)}
+                            </span>*/}
+                            {/* Per-state redo: the card header keeps exactly one
+                                destructive control. Erases THIS step and every
+                                step downstream of it. */}
+                            {!isEmpty && step !== "original" && canRedo && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRedoConfirmFor(d.id);
+                                  if (expandedDoc !== d.id)
+                                    setExpandedDoc(d.id);
+                                }}
+                                title={t("project.stepRedoTitle")}
+                                style={{
+                                  ...btnSmall,
+                                  background: "#D2992218",
+                                  color: "#D29922",
+                                  border: "1px solid #D2992233",
+                                  fontSize: 11,
+                                  padding: "2px 8px",
+                                }}
+                              >
+                                {"\u21BA "}
+                                {t("project.stepRedo")}
+                              </button>
+                            )}
+                            {/* Run button: ONLY on the empty step. Hidden while
+                                expanded — the panel renders it inside the step. */}
+                            {/*{isEmpty &&
+                              !isRunning &&
+                              !isError &&
+                              !err &&
+                              expandedDoc !== d.id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    runStep(d, step);
+                                  }}
+                                  disabled={runDisabled}
+                                  title={t("project.stepRun", {
+                                    step: stepLabel(step),
+                                  })}
+                                  style={{
+                                    ...btnSmall,
+                                    background: runDisabled ? "#30363D" : color,
+                                    color: runDisabled ? "#484F58" : "#FFF",
+                                    border: "none",
+                                    cursor: runDisabled
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  }}
+                                >
+                                  {t("project.stepRun", {
+                                    step: stepLabel(step),
+                                  })}
+                                </button>
+                              )}*/}
+                            {isRunning && canCancel && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -3440,30 +4864,42 @@ export default function ProjectDetail() {
                                 {"\u23F9"}
                               </button>
                             )}
+                            {isRunning && !canCancel && (
+                              <span
+                                style={{
+                                  ...btnSmall,
+                                  background: "#21262D",
+                                  color: "#8B949E",
+                                  border: "none",
+                                  cursor: "default",
+                                }}
+                              >
+                                {t("project.statusInProgress")}
+                              </span>
+                            )}
+                            {/* Error recovery — the only consumer of the old ↻ */}
+                            {!isRunning && (err || isError) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDocAction(d.id);
+                                }}
+                                title={t("project.stepRecoverError")}
+                                style={{
+                                  ...btnSmall,
+                                  background: "#F85149",
+                                  color: "#FFF",
+                                  border: "none",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {"\u26A0 "}
+                                {t("project.stepRetry")}
+                              </button>
+                            )}
                           </>
                         );
                       })()}
-                      {/* Restore: hidden while running; same rollback as cancel but at rest */}
-                      {d.estado !== "crudo" && punctRunning !== d.id && (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            await handleRestoreStep(d.id);
-                          }}
-                          title="Restaurar a estado original"
-                          style={{
-                            ...btnSmall,
-                            background: "transparent",
-                            color: "#D29922",
-                            border: "1px solid #D2992244",
-                            fontSize: 14,
-                            padding: "2px 8px",
-                            lineHeight: 1,
-                          }}
-                        >
-                          {"\u21BB"}
-                        </button>
-                      )}
                       {/*{punctRunning !== d.id && originalTexts.current[d.id] && (
                         <button
                           onClick={async () => {
@@ -3491,7 +4927,7 @@ export default function ProjectDetail() {
                               ...prev,
                               [d.id]: t("project.restored"),
                             }));
-                            refreshDocs();
+                            refreshAll();
                             setSegments((prev) => {
                               const n = { ...prev };
                               delete n[d.id];
@@ -3503,23 +4939,54 @@ export default function ProjectDetail() {
                           {t("project.undo")}
                         </button>
                       )}*/}
-                      <button
-                        onClick={async () => {
-                          if (!(await safeConfirm(t("project.deleteConfirm"))))
-                            return;
-                          try {
-                            await deleteDocument(d.id);
-                            refreshDocs();
-                          } catch (e: any) {
-                            showErrorToast(
-                              "Error al eliminar: " + (e.message || ""),
-                            );
-                          }
-                        }}
-                        style={{ ...btnSmall, color: "#F85149" }}
-                      >
-                        {t("project.deleteIcon")}
-                      </button>
+                      {/* Destructive control: visible but locked while any
+                          step is processing, here or elsewhere, so it keeps its
+                          place in the header and can explain the lock. */}
+                      {(() => {
+                        const locked = docRunning(d) || anyStepRunning();
+                        return (
+                          // A disabled button swallows pointer events in most
+                          // browsers, so the hint has to live on a wrapper.
+                          <span
+                            title={
+                              locked
+                                ? t("project.deleteBlockedTitle")
+                                : undefined
+                            }
+                          >
+                            <button
+                              onClick={async () => {
+                                // Re-read at click time: a run may have started
+                                // after this render.
+                                if (docRunning(d) || anyStepRunning()) return;
+                                if (
+                                  !(await safeConfirm(
+                                    t("project.deleteConfirm"),
+                                  ))
+                                )
+                                  return;
+                                try {
+                                  await deleteDocument(d.id);
+                                  refreshAll();
+                                } catch (e: any) {
+                                  showErrorToast(
+                                    "Error al eliminar: " + (e.message || ""),
+                                  );
+                                }
+                              }}
+                              disabled={locked}
+                              style={{
+                                ...btnSmall,
+                                color: "#F85149",
+                                opacity: locked ? 0.4 : 1,
+                                cursor: locked ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {t("project.deleteIcon")}
+                            </button>
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -3566,180 +5033,312 @@ export default function ProjectDetail() {
                     </div>
                   )}
 
-                  {/* ── Expanded text view ── */}
+                  {/* ── Expanded step viewer ── */}
                   {expandedDoc === d.id && (
                     <div style={{ marginTop: 8 }}>
-                      {
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
-                        >
-                          {(
-                            [
-                              "original",
-                              "preprocessed",
-                              "classified",
-                              "segmented",
-                              "incidents",
-                            ] as const
-                          ).map((mode) => {
-                            const hasIt =
-                              mode === "original"
-                                ? true
-                                : mode === "preprocessed"
-                                  ? !!(d as any).texto_preprocesado
-                                  : mode === "classified"
-                                    ? !!(d as any).texto_clasificado
-                                    : mode === "segmented"
-                                      ? !!(
-                                          segments[d.id] &&
-                                          segments[d.id].length > 0
-                                        )
-                                      : !!(
-                                          (d as any).metadatos &&
-                                          (d as any).metadatos.document_signals
-                                        );
-                            const isActive = textViewMode === mode;
-                            const lbl =
-                              mode === "original"
-                                ? "\uD83D\uDCC4 Original"
-                                : mode === "preprocessed"
-                                  ? "\uD83D\uDCDD Preprocesado"
-                                  : mode === "classified"
-                                    ? "\uD83C\uDFF7\uFE0F Clasificado"
-                                    : mode === "segmented"
-                                      ? "\u2702\uFE0F Segmentado"
-                                      : "\uD83D\uDD0D Incidentes";
-                            return (
-                              <span
-                                key={mode}
-                                onClick={() => hasIt && setTextViewMode(mode)}
+                      {/* Inline confirmation (a list, so `safeConfirm` — a
+                          single-line bar — cannot render it). */}
+                      {redoConfirmFor === d.id &&
+                        !isOnEmptyStep(d) &&
+                        viewedStepOf(d) !== "original" &&
+                        !anyStepRunning() &&
+                        (() => {
+                          const idx = clampedStepIndex(d);
+                          const step = DOC_STEPS[idx];
+                          const eraseLabels = DOC_STEPS.slice(idx)
+                            .map((s) => stepLabel(s))
+                            .join(", ");
+                          return (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                marginBottom: 8,
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                background: "#F8514912",
+                                border: "1px solid #F8514933",
+                                color: "#F85149",
+                                fontSize: 11,
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                                {"\u26A0 "}
+                                {t("project.stepRedoConfirmTitle", {
+                                  step: stepLabel(step),
+                                })}
+                              </div>
+                              <div>
+                                {t("project.stepRedoWillErase", {
+                                  steps: eraseLabels,
+                                })}
+                              </div>
+                              <div style={{ marginBottom: 6 }}>
+                                {t("project.stepRedoIrreversible")}
+                              </div>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button
+                                  onClick={() => handleRedoStep(d, step)}
+                                  style={{
+                                    ...btnSmall,
+                                    background: "#F85149",
+                                    color: "#FFF",
+                                    border: "none",
+                                  }}
+                                >
+                                  {t("project.stepRedoConfirmButton")}
+                                </button>
+                                <button
+                                  onClick={() => setRedoConfirmFor(null)}
+                                  style={{
+                                    ...btnSmall,
+                                    background: "transparent",
+                                    color: "#8B949E",
+                                  }}
+                                >
+                                  {t("common.cancel")}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      {/* Empty step: this is the ONLY place the run button lives. */}
+                      {isOnEmptyStep(d) &&
+                        (() => {
+                          const idx = clampedStepIndex(d);
+                          const step = DOC_STEPS[idx];
+                          const stepColor = STEP_COLORS[step];
+                          const isRunning =
+                            punctRunning === d.id ||
+                            !!runningOps[d.id] ||
+                            IN_FLIGHT_DOC_STATES.includes(
+                              String(d.estado ?? "").trim(),
+                            );
+                          const hasText = !!(
+                            (d as any).texto_original || d.texto_extraido
+                          );
+                          const runDisabled =
+                            step === "preprocessed" && !hasText;
+                          return (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                marginBottom: 8,
+                                padding: "10px 12px",
+                                borderRadius: 6,
+                                background: "#1C2333",
+                                border: "1px dashed #30363D",
+                                fontSize: 12,
+                                color: "#8B949E",
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              <div
                                 style={{
-                                  fontSize: 10,
-                                  padding: "2px 8px",
-                                  borderRadius: 10,
-                                  cursor: hasIt ? "pointer" : "not-allowed",
-                                  background: isActive ? "#A371F7" : "#1C2333",
-                                  color: isActive
-                                    ? "#FFF"
-                                    : hasIt
-                                      ? "#8B949E"
-                                      : "#484F58",
-                                  border:
-                                    "1px solid " +
-                                    (isActive ? "#A371F7" : "#30363D"),
-                                  opacity: hasIt ? 1 : 0.4,
-                                  userSelect: "none",
-                                  transition: "all 0.15s",
+                                  fontWeight: 600,
+                                  color: "#E6EDF3",
+                                  marginBottom: 4,
                                 }}
                               >
-                                {lbl}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      }
-                      {/* Unified text viewer — same style for all modes */}
+                                {STEP_ICONS[step]}{" "}
+                                {t("project.stepEmptyTitle", {
+                                  step: stepLabel(step),
+                                })}
+                              </div>
+                              <div style={{ marginBottom: 8 }}>
+                                {t("project.stepEmptyHint")}
+                              </div>
+                              {/* Cancelling lives in the header navigator, so
+                                  this box only reports that the step is in
+                                  flight — otherwise the ⏹ would appear twice. */}
+                              {isRunning ? (
+                                <span
+                                  style={{
+                                    ...btnSmall,
+                                    background: "#21262D",
+                                    color: "#8B949E",
+                                    border: "none",
+                                    cursor: "default",
+                                  }}
+                                >
+                                  {t("project.statusInProgress")}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => runStep(d, step)}
+                                  disabled={runDisabled}
+                                  style={{
+                                    ...btnSmall,
+                                    background: runDisabled
+                                      ? "#30363D"
+                                      : stepColor,
+                                    color: runDisabled ? "#484F58" : "#FFF",
+                                    border: "none",
+                                    cursor: runDisabled
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  }}
+                                >
+                                  {"\u25B6 "}
+                                  {t("project.stepRun", {
+                                    step: stepLabel(step),
+                                  })}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      {/* Text viewer — only for the steps that ARE text. */}
                       {/* While processing, the text is 50% transparent and
                           non-interactive so it cannot be edited mid-run. */}
-                      <div
-                        style={{
-                          opacity:
-                            punctRunning === d.id || runningOps[d.id] ? 0.5 : 1,
-                          pointerEvents:
-                            punctRunning === d.id || runningOps[d.id]
-                              ? "none"
-                              : "auto",
-                          transition: "opacity .2s",
-                        }}
-                      >
-                        {textEdits[d.id] !== undefined ? (
-                          <textarea
-                            disabled={
-                              punctRunning === d.id || !!runningOps[d.id]
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                              setTextEdits((prev) => ({
-                                ...prev,
-                                [d.id]: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "100%",
-                              minHeight: 150,
-                              fontFamily: "monospace",
-                              fontSize: 13,
-                              background: "#0D1117",
-                              color: "#E6EDF3",
-                              border: "1px solid #D29922",
-                              borderRadius: 6,
-                              padding: 8,
-                              resize: "vertical",
-                            }}
-                            value={textEdits[d.id]}
-                          />
-                        ) : (
+                      {!isOnEmptyStep(d) &&
+                        viewedStepOf(d) !== "segmented" &&
+                        viewedStepOf(d) !== "incidents" && (
                           <div
-                            onClick={(e) => e.stopPropagation()}
                             style={{
-                              width: "100%",
-                              minHeight: 150,
-                              maxHeight: "55vh",
-                              fontFamily: "monospace",
-                              fontSize: 13,
-                              background: "#0D1117",
-                              color: "#E6EDF3",
-                              border: "1px solid #21262D",
-                              borderRadius: 6,
-                              padding: 8,
-                              overflow: "auto",
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
+                              opacity:
+                                punctRunning === d.id || runningOps[d.id]
+                                  ? 0.5
+                                  : 1,
+                              pointerEvents:
+                                punctRunning === d.id || runningOps[d.id]
+                                  ? "none"
+                                  : "auto",
+                              transition: "opacity .2s",
                             }}
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                textViewMode === "classified"
-                                  ? renderClassifiedText(
-                                      (d as any).texto_clasificado ||
-                                        ((d as any).metadatos &&
-                                          (d as any).metadatos
-                                            .texto_clasificado) ||
-                                        "",
-                                    )
-                                  : textViewMode === "segmented" &&
-                                      segments[d.id]?.length
-                                    ? segments[d.id]!.map(
-                                        (s) => `[${s.posicion}] ${s.texto}`,
-                                      )
-                                        .join("\n\n")
-                                        .replace(/&/g, "&amp;")
-                                        .replace(/</g, "&lt;")
-                                        .replace(/>/g, "&gt;")
-                                    : textViewMode === "preprocessed"
-                                      ? (
-                                          (d as any).texto_preprocesado ||
-                                          d.texto_extraido ||
-                                          ""
-                                        )
-                                          .replace(/&/g, "&amp;")
-                                          .replace(/</g, "&lt;")
-                                          .replace(/>/g, "&gt;")
-                                      : (
-                                          (d as any).texto_original ||
-                                          d.texto_extraido ||
-                                          ""
-                                        )
-                                          .replace(/&/g, "&amp;")
-                                          .replace(/</g, "&lt;")
-                                          .replace(/>/g, "&gt;")
-                                          .replace(/\n/g, "<br>"),
-                            }}
-                          />
+                          >
+                            {(() => {
+                              const step = textEditStepOf(d);
+                              // Only on its own step, and only while idle.
+                              if (textEdits[d.id] !== undefined) return null;
+                              if (viewedStepOf(d) !== step) return null;
+                              const blocked = textEditBlockedReason(d);
+                              return (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "flex-end",
+                                    marginBottom: 6,
+                                  }}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (blocked) {
+                                        showToast(blocked);
+                                        return;
+                                      }
+                                      const text = stepTextRaw(d, step);
+                                      setTextEdits((prev) => ({
+                                        ...prev,
+                                        [d.id]: { text, step },
+                                      }));
+                                    }}
+                                    title={
+                                      blocked ?? t("project.editTextTitle")
+                                    }
+                                    style={{
+                                      ...btnSmall,
+                                      background: "#D2992218",
+                                      color: "#D29922",
+                                      border: "1px solid #D2992233",
+                                      fontSize: 10,
+                                      padding: "2px 8px",
+                                      opacity: blocked ? 0.5 : 1,
+                                      cursor: blocked
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    }}
+                                  >
+                                    {t("project.editText")}
+                                  </button>
+                                </div>
+                              );
+                            })()}
+                            {textEdits[d.id] !== undefined ? (
+                              <textarea
+                                disabled={
+                                  punctRunning === d.id || !!runningOps[d.id]
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) =>
+                                  setTextEdits((prev) => ({
+                                    ...prev,
+                                    [d.id]: {
+                                      ...prev[d.id],
+                                      text: e.target.value,
+                                    },
+                                  }))
+                                }
+                                style={{
+                                  width: "100%",
+                                  minHeight: 150,
+                                  fontFamily: "monospace",
+                                  fontSize: 13,
+                                  background: "#0D1117",
+                                  color: "#E6EDF3",
+                                  border: "1px solid #D29922",
+                                  borderRadius: 6,
+                                  padding: 8,
+                                  resize: "vertical",
+                                }}
+                                value={textEdits[d.id]?.text ?? ""}
+                              />
+                            ) : viewedStepOf(d) === "classified" &&
+                              (d.glaser_blocks?.length ?? 0) > 0 ? (
+                              /* El paso clasificado se edita bloque por bloque:
+                                 cambiar una categoría re-deriva la etiqueta de
+                                 los segmentos, así que es una escritura real. */
+                              <ClassifiedBlockEditor
+                                documentId={d.id}
+                                blocks={d.glaser_blocks ?? []}
+                                canEdit={!docRunning(d)}
+                                onSaved={(blocks, textoClasificado) => {
+                                  setDocs((prev) =>
+                                    prev.map((item) =>
+                                      item.id === d.id
+                                        ? {
+                                            ...item,
+                                            glaser_blocks: blocks,
+                                            texto_clasificado: textoClasificado,
+                                          }
+                                        : item,
+                                    ),
+                                  );
+                                  // Los segmentos heredaron etiquetas nuevas.
+                                  invalidateDocCaches(d.id);
+                                }}
+                                onError={showErrorToast}
+                              />
+                            ) : (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  width: "100%",
+                                  minHeight: 150,
+                                  maxHeight: "55vh",
+                                  fontFamily: "monospace",
+                                  fontSize: 13,
+                                  background: "#0D1117",
+                                  color: "#E6EDF3",
+                                  border: "1px solid #21262D",
+                                  borderRadius: 6,
+                                  padding: 8,
+                                  overflow: "auto",
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html:
+                                    viewedStepOf(d) === "classified"
+                                      ? renderClassified(d)
+                                      : stepTextHtml(d, viewedStepOf(d)),
+                                }}
+                              />
+                            )}
+                          </div>
                         )}
-                      </div>
                       {textEdits[d.id] !== undefined && (
                         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                           <button
@@ -3760,7 +5359,9 @@ export default function ProjectDetail() {
                                 : "pointer",
                             }}
                           >
-                            {textSaving[d.id] ? "Guardando…" : "✓ Guardar"}
+                            {textSaving[d.id]
+                              ? t("project.textSaving")
+                              : t("project.textSave")}
                           </button>
                           <button
                             onClick={() =>
@@ -3780,10 +5381,107 @@ export default function ProjectDetail() {
                               cursor: "pointer",
                             }}
                           >
-                            Descartar
+                            {t("project.textDiscard")}
                           </button>
                         </div>
                       )}
+
+                      {/* ── Classified: audit surface for the inheritance step ── */}
+                      {!isOnEmptyStep(d) &&
+                        viewedStepOf(d) === "classified" && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              marginTop: 8,
+                              padding: "8px 10px",
+                              borderRadius: 6,
+                              background: "#3FB95010",
+                              border: "1px solid #3FB95033",
+                              fontSize: 11,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: "#3FB950",
+                                marginBottom: 4,
+                              }}
+                            >
+                              {t("project.classifiedUntaggedHeading")} (
+                              {
+                                (segments[d.id] ?? []).filter(
+                                  (s) => !s.tipo_dato_glaser,
+                                ).length
+                              }
+                              )
+                            </div>
+                            {(segments[d.id] ?? []).filter(
+                              (s) => !s.tipo_dato_glaser,
+                            ).length === 0 ? (
+                              <div style={{ color: "#8B949E" }}>
+                                {t("project.segmentsEmpty")}
+                              </div>
+                            ) : (
+                              (segments[d.id] ?? [])
+                                .filter((s) => !s.tipo_dato_glaser)
+                                .map((s) => (
+                                  <div key={s.id} style={{ color: "#8B949E" }}>
+                                    <span style={{ color: "#F85149" }}>
+                                      #{s.posicion}
+                                    </span>{" "}
+                                    {shorten(s.texto, 120)}
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        )}
+
+                      {/* ── Segmented: cada segmento, con borrado/fusión ── */}
+                      {!isOnEmptyStep(d) && viewedStepOf(d) === "segmented" && (
+                        <SegmentsMergeList
+                          documentId={d.id}
+                          segments={segments[d.id] ?? []}
+                          canEdit={!docRunning(d)}
+                          onChanged={(next) =>
+                            setSegments((prev) => ({ ...prev, [d.id]: next }))
+                          }
+                          onError={showErrorToast}
+                          onNotify={showToast}
+                        />
+                      )}
+
+                      {/* ── Incidentes: curación manual ── */}
+                      {!isOnEmptyStep(d) &&
+                        viewedStepOf(d) === "incidents" &&
+                        (() => {
+                          const estado = String(d.estado ?? "").trim();
+                          const incidentsRunning =
+                            punctRunning === d.id ||
+                            !!runningOps[d.id] ||
+                            IN_FLIGHT_DOC_STATES.includes(estado);
+                          return (
+                            <IncidentsPanel
+                              documentId={d.id}
+                              canEdit={!incidentsRunning}
+                              // Cambia cuando el documento gana/pierde datos:
+                              // es lo que fuerza al panel a releer en vez de
+                              // quedar mostrando el payload viejo.
+                              reloadToken={`${d.id}:${estado}:${
+                                segments[d.id]?.length ?? 0
+                              }:${getDocLog(d.id)?.incidents_count ?? 0}`}
+                              onRunExtraction={() => runStep(d, "incidents")}
+                              // La categoría de una cita no se reclasifica acá:
+                              // el único lugar con autoridad sobre el texto es
+                              // el paso `classified`, así que el enlace lleva
+                              // al visor de ese paso.
+                              onEditClassification={() => {
+                                const index = DOC_STEPS.indexOf("classified");
+                                if (index >= 0) setGlobalStep(index);
+                              }}
+                            />
+                          );
+                        })()}
                     </div>
                   )}
                 </li>
@@ -3792,22 +5490,6 @@ export default function ProjectDetail() {
           </ul>
 
           <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
-
-          {/* ── HITL Modal ── */}
-          <style>{`
-        body {
-          background: #0D1117;
-          margin: 0;
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        @keyframes stagePulse {
-          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(163,113,247,0.4); }
-          50% { opacity: 0.5; box-shadow: 0 0 0 6px rgba(163,113,247,0); }
-        }
-      `}</style>
 
           {/* ── HITL Modal ── */}
           {hitlPending.length > 0 && id && (
@@ -3832,7 +5514,23 @@ export default function ProjectDetail() {
               onClose={() => setShowAddMemo(false)}
               onCreated={() => {
                 setShowAddMemo(false);
-                refreshDocs();
+                refreshAll();
+              }}
+            />
+          )}
+
+          {/* ── Open-coding HITL Modal ── */}
+          {id && (
+            <OpenCodingHITLModal
+              open={ocHitlOpen}
+              projectId={id}
+              onClose={() => setOcHitlOpen(false)}
+              onDecided={() => {
+                setOcHitlOpen(false);
+                getOpenCodingHitlStatus(id)
+                  .then(setOcHitl)
+                  .catch(() => {});
+                refreshAll();
               }}
             />
           )}
@@ -3887,20 +5585,17 @@ export default function ProjectDetail() {
                     {t("project.addMemo")}
                   </button>
                 )}
-                {/* Delete buttons */}
-                {memoFilter !== "all" && (
-                  <DeleteByTypeButton
-                    projectId={id!}
-                    tipo={memoFilter}
-                    onDeleted={() => setMemoFilter("all")}
-                  />
-                )}
-                {memoFilter === "all" && agentMemos.length > 0 && (
-                  <DeleteByTypeButton
-                    projectId={id!}
-                    tipo="all"
+                {agentMemos.length > 0 && (
+                  <ConfirmDeleteButton
                     label={t("project.deleteAllMemos")}
-                    onDeleted={() => {}}
+                    title={
+                      entitiesLocked
+                        ? t("memo.pipelineBusy")
+                        : t("project.deleteAllMemos")
+                    }
+                    confirmText={t("memo.deleteAllConfirm")}
+                    disabled={entitiesLocked}
+                    onConfirm={handleDeleteAllMemos}
                   />
                 )}
               </div>
@@ -3911,6 +5606,8 @@ export default function ProjectDetail() {
               activeFilter={memoFilter}
               onFilterChange={setMemoFilter}
               onDeleteMemo={handleDeleteMemo}
+              onDeleteMemos={handleDeleteMemos}
+              deleteDisabled={entitiesLocked}
               onUpdateMemo={handleUpdateMemo}
               projectId={id!}
               originalPrompt={project.ruta_de_codificacion || ""}
@@ -3960,7 +5657,9 @@ export default function ProjectDetail() {
                 ? "Logs"
                 : sidebarViewMode === "agents"
                   ? "Agentes"
-                  : "Etapas"}
+                  : sidebarViewMode === "hitl"
+                    ? "Decisiones HITL"
+                    : "Etapas"}
             </span>
 
             {!pipelineRunning ? (
@@ -4015,6 +5714,30 @@ export default function ProjectDetail() {
                 >
                   ▶ {t("project.runPipeline")}
                 </button>
+                {hasStaleRun && (
+                  <button
+                    onClick={async () => {
+                      await closeIdlePipelineRuns(id!).catch(() => {});
+                      getPipelineLog(id!)
+                        .then(setPipelineLog)
+                        .catch(() => {});
+                    }}
+                    title={t("project.closeStaleRunTitle")}
+                    style={{
+                      background: "#D2992218",
+                      border: "1px solid #D2992233",
+                      borderRadius: 6,
+                      color: "#D29922",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "4px 10px",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ⏹ {t("project.closeStaleRun")}
+                  </button>
+                )}
               </div>
             ) : (
               <button
@@ -4126,6 +5849,22 @@ export default function ProjectDetail() {
             >
               📋 Logs
             </button>
+            <button
+              onClick={() => setSidebarViewMode("hitl")}
+              style={{
+                flex: 1,
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                background:
+                  sidebarViewMode === "hitl" ? "#A371F7" : "transparent",
+                color: sidebarViewMode === "hitl" ? "#fff" : "#8B949E",
+              }}
+            >
+              {t("hitlCrud.title")}
+            </button>
           </div>
 
           {pipelineMsg && (
@@ -4184,6 +5923,8 @@ export default function ProjectDetail() {
                 );
               })}
             </div>
+          ) : sidebarViewMode === "hitl" ? (
+            <HitlDecisionsPanel projectId={id} />
           ) : sidebarViewMode === "agents" ? (
             <PipelineAgents
               agentStatuses={agentStatuses}
@@ -4192,12 +5933,16 @@ export default function ProjectDetail() {
                 const auth = `Bearer ${localStorage.getItem("access_token")}`;
                 const perDocAgents = new Set([
                   "util_punctuator",
-                  "fa_glaser_data_classifier",
                   "segmentar_documento",
+                  "fa_glaser_data_classifier",
+                  "fa_document_pattern_extractor",
                 ]);
                 if (perDocAgents.has(agentId)) {
                   // ── Helper: clear previous work and restart ──
-                  const clearAndRestart = async (agent: string) => {
+                  const clearAndRestart = async (
+                    agent: string,
+                    targetIds: Set<string>,
+                  ) => {
                     // Clear HITL
                     await fetch(`/api/v1/projects/${id}/hitl/reset`, {
                       method: "POST",
@@ -4205,10 +5950,12 @@ export default function ProjectDetail() {
                         Authorization: `Bearer ${localStorage.getItem("access_token")}`,
                       },
                     }).catch(() => {});
-                    // Preprocessor: revert all preprocessed docs BEFORE filtering
+                    // Preprocessor: revert only the confirmed docs, so re-running
+                    // a subset does not strand the ones left at 'preprocesado'.
                     if (agent === "util_punctuator") {
                       const preprocessed = docs.filter(
-                        (d) => d.estado === "preprocesado",
+                        (d) =>
+                          d.estado === "preprocesado" && targetIds.has(d.id),
                       );
                       for (const d of preprocessed) {
                         await fetch(
@@ -4222,8 +5969,12 @@ export default function ProjectDetail() {
                         ).catch(() => {});
                       }
                     }
-                    // Delete segments if segmenter or downstream
-                    if (agent !== "util_punctuator") {
+                    // Delete segments only when re-running punctuation or
+                    // segmentation; the classifier consumes existing segments.
+                    if (
+                      agent === "util_punctuator" ||
+                      agent === "segmentar_documento"
+                    ) {
                       await fetch(`/api/v1/documents/project/${id}/segments`, {
                         method: "DELETE",
                         headers: {
@@ -4244,6 +5995,7 @@ export default function ProjectDetail() {
                         "util_punctuator",
                         "fa_glaser_data_classifier",
                         "segmentar_documento",
+                        "fa_document_pattern_extractor",
                       ];
                       const idx = agentOrder.indexOf(agent);
                       if (idx >= 0) {
@@ -4253,25 +6005,14 @@ export default function ProjectDetail() {
                       }
                       return next;
                     });
-                    // Re-filter: all docs not yet at or beyond this agent's output
-                    const out = PER_DOC_AGENTS[agent].output;
-                    const resetEligible = freshDocs.filter((d) => {
-                      const hasText = !!(
-                        (d as any).texto_preprocesado ||
-                        (d as any).texto_original ||
-                        d.texto_extraido
-                      );
-                      return hasText && !(BEYOND[out] || []).includes(d.estado);
-                    });
+                    // Se procesan exactamente los docs confirmados (el conjunto
+                    // puede menguar si alguno perdió material al revertir), no
+                    // todo lo que parezca elegible ahora.
+                    const resetEligible = freshDocs.filter(
+                      (d) => targetIds.has(d.id) && canProcessDoc(d, agent),
+                    );
                     dispatchAgentLoop(resetEligible);
                   };
-
-                  // Determine which docs are eligible = all docs not yet at or beyond output
-                  const eligible = docs.filter((d) => {
-                    return !(
-                      BEYOND[PER_DOC_AGENTS[agentId].output] || []
-                    ).includes(d.estado);
-                  });
 
                   // ── Build a single confirmation message ──
                   // 1. What layers will be wiped?
@@ -4279,77 +6020,116 @@ export default function ProjectDetail() {
                     "util_punctuator",
                     "fa_glaser_data_classifier",
                     "segmentar_documento",
+                    "fa_document_pattern_extractor",
                   ];
                   const myIdx = agentOrder.indexOf(agentId);
                   const wipedAgents = myIdx >= 0 ? agentOrder.slice(myIdx) : [];
                   const wipeLabels: string[] = [];
+                  // Classify-first: the segmenter deletes the segments (and with
+                  // them the inherited tags); the classifier only rewrites the
+                  // classified text over the preprocessed one.
                   if (wipedAgents.includes("segmentar_documento"))
                     wipeLabels.push("segmentos");
-                  if (wipedAgents.includes("fa_glaser_data_classifier"))
+                  if (
+                    wipedAgents.includes("fa_glaser_data_classifier") &&
+                    // Re-running the segmenter already reports the segments.
+                    !wipedAgents.includes("segmentar_documento")
+                  )
                     wipeLabels.push("texto clasificado");
                   if (wipedAgents.includes("util_punctuator"))
                     wipeLabels.push("texto preprocesado");
 
-                  // 2. How many docs need the prerequisite?
-                  const missingPrereq = docs.filter(
-                    (d) => d.estado !== PER_DOC_AGENTS[agentId].input,
-                  ).length;
+                  // 2. Docs con material y docs que aún necesitan este agente.
+                  const reprocessableDocs = docs.filter((d) =>
+                    canProcessDoc(d, agentId),
+                  );
+                  const pendingDocs = reprocessableDocs.filter((d) =>
+                    needsAgent(d, agentId),
+                  );
+                  const missingPrereq = docs.length - reprocessableDocs.length;
+
+                  // Si queda trabajo pendiente se procesa sólo eso (▶). Si no
+                  // queda nada pendiente, el click es un re-run (↻) y se
+                  // reprocesa todo lo que tenga material.
+                  //
+                  // Excepción: el borrado de segmentos es por proyecto, así que
+                  // segmentar un subconjunto dejaría sin segmentos al resto. Ahí
+                  // el click siempre reprocesa todos los docs con material.
+                  const wipesAll = agentId === "segmentar_documento";
+                  const isRerun = pendingDocs.length === 0;
+                  const eligible =
+                    isRerun || wipesAll ? reprocessableDocs : pendingDocs;
 
                   // 3. Build message
                   let confirmMsg2 = "";
                   if (wipeLabels.length > 0) {
                     confirmMsg2 +=
-                      "Se eliminaran: " + wipeLabels.join(", ") + ". ";
+                      "Se eliminarán: " + wipeLabels.join(", ") + ". ";
+                  }
+                  // El extractor no borra capas previas: el worker reescribe los
+                  // incidentes y patrones (`replace_existing`) y recalcula A1/A2/A3.
+                  if (agentId === "fa_document_pattern_extractor") {
+                    confirmMsg2 +=
+                      "Los incidentes y patrones previos se reemplazarán. ";
                   }
                   if (missingPrereq > 0) {
-                    const fallbackLabel =
-                      agentId === "fa_glaser_data_classifier"
-                        ? "texto original"
-                        : agentId === "segmentar_documento"
-                          ? "texto preprocesado u original"
-                          : "sin procesar";
                     confirmMsg2 +=
                       missingPrereq +
                       " de " +
                       docs.length +
-                      " docs no estan en estado '" +
-                      PER_DOC_AGENTS[agentId].input +
-                      "'. Se usara " +
-                      fallbackLabel +
-                      ". ";
+                      " docs no tienen material para procesar y se omitirán. ";
                   }
+                  let targetSuffix = "";
+                  if (isRerun) targetSuffix = " (ya procesados)";
+                  else if (wipesAll)
+                    targetSuffix = ` (${pendingDocs.length} pendiente(s); el borrado de segmentos es por proyecto)`;
                   confirmMsg2 +=
-                    "Se procesaran " +
+                    (isRerun ? "Re-procesar " : "Procesar ") +
                     eligible.length +
-                    " documento(s). Continuar?";
+                    " documento(s)" +
+                    targetSuffix +
+                    ". ¿Continuar?";
+                  if (eligible.length === 0) {
+                    showErrorToast(
+                      "Ningún documento tiene texto ni segmentos para procesar.",
+                    );
+                    return;
+                  }
                   const ok = await safeConfirm(confirmMsg2);
                   if (!ok) return;
 
                   // ── Wipe downstream layers before running ──
-                  await clearAndRestart(agentId);
+                  const targetIds = new Set(eligible.map((d) => d.id));
+                  await clearAndRestart(agentId, targetIds);
 
                   async function dispatchAgentLoop(
                     docsToProcess: typeof eligible,
                   ) {
                     abortRef.current = false;
                     setRunningAgentIds((prev) => new Set([...prev, agentId]));
-                    for (const doc of docsToProcess) {
-                      if (abortRef.current) break;
-                      await runDocTask(
-                        doc.id,
-                        `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
-                        abortRef,
-                      );
+                    try {
+                      for (const doc of docsToProcess) {
+                        if (abortRef.current) break;
+                        await runDocTask(
+                          doc.id,
+                          `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
+                          abortRef,
+                        );
+                      }
+                    } catch (e: any) {
+                      showErrorToast(e?.message || String(e));
+                    } finally {
+                      // El badge siempre vuelve a su estado real: sin `finally`,
+                      // un fetch fallido dejaba el spinner colgado para siempre.
+                      // PipelineAgents recomputa canRun/done desde docs[].estado.
+                      runningTaskRef.current = null;
+                      setRunningAgentIds((prev) => {
+                        const next = new Set(prev);
+                        next.delete(agentId);
+                        return next;
+                      });
+                      refreshAll();
                     }
-                    // Per-doc agent finished its loop — clear running state.
-                    // PipelineAgents will recompute canRun/done from docs[].estado.
-                    runningTaskRef.current = null;
-                    setRunningAgentIds((prev) => {
-                      const next = new Set(prev);
-                      next.delete(agentId);
-                      return next;
-                    });
-                    refreshDocs();
                   }
                 } else {
                   // Project-level agent
@@ -4391,7 +6171,9 @@ export default function ProjectDetail() {
                     // Poll until terminal so the badge matches the real outcome.
                     if (taskId) {
                       const pollInterval = 3000;
-                      const maxPolls = Math.ceil(360_000 / pollInterval);
+                      const maxPolls = Math.ceil(
+                        STEP_TIMEOUT_MS / pollInterval,
+                      );
                       let outcome: "success" | "failed" | "timeout" = "timeout";
                       for (let i = 0; i < maxPolls; i++) {
                         await new Promise((r) => setTimeout(r, pollInterval));
@@ -4435,7 +6217,7 @@ export default function ProjectDetail() {
                     );
                   } finally {
                     clearRunning();
-                    refreshDocs();
+                    refreshAll();
                   }
                 }
               }}
@@ -4450,7 +6232,7 @@ export default function ProjectDetail() {
                     Authorization: `Bearer ${localStorage.getItem("access_token")}`,
                   },
                 })
-                  .then(() => refreshDocs())
+                  .then(() => refreshAll())
                   .catch(() => {});
                 setRunningAgentIds((prev) => {
                   const next = new Set(prev);
@@ -4458,27 +6240,26 @@ export default function ProjectDetail() {
                   return next;
                 });
               }}
-              pipelineRunning={pipelineRunning}
+              pipelineRunning={pipelineRunning || phaseRunning}
               completedAgents={completedAgents}
               iterations={iterations}
               agentDocCounts={Object.fromEntries(
-                Object.entries(PER_DOC_AGENTS).map(
-                  ([agentId, { input, output }]) => [
-                    agentId,
-                    {
-                      done: docs.filter((d) =>
-                        (BEYOND[output] || []).includes(d.estado),
-                      ).length,
-                      total: docs.length,
-                    },
-                  ],
-                ),
+                Object.entries(PER_DOC_AGENTS).map(([agentId]) => [
+                  agentId,
+                  {
+                    // `done` espeja `eligible`: un doc en el estado de salida
+                    // cuyos segmentos siguen sin categoría no está terminado.
+                    done: docs.filter((d) => !needsAgent(d, agentId)).length,
+                    total: docs.length,
+                  },
+                ]),
               )}
               eligibleDocCounts={Object.fromEntries(
-                Object.entries(PER_DOC_AGENTS).map(([agentId, { output }]) => [
+                Object.entries(PER_DOC_AGENTS).map(([agentId]) => [
                   agentId,
-                  docs.filter((d) => !(BEYOND[output] || []).includes(d.estado))
-                    .length,
+                  docs.filter(
+                    (d) => canProcessDoc(d, agentId) && needsAgent(d, agentId),
+                  ).length,
                 ]),
               )}
               upstreamDocCounts={Object.fromEntries(
@@ -4500,40 +6281,48 @@ export default function ProjectDetail() {
                   docs.length > 0 &&
                   status === "pending" &&
                   idx === lastDone + 1;
+                // True while any agent of this stage is executing, even when the
+                // stage's own status has not been flipped to "running" (manual
+                // runs). Must be computed before isClickable: a finished stage
+                // stays "done" while one of its agents is re-run, so a click here
+                // would restart/wipe the stage mid-flight.
+                const isStageRunning =
+                  status === "running" ||
+                  stage.agents.some((a) => isAgentRunning(a.id)) ||
+                  runningPhases.has(stage.key);
+
                 const isClickable =
                   !pipelineRunning &&
+                  !isStageRunning &&
                   (status === "done" || status === "error" || isNextPending);
 
-                const circleBg =
-                  status === "done"
+                const circleBg = isStageRunning
+                  ? "#A371F722"
+                  : status === "done"
                     ? "#3FB95022"
-                    : status === "running"
-                      ? "#A371F722"
-                      : status === "error"
-                        ? "#F8514922"
-                        : isNextPending
-                          ? "#A371F711"
-                          : "#161B22";
-                const circleBorder =
-                  status === "running"
-                    ? "2px solid #A371F7"
-                    : status === "done"
-                      ? "2px solid #3FB950"
-                      : status === "error"
-                        ? "2px solid #F85149"
-                        : isNextPending
-                          ? "2px dashed #A371F755"
-                          : "2px solid #21262D";
-                const labelColor =
-                  status === "done"
+                    : status === "error"
+                      ? "#F8514922"
+                      : isNextPending
+                        ? "#A371F711"
+                        : "#161B22";
+                const circleBorder = isStageRunning
+                  ? "2px solid #A371F7"
+                  : status === "done"
+                    ? "2px solid #3FB950"
+                    : status === "error"
+                      ? "2px solid #F85149"
+                      : isNextPending
+                        ? "2px dashed #A371F755"
+                        : "2px solid #21262D";
+                const labelColor = isStageRunning
+                  ? "#E6EDF3"
+                  : status === "done"
                     ? "#3FB950"
-                    : status === "running"
-                      ? "#E6EDF3"
-                      : status === "error"
-                        ? "#F85149"
-                        : isNextPending
-                          ? "#A371F7"
-                          : "#8B949E";
+                    : status === "error"
+                      ? "#F85149"
+                      : isNextPending
+                        ? "#A371F7"
+                        : "#8B949E";
 
                 return (
                   <div key={stage.key}>
@@ -4548,11 +6337,13 @@ export default function ProjectDetail() {
                         opacity:
                           status === "pending" &&
                           !isNextPending &&
-                          !pipelineRunning
+                          !pipelineRunning &&
+                          !isStageRunning
                             ? 0.4
                             : 1,
-                        background:
-                          status === "running" ? "#A371F708" : "transparent",
+                        background: isStageRunning
+                          ? "#A371F708"
+                          : "transparent",
                         transition: "all 0.2s ease",
                       }}
                     >
@@ -4595,26 +6386,23 @@ export default function ProjectDetail() {
                           background: circleBg,
                           border: circleBorder,
                           cursor: isClickable ? "pointer" : "default",
-                          animation:
-                            status === "running"
-                              ? "stagePulse 1.5s ease-in-out infinite"
-                              : "none",
+                          animation: isStageRunning
+                            ? "stagePulse 1.5s ease-in-out infinite"
+                            : "none",
                         }}
                       >
-                        {status === "done" ? (
+                        {/* isStageRunning wins over "done": a completed stage
+                            whose agent is being re-run must show the spinner,
+                            otherwise the play/redo buttons give no feedback. */}
+                        {isStageRunning ? (
+                          <span
+                            className="spinner"
+                            style={{ width: 16, height: 16 }}
+                          />
+                        ) : status === "done" ? (
                           t("project.stageCheckmark")
                         ) : status === "error" ? (
                           t("project.stageCross")
-                        ) : status === "running" ? (
-                          <span
-                            style={{
-                              display: "inline-block",
-                              width: 10,
-                              height: 10,
-                              borderRadius: "50%",
-                              background: "#A371F7",
-                            }}
-                          />
                         ) : isNextPending ? (
                           <span style={{ color: "#A371F7", fontSize: 12 }}>
                             {t("project.stagePlay")}
@@ -4701,7 +6489,7 @@ export default function ProjectDetail() {
                                       headers: { Authorization: auth },
                                     },
                                   );
-                                  refreshDocs();
+                                  refreshAll();
                                   setSegments({});
                                   getPipelineLog(id!)
                                     .then(setPipelineLog)
@@ -4813,7 +6601,12 @@ export default function ProjectDetail() {
                                         }
                                         throw new Error(detail);
                                       }
-                                      await refreshDocs();
+                                      await refreshAll();
+                                      // Refresca el log de inmediato para que la
+                                      // etapa muestre el spinner sin esperar 6 s.
+                                      getPipelineLog(id!)
+                                        .then(setPipelineLog)
+                                        .catch(() => {});
                                       showToast("Codificación en curso");
                                     } catch (err: any) {
                                       showErrorToast(
@@ -4840,10 +6633,50 @@ export default function ProjectDetail() {
                                   ▶ Codificar
                                 </button>
                               )}
+                            <button
+                              onClick={() => setOcHitlOpen(true)}
+                              title="Decisión HITL: concern principal, población y categorías centrales"
+                              style={{
+                                fontSize: 9,
+                                padding: "1px 6px",
+                                borderRadius: 999,
+                                background: ocHitlReady
+                                  ? "#D2992218"
+                                  : "#8B949E18",
+                                color: ocHitlReady ? "#D29922" : "#8B949E",
+                                border: ocHitlReady
+                                  ? "1px solid #D2992244"
+                                  : "1px solid #8B949E33",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ◆ HITL
+                            </button>
+                            {dupRedundant > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOcHitlOpen(true);
+                                }}
+                                title={`Hipótesis casi idénticas sin revisar (${dupRedundant} sobrantes en ${dupClusters} grupo(s)) — abrí el gate HITL para revisarlas y borrarlas`}
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background: "#D2992218",
+                                  color: "#D29922",
+                                  border: "1px solid #D2992244",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ⚠ {dupRedundant} dupl.
+                              </button>
+                            )}
                           </div>
                         )}
                         {stage.key === "selective_coding" &&
-                          cats.some((c) => c.es_central) && (
+                          (cats.some((c) => c.es_central) ||
+                            dupRedundant > 0) && (
                             <div
                               style={{
                                 display: "flex",
@@ -4853,18 +6686,40 @@ export default function ProjectDetail() {
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span
-                                style={{
-                                  fontSize: 9,
-                                  padding: "1px 6px",
-                                  borderRadius: 999,
-                                  background: "#58A6FF18",
-                                  color: "#58A6FF",
-                                  border: "1px solid #58A6FF33",
-                                }}
-                              >
-                                {cats.filter((c) => c.es_central).length} core
-                              </span>
+                              {cats.some((c) => c.es_central) && (
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 6px",
+                                    borderRadius: 999,
+                                    background: "#58A6FF18",
+                                    color: "#58A6FF",
+                                    border: "1px solid #58A6FF33",
+                                  }}
+                                >
+                                  {cats.filter((c) => c.es_central).length} core
+                                </span>
+                              )}
+                              {dupRedundant > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOcHitlOpen(true);
+                                  }}
+                                  title={`Hipótesis duplicadas sin resolver (${dupRedundant} sobrantes en ${dupClusters} grupo(s)): revisalas antes de pasar a codificación selectiva`}
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 6px",
+                                    borderRadius: 999,
+                                    background: "#D2992218",
+                                    color: "#D29922",
+                                    border: "1px solid #D2992244",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ⚠ {dupRedundant} dupl.
+                                </button>
+                              )}
                             </div>
                           )}
                         {stage.key === "theoretical_coding" &&

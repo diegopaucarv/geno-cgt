@@ -29,6 +29,16 @@ from llm_client import LLMClient
 logger = logging.getLogger(__name__)
 
 app = Celery("fast_tasks", broker=REDIS_URL, backend=REDIS_URL)
+
+# Cierra el pipeline_run en cuanto termina su última tarea en vuelo (ver
+# app/services/pipeline_run_close.py).
+try:
+    from app.services.pipeline_run_close import register_run_close_hook
+
+    register_run_close_hook(app)
+except Exception:  # pragma: no cover - nunca romper el registro de tareas
+    logger.warning("No se pudo registrar el cierre de runs", exc_info=True)
+
 llm = LLMClient()
 
 # ═══════════════════════════════════════════════════════════════════════

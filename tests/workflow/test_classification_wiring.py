@@ -285,3 +285,115 @@ def test_degraded_status_fails_the_run() -> None:
         "treat status='degraded' as a failure"
     )
     assert "raise ClassificationUnavailable" in source
+
+
+# ── 1c. Extractor de incidentes: wiring estático (sidebar + worker) ────
+#
+# "Extraer incidentes" gained its own sidebar entry (agent id
+# ``fa_document_pattern_extractor``). These four checks pin the files that must
+# agree for the click to do anything at all: backend task mapping, sidebar
+# config, the Project.tsx dispatch gate and the i18n label.
+
+CHAINS = REPO / "frontend" / "src" / "config" / "pipelineChains.ts"
+PROJECT_PAGE = REPO / "frontend" / "src" / "pages" / "Project.tsx"
+TRANSLATIONS = REPO / "frontend" / "src" / "i18n" / "translations.ts"
+
+
+def test_pattern_extractor_agent_id_maps_to_registered_task() -> None:
+    """The sidebar id is not a Celery task; pipeline.py must translate it."""
+    src = _source(PIPELINE)
+    assert '"fa_document_pattern_extractor": "process_document_agents_a"' in src, (
+        "pipeline.py lost the per_doc_task_names entry for "
+        "fa_document_pattern_extractor; the UI would dispatch an unregistered "
+        "Celery task"
+    )
+    # A mapping is worthless if the task name on the right is not registered.
+    heavy_tasks = _source(REPO / "workers" / "heavy" / "tasks.py")
+    assert re.search(r'name="process_document_agents_a"', heavy_tasks), (
+        "worker-heavy no longer registers process_document_agents_a, so the "
+        "mapping above points at nothing"
+    )
+
+
+def test_sidebar_lists_extractor_after_classifier() -> None:
+    """The extractor must be listed after the classifier in stage *and* chain.
+
+    ``dependencies`` is what keeps the sidebar from offering the extractor on
+    documents that were never classified, so the order and the dependency edge
+    have to stay together.
+    """
+    src = _source(CHAINS)
+
+    # Counted as declarations (``id: "..."``) so prose that mentions the id in
+    # comments does not inflate the count.
+    classifier_ids = [
+        m.start() for m in re.finditer(r'id:\s*"fa_glaser_data_classifier"', src)
+    ]
+    extractor_ids = [
+        m.start() for m in re.finditer(r'id:\s*"fa_document_pattern_extractor"', src)
+    ]
+    assert len(extractor_ids) == 2, (
+        "expected exactly two declarations (data_management.agents and the "
+        f"data_management_main chain), found {len(extractor_ids)}"
+    )
+    assert len(classifier_ids) == 2, (
+        "expected the classifier to stay declared in both arrays too, found "
+        f"{len(classifier_ids)}"
+    )
+
+    # Pair them positionally — stage first, then chain — and require
+    # classifier -> extractor in both pairs.
+    for classifier_at, extractor_at in zip(classifier_ids, extractor_ids):
+        assert classifier_at < extractor_at, (
+            "fa_document_pattern_extractor must come after "
+            "fa_glaser_data_classifier in the data_management stage and chain"
+        )
+
+    # The order alone is cosmetic: without the dependency the UI still queues
+    # the extractor for unclassified docs.
+    assert src.count('dependencies: ["fa_glaser_data_classifier"]') >= 2, (
+        "both extractor declarations must depend on fa_glaser_data_classifier"
+    )
+
+
+def test_project_extractor_runs_only_on_classified_docs() -> None:
+    """Project.tsx must map, dispatch and gate the extractor per document."""
+    src = _source(PROJECT_PAGE)
+    assert 'output: "incidentes_extraidos"' in src, (
+        "PER_DOC_AGENTS no longer maps fa_document_pattern_extractor to "
+        "incidentes_extraidos; the doc would keep its old state after extracting"
+    )
+
+    # The id must be in the perDocAgents Set, otherwise onRunAgent takes the
+    # project-level branch and the extractor never sees a document.
+    set_start = src.index("const perDocAgents = new Set([")
+    set_region = src[set_start : src.index("]);", set_start)]
+    assert "fa_document_pattern_extractor" in set_region, (
+        "fa_document_pattern_extractor missing from the perDocAgents Set in "
+        "onRunAgent; the click would run as a project-level agent"
+    )
+
+    # EXTRACTOR_STATES mirrors the backend 409 guard. Under the classify-first
+    # ladder the extractor consumes segments that already carry their Glaser
+    # tag, so "segmentado" is the normal entry point and must be allowed:
+    # blocking it would hide the extractor exactly when the backend accepts it.
+    states_start = src.index("const EXTRACTOR_STATES")
+    states = src[states_start : src.index("];", states_start)]
+    assert '"segmentado"' in states, (
+        "EXTRACTOR_STATES must allow segmentado; classification happens before "
+        "segmentation, so a segmented document already has tagged segments"
+    )
+    assert '"clasificado"' in states, (
+        "EXTRACTOR_STATES must allow clasificado, the normal extractor input"
+    )
+
+
+def test_extractor_label_translated_in_all_locales() -> None:
+    """One label per locale; a missing key renders the raw key in the sidebar."""
+    src = _source(TRANSLATIONS)
+    assert src.count("fa_document_pattern_extractor:") == 4, (
+        "expected one pipeline.agent.fa_document_pattern_extractor label per "
+        "locale (en, es, de, pt); the sidebar renders "
+        't("pipeline.agent.fa_document_pattern_extractor") and a missing key '
+        "surfaces the raw key in the UI"
+    )

@@ -11,11 +11,13 @@ from app.api.v1 import (
     chain_runs,
     coding,
     config_info,
+    document_curation,
     documents,
     elaboration,
     events,
     hitl,
     hypotheses,
+    incidents,
     memos,
     ping,
     pipeline,
@@ -122,6 +124,7 @@ app.include_router(auth.router)
 app.include_router(chain_runs.router)
 app.include_router(coding.router)
 app.include_router(documents.router)
+app.include_router(document_curation.router)
 app.include_router(hypotheses.router)
 app.include_router(ping.router)
 app.include_router(pipeline.router)
@@ -134,4 +137,5 @@ app.include_router(theoretical_codes.router)
 app.include_router(elaboration.router)
 app.include_router(hitl.router)
 app.include_router(memos.router)
+app.include_router(incidents.router)
 app.include_router(setup.router)

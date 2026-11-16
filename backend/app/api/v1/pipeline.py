@@ -1,5 +1,6 @@
 """Pipeline execution endpoints — dispara stages y devuelve task_ids para polling."""
 
+import asyncio
 import logging
 from uuid import UUID, uuid4
 
@@ -11,7 +12,12 @@ from app.models.domain.project import Proyecto
 from app.models.domain.user import Usuario
 from app.schemas.hitl import PauseConfigRequest
 from app.services.auth import get_current_user
-from fastapi import APIRouter, Depends, HTTPException
+from app.services.pipeline_state import (
+    close_finished_runs,
+    close_idle_runs,
+    pipeline_really_running,
+)
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,9 +76,10 @@ async def run_pipeline_stage(
         result["note"] = "Precoding runs as part of open_coding phase"
 
     elif stage_name == "open_coding":
-        # process_document_agents_a llama _ensure_segmented, que LANZA si el doc
-        # no tiene segmentos. Solo despachamos docs realmente segmentados;
-        # 'crudo' y 'segmentando' fallarían siempre.
+        # Classify-first: `process_document_agents_a` consume los segmentos ya
+        # etiquetados, así que sólo entran los 'segmentado'. Un doc en
+        # 'clasificado' todavía necesita segmentarse (paso anterior de la
+        # escalera) y los terminales ya no se re-despachan.
         for doc in docs:
             if (doc.estado or "").strip() == "segmentado":
                 task = celery_app.send_task(
@@ -105,6 +112,18 @@ async def run_pipeline_stage(
         )
         result["task_ids"].append(task.id)
         result["status"] = "dispatched"
+
+        # Tracking: sin esta fila /pipeline/log no ve la fase en vuelo (la etapa
+        # se queda sin spinner) y /admin/projects/{id}/stop no puede revocarla.
+        await _track_pipeline_task(
+            db,
+            project_id,
+            None,
+            task.id,
+            "process_synthesis_agents_b",
+            "heavy",
+            None,
+        )
 
     elif stage_name == "pattern_of_interest":
         # Redirigido al selective_coding_coordinator (Fase A)
@@ -207,10 +226,13 @@ async def get_pipeline_log(
             "summary": {
                 "total": 0,
                 "need_segment": 0,
+                "need_classify": 0,
                 "need_agents": 0,
                 "done": 0,
                 "failed": 0,
                 "categories": 0,
+                "docs_inconsistent": 0,
+                "docs_need_classify": 0,
                 "playground_ready": False,
             },
         }
@@ -243,6 +265,47 @@ async def get_pipeline_log(
     for row in code_result:
         code_counts[str(row[0])] = row[1]
 
+    # Contar segmentos ya clasificados (tipo_dato_glaser) por documento
+    clasif_counts = {}
+    clasif_result = await db.execute(
+        text(
+            "SELECT documento_id, COUNT(*) FROM segmentos "
+            "WHERE documento_id = ANY(:ids) AND tipo_dato_glaser IS NOT NULL "
+            "GROUP BY documento_id"
+        ),
+        {"ids": doc_ids},
+    )
+    for row in clasif_result:
+        clasif_counts[str(row[0])] = row[1]
+
+    # Clasificación real por documento. Se consulta la DB en vez de inferirla
+    # del estado: bajo la escalera classify-first 'clasificado' es un estado
+    # transitorio y los metadatos son la única prueba de que el texto quedó
+    # etiquetado (los docs legacy usan texto_clasificado).
+    class_flags = {}
+    class_result = await db.execute(
+        text(
+            "SELECT id, (metadatos ? 'glaser_blocks') AS has_blocks, "
+            "(metadatos ? 'texto_clasificado') AS has_legacy "
+            "FROM documentos WHERE id = ANY(:ids)"
+        ),
+        {"ids": doc_ids},
+    )
+    for row in class_result:
+        class_flags[str(row[0])] = bool(row[1]) or bool(row[2])
+
+    # Contar incidentes extraídos por documento
+    inc_counts = {}
+    inc_result = await db.execute(
+        text(
+            "SELECT documento_id, COUNT(*) FROM extracted_incidents "
+            "WHERE documento_id = ANY(:ids) GROUP BY documento_id"
+        ),
+        {"ids": doc_ids},
+    )
+    for row in inc_result:
+        inc_counts[str(row[0])] = row[1]
+
     # Contar categorías del proyecto
     cat_result = await db.execute(
         text("SELECT COUNT(*) FROM categorias WHERE proyecto_id = :pid"),
@@ -256,6 +319,9 @@ async def get_pipeline_log(
         did = str(doc.id)
         n_segs = seg_counts.get(did, 0)
         n_codes = code_counts.get(did, 0)
+        n_clasif = clasif_counts.get(did, 0)
+        n_incidents = inc_counts.get(did, 0)
+        has_classification = class_flags.get(did, False)
         has_text = bool(
             (doc.metadatos or {}).get("texto_extraido")
             or (doc.metadatos or {}).get("texto_preprocesado")
@@ -272,23 +338,54 @@ async def get_pipeline_log(
             "coded": n_codes > 0,
             "agents_done": doc.estado in ("listo", "sintetizado") and n_codes > 0,
             "synthesis_done": doc.estado == "sintetizado",
+            "classified": has_classification,
+            "incidents": n_incidents > 0,
         }
 
-        # Determinar qué falta
+        # Determinar qué falta. Escalera classify-first: el clasificador corre
+        # sobre el texto y los segmentos se derivan después, así que la
+        # clasificación se comprueba ANTES de los segmentos (un doc clasificado
+        # sin segmentos está a un paso de segmentar, no de clasificar).
         if doc.estado == "error":
             next_action = "error"
         elif not has_text:
             next_action = "extract_text"
+        elif not has_classification:
+            next_action = "classify"
         elif not n_segs:
             next_action = "segment"
+        elif doc.estado in ("incidentes_extraidos", "codificando"):
+            # Pipeline por incidentes: los agentes A ya corrieron y NO escriben
+            # en codigos_segmento (los códigos viven en incident_groups /
+            # categorias). Sin esta rama un doc en 'incidentes_extraidos' cuenta
+            # como "run_agents" para siempre: la etapa open_coding nunca llega a
+            # "done" y el resumen pide reejecutar agentes que no aplican.
+            next_action = "run_synthesis"
+        elif doc.estado in ("procesado", "codificado", "sintetizado"):
+            # Estados terminales (ver skip_estados del orquestador).
+            next_action = "done"
         elif not n_codes:
             next_action = "run_agents"
         elif doc.estado == "listo":
             next_action = "run_synthesis"
-        elif doc.estado == "sintetizado":
-            next_action = "done"
         else:
             next_action = "run_agents"
+
+        # Códigos que describen un estado imposible bajo classify-first. El
+        # frontend los usa para avisar en vez de ofrecer un paso que el backend
+        # va a rechazar (un doc 'segmentado' sin segmentos, por ejemplo).
+        inconsistencies = []
+        if n_segs > 0 and not has_classification:
+            inconsistencies.append("missing_classified")
+        if (
+            doc.estado in ("incidentes_extraidos", "procesado", "codificado", "listo")
+            and n_segs == 0
+        ):
+            inconsistencies.append("missing_segmented")
+        if doc.estado == "segmentado" and n_segs == 0:
+            inconsistencies.append("segmented_without_segments")
+        if n_segs > 0 and n_clasif < n_segs:
+            inconsistencies.append("segments_unclassified")
 
         doc_logs.append(
             {
@@ -298,6 +395,10 @@ async def get_pipeline_log(
                 "steps": steps_done,
                 "segments_count": n_segs,
                 "codes_count": n_codes,
+                "has_classification": has_classification,
+                "classified_count": n_clasif,
+                "incidents_count": n_incidents,
+                "inconsistencies": inconsistencies,
                 "next_action": next_action,
             }
         )
@@ -311,10 +412,12 @@ async def get_pipeline_log(
         or (d["next_action"] not in ("done", "error") and d["segments_count"] == 0)
     )
     docs_need_agents = sum(1 for d in doc_logs if d["next_action"] == "run_agents")
+    docs_need_classify = sum(1 for d in doc_logs if d["next_action"] == "classify")
     docs_need_synthesis = sum(
         1 for d in doc_logs if d["next_action"] == "run_synthesis"
     )
     docs_done = sum(1 for d in doc_logs if d["next_action"] == "done")
+    docs_inconsistent = sum(1 for d in doc_logs if d["inconsistencies"])
     docs_sintetizados = sum(1 for d in docs if d.estado == "sintetizado")
     docs_failed = sum(1 for d in doc_logs if d["next_action"] == "error")
     error_list = [
@@ -344,13 +447,101 @@ async def get_pipeline_log(
     except Exception:
         pass
 
+    # Runs marcados 'running'. Se reconcilian con Celery antes de contarlos para
+    # que un run cuyo trabajo ya terminó no deje el botón "cerrar ejecución
+    # anterior" colgado en la UI: nadie cierra el último run de una sesión (solo
+    # el siguiente despacho, los memos o el botón manual lo hacían). Si no se
+    # pudo leer el estado real, se cae al conteo crudo sin cerrar nada.
+    open_runs = 0
+    try:
+        reconciled = await close_finished_runs(db, project_id)
+        if reconciled is None:
+            open_runs = (
+                await db.execute(
+                    text(
+                        "SELECT COUNT(*) FROM pipeline_runs "
+                        "WHERE project_id = :pid AND status = 'running'"
+                    ),
+                    {"pid": str(project_id)},
+                )
+            ).scalar() or 0
+        else:
+            open_runs = reconciled[1]
+    except Exception:
+        logger.debug("No se pudieron reconciliar pipeline_runs", exc_info=True)
+
+    # ── Agentes con trabajo en vuelo ──
+    # pipeline_tasks solo registra 'queued': nada la pasa a 'running' ni a
+    # 'completed' (solo on_failure escribe 'failed'), así que el estado real se
+    # consulta al result backend de Celery. La ventana de 4 h descarta filas
+    # huérfanas de runs abandonados, cuyos task ids Celery ya olvidó y que
+    # responderían 'PENDING' para siempre.
+    running_agents: list[str] = []
+    # Agentes cuya tarea terminó con SUCCESS dentro de la ventana. Sin esto,
+    # recargar la página a mitad de ejecución deja al agente fuera de
+    # completedAgents (estado de cliente) y vuelve a mostrar ▶ en vez de ↻.
+    succeeded_agents: list[str] = []
+    # Etapas cuyo orquestador de fase está en vuelo ("data_management",
+    # "open_coding"). Las tareas de fase no corresponden a ningún agente de la
+    # UI, así que sin esto lanzar la codificación no pinta ningún spinner.
+    running_phases: list[str] = []
+    try:
+        pending_rows = (
+            await db.execute(
+                text(
+                    "SELECT pt.task_name, pt.celery_task_id "
+                    "FROM pipeline_tasks pt "
+                    "JOIN pipeline_runs pr ON pr.id = pt.run_id "
+                    "WHERE pr.project_id = :pid "
+                    "AND pt.status = 'queued' "
+                    "AND pt.creado_en > now() - interval '4 hours' "
+                    "ORDER BY pt.creado_en DESC "
+                    "LIMIT 50"
+                ),
+                {"pid": str(project_id)},
+            )
+        ).all()
+        if pending_rows:
+            tids = [r[1] for r in pending_rows if r[1]]
+            states = await asyncio.to_thread(_celery_task_states, tids)
+            for task_name, tid in pending_rows:
+                state = states.get(tid)
+                in_flight = state in (
+                    "PENDING",
+                    "STARTED",
+                    "RETRY",
+                    "RECEIVED",
+                )
+                agent_id = _TASK_TO_AGENT_ID.get(task_name or "")
+                if agent_id:
+                    if in_flight:
+                        if agent_id not in running_agents:
+                            running_agents.append(agent_id)
+                    elif state == "SUCCESS":
+                        if agent_id not in succeeded_agents:
+                            succeeded_agents.append(agent_id)
+                    continue
+                # Orquestador de fase: se refleja a nivel de etapa.
+                stage_key = _PHASE_TASK_TO_STAGE.get(task_name or "")
+                if in_flight and stage_key and stage_key not in running_phases:
+                    running_phases.append(stage_key)
+    except Exception:
+        logger.debug("No se pudo resolver running_agents", exc_info=True)
+
+    # Un mismo agente puede tener un lanzamiento viejo en vuelo y otro nuevo ya
+    # terminado; "en vuelo" gana, que es lo que el usuario ve en pantalla.
+    succeeded_agents = [a for a in succeeded_agents if a not in running_agents]
+
     return {
         "project_id": str(project_id),
         "documents": doc_logs,
         "summary": {
             "total": len(docs),
             "need_segment": docs_need_segment,
+            "need_classify": docs_need_classify,
             "need_agents": docs_need_agents,
+            "docs_inconsistent": docs_inconsistent,
+            "docs_need_classify": docs_need_classify,
             "need_synthesis": docs_need_synthesis,
             "sintetizados": docs_sintetizados,
             "done": docs_done,
@@ -360,6 +551,10 @@ async def get_pipeline_log(
             "categories": cat_count,
             "project_state": await _get_project_state(db, project_id),
             "playground_ready": docs_sintetizados == len(docs) and cat_count > 0,
+            "running_agents": running_agents,
+            "succeeded_agents": succeeded_agents,
+            "running_phases": running_phases,
+            "open_runs": open_runs,
         },
     }
 
@@ -496,6 +691,23 @@ async def get_pipeline_status(
     }
 
 
+@router.post("/projects/{project_id}/pipeline/close-idle-runs")
+async def close_idle_pipeline_runs(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Cierra los runs que quedaron en 'running' sin trabajo en vuelo.
+
+    ``pipeline_runs.status`` no tiene dueño: los runs se crean 'running' y solo
+    ``POST /admin/projects/{id}/stop`` los cierra. Si el worker muere a mitad, el
+    proyecto queda marcado como "pipeline en ejecución" para siempre. Este
+    endpoint reconcilia con Celery como fuente de verdad y no revoca tareas ni
+    toca documentos (a diferencia de /stop).
+    """
+    return {"closed": await close_idle_runs(db, project_id)}
+
+
 @router.post("/projects/{project_id}/pipeline/run")
 async def run_pipeline_orchestrated(
     project_id: UUID,
@@ -505,13 +717,12 @@ async def run_pipeline_orchestrated(
 ):
     """
     Orchestrator único del pipeline.
-    Recibe {"force": false} y determina qué pasos ejecutar
-    basándose en el estado REAL de la DB (segmentos, códigos).
+    Recibe `{"force": bool}` y delega en el pipeline el cálculo de qué toca
+    despachar (classify → segmentar → extraer).
 
-    Retorna inmediatamente con task_ids. El frontend hace polling
-    de /pipeline/tail y /pipeline/log para seguir el progreso.
+    Returns:
+        Resumen del pipeline con los task_ids encolados.
     """
-    from sqlalchemy import text
 
     force = (body or {}).get("force", False)
 
@@ -536,60 +747,12 @@ async def run_pipeline_orchestrated(
     except Exception:
         pass
 
-    # ── 2. Para cada doc, determinar qué falta mirando la DB real ──
-    doc_ids = [d.id for d in docs]
+    # Qué falta por documento lo decide el orchestrator (mira la clasificación de
+    # metadatos, los segmentos, los incidentes y los códigos), así que aquí sólo
+    # se delega: duplicar esa decisión en el API fue lo que dejó la escalera
+    # segment-first clavada en este archivo.
 
-    # Segmentos por doc
-    seg_counts = {}
-    if doc_ids:
-        seg_result = await db.execute(
-            text(
-                "SELECT documento_id, COUNT(*) FROM segmentos WHERE documento_id = ANY(:ids) GROUP BY documento_id"
-            ),
-            {"ids": doc_ids},
-        )
-        for row in seg_result:
-            seg_counts[str(row[0])] = row[1]
-
-    # Códigos por doc (via segmentos)
-    code_counts = {}
-    if doc_ids:
-        code_result = await db.execute(
-            text(
-                "SELECT s.documento_id, COUNT(cs.segmento_id) "
-                "FROM segmentos s "
-                "LEFT JOIN codigos_segmento cs ON cs.segmento_id = s.id "
-                "WHERE s.documento_id = ANY(:ids) GROUP BY s.documento_id"
-            ),
-            {"ids": doc_ids},
-        )
-        for row in code_result:
-            code_counts[str(row[0])] = row[1]
-
-    # ── 3. Clasificar docs ──
-    need_segment = []
-    need_agents = []
-    already_done = []
-
-    for doc in docs:
-        did = str(doc.id)
-        n_segs = seg_counts.get(did, 0)
-        n_codes = code_counts.get(did, 0)
-
-        if force:
-            if n_segs == 0:
-                need_segment.append(doc)
-            else:
-                need_agents.append(doc)
-        else:
-            if n_segs == 0:
-                need_segment.append(doc)
-            elif n_codes == 0:
-                need_agents.append(doc)
-            else:
-                already_done.append(doc)
-
-    # ── 4. Delegar al Orchestrator centralizado ──
+    # ── Delegar al Orchestrator centralizado ──
     import os as _os
 
     from app.services.pipeline_orchestrator import PipelineOrchestrator
@@ -797,6 +960,108 @@ TABLE_MAP = {
     "cat": ("categorias", ["nombre", "definicion"]),
 }
 
+# Families served by GET .../agent-memos, expressed as TABLE_MAP prefixes so the
+# bulk delete below cannot drift from the read side.
+MEMO_FAMILY_PREFIXES = {
+    "descriptive_data": ("pc", "dp"),
+    "inductive_data": ("cat",),
+}
+
+
+def _resolve_memo_prefixes(family: str | None) -> tuple[str, ...]:
+    """Map a ``family`` filter to TABLE_MAP prefixes. No filter = every family."""
+    if not family or family.strip().lower() in ("all", "*"):
+        return tuple(TABLE_MAP)
+    key = family.strip().lower()
+    if key in MEMO_FAMILY_PREFIXES:
+        return MEMO_FAMILY_PREFIXES[key]
+    if key in TABLE_MAP:
+        return (key,)
+    for prefix, (table, _) in TABLE_MAP.items():
+        if key == table:
+            return (prefix,)
+    raise HTTPException(
+        400,
+        f"Familia desconocida: {family!r}. Valores válidos: "
+        + ", ".join(sorted(MEMO_FAMILY_PREFIXES)),
+    )
+
+
+@router.delete("/projects/{project_id}/agent-memos")
+async def delete_agent_memos(
+    project_id: UUID,
+    family: str | None = Query(
+        None,
+        description="Familia a eliminar (descriptive_data, inductive_data). "
+        "Sin valor se eliminan todas.",
+    ),
+    tipo: str | None = Query(None, description="Alias de `family`."),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Elimina los memos de agente que devuelve GET .../agent-memos.
+
+    Borra de las mismas tablas que lee el GET (``TABLE_MAP``) en una sola
+    transacción: si alguna fila tiene datos derivados (códigos, hipótesis,
+    métricas…) la FK lo impide y no se borra nada.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    proyecto = await db.get(Proyecto, project_id)
+    if proyecto is None:
+        raise HTTPException(404, "Proyecto no encontrado")
+    if str(proyecto.creador_id) != str(current_user.id):
+        raise HTTPException(403, "No autorizado")
+
+    # Mismo gate que DELETE /projects/{id}/memos (memos.py): borrar entidades
+    # con el pipeline en marcha deja a los agentes escribiendo en el vacío.
+    # El estado se pide a Celery: los runs no se cierran nunca y su 'running'
+    # dejaría el borrado bloqueado para siempre. `heal=True` aprovecha para
+    # cerrar los que ya no tienen trabajo en vuelo.
+    if await pipeline_really_running(db, project_id, heal=True):
+        raise HTTPException(409, "Pausa el pipeline antes de eliminar entidades.")
+
+    requested = family or tipo
+    prefixes = _resolve_memo_prefixes(requested)
+
+    by_table: dict[str, int] = {}
+    try:
+        for prefix in prefixes:
+            table, _ = TABLE_MAP[prefix]
+            result = await db.execute(
+                text(f"DELETE FROM {table} WHERE proyecto_id = :pid"),
+                {"pid": project_id},
+            )
+            by_table[table] = result.rowcount or 0
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.warning(
+            "Bulk agent-memo delete blocked by a foreign key in project %s: %s",
+            project_id,
+            exc,
+        )
+        raise HTTPException(
+            409,
+            "No se pueden eliminar estos memos: tienen datos derivados "
+            "(códigos, hipótesis, métricas de saturación…). Elimina esos datos "
+            "primero y vuelve a intentarlo.",
+        ) from exc
+
+    deleted = sum(by_table.values())
+    if deleted == 0:
+        await db.rollback()
+        raise HTTPException(
+            404,
+            "No hay memos de agente que eliminar"
+            + (f" en la familia '{requested}'" if requested else ""),
+        )
+
+    await db.commit()
+    logger.info(
+        "Deleted %d agent memos from project %s: %s", deleted, project_id, by_table
+    )
+    return {"deleted": deleted, "by_table": by_table, "family": requested or "all"}
+
 
 @router.delete("/agent-outputs/{memo_id}")
 async def delete_agent_output(
@@ -818,6 +1083,9 @@ async def delete_agent_output(
     table, _ = TABLE_MAP[prefix]
 
     # ── Sync: si es una categoría con source_memo_id, actualizar el memo ──
+    # Se lee antes del DELETE (es la misma fila) pero el memo sólo se marca
+    # cuando el borrado ha ocurrido de verdad.
+    source_memo_id = None
     if prefix == "cat":
         source = await db.execute(
             text("SELECT source_memo_id FROM categorias WHERE id = :id"),
@@ -826,21 +1094,29 @@ async def delete_agent_output(
         source_row = source.fetchone()
         if source_row and source_row[0]:
             source_memo_id = str(source_row[0])
-            # Marcar el memo como absorbido/eliminado lógicamente
-            await db.execute(
-                text(
-                    "UPDATE memos SET estado = 'ABSORBIDO', version = version + 1 "
-                    "WHERE id = :mid"
-                ),
-                {"mid": source_memo_id},
-            )
-            logger.info(
-                "Marked source memo %s as ABSORBIDO after category %s deletion",
-                source_memo_id,
-                row_id,
-            )
 
-    await db.execute(text(f"DELETE FROM {table} WHERE id = :id"), {"id": row_id})
+    result = await db.execute(
+        text(f"DELETE FROM {table} WHERE id = :id"), {"id": row_id}
+    )
+    if result.rowcount == 0:
+        await db.rollback()
+        raise HTTPException(404, f"Agent output no encontrado: {memo_id}")
+
+    if source_memo_id:
+        # Marcar el memo como absorbido/eliminado lógicamente
+        await db.execute(
+            text(
+                "UPDATE memos SET estado = 'ABSORBIDO', version = version + 1 "
+                "WHERE id = :mid"
+            ),
+            {"mid": source_memo_id},
+        )
+        logger.info(
+            "Marked source memo %s as ABSORBIDO after category %s deletion",
+            source_memo_id,
+            row_id,
+        )
+
     await db.commit()
     return {"status": "deleted", "id": memo_id}
 
@@ -996,10 +1272,63 @@ _PROJECT_LEVEL_TASK_NAMES = frozenset(
     }
 )
 
+# UI agent ids → Celery task. The open-coding stage uses prompt-level agent ids
+# that are not registered Celery task names; without this translation the
+# dispatch would be rejected (or silently 200 without executing anything).
+# Only agents that map to a real task are listed — the rest are prompt-only and
+# must not be launchable on their own.
+_AGENT_ID_TO_TASK: dict[str, str] = {
+    "fa_population_context": "a3_make_sense",
+    "fb_incident_grouper": "b1_compare_incidents",
+    "fb_code_generator": "b2_label_groups",
+    "fd_category_synthesizer": "synthesize_categories",
+    "fd_config_critic": "critique_configuration",
+}
+
+# Extra positional args appended after proyecto_id, for tasks whose signature
+# needs more than the project id. batch_start=1 is correct for the first batch.
+_AGENT_ID_EXTRA_ARGS: dict[str, tuple] = {
+    "fd_category_synthesizer": (1,),
+    "fd_config_critic": (1,),
+}
+
+# Reverse map: which UI agent is in flight for a given Celery task.
+_TASK_TO_AGENT_ID: dict[str, str] = {
+    task: agent for agent, task in _AGENT_ID_TO_TASK.items()
+}
+
+# Orquestadores de fase: no son agentes de la UI, pero sí pintan el spinner de
+# la etapa completa mientras están en vuelo.
+_PHASE_TASK_TO_STAGE: dict[str, str] = {
+    "process_document_agents_a": "data_management",
+    "process_synthesis_agents_b": "open_coding",
+}
+
+
+def _celery_task_states(task_ids: list[str]) -> dict[str, str]:
+    """Consulta el estado real de cada tarea en el result backend (bloqueante).
+
+    Se ejecuta en un hilo aparte: AsyncResult.status hace I/O contra Redis y no
+    debe bloquear el event loop.
+    """
+    from celery.result import AsyncResult
+
+    states: dict[str, str] = {}
+    for tid in task_ids:
+        try:
+            states[tid] = AsyncResult(tid, app=celery_app).status
+        except Exception:
+            states[tid] = "UNKNOWN"
+    return states
+
 
 async def _get_or_create_running_run_id(db: AsyncSession, project_id: UUID) -> UUID:
     """Reutiliza el pipeline_run 'running' más reciente o crea uno nuevo."""
     from sqlalchemy import text
+
+    # Un run abandonado no debe absorber el trabajo nuevo (quedaría abierto para
+    # siempre y bloquearía memos/borrados). Se reconcilia antes de reutilizarlo.
+    await close_idle_runs(db, project_id)
 
     row = await db.execute(
         text(
@@ -1028,13 +1357,16 @@ async def _get_or_create_running_run_id(db: AsyncSession, project_id: UUID) -> U
 async def _track_pipeline_task(
     db: AsyncSession,
     project_id: UUID,
-    document_id: str,
+    document_id: str | None,
     celery_task_id: str,
     task_name: str,
     queue: str,
     doc_estado_before: str | None,
 ) -> None:
-    """Registra la tarea despachada en pipeline_tasks para poder revertirla."""
+    """Registra la tarea despachada en pipeline_tasks para poder revertirla.
+
+    document_id va NULL para agentes de proyecto (no tocan un documento).
+    """
     from sqlalchemy import text
 
     run_id = await _get_or_create_running_run_id(db, project_id)
@@ -1049,7 +1381,8 @@ async def _track_pipeline_task(
         {
             "id": uuid4(),
             "run_id": run_id,
-            "did": str(document_id),
+            # str(None) == 'None' → asyncpg rechaza el literal como UUID.
+            "did": str(document_id) if document_id else None,
             "ctid": celery_task_id,
             "tname": task_name,
             "queue": queue,
@@ -1079,8 +1412,12 @@ async def run_single_agent(
     per_doc_task_names = {
         "fa_glaser_data_classifier": "run_glaser_classifier",
         "clasificador_datos": "run_glaser_classifier",
-        # "Extraer incidentes": F2.3 runs inside process_document_agents_a,
-        # which segments (if needed), classifies segment types and extracts.
+        # "Extraer incidentes" (sidebar y botón por documento): F2.3 runs inside
+        # process_document_agents_a, which segments (if needed), classifies
+        # segment types and extracts. `fa_document_pattern_extractor` es el id
+        # del prompt/agente que hace la extracción baseline; el resto son alias
+        # históricos de la UI.
+        "fa_document_pattern_extractor": "process_document_agents_a",
         "extract_patterns": "process_document_agents_a",
         "extract_patterns_and_incidents": "process_document_agents_a",
     }
@@ -1101,13 +1438,44 @@ async def run_single_agent(
         estado_before = (doc.estado or "").strip() or None
 
         if agent_id == "segmentar_documento":
-            task_name = "segmentar_documento"
-            queue = "nlp"
-            task = celery_app.send_task(
-                task_name,
-                args=[texto, 1024, "", "TEXTO", "", doc_id, True],  # manual_mode=True
-                queue=queue,
-            )
+            from app.agents.transitions import segmenters_available
+
+            # La escalera es classify-first: el clasificador etiqueta el texto y
+            # los segmentos heredan esa etiqueta. Segmentar antes dejaría
+            # segmentos sin categoría que ninguna etapa posterior reclasifica.
+            if not (
+                (doc.metadatos or {}).get("glaser_blocks")
+                or (doc.metadatos or {}).get("texto_clasificado")
+            ):
+                raise HTTPException(409, "Clasificá el texto antes de segmentar.")
+
+            if await asyncio.to_thread(segmenters_available):
+                task_name = "segmentar_documento"
+                queue = "nlp"
+                task = celery_app.send_task(
+                    task_name,
+                    args=[
+                        texto,
+                        1024,
+                        "",
+                        "TEXTO",
+                        "",
+                        doc_id,
+                        True,
+                    ],  # manual_mode=True
+                    queue=queue,
+                )
+            else:
+                # Sin workers de segmentación el segmentador LLM (heavy) hace el
+                # trabajo. La clasificación previa se conserva: los segmentos
+                # viejos los borra el propio worker antes de insertar los nuevos.
+                task_name = "segmentar_documento_llm"
+                queue = "heavy"
+                task = celery_app.send_task(
+                    task_name,
+                    args=[doc_id, str(project_id)],
+                    queue=queue,
+                )
         elif agent_id in ("punctuate_text", "util_punctuator"):
             task_name = "punctuate_text"
             queue = "fast"
@@ -1125,8 +1493,10 @@ async def run_single_agent(
         else:
             task_name = per_doc_task_names.get(agent_id, agent_id)
             queue = "heavy"
-            # process_document_agents_a necesita segmentos reales; en otros
-            # estados _ensure_segmented lanza y la tarea falla.
+            # process_document_agents_a consume segmentos ya clasificados: el
+            # estado mínimo es 'segmentado' (la clasificación ocurre antes). En
+            # 'clasificado' todavía no hay segmentos y _ensure_segmented no los
+            # produce, así que la tarea falla.
             if task_name == "process_document_agents_a" and estado_before not in (
                 "segmentado",
                 "incidentes_extraidos",
@@ -1137,7 +1507,7 @@ async def run_single_agent(
                 raise HTTPException(
                     409,
                     f"Documento en estado '{estado_before}'. "
-                    "Ejecutá segmentar_documento antes de extraer.",
+                    "Segmentá el texto ya clasificado antes de extraer.",
                 )
             task = celery_app.send_task(
                 task_name,
@@ -1157,20 +1527,45 @@ async def run_single_agent(
         )
     else:
         # Project-level agents (cross-doc, synthesizers, etc.).
-        # El agent_id de la UI puede ser un id de prompt NO registrado en
-        # Celery; despacharlo igual devuelve 200 sin ejecutar nada.
-        if agent_id not in _PROJECT_LEVEL_TASK_NAMES:
-            raise HTTPException(
-                400,
-                f"El agente '{agent_id}' no es una tarea Celery registrada. "
-                "Los agentes de prompt deben ejecutarse vía "
-                f"POST /projects/{project_id}/pipeline/run-stage/{{stage}}.",
+        # Los ids de agente de la UI no siempre son nombres de tarea Celery:
+        # primero traducimos con _AGENT_ID_TO_TASK, y solo después aceptamos
+        # un id que ya sea una tarea de proyecto registrada.
+        mapped = _AGENT_ID_TO_TASK.get(agent_id)
+        if mapped:
+            task_name = mapped
+            task = celery_app.send_task(
+                task_name,
+                args=[
+                    str(project_id),
+                    *_AGENT_ID_EXTRA_ARGS.get(agent_id, ()),
+                ],
+                queue="heavy",
             )
-        task_name = agent_id
-        task = celery_app.send_task(
+        else:
+            if agent_id not in _PROJECT_LEVEL_TASK_NAMES:
+                raise HTTPException(
+                    400,
+                    f"El agente '{agent_id}' no es una tarea Celery registrada. "
+                    "Los agentes de prompt deben ejecutarse vía "
+                    f"POST /projects/{project_id}/pipeline/run-stage/{{stage}}.",
+                )
+            task_name = agent_id
+            task = celery_app.send_task(
+                task_name,
+                args=[str(project_id)],
+                queue="heavy",
+            )
+
+        # Tracking: permite que /admin/projects/{id}/stop la revoque y que
+        # /pipeline/log muestre el agente en vuelo tras un reload.
+        await _track_pipeline_task(
+            db,
+            project_id,
+            None,
+            task.id,
             task_name,
-            args=[str(project_id)],
-            queue="heavy",
+            "heavy",
+            None,
         )
 
     return {

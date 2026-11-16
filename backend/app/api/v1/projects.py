@@ -707,18 +707,21 @@ VALID_OBJECTS_OF_STUDY = {
 
 # ── Prompt Glaser por proyecto ────────────────────────────────────────
 
-# Prompt Glaser por proyecto: mismos 4 tags que validan los workers.
-# Canario de la definición: workers/heavy/glaser_classifier.py (VALID_TAGS).
+# Prompt Glaser por proyecto: las 5 categorías canónicas que persiste el
+# clasificador segment-first.
+# Canario de la definición: workers/heavy/segment_classifier.py (CLASSES_GLASER).
 GLASER_TAGS: tuple[str, ...] = (
     "baseline_data",
-    "interviewer_context",
-    "processual_data",
-    "contextual_data",
+    "properline_data",
+    "interpreted_data",
+    "vague_data",
+    "document_context",
 )
+GLASER_TAGS_LABEL = ", ".join(f"<{tag}>" for tag in GLASER_TAGS)
 MAX_GLASER_PROMPT_LEN = 20_000
 GLASER_PROMPT_MIN_LEN = 200
 
-# Tags envolventes que el worker añade/espera además de los 4 de Glaser.
+# Tags envolventes que el worker añade/espera además de los 5 de Glaser.
 _GLASER_ALLOWED_EXTRA_TAGS = {"texto", "texto_crudo"}
 _GLASER_TAG_RE = re.compile(r"</?([A-Za-z_][A-Za-z0-9_]*)>")
 # Expresiones que indican que el prompt prohíbe tags anidados.
@@ -768,8 +771,7 @@ def _validate_glaser_prompt_tags(prompt: str) -> list[str]:
     if missing:
         raise HTTPException(
             400,
-            "El prompt debe mencionar los 4 tags: <baseline_data>, "
-            "<interviewer_context>, <processual_data>, <contextual_data>. "
+            f"El prompt debe mencionar los 5 tags: {GLASER_TAGS_LABEL}. "
             f"Faltan: {', '.join(f'<{t}>' for t in missing)}.",
         )
 
@@ -780,8 +782,7 @@ def _validate_glaser_prompt_tags(prompt: str) -> list[str]:
             raise HTTPException(
                 400,
                 f"Tag no permitido en el prompt: '<{name}>'. Solo se permiten: "
-                "<baseline_data>, <interviewer_context>, <processual_data>, "
-                "<contextual_data>.",
+                f"{GLASER_TAGS_LABEL}.",
             )
 
     if "{raw_text}" in prompt:

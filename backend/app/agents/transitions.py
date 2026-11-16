@@ -8,7 +8,12 @@ Principios:
 - SOLO este módulo dispara Phase B (con deduplicación vía processing_states)
 - Optimistic locking: WHERE estado = from_state previene race conditions
 
+Orden del pipeline (classify-first):
+  crudo|preprocesado → clasificando → clasificado → segmentando → segmentado
+                     → procesando → extrayendo → incidentes_extraidos
+
 Workers llaman:
+  transition(session, doc_id, proj_id, "clasificado", "run_glaser_classifier", True)
   transition(session, doc_id, proj_id, "segmentado", "segmentar_documento", True)
   transition(session, doc_id, proj_id, "extrayendo", "process_document_agents_a", True)
   transition(session, doc_id, proj_id, estado_actual, task_name, False)  # error
@@ -18,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os as _os
+import time
 from uuid import UUID
 
 from celery import Celery
@@ -29,27 +35,67 @@ logger = logging.getLogger(__name__)
 _celery_app = Celery(broker=_os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
 # ═══════════════════════════════════════════════════════════════════════
+# Disponibilidad de segmentadores (workers/nlp)
+# ═══════════════════════════════════════════════════════════════════════
+
+_SEGMENTER_PROBE_TTL = 30.0
+_segmenter_probe: dict[str, float | bool] = {"ts": 0.0, "value": False}
+
+
+def segmenters_available(timeout: float = 1.0) -> bool:
+    """True si algún worker registrado expone la tarea ``segmentar_documento``.
+
+    Se detecta por tarea registrada, no por nombre de nodo: worker-nlp arranca
+    sin ``--hostname`` y Celery lo registra como ``celery@<container-id>``.
+    El resultado se cachea 30 s para no hacer un broadcast por documento.
+    Cualquier error de broker se interpreta como "no disponible", que es el
+    camino seguro: la segmentación la hace entonces ``segmentar_documento_llm``
+    en worker-heavy.
+    """
+    now = time.monotonic()
+    if now - float(_segmenter_probe["ts"]) < _SEGMENTER_PROBE_TTL:
+        return bool(_segmenter_probe["value"])
+
+    available = False
+    try:
+        inspector = _celery_app.control.inspect(timeout=timeout)
+        registered = inspector.registered() or {}
+        available = any(
+            "segmentar_documento" in (tasks or []) for tasks in registered.values()
+        )
+    except Exception:
+        available = False
+
+    _segmenter_probe["ts"] = now
+    _segmenter_probe["value"] = available
+    return available
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # State machine: current_state → (next_state, next_task)
 # ═══════════════════════════════════════════════════════════════════════
 
 NEXT: dict[str, tuple[str, str | None, str | None]] = {
     # ── Stage 1: Data Management (per-document) ──
-    # The manual UI flow is punctuate → classify → segment:
-    #   crudo → preprocesando → preprocesado → clasificando → clasificado
-    #         → segmentando → segmentado
-    # `crudo` also feeds segmentation directly for the bulk pipeline, which
-    # segments raw text without the manual preprocess/classify steps.
-    "crudo": ("segmentando", "segmentar_documento", "nlp"),
+    # Classify-first: el clasificador etiqueta el TEXTO completo (sin crear
+    # segmentos), y sólo después el segmentador divide el texto heredando la
+    # etiqueta del tramo de origen.
+    #   crudo|preprocesado → clasificando → clasificado
+    #                      → segmentando → segmentado
+    #                      → procesando → extrayendo → incidentes_extraidos
+    # Sin worker-nlp registrado, `_resolve_next` sustituye el segmentador por
+    # `segmentar_documento_llm`, que segmenta en worker-heavy.
+    "crudo": ("clasificando", "run_glaser_classifier", "heavy"),
     "preprocesando": ("preprocesado", None, None),
     "preprocesado": ("clasificando", "run_glaser_classifier", "heavy"),
-    # The classifier worker writes 'clasificado' itself.
+    # El worker del clasificador escribe 'clasificado' él mismo.
     "clasificando": ("clasificado", None, None),
     "clasificado": ("segmentando", "segmentar_documento", "nlp"),
     "segmentando": ("segmentado", None, None),
-    # ── F2.3 runs inside process_document_agents_a, not as separate task ──
     "segmentado": ("procesando", "process_document_agents_a", "heavy"),
-    # process_document_agents_a sets 'extrayendo' while F2.3 runs; this is the
-    # state it must transition FROM to reach the batch-ready terminal state.
+    # ── F2.3 runs inside process_document_agents_a, not as separate task ──
+    # 'procesando' is transient (begin_extraction moves it to 'extrayendo'), so
+    # it needs no entry of its own in this ladder.
     "extrayendo": ("incidentes_extraidos", None, None),
     "incidentes_extraidos": (None, None, None),  # waits for batch trigger (3+ docs)
     # ── Stage 2: Open Coding (batch, cross-document) ──
@@ -100,6 +146,26 @@ GATE_DATABASE_B = "database_b"
 GATE_GLOBAL_SATURATION = "global_saturation"
 
 
+def _resolve_next(
+    from_state: str,
+) -> tuple[str, str | None, str | None] | None:
+    """Resuelve el siguiente paso, degradando la segmentación si no hay workers.
+
+    La degradación se decide por la TAREA, no por el estado: si el paso a
+    despachar es ``segmentar_documento`` y no hay worker-nlp registrado, se
+    sustituye por ``segmentar_documento_llm`` en worker-heavy. El documento
+    sigue pasando por ``segmentando`` (el destino del estado no cambia), pero la
+    tarea que lo ejecuta sí.
+    """
+    info = NEXT.get(from_state)
+    if not info:
+        return None
+    next_state, next_task, queue = info
+    if next_task == "segmentar_documento" and not segmenters_available():
+        return ("segmentando", "segmentar_documento_llm", "heavy")
+    return info
+
+
 def transition(
     session,
     documento_id: str,
@@ -127,7 +193,7 @@ def transition(
     if not success:
         return _to_error(session, documento_id, fail_to)
 
-    info = NEXT.get(from_state)
+    info = _resolve_next(from_state)
     if not info:
         logger.warning("Unknown state '%s' for doc=%s", from_state, documento_id)
         return None
@@ -153,13 +219,17 @@ def transition(
 
     # ── 2. Despachar siguiente tarea ──
     if next_task and queue:
+        # `from_state` (no `next_state`) es el estado PREVIO a la tarea: es el
+        # destino de rollback si se cancela. Guardar el transitorio recién
+        # escrito dejaría al documento clavado en 'clasificando'/'segmentando'
+        # al detener el pipeline.
         return _dispatch_next(
             session,
             documento_id,
             proyecto_id,
             next_task,
             queue,
-            next_state or from_state,
+            from_state,
         )
 
     # ── 3. Si llegó a estado de batch-ready, verificar Phase B + Iteration ──
@@ -195,12 +265,65 @@ def transition(
 # ═══════════════════════════════════════════════════════════════════════
 
 
+# Estados terminales que una tarea zombie o cancelada NUNCA puede demover.
+_PROTECTED_ON_ERROR = frozenset(
+    {"incidentes_extraidos", "procesado", "listo", "codificado", "resumido"}
+)
+
+# Destinos reintentables: sólo se aplican desde los estados en los que la tarea
+# que falla podía estar corriendo. `process_document_agents_a` vuelve a
+# 'segmentado' cuando la extracción falla empezando en 'procesando'/'extrayendo'.
+_RETRY_ONLY_FROM: dict[str, frozenset[str]] = {
+    "segmentado": frozenset({"procesando", "extrayendo", "segmentado", "error"}),
+}
+
+
 def _to_error(session, documento_id: str, to_state: str = "error") -> None:
-    """Marca documento como error (o en el estado de fallo indicado)."""
+    """Marca el documento como fallido sin demover uno que ya avanzó.
+
+    Una tarea zombie o cancelada sigue viva el tiempo suficiente para escribir
+    'error' sobre un documento que otro worker ya llevó a
+    'incidentes_extraidos'. Los terminales de ``_PROTECTED_ON_ERROR`` no se
+    tocan nunca, y los destinos reintentables (``to_state='segmentado'``) sólo
+    se escriben desde el estado en el que la tarea realmente corría.
+    """
     session.rollback()  # clear any previously aborted transaction
+
+    row = session.execute(
+        text("SELECT estado FROM documentos WHERE id = :did"),
+        {"did": documento_id},
+    ).fetchone()
+    if row is None:
+        logger.warning("_to_error: doc=%s no existe", documento_id)
+        return
+
+    current = (row[0] or "").strip()
+    if current in _PROTECTED_ON_ERROR:
+        logger.warning(
+            "_to_error ignorado: doc=%s ya está en '%s' (terminal) y no se "
+            "degrada a '%s'",
+            documento_id,
+            current,
+            to_state,
+        )
+        return
+
+    allowed_from = _RETRY_ONLY_FROM.get(to_state)
+    if allowed_from is not None and current not in allowed_from:
+        logger.warning(
+            "_to_error ignorado: doc=%s está en '%s' y '%s' sólo se aplica desde %s",
+            documento_id,
+            current,
+            to_state,
+            sorted(allowed_from),
+        )
+        return
+
     session.execute(
-        text("UPDATE documentos SET estado = :to WHERE id = :did"),
-        {"to": to_state, "did": documento_id},
+        text(
+            "UPDATE documentos SET estado = :to WHERE id = :did AND estado = :current"
+        ),
+        {"to": to_state, "did": documento_id, "current": row[0]},
     )
     session.commit()
 
@@ -426,6 +549,11 @@ def _get_texto(session, documento_id: str) -> str:
 def begin_extraction(session, documento_id: str) -> bool:
     """Mueve el doc a 'extrayendo' sólo desde estados no terminales.
 
+    La extracción arranca desde ``segmentado`` (el texto ya está segmentado y
+    cada segmento heredó su tag Glaser) o desde ``procesando`` si una corrida
+    anterior se quedó a medias. ``error`` sigue aceptándose para el reintento
+    manual desde la UI.
+
     Devuelve True si esta ejecución debe hacer la transición final
     extrayendo -> incidentes_extraidos. Devuelve False si el doc ya estaba
     en un estado terminal (re-ejecución manual), para no regresarlo.
@@ -453,7 +581,13 @@ def begin_extraction(session, documento_id: str) -> bool:
 def reset_after_cancel(
     session, documento_id: str, to_state: str = "segmentado"
 ) -> None:
-    """Devuelve el doc a un estado reintentable tras una cancelación."""
+    """Devuelve el doc a un estado reintentable tras una cancelación.
+
+    La extracción ahora corre desde 'segmentado' (el texto ya está clasificado
+    Y segmentado, con la etiqueta heredada en cada segmento), así que es el
+    estado por defecto al que vuelve un documento cuyo 'extrayendo' fue
+    cancelado.
+    """
     session.rollback()
     session.execute(
         text(

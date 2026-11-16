@@ -8,13 +8,14 @@ import uuid
 from uuid import UUID
 
 from app.core.memo_types import (
-    family_to_entity_type,
+    MEMO_TYPES_BY_STAGE,
+    get_all_type_keys,
     get_all_types,
-    get_types_for_stage,
 )
 from app.db.database import get_db
 from app.models.domain.user import Usuario
 from app.services.auth import get_current_user
+from app.services.pipeline_state import pipeline_really_running
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -31,12 +32,30 @@ def _to_jsonb(value: dict | None) -> str | None:
     return json.dumps(value, ensure_ascii=False)
 
 
+async def _end_auth_transaction(db: AsyncSession) -> None:
+    """Cierra la transacción que abrió ``get_current_user``.
+
+    FastAPI cachea ``get_db``, así que el endpoint recibe la misma sesión en la
+    que la dependencia de auth ya ejecutó un SELECT: SQLAlchemy hizo autobegin y
+    ``db.begin()`` lanzaría ``InvalidRequestError``. Cerramos esa transacción
+    (solo lecturas) para que el bloque atómico sea dueño de la suya.
+    """
+    if db.in_transaction():
+        await db.commit()
+
+
 # ── Schemas ──────────────────────────────────────────────────────────────
 
 
 class CreateMemoRequest(BaseModel):
     tipo: str = Field(..., description="Tipo de entidad: HIPOTESIS, CATEGORIA, etc.")
     contenido: str = Field(..., min_length=1, description="Contenido del memo")
+    nombre: str | None = Field(
+        None,
+        max_length=200,
+        description="Nombre de la categoría a crear (solo tipo CATEGORIA). "
+        "Si se omite, se deriva del contenido.",
+    )
     es_confidencial: bool = Field(False)
     structured_fields: dict | None = Field(
         None, description="Campos estructurados según el tipo de memo"
@@ -59,10 +78,19 @@ class PatchMemoRequest(BaseModel):
 @router.get("/projects/{project_id}/available-memo-types")
 async def get_available_memo_types(
     project_id: UUID,
+    lang: str | None = Query(
+        None, description="Idioma de label/description (en|es|de|pt)"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Tipos de memo disponibles según la etapa actual del proyecto."""
+    """Tipos de memo disponibles según la etapa actual del proyecto.
+
+    Devuelve dos vistas del catálogo localizado:
+    - ``available_types``: los tipos de la etapa (``stage_available`` siempre True).
+    - ``all_types``: el catálogo completo, con ``stage_available``.
+    Ambas llevan ``agent_status`` cuando el tipo tenga ``requires_agent``.
+    """
     row = await db.execute(
         text("SELECT estado FROM proyectos WHERE id = :pid"),
         {"pid": project_id},
@@ -73,37 +101,42 @@ async def get_available_memo_types(
 
     stage = proyecto[0]
 
-    active_run = await db.execute(
-        text(
-            "SELECT id FROM pipeline_runs "
-            "WHERE project_id = :pid AND status = 'running' LIMIT 1"
-        ),
-        {"pid": project_id},
-    )
-    is_running = active_run.fetchone() is not None
+    # `pipeline_runs.status` no basta: los runs se crean 'running' y nadie los
+    # cierra, así que un run viejo bloquearía la creación de memos para siempre.
+    # `heal=True` cierra esos restos en cuanto se consultan.
+    is_running = await pipeline_really_running(db, project_id, heal=True)
 
-    available = get_types_for_stage(stage)
+    all_types = get_all_types(lang)
 
-    # ── FIX 5: Two-level gating — check which required agents have run ──
-    required_agents = list(
-        {t["requires_agent"] for t in available if t.get("requires_agent")}
+    # Dos banderas por entrada, para que el modal pueda informar sin bloquear:
+    # - stage_available: si el tipo es típico de la etapa actual
+    # - agent_status: si el agente que normalmente lo produce ya se ha ejecutado
+    stage_keys = set(MEMO_TYPES_BY_STAGE.get(stage, MEMO_TYPES_BY_STAGE["collecting"]))
+
+    required_agents = sorted(
+        {t["requires_agent"] for t in all_types if t.get("requires_agent")}
     )
+    ran_agents: set[str] = set()
     if required_agents:
         agent_rows = await db.execute(
             text(
                 "SELECT DISTINCT agent_id FROM agent_loop_logs "
-                "WHERE proyecto_id = :pid AND agent_id = ANY(:agent_ids::text[])"
+                # `:param::cast` is invisible to SQLAlchemy's text() parser —
+                # it skips a bind name followed by `:` — so the parameter was
+                # left in the SQL verbatim and Postgres choked on it.
+                "WHERE proyecto_id = :pid AND agent_id = ANY(:agent_ids)"
             ),
             {"pid": project_id, "agent_ids": required_agents},
         )
-        completed = {row[0] for row in agent_rows.fetchall()}
+        ran_agents = {row[0] for row in agent_rows.fetchall()}
 
-        for t in available:
-            ra = t.get("requires_agent")
-            if ra:
-                t["agent_status"] = "completed" if ra in completed else "not_run"
+    for t in all_types:
+        t["stage_available"] = t["key"] in stage_keys
+        ra = t.get("requires_agent")
+        if ra:
+            t["agent_status"] = "completed" if ra in ran_agents else "not_run"
 
-    all_types = get_all_types()
+    available = [t for t in all_types if t["stage_available"]]
 
     return {
         "stage": stage,
@@ -124,9 +157,27 @@ async def create_user_memo(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Crea un memo manual. Solo si el pipeline NO está corriendo."""
+    """Crea un memo manual. Solo si el pipeline NO está corriendo.
 
-    # ── 1. Bloquear proyecto y verificar pipeline ──
+    Acepta cualquier categoría del catálogo (ver ``memo_types.META``): la etapa
+    del proyecto ya no restringe la creación, solo se informa vía
+    ``stage_available`` en /available-memo-types.
+
+    Para ``tipo="CATEGORIA"`` se puede enviar ``nombre`` para fijar el nombre de
+    la categoría creada; si se omite, se deriva del contenido.
+    """
+
+    # ── 1. Verificar pipeline y bloquear proyecto ──
+    # El estado real se pregunta a Celery: cualquier run que se haya creado
+    # queda en 'running' para siempre y bloquearía el proyecto de por vida. Va
+    # fuera del bloque atómico porque hace I/O contra Redis.
+    if await pipeline_really_running(db, project_id, heal=True):
+        raise HTTPException(
+            409,
+            "No se pueden añadir entidades mientras el pipeline está ejecutándose. Pausalo primero.",
+        )
+
+    await _end_auth_transaction(db)
     async with db.begin():
         row = await db.execute(
             text("SELECT estado FROM proyectos WHERE id = :pid FOR UPDATE"),
@@ -138,27 +189,14 @@ async def create_user_memo(
 
         stage = proyecto[0]
 
-        active_run = await db.execute(
-            text(
-                "SELECT id FROM pipeline_runs "
-                "WHERE project_id = :pid AND status = 'running' "
-                "FOR UPDATE LIMIT 1"
-            ),
-            {"pid": project_id},
-        )
-        if active_run.fetchone():
-            raise HTTPException(
-                409,
-                "No se pueden añadir entidades mientras el pipeline está ejecutándose. Pausalo primero.",
-            )
-
-        # ── 2. Validar tipo permitido en esta etapa ──
-        available = get_types_for_stage(stage)
-        allowed_keys = [t["key"] for t in available]
+        # ── 2. Validar tipo del catálogo ──
+        # La etapa ya no restringe la creación: el investigador puede necesitar
+        # cualquier tipo en cualquier momento. Se informa vía stage_available.
+        allowed_keys = get_all_type_keys()
         if body.tipo not in allowed_keys:
             raise HTTPException(
                 400,
-                f"Tipo '{body.tipo}' no disponible en etapa '{stage}'. "
+                f"Tipo '{body.tipo}' no existe en el catálogo de categorías de memo. "
                 f"Disponibles: {allowed_keys}",
             )
 
@@ -186,7 +224,7 @@ async def create_user_memo(
 
         # ── 4. Efectos secundarios por tipo ──
         if body.tipo == "CATEGORIA":
-            nombre = f"[Manual] {body.contenido[:100]}"
+            nombre = (body.nombre or "").strip() or f"[Manual] {body.contenido[:100]}"
             await db.execute(
                 text(
                     "INSERT INTO categorias "
@@ -262,6 +300,7 @@ async def patch_user_memo(
     Si el memo es fuente de un código teórico, propaga a name/description.
     """
 
+    await _end_auth_transaction(db)
     async with db.begin():
         # ── 1. Verificar que el memo existe y pertenece al proyecto ──
         memo_row = await db.execute(
@@ -300,12 +339,12 @@ async def patch_user_memo(
             stage = proyecto_row.scalar()
             if not stage:
                 raise HTTPException(404, "Proyecto no encontrado")
-            available = get_types_for_stage(stage)
-            allowed_keys = [t["key"] for t in available]
+            allowed_keys = get_all_type_keys()
             if body.tipo not in allowed_keys:
                 raise HTTPException(
                     400,
-                    f"Tipo '{body.tipo}' no disponible en etapa '{stage}'.",
+                    f"Tipo '{body.tipo}' no existe en el catálogo de categorías de memo. "
+                    f"Disponibles: {allowed_keys}",
                 )
             sets.append("tipo = :tipo")
             params["tipo"] = body.tipo
@@ -383,6 +422,7 @@ async def delete_user_memo(
     Los códigos teóricos vinculados se marcan como huérfanos igualmente.
     """
 
+    await _end_auth_transaction(db)
     async with db.begin():
         # ── 1. Verificar que el memo existe y es editable ──
         memo_row = await db.execute(
@@ -509,11 +549,13 @@ async def get_stale_user_entities(
 
 
 @router.get("/entity-type-colors")
-async def get_entity_type_colors():
+async def get_entity_type_colors(
+    lang: str | None = Query(
+        None, description="Idioma de label/description (en|es|de|pt)"
+    ),
+):
     """Devuelve colores y metadata de todos los tipos de entidad para los filtros/badges del frontend."""
-    from app.core.memo_types import get_all_types
-
-    return {"types": get_all_types()}
+    return {"types": get_all_types(lang)}
 
 
 # ── DELETE /memos ────────────────────────────────────────────────────────
@@ -529,13 +571,7 @@ async def delete_memos_by_type(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Elimina todos los memos user_created de un tipo especifico, o todos si tipo='all'."""
-    active_run = await db.execute(
-        text(
-            "SELECT id FROM pipeline_runs WHERE project_id = :pid AND status = 'running' LIMIT 1"
-        ),
-        {"pid": project_id},
-    )
-    if active_run.fetchone():
+    if await pipeline_really_running(db, project_id, heal=True):
         raise HTTPException(409, "Pausa el pipeline antes de eliminar entidades.")
 
     tipo_filter = "" if tipo == "all" else "AND tipo = :tipo"

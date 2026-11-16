@@ -12,7 +12,8 @@ interface MemoType {
   color: string;
   description: string;
   requires_agent?: string;
-  agent_status?: "not_run" | "completed";
+  agent_status?: string;
+  stage_available?: boolean;
 }
 
 interface StructuredFields {
@@ -201,6 +202,20 @@ const SF_TITLE: CSSProperties = {
   letterSpacing: "0.5px",
 };
 
+const WARNING_BOX: CSSProperties = {
+  marginTop: 12,
+  padding: "8px 12px",
+  borderRadius: 6,
+  background: "#D2992218",
+  border: "1px solid #D2992244",
+  color: "#D29922",
+  fontSize: 12,
+  lineHeight: 1.5,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
 // ── ColorBadge ────────────────────────────────────────────────────────
 
 function ColorBadge(mt: MemoType) {
@@ -285,7 +300,8 @@ function buildStructuredPayload(
   if (tipo === "TEORICO") {
     if (sd.family) result.family = sd.family;
     if (sd.layer) result.layer = sd.layer;
-    if (sd.visualization_hint) result.visualization_hint = sd.visualization_hint;
+    if (sd.visualization_hint)
+      result.visualization_hint = sd.visualization_hint;
     return Object.keys(result).length > 0 ? result : undefined;
   }
 
@@ -312,7 +328,7 @@ export default function AddMemoModal({
   onClose,
   onCreated,
 }: AddMemoModalProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [types, setTypes] = useState<MemoType[]>([]);
   const [selectedType, setSelectedType] = useState("");
   const [content, setContent] = useState("");
@@ -323,24 +339,29 @@ export default function AddMemoModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [structuredData, setStructuredData] = useState<StructuredFields>({});
+  const [categoryName, setCategoryName] = useState("");
 
   useEffect(() => {
-    getAvailableMemoTypes(projectId)
+    getAvailableMemoTypes(projectId, language)
       .then((data) => {
-        setTypes(data.available_types);
+        const list = data.all_types?.length
+          ? data.all_types
+          : data.available_types;
+        setTypes(list);
         setStage(data.stage);
         setPipelineRunning(data.pipeline_running);
-        if (data.available_types.length > 0) {
-          setSelectedType(data.available_types[0].key);
+        if (list.length > 0) {
+          setSelectedType(list[0].key);
         }
       })
       .catch((e) => setError(e.message || t("memo.errorLoadingTypes")))
       .finally(() => setLoading(false));
-  }, [projectId, t]);
+  }, [projectId, language, t]);
 
   // Reset structured fields when type changes
   useEffect(() => {
     setStructuredData({});
+    setCategoryName("");
   }, [selectedType]);
 
   const handleSubmit = async () => {
@@ -354,6 +375,9 @@ export default function AddMemoModal({
         contenido: content,
         es_confidencial: isConfidential,
         ...(sf && { structured_fields: sf }),
+        ...(selectedType === "CATEGORIA" && categoryName.trim()
+          ? { nombre: categoryName.trim() }
+          : {}),
       });
       onCreated();
       onClose();
@@ -450,30 +474,18 @@ export default function AddMemoModal({
         </select>
         {selected && <div style={DESCRIPTION}>{selected.description}</div>}
 
-        {/* Color indicator */}
-        {selected && ColorBadge(selected)}
-
         {/* Agent not-run warning (FIX 5) */}
         {selected && selected.agent_status === "not_run" && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "8px 12px",
-              borderRadius: 6,
-              background: "#D2992218",
-              border: "1px solid #D2992244",
-              color: "#D29922",
-              fontSize: 12,
-              lineHeight: 1.5,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
+          <div style={WARNING_BOX}>
             <span style={{ fontSize: 16 }}>⚠️</span>
-            <span>
-              {t("memo.agentNotRunWarning")}
-            </span>
+            <span>{t("memo.agentNotRunWarning")}</span>
+          </div>
+        )}
+
+        {/* Tipo no típico de la etapa: informativo, no bloquea */}
+        {selected && selected.stage_available === false && (
+          <div style={{ marginTop: 4, fontSize: 11, color: "#8B949E" }}>
+            {t("memo.notTypicalForStage", { stage })}
           </div>
         )}
 
@@ -486,6 +498,24 @@ export default function AddMemoModal({
           placeholder={t("memo.contentPlaceholder")}
           rows={8}
         />
+
+        {/* ── New category name (CATEGORIA only) ── */}
+        {selectedType === "CATEGORIA" && (
+          <div style={SF_SECTION}>
+            <div style={SF_TITLE}>{t("memo.newCategorySection")}</div>
+
+            <div style={LABEL}>{t("memo.newCategoryName")}</div>
+            <input
+              style={INPUT}
+              type="text"
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
+              placeholder={t("memo.newCategoryNamePlaceholder")}
+              maxLength={200}
+            />
+            <div style={DESCRIPTION}>{t("memo.newCategoryHint")}</div>
+          </div>
+        )}
 
         {/* ── Structured Fields (conditional by tipo) ── */}
 
@@ -602,7 +632,10 @@ export default function AddMemoModal({
               step={0.1}
               value={structuredData.strength ?? ""}
               onChange={(e) => {
-                const val = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                const val =
+                  e.target.value === ""
+                    ? undefined
+                    : parseFloat(e.target.value);
                 setField("strength", val);
               }}
               placeholder="0.0 – 1.0"
