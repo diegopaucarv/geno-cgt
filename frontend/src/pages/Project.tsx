@@ -58,6 +58,8 @@ import AgentModal from "../components/AgentModal";
 import IncidentsPanel from "../components/incidents/IncidentsPanel";
 import ClassifiedBlockEditor from "../components/curation/ClassifiedBlockEditor";
 import SegmentsMergeList from "../components/curation/SegmentsMergeList";
+import { ExpandableText } from "../components/ExpandableText";
+import { isTruncated } from "../components/incidents/shorten";
 import { getAgentLogs, type AgentLogEntry } from "../api/client";
 import { PIPELINE_STAGES, FAMILY_COLORS } from "../config/pipelineChains";
 import { STEP_TIMEOUT_MS, STEP_TIMEOUT_MINUTES } from "../config/timeouts";
@@ -146,14 +148,6 @@ const INCONSISTENCY_LABEL_KEYS: Record<string, string> = {
   segments_unclassified: "project.stepSegmentsUnclassified",
 };
 
-/** Single-line, length-capped preview for compact segment lists. */
-function shorten(text: string, max = 160): string {
-  const clean = String(text ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return clean.length > max ? clean.slice(0, max) + "…" : clean;
-}
-
 /** Per-document pipeline log as extended by the classify-first backend. */
 type ExtendedDocLog = DocPipelineLog & {
   has_classification?: boolean;
@@ -178,6 +172,40 @@ const IN_FLIGHT_DOC_STATES = [
 ];
 
 // ── Component ─────────────────────────────────────────────────────
+
+/**
+ * Fila de un segmento todavía sin clasificar (paso `classified`).
+ * El clic en cualquier punto de la fila expande el texto completo.
+ */
+function UnclassifiedSegmentRow({ segment }: { segment: Segment }) {
+  const [open, setOpen] = useState(false);
+  const expandable = isTruncated(segment.texto, 120);
+  return (
+    <div
+      onClick={(e) => {
+        const control = (e.target as HTMLElement).closest(
+          "button, input, select, textarea, a",
+        );
+        if (control) return;
+        setOpen((v) => !v);
+      }}
+      style={{ color: "#8B949E", cursor: expandable ? "pointer" : undefined }}
+    >
+      <span style={{ color: "#F85149" }}>#{segment.posicion}</span>{" "}
+      <ExpandableText
+        text={segment.texto}
+        max={120}
+        expanded={open}
+        onToggle={() => setOpen((v) => !v)}
+      />
+    </div>
+  );
+}
+
+// Gates informativos: avisan en el panel pero NO abren el modal solos.
+// `pattern_convergence` es el chequeo F2.5 de convergencia entre patrones:
+// no bloquea el pipeline, así que interrumpir con un modal era ruido.
+const ADVISORY_HITL_GATES = new Set(["pattern_convergence"]);
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -464,6 +492,9 @@ export default function ProjectDetail() {
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
   const [showHITLModal, setShowHITLModal] = useState(false);
+  // Ids de gates pendientes ya vistos: el modal solo se abre cuando aparece
+  // uno NUEVO. Sin esto, cerrar el modal lo reabría en cada poll (10 s).
+  const hitlSeenIdsRef = useRef<Set<string>>(new Set());
   // Gate de codificación abierta (concern / población / categorías centrales)
   const [ocHitl, setOcHitl] = useState<OpenCodingHitlStatus | null>(null);
   const [ocHitlOpen, setOcHitlOpen] = useState(false);
@@ -550,9 +581,6 @@ export default function ProjectDetail() {
   const [docError, setDocError] = useState<
     Record<string, { action: string; message: string }>
   >({});
-
-  // ── Drag-and-drop state ──
-  const dragDoc = useRef<string | null>(null);
 
   // ── Agent execution state ──
   // Las claves de localStorage se indexan por proyecto: una clave global
@@ -852,7 +880,12 @@ export default function ProjectDetail() {
   // ── HITL: mark relevant stage as "running" when HITL is pending ──
   useEffect(() => {
     if (!pipelineLog || hitlPending.length === 0) return;
-    const gate = hitlPending[0].gate_name;
+    // Preferimos el gate bloqueante: uno informativo no debe marcar la etapa
+    // como bloqueada si hay una decisión real esperando.
+    const gate = (
+      hitlPending.find((g) => !ADVISORY_HITL_GATES.has(g.gate_name)) ??
+      hitlPending[0]
+    ).gate_name;
 
     setStageStatuses((prev) => {
       const next = { ...prev };
@@ -922,6 +955,8 @@ export default function ProjectDetail() {
       .catch(() => {});
   }, [ocHitlOpen, id]);
 
+  // Gates informativos: prefieren no bloquear (`ADVISORY_HITL_GATES`).
+
   // ── HITL polling ──
   useEffect(() => {
     if (!id) return;
@@ -929,7 +964,14 @@ export default function ProjectDetail() {
       getPendingHitl(id)
         .then((items) => {
           setHitlPending(items);
-          setShowHITLModal(items.length > 0);
+          const seen = hitlSeenIdsRef.current;
+          const ids = new Set(items.map((i) => i.id));
+          // Solo auto-abrimos si hay un gate BLOQUEANTE que no habíamos visto.
+          const hasNew = items.some(
+            (i) => !seen.has(i.id) && !ADVISORY_HITL_GATES.has(i.gate_name),
+          );
+          hitlSeenIdsRef.current = ids;
+          if (hasNew) setShowHITLModal(true);
         })
         .catch(() => {});
     }, 10000); // poll every 10s
@@ -3208,13 +3250,29 @@ export default function ProjectDetail() {
     }))
     .filter((group) => group.docs.length > 0);
 
-  // El gate de codificación abierta está disponible en cuanto hay documentos
-  // procesados y todavía nadie fijó el concern principal.
+  // El gate de open coding solo tiene sentido cuando hay algo que elegir: el
+  // concern principal y la población los producen los agentes de Fase B, que
+  // corren después de la extracción. Mostrar el aviso antes dejaba un HITL
+  // vacío (sin candidatos, sin población y sin categorías).
   const ocHitlReady =
     !!ocHitl &&
     !ocHitl.chosen_concern &&
     (ocHitl.total_docs ?? 0) > 0 &&
-    (ocHitl.docs_processed ?? 0) > 0;
+    (ocHitl.docs_processed ?? 0) > 0 &&
+    ((ocHitl.concern_candidates?.length ?? 0) > 0 ||
+      (ocHitl.population_proposals?.length ?? 0) > 0 ||
+      (ocHitl.unified_categories?.length ?? 0) > 0);
+
+  // Reparto de gates pendientes: los bloqueantes mandan (banner + modal),
+  // los informativos sólo dejan aviso.
+  const advisoryHitl = hitlPending.filter((g) =>
+    ADVISORY_HITL_GATES.has(g.gate_name),
+  );
+  const blockingHitl = hitlPending.filter(
+    (g) => !ADVISORY_HITL_GATES.has(g.gate_name),
+  );
+  const primaryHitl = blockingHitl[0] ?? advisoryHitl[0] ?? null;
+  const hitlAdvisoryOnly = blockingHitl.length === 0 && advisoryHitl.length > 0;
 
   return (
     <div
@@ -3287,35 +3345,44 @@ export default function ProjectDetail() {
         </div>
 
         {/* ── HITL Decision Banner ── */}
-        {hitlPending.length > 0 && (
+        {primaryHitl && (
           <div
             style={{
               padding: "10px 16px",
               marginBottom: 12,
               borderRadius: 8,
-              background: "#D2992218",
-              border: "1px solid #D2992244",
+              background: hitlAdvisoryOnly ? "#A371F718" : "#D2992218",
+              border: `1px solid ${hitlAdvisoryOnly ? "#A371F744" : "#D2992244"}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
             }}
           >
-            <span style={{ fontSize: 13, color: "#D29922" }}>
-              🛑 {t("project.decisionRequired")}{" "}
+            <span
+              style={{
+                fontSize: 13,
+                color: hitlAdvisoryOnly ? "#A371F7" : "#D29922",
+              }}
+            >
+              {hitlAdvisoryOnly
+                ? `\u25C6 ${t("project.convergenceNotice")}`
+                : t("project.decisionRequired")}
               <strong>
-                {hitlPending[0].gate_name === "pattern_of_interest"
+                {primaryHitl.gate_name === "pattern_of_interest"
                   ? t("project.mainConcern")
-                  : hitlPending[0].gate_name === "core_category"
-                    ? t("project.coreCategory")
-                    : hitlPending[0].gate_name === "selective_reduction"
-                      ? t("project.selectiveReduction")
-                      : hitlPending[0].gate_name === "core_saturation"
-                        ? t("project.coreSaturation")
-                        : hitlPending[0].gate_name === "database_a"
-                          ? t("project.databaseANodes")
-                          : hitlPending[0].gate_name === "database_b"
-                            ? t("project.databaseBEdges")
-                            : hitlPending[0].gate_name}
+                  : primaryHitl.gate_name === "pattern_convergence"
+                    ? t("hitl.gatePatternConvergence")
+                    : primaryHitl.gate_name === "core_category"
+                      ? t("project.coreCategory")
+                      : primaryHitl.gate_name === "selective_reduction"
+                        ? t("project.selectiveReduction")
+                        : primaryHitl.gate_name === "core_saturation"
+                          ? t("project.coreSaturation")
+                          : primaryHitl.gate_name === "database_a"
+                            ? t("project.databaseANodes")
+                            : primaryHitl.gate_name === "database_b"
+                              ? t("project.databaseBEdges")
+                              : primaryHitl.gate_name}
               </strong>
             </span>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -3325,14 +3392,16 @@ export default function ProjectDetail() {
                   padding: "6px 16px",
                   borderRadius: 6,
                   border: "none",
-                  background: "#D29922",
+                  background: hitlAdvisoryOnly ? "#A371F7" : "#D29922",
                   color: "#0D1117",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
-                {t("project.resolveButton")}
+                {hitlAdvisoryOnly
+                  ? t("project.reviewButton")
+                  : t("project.resolveButton")}
               </button>
               <button
                 onClick={() => setSidebarViewMode("hitl")}
@@ -3356,7 +3425,7 @@ export default function ProjectDetail() {
         )}
 
         {/* ── Open Coding HITL Banner ── */}
-        {ocHitlReady && hitlPending.length === 0 && (
+        {ocHitlReady && blockingHitl.length === 0 && (
           <div
             style={{
               padding: "10px 16px",
@@ -3441,7 +3510,7 @@ export default function ProjectDetail() {
 
         {/* ── Playground Ready Banner ── */}
         {pipelineLog?.summary?.project_state === "playground_ready" &&
-          hitlPending.length === 0 && (
+          blockingHitl.length === 0 && (
             <div
               style={{
                 padding: "10px 16px",
@@ -4593,50 +4662,6 @@ export default function ProjectDetail() {
               return (
                 <li
                   key={d.id}
-                  draggable
-                  onDragStart={(e) => {
-                    dragDoc.current = d.id;
-                    (e.target as HTMLElement).style.opacity = "0.5";
-                  }}
-                  onDragEnd={(e) => {
-                    dragDoc.current = null;
-                    (e.target as HTMLElement).style.opacity = "1";
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    (e.target as HTMLElement).style.borderTop =
-                      "2px solid #A371F7";
-                  }}
-                  onDragLeave={(e) => {
-                    (e.target as HTMLElement).style.borderTop = "";
-                  }}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    (e.target as HTMLElement).style.borderTop = "";
-                    (e.target as HTMLElement).style.opacity = "1";
-                    const fromId = dragDoc.current;
-                    if (!fromId || fromId === d.id) return;
-                    const fromIdx = docs.findIndex((x) => x.id === fromId);
-                    const toIdx = docs.findIndex((x) => x.id === d.id);
-                    if (fromIdx === -1 || toIdx === -1) return;
-                    const reordered = [...docs];
-                    const [moved] = reordered.splice(fromIdx, 1);
-                    reordered.splice(toIdx, 0, moved);
-                    setDocs(reordered);
-                    // Save using reordered array, not stale state
-                    const order = reordered.map((d, i) => ({
-                      id: d.id,
-                      sort_order: i + 1,
-                    }));
-                    fetch(`/api/v1/documents/project/${id}/reorder`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-                      },
-                      body: JSON.stringify({ order }),
-                    }).catch(() => {});
-                  }}
                   onClick={(e) => {
                     // Only toggle if click was on the card itself, not a button/input
                     const tag = (e.target as HTMLElement).tagName;
@@ -5426,12 +5451,10 @@ export default function ProjectDetail() {
                               (segments[d.id] ?? [])
                                 .filter((s) => !s.tipo_dato_glaser)
                                 .map((s) => (
-                                  <div key={s.id} style={{ color: "#8B949E" }}>
-                                    <span style={{ color: "#F85149" }}>
-                                      #{s.posicion}
-                                    </span>{" "}
-                                    {shorten(s.texto, 120)}
-                                  </div>
+                                  <UnclassifiedSegmentRow
+                                    key={s.id}
+                                    segment={s}
+                                  />
                                 ))
                             )}
                           </div>
@@ -5492,11 +5515,11 @@ export default function ProjectDetail() {
           <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
 
           {/* ── HITL Modal ── */}
-          {hitlPending.length > 0 && id && (
+          {primaryHitl && id && (
             <HITLModal
               open={showHITLModal}
               projectId={id}
-              gateName={hitlPending[0].gate_name}
+              gateName={primaryHitl.gate_name}
               onClose={() => setShowHITLModal(false)}
               onDecided={() => {
                 setShowHITLModal(false);

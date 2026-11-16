@@ -43,7 +43,6 @@ from app.services.incident_curation import (
     acquire_document_lock,
     assert_curation_allowed,
     document_of_document,
-    recompute_primary,
     validate_tag,
 )
 from fastapi import APIRouter, Depends, HTTPException
@@ -234,8 +233,6 @@ async def delete_document_segment(
             ]
 
         await renumber_segments(db, document_id)
-        for incident_id in survivors_to_fix:
-            await recompute_primary(db, incident_id)
 
         segments = await _segments_payload(db, document_id)
 

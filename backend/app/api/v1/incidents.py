@@ -34,7 +34,6 @@ from app.services.incident_curation import (
     build_unassigned_payload,
     document_of_document,
     document_of_incident,
-    recompute_primary,
     validate_tag,
 )
 from fastapi import APIRouter, Depends, HTTPException
@@ -187,14 +186,13 @@ async def create_incident(
         await db.execute(
             text(
                 "INSERT INTO extracted_incidents "
-                "(id, segmento_id, documento_id, proyecto_id, jot_text, "
+                "(id, documento_id, proyecto_id, jot_text, "
                 " keep_moving, tipo_dato_glaser, origen, preguntas_glaser_json) "
-                "VALUES (:iid, :sid, :did, :pid, :jot, :km, :tdg, 'manual', "
+                "VALUES (:iid, :did, :pid, :jot, :km, :tdg, 'manual', "
                 "        CAST(:meta AS jsonb))"
             ),
             {
                 "iid": incident_id,
-                "sid": primary["id"],
                 "did": document_id,
                 "pid": project_id,
                 "jot": jot,
@@ -236,7 +234,8 @@ async def attach_segments(
     Con ``mode='move'`` la cita se saca del incidente que la tuviera. Eso no
     puede dejar a ese incidente sin ninguna cita —es el estado que
     ``DELETE .../segments`` rechaza con 409—, así que se valida antes de tocar
-    nada y se le recalcula la cita primaria a los donantes que sobreviven.
+    nada. Los donantes que sobreviven conservan intactos sus vínculos en
+    ``incident_segmentos``.
     """
     document_id, project_id = await document_of_incident(db, incident_id)
     await assert_curation_allowed(db, document_id, project_id)
@@ -253,7 +252,6 @@ async def attach_segments(
         to_add = [(seg, tag) for seg, tag in resolved if seg["id"] not in existing]
         already = [seg["id"] for seg, _ in resolved if seg["id"] in existing]
 
-        donors: set[UUID] = set()
         if body.mode == "move" and to_add:
             losses: dict[UUID, set[str]] = {}
             for seg, _ in to_add:
@@ -285,7 +283,6 @@ async def attach_segments(
                         "Esa cita es la única de otro incidente. "
                         "Vinculala en modo 'compartir' o borrá ese incidente primero.",
                     )
-                donors.add(donor_id)
 
         for seg, tag in to_add:
             if body.mode == "move":
@@ -311,9 +308,6 @@ async def attach_segments(
             text("UPDATE extracted_incidents SET origen = 'manual' WHERE id = :iid"),
             {"iid": incident_id},
         )
-        await recompute_primary(db, incident_id)
-        for donor_id in donors:
-            await recompute_primary(db, donor_id)
 
     payload = await build_incidents_payload(db, document_id)
     return {
@@ -367,7 +361,6 @@ async def detach_segment(
             text("UPDATE extracted_incidents SET origen = 'manual' WHERE id = :iid"),
             {"iid": incident_id},
         )
-        await recompute_primary(db, incident_id)
 
         still_linked = (
             await db.execute(
@@ -423,7 +416,6 @@ async def patch_link(
             text("UPDATE extracted_incidents SET origen = 'manual' WHERE id = :iid"),
             {"iid": incident_id},
         )
-        await recompute_primary(db, incident_id)
 
     return {"status": "ok", **(await build_incidents_payload(db, document_id))}
 

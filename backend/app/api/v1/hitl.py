@@ -904,7 +904,10 @@ async def decide_hitl(
     await db.commit()
 
     # 3. Re-disparar coordinator para continuar el pipeline
-    if body.decision in ("accept", "modify"):
+    # Los gates de convergencia son informativos: no gobiernan la fase
+    # selectiva, así que decidir sobre ellos no debe arrancar el coordinator.
+    _ADVISORY_GATES = {"pattern_convergence"}
+    if body.decision in ("accept", "modify") and gate_name not in _ADVISORY_GATES:
         try:
             from app.core.celery_app import celery_app
 

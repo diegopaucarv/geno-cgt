@@ -39,7 +39,7 @@
     },
     "incidents": {
       "type": "array",
-      "description": "Evidence one-liners. Concrete things the participant did, said, felt, or experienced.",
+      "description": "Syntheses of a single behavioral process. Each incident fuses the segments that describe the same behavioral process into one coherent statement. NOT codes, NOT a copy of a segment, NOT a bare list of separate facts.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -47,12 +47,12 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "One-liner describing what happened. {label_anti}."
+            "description": "Synthesized statement of ONE behavioral process described by the cited segments, never one per segment. Plain language, {label_anti}. Example: 'the teacher arrived at 5am, found no materials and paid for them out of pocket'."
           },
           "segment_refs": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "1-based indices of segments this incident comes from."
+            "description": "1-based indices of ALL the segments that compose this incident (the segments describing the same behavioral process)."
           },
           "patterns": {
             "type": "array",
@@ -61,7 +61,7 @@
           },
           "exact_quote": {
             "type": "string",
-            "description": "Verbatim quote from the segment that best captures this incident. Optional."
+            "description": "Verbatim quote from any of the cited segments that best supports this synthesis. Optional."
           }
         }
       }

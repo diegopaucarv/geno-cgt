@@ -200,15 +200,25 @@ def query_lower_level(
     session = SessionLocal()
     try:
         if entity_type == "category" and direction == "down":
-            # Bajar a incidentes que respaldan esta categoria
+            # Bajar a incidentes que respaldan esta categoria. El LATERAL elige,
+            # por incidente, la cita con menor `posicion` codificada en la
+            # categoria: así cada incidente aparece una sola vez y el texto
+            # mostrado es el primero que lo sostiene.
             incidents = session.execute(
                 text(
                     "SELECT ei.id, ei.jot_text, s.texto, d.original_filename "
                     "FROM extracted_incidents ei "
-                    "JOIN segmentos s ON ei.segmento_id = s.id "
                     "JOIN documentos d ON ei.documento_id = d.id "
-                    "JOIN codigos_segmento cs ON cs.segmento_id = s.id "
-                    "WHERE cs.categoria_id = :eid LIMIT 30"
+                    "JOIN LATERAL ("
+                    "    SELECT s2.texto "
+                    "    FROM incident_segmentos x "
+                    "    JOIN segmentos s2 ON s2.id = x.segmento_id "
+                    "    JOIN codigos_segmento cs ON cs.segmento_id = s2.id "
+                    "    WHERE x.incident_id = ei.id AND cs.categoria_id = :eid "
+                    "    ORDER BY s2.posicion "
+                    "    LIMIT 1"
+                    ") s ON TRUE "
+                    "LIMIT 30"
                 ),
                 {"eid": entity_id},
             ).fetchall()

@@ -372,11 +372,10 @@ class PipelineOrchestrator:
     def _reset_document(self, doc_id: str):
         """Resetea un documento a estado crudo (para force=True)."""
         # Hijas primero: sus FK a segmentos.id no tienen ON DELETE.
+        # Los incidentes se anclan al documento: `extracted_incidents.segmento_id`
+        # es legacy y queda NULL, así que no sirve para localizarlos.
         self.db.execute(
-            text(
-                "DELETE FROM extracted_incidents WHERE segmento_id IN "
-                "(SELECT id FROM segmentos WHERE documento_id = :did)"
-            ),
+            text("DELETE FROM extracted_incidents WHERE documento_id = :did"),
             {"did": doc_id},
         )
         self.db.execute(
@@ -554,10 +553,10 @@ class PipelineOrchestrator:
     @staticmethod
     def _count_incidents(doc_id: str, session=None) -> int:
         """Cuenta incidentes extraídos del documento (paso 3 de la cadena)."""
+        # Se consulta por documento_id: extracted_incidents.segmento_id es legacy.
         sql = (
             "SELECT COUNT(ei.id) FROM extracted_incidents ei "
-            "JOIN segmentos s ON s.id = ei.segmento_id "
-            "WHERE s.documento_id = :did"
+            "WHERE ei.documento_id = :did"
         )
         if session is not None:
             return session.execute(text(sql), {"did": doc_id}).fetchone()[0]

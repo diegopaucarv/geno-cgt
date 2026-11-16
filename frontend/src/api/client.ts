@@ -662,13 +662,10 @@ export interface IncidentQuotePayload {
   /** De dónde sale `categoria`: del segmento o de una anotación de la cita. */
   categoria_origen: "segment" | "override";
   is_manual: boolean;
-  /** Cita primaria denormalizada (`extracted_incidents.segmento_id`). */
-  primario: boolean;
 }
 
 export interface IncidentPayload {
   id: string;
-  segmento_id: string | null;
   jot_text: string | null;
   keep_moving: boolean;
   tipo_dato_glaser: string | null;

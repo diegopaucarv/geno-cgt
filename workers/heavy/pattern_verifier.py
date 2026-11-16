@@ -2,7 +2,9 @@
 
 Compares the last 3 individual patterns per document and evaluates
 whether they converge toward a shared pattern. Triggers HITL gate
-GATE_PATTERN_OF_INTEREST.
+GATE_PATTERN_CONVERGENCE ("pattern_convergence"), which is distinct from the
+main-concern gate GATE_PATTERN_OF_INTEREST: reusing the latter made the
+frontend render this convergence payload as an empty concern proposal.
 """
 
 from __future__ import annotations
@@ -113,9 +115,7 @@ def verify_core_pattern(proyecto_id: str) -> dict:
         )
 
         # 7. Store HITL decision
-        from app.agents.transitions import hitl_gate
-
-        GATE_PATTERN_OF_INTEREST = "pattern_of_interest"
+        from app.agents.transitions import GATE_PATTERN_CONVERGENCE, hitl_gate
 
         proposal = {
             "convergence_assessment": result.get("convergence_assessment", ""),
@@ -129,7 +129,11 @@ def verify_core_pattern(proyecto_id: str) -> dict:
             "population_concerns": result.get("population_concerns", []),
         }
         hitl_gate(
-            session, proyecto_id, GATE_PATTERN_OF_INTEREST, proposal, critic_verdict
+            session,
+            proyecto_id,
+            GATE_PATTERN_CONVERGENCE,
+            proposal,
+            critic_verdict,
         )
         session.commit()
 

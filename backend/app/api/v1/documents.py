@@ -345,11 +345,11 @@ async def segment_document(
     # Rutas local/LLM: los segmentos previos se borran siempre, incluso si el
     # segmentador va a re-segmentar, o quedarían segmentos obsoletos en la
     # tabla. FK hijas primero (mismo orden que restore_document_original).
+    # Los incidentes se borran por documento_id, no por segmento_id: en los
+    # incidentes nuevos `segmento_id` es NULL, así que el filtro viejo no los
+    # borraría y además bloquearía el DELETE de segmentos por FK.
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id = :did)"
-        ),
+        text("DELETE FROM extracted_incidents WHERE documento_id = :did"),
         {"did": document_id},
     )
     await db.execute(
@@ -680,11 +680,10 @@ async def delete_document(
         text("DELETE FROM pipeline_tasks WHERE document_id = :did"),
         {"did": document_id},
     )
+    # Por documento_id y no por segmento_id: los incidentes nuevos tienen
+    # `segmento_id` NULL y quedarían huérfanos (bloqueando el DELETE siguiente).
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id = :did)"
-        ),
+        text("DELETE FROM extracted_incidents WHERE documento_id = :did"),
         {"did": document_id},
     )
     await db.execute(
@@ -719,12 +718,10 @@ async def delete_all_segments(
     """
     from sqlalchemy import text
 
+    # Por proyecto_id: los incidentes nuevos llevan `segmento_id` NULL, así que
+    # filtrar por segmentos no los borraría ni desbloquearía el DELETE de abajo.
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id IN "
-            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
-        ),
+        text("DELETE FROM extracted_incidents WHERE proyecto_id = :pid"),
         {"pid": project_id},
     )
     await db.execute(
@@ -817,11 +814,10 @@ async def delete_document_segments(
     from sqlalchemy import text
 
     # FK hijas primero (mismo orden que restore_document_original).
+    # Incidentes por documento_id: `segmento_id` queda NULL en los nuevos, así
+    # que el filtro por segmentos no los borraría (y bloquearía el DELETE de abajo).
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id = :did)"
-        ),
+        text("DELETE FROM extracted_incidents WHERE documento_id = :did"),
         {"did": document_id},
     )
     await db.execute(
@@ -991,11 +987,10 @@ async def restore_document_original(
     )
     # Also delete segments so the doc really goes back to raw
     # Delete FK dependencies first
+    # Incidentes por documento_id: los nuevos tienen `segmento_id` NULL y el
+    # filtro por segmentos dejaría huérfanos que bloquean el DELETE de segmentos.
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id = :did)"
-        ),
+        text("DELETE FROM extracted_incidents WHERE documento_id = :did"),
         {"did": document_id},
     )
     await db.execute(
@@ -1035,12 +1030,10 @@ async def reset_all_docs_to_crudo(
         ),
         {"pid": project_id},
     )
+    # Por proyecto_id: en los incidentes nuevos `segmento_id` es NULL, así que el
+    # filtro por segmentos no los borraría ni desbloquearía el DELETE de abajo.
     await db.execute(
-        text(
-            "DELETE FROM extracted_incidents WHERE segmento_id IN "
-            "(SELECT id FROM segmentos WHERE documento_id IN "
-            "(SELECT id FROM documentos WHERE proyecto_id = :pid))"
-        ),
+        text("DELETE FROM extracted_incidents WHERE proyecto_id = :pid"),
         {"pid": project_id},
     )
     await db.execute(

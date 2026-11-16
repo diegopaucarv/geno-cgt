@@ -39,7 +39,7 @@
     },
     "incidents": {
       "type": "array",
-      "description": "Frases curtas de evidência. Coisas concretas que o participante fez, disse, sentiu ou vivenciou.",
+      "description": "Síntese de um único processo ou conduta. Cada incidente funde os segmentos que descrevem o mesmo processo ou conduta numa única afirmação coerente. Não são códigos, nem a cópia de um segmento, nem uma lista de factos soltos.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -47,12 +47,12 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Frase curta descrevendo o que aconteceu. Linguagem simples, {label_anti}."
+            "description": "Afirmação sintetizada de UM processo ou conduta descrito pelos segmentos citados. Um incidente, nunca um por segmento. Linguagem simples, {label_anti}. Exemplo: 'a professora chegou às 5 da manhã, não encontrou materiais e pagou-os do próprio bolso'."
           },
           "segment_refs": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "Índices base 1 dos segmentos de onde este incidente se origina."
+            "description": "Índices base 1 de TODOS os segmentos que compõem este incidente (os que descrevem o mesmo processo ou conduta)."
           },
           "patterns": {
             "type": "array",
@@ -61,7 +61,7 @@
           },
           "exact_quote": {
             "type": "string",
-            "description": "Citação literal do segmento que melhor captura este incidente. Opcional."
+            "description": "Citação literal de qualquer um dos segmentos citados que melhor sustenta esta síntese. Opcional."
           }
         }
       }

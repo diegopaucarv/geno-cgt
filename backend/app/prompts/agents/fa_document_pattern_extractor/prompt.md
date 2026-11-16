@@ -1,17 +1,18 @@
 ---
 agent: fa_document_pattern_extractor
 tier: PRO
-description: Unified Open Coding — extracts multiple patterns ({label_name}s), incidents (evidence one-liners), and document-level signals from ALL baseline segments of a SINGLE document. Replaces old per-segment incident extraction. One PRO call per document.
+description: Unified Open Coding — extracts multiple patterns ({label_name}s), incidents (each one a synthesis of a single behavioral process), and document-level signals from ALL baseline segments of a SINGLE document. Replaces old per-segment incident extraction. One PRO call per document.
 notes:
   - PRO tier: needs reasoning across all segments of one document.
   - Patterns are {label_name}s ({label_format}). Incidents are evidence, NOT codes.
-  - Incidents link to patterns and segments via segment_refs (integer array).
+  - An incident is the SYNTHESIS of one behavioral process; the segments it cites merely describe that same behavioral process. Several segments describing the same behavioral process collapse into ONE incident.
+  - Incidents link to patterns and to every segment that composes them via segment_refs (integer array).
   - Document signals include the core {object_of_study} pattern and tentative main concern.
   - Segments and document name arrive in the user message; the system prefix stays static and cacheable.
 constraints:
   - ISOLATED: only use segments from THIS document.
   - {label_name_upper} only for pattern names. No nouns, abstractions, or theoretical labels.
-  - Incidents are one-liner descriptions of what happened. NO {label_name}s.
+  - One incident per behavioral process, not necessarily one per segment. NO {label_name}s in incident descriptions.
   - Every claim must be grounded in specific segment text.
   - Output language matches the language of the input segments.
 input_state: object_of_study, operational_question (interpolated into system prompt); segments_text, document_name (user message)
@@ -27,7 +28,7 @@ Extract THREE things from this document's segments:
 
 1. **PATTERNS** — {label_name} recurring everyday behavioral processes that seem to be indicated by one or multiple segments. Pattern names are {label_name}s of 2-6 words. Each pattern has a definition and references the segments that evidence it.
 
-2. **INCIDENTS** — evidence one-liners describing specific things the participant did, said, felt, or experienced. Incidents are NOT codes — they are raw evidentiary units. Each incident links to the pattern(s) it supports and the segment(s) it comes from. NO {label_name}s in incident descriptions.
+2. **INCIDENTS** — the synthesis of ONE behavioral process. An incident is not a copy of a segment and not a list of separate facts: it is a single statement that synthesizes one behavioral process which one or several segments describe. Segments that describe the same behavioral process belong to the SAME incident; only clearly different processes yield separate incidents. Incidents are NOT codes and carry no {label_name}s. Each incident links to the pattern(s) it supports and to EVERY segment that composes it: a process is usually described across several segments, and all of them are cited together in that one incident.
 
 3. **DOCUMENT SIGNALS** — document-level observations: the tentative core {object_of_study} pattern (what {object_of_study} seems to drive this participant's behavior?), tentative main concern (what are they continuously trying to resolve?), and any notable anomalies or patterns requiring verification.
 
@@ -42,16 +43,17 @@ The researcher is investigating: **{object_of_study}**
 1. Read all segments thoroughly. Look for recurring behavioral processes.
 2. Identify patterns: what is this participant repeatedly doing, negotiating, or processing? Name each with a {label_name}.
 3. For each pattern, identify which segments evidence it and write a definition.
-4. Extract incidents: specific things that happened within the segments. One-liners, descriptive, no {label_name}s.
-5. Link each incident to its pattern(s) via pattern indices and to its segment(s) via segment_refs (1-based integers).
-6. Assess document-level signals: core {object_of_study} pattern, tentative concern, anomalies.
+4. Extract incidents: group together the segments that describe the same behavioral process and synthesize them into ONE incident. Do not produce one incident per segment — split only when the segments describe clearly different processes.
+5. Write each incident as the synthesis of that single behavioral process (what the participant did, said, felt or experienced, as one coherent happening), without {label_name}s.
+6. Link each incident to its pattern(s) via pattern indices and to ALL the segments that compose it via segment_refs (1-based integers).
+7. Assess document-level signals: core {object_of_study} pattern, tentative concern, anomalies.
 
 [RESTRICTIONS]
 
 - ISOLATED: only use segments from THIS document.
 - {label_name_upper} only for pattern names ({label_format}). NEVER abstract nouns or theoretical jargon.
-- INCIDENT descriptions are plain evidence: "the teacher arrived at 5am", "the recycler hid materials from the inspector". NO {label_name}s in incident descriptions.
-- segment_refs are 1-based integers matching the order of segments in the input. This is how an incident is bound to the text it comes from: never omit it.
+- INCIDENT = SYNTHESIS OF ONE BEHAVIORAL PROCESS. The cited segments are parts of the same happening, not separate incidents: fuse them into one coherent statement ("the teacher arrived at 5am, found no materials and paid for them out of pocket" — ONE incident, not three). Never copy a single sentence and never split one behavioral process into several incidents. NO {label_name}s in incident descriptions.
+- segment_refs are 1-based integers matching the order of segments in the input. This is how an incident is bound to the text it comes from: never omit it. List ALL the segments that compose the behavioral process: several segments describing the same thing are cited together in the same incident, never split into separate incidents and never dropped.
 - The `patterns` array in an incident uses 0-based indices of the patterns array above; omit it when no pattern applies.
 - All segments you receive are already labelled baseline_data. Never re-classify them and never discard a segment because of its category.
 - If the data is too sparse, produce fewer patterns and incidents rather than forcing low-quality output.
@@ -101,7 +103,7 @@ The researcher is investigating: **{object_of_study}**
     },
     "incidents": {
       "type": "array",
-      "description": "Evidence one-liners. Concrete things the participant did, said, felt, or experienced. NOT codes — raw evidentiary units that relate segments to patterns",
+      "description": "Syntheses of a single behavioral process. Each incident fuses the segments that describe the same behavioral process into one coherent statement. NOT codes, NOT a copy of a segment, NOT a bare list of separate facts.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -109,12 +111,12 @@ The researcher is investigating: **{object_of_study}**
         "properties": {
           "description": {
             "type": "string",
-            "description": "One-liner describing what happened. Plain language, no {label_name}s. Example: 'the teacher arrived at 5am to prepare materials' NOT 'Preparing materials early'."
+            "description": "Synthesized statement of ONE behavioral process described by the cited segments. Plain language, no {label_name}s. Example: 'the teacher arranges her work along a schedule' (with segments indicating so)."
           },
           "segment_refs": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "1-based indices of segments this incident comes from."
+            "description": "1-based indices of ALL the segments that compose this incident (the segments describing the same behavioral process)."
           },
           "patterns": {
             "type": "array",
@@ -123,7 +125,7 @@ The researcher is investigating: **{object_of_study}**
           },
           "exact_quote": {
             "type": "string",
-            "description": "Verbatim quote from the segment that best captures this incident. Optional."
+            "description": "Verbatim quote from any of the cited segments that best supports this synthesis. Optional."
           }
         }
       }

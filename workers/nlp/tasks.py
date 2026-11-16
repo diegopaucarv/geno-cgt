@@ -336,9 +336,10 @@ def segmentar_documento(
                 # `baseline_tags`. Los segmentos nuevos heredan su categoría del
                 # tramo de texto original del que salieron.
                 # Hijas primero: sus FK a segmentos.id no tienen ON DELETE.
+                # Por documento_id: en los incidentes nuevos `segmento_id` es NULL,
+                # así que filtrar por segmentos no los borraría.
                 cur.execute(
-                    "DELETE FROM extracted_incidents WHERE segmento_id IN "
-                    "(SELECT id FROM segmentos WHERE documento_id = %s)",
+                    "DELETE FROM extracted_incidents WHERE documento_id = %s",
                     (documento_id,),
                 )
                 cur.execute(

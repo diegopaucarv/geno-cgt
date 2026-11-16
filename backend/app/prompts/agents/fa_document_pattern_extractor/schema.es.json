@@ -39,7 +39,7 @@
     },
     "incidents": {
       "type": "array",
-      "description": "Frases breves de evidencia. Cosas concretas que el participante hizo, dijo, sintió o experimentó.",
+      "description": "Síntesis de un único proceso o conducta. Cada incidente funde los segmentos que describen el mismo proceso o conducta en un solo enunciado coherente. No son códigos, ni la copia de un segmento, ni una lista de hechos sueltos.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -47,12 +47,12 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Frase breve que describe lo sucedido. Lenguaje llano, {label_anti}."
+            "description": "Enunciado sintetizado de UN proceso o conducta descrito por los segmentos citados. Un incidente, nunca uno por segmento. Lenguaje llano, {label_anti}. Ejemplo: 'la docente llegó a las 5 de la mañana, no encontró materiales y los pagó de su bolsillo'."
           },
           "segment_refs": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "Índices en base 1 de los segmentos de donde proviene este incidente."
+            "description": "Índices en base 1 de TODOS los segmentos que componen este incidente (los que describen el mismo proceso o conducta)."
           },
           "patterns": {
             "type": "array",
@@ -61,7 +61,7 @@
           },
           "exact_quote": {
             "type": "string",
-            "description": "Cita textual del segmento que mejor captura este incidente. Opcional."
+            "description": "Cita textual de cualquiera de los segmentos citados que mejor respalda esta síntesis. Opcional."
           }
         }
       }

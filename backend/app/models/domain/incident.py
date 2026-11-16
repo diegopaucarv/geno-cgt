@@ -19,19 +19,25 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 
 class ExtractedIncident(Base, TimestampMixin):
-    """Incidente extraído de un segmento por el incident_extractor (FLASH, per-segmento).
+    """Incidente extraído por el incident_extractor (FLASH).
 
-    Cada segmento baseline produce un incidente. El incident_extractor aplica
-    las 4 preguntas de Glaser (pregunta 4 parametrizada por object_of_study)
-    y produce un "jot" (gerundio) + keep_moving flag.
+    Un incidente cita uno o varios segmentos `baseline_data` vía
+    `incident_segmentos`, que es la fuente de verdad de qué texto lo sostiene.
+    El incident_extractor aplica las 4 preguntas de Glaser (pregunta 4
+    parametrizada por object_of_study) y produce un "jot" (gerundio) +
+    keep_moving flag.
     """
 
     __tablename__ = "extracted_incidents"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    segmento_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("segmentos.id"), index=True
+    segmento_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("segmentos.id"), nullable=True, index=True
     )
+    """LEGACY. Antes era la "cita primaria" denormalizada. La fuente de verdad
+    es `incident_segmentos`; el extractor ya no la escribe (queda NULL) y ningún
+    lector debe asumir que existe."""
+
     documento_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documentos.id"), index=True
     )
@@ -81,7 +87,7 @@ class IncidentSegmento(Base, TimestampMixin):
     significa "heredar la categoría del segmento" — nunca se inventa una.
 
     Esta tabla es la fuente de verdad de "qué texto sostiene este incidente".
-    `extracted_incidents.segmento_id` queda como cita primaria denormalizada.
+    `extracted_incidents.segmento_id` es legacy y queda NULL.
     """
 
     __tablename__ = "incident_segmentos"

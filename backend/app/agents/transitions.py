@@ -138,6 +138,10 @@ PROJECT_STATES: dict[str, str] = {
 # Gate Names — constantes canonicas (F1.1)
 # ═══════════════════════════════════════════════════════
 GATE_PATTERN_OF_INTEREST = "pattern_of_interest"
+# F2.5 comprueba convergencia entre patrones documentales. Es un gate propio:
+# reutilizar "pattern_of_interest" hacía que el frontend lo pintara como el
+# gate de concern principal (espera `core_concern`), mostrándose vacío.
+GATE_PATTERN_CONVERGENCE = "pattern_convergence"
 GATE_CORE_CATEGORY = "core_category"
 GATE_SELECTIVE_REDUCTION = "selective_reduction"
 GATE_CORE_SATURATION = "core_saturation"
@@ -704,6 +708,7 @@ def hitl_gate(
 
     Gates conocidos (ver constantes GATE_* arriba):
       - GATE_PATTERN_OF_INTEREST ("pattern_of_interest") → Patron de Interes / Core Pattern
+      - GATE_PATTERN_CONVERGENCE ("pattern_convergence") → Convergencia de patrones (F2.5)
       - GATE_CORE_CATEGORY → Core Category
       - GATE_SELECTIVE_REDUCTION → Selective Reduction
       - GATE_CORE_SATURATION → Core Saturation
@@ -717,19 +722,46 @@ def hitl_gate(
     """
     import json
 
-    session.execute(
+    # Dedup: si ya hay una decision pendiente para este gate, se actualiza su
+    # propuesta en lugar de acumular filas. Sin esto, cada re-ejecución del
+    # agente dejaba una copia pendiente del mismo gate y el frontend abría el
+    # modal en bucle mostrando propuestas viejas.
+    existing = session.execute(
         text(
-            "INSERT INTO hitl_decisions "
-            "(id, project_id, gate_name, proposal, critic_verdict, status) "
-            "VALUES (gen_random_uuid(), :pid, :gate, :prop, :verdict, 'pending')"
+            "SELECT id FROM hitl_decisions "
+            "WHERE project_id = :pid AND gate_name = :gate AND status = 'pending' "
+            "ORDER BY creado_en DESC LIMIT 1"
         ),
-        {
-            "pid": project_id,
-            "gate": gate_name,
-            "prop": json.dumps(proposal, ensure_ascii=False),
-            "verdict": json.dumps(critic_verdict, ensure_ascii=False),
-        },
-    )
+        {"pid": project_id, "gate": gate_name},
+    ).fetchone()
+
+    if existing:
+        session.execute(
+            text(
+                "UPDATE hitl_decisions SET proposal = :prop, "
+                "critic_verdict = :verdict, creado_en = now() "
+                "WHERE id = :did"
+            ),
+            {
+                "prop": json.dumps(proposal, ensure_ascii=False),
+                "verdict": json.dumps(critic_verdict, ensure_ascii=False),
+                "did": existing[0],
+            },
+        )
+    else:
+        session.execute(
+            text(
+                "INSERT INTO hitl_decisions "
+                "(id, project_id, gate_name, proposal, critic_verdict, status) "
+                "VALUES (gen_random_uuid(), :pid, :gate, :prop, :verdict, 'pending')"
+            ),
+            {
+                "pid": project_id,
+                "gate": gate_name,
+                "prop": json.dumps(proposal, ensure_ascii=False),
+                "verdict": json.dumps(critic_verdict, ensure_ascii=False),
+            },
+        )
     session.commit()
 
     # Notificar frontend vía Redis pub/sub

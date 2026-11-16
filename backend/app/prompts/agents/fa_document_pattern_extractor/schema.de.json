@@ -39,7 +39,7 @@
     },
     "incidents": {
       "type": "array",
-      "description": "Evidenz-Einzeiler. Konkrete Dinge, die der Teilnehmer tat, sagte, fühlte oder erlebte.",
+      "description": "Synthese eines einzelnen Prozesses oder Verhaltens. Jeder Vorfall führt die Segmente, die denselben Prozess oder dasselbe Verhalten beschreiben, zu einer kohärenten Aussage zusammen. Keine Codes, keine Kopie eines Segments, keine bloße Liste einzelner Fakten.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -47,12 +47,12 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Einzeiler, der beschreibt, was geschah. {label_anti}."
+            "description": "Synthetisierte Aussage über EINEN Prozess oder EIN Verhalten, das die zitierten Segmente beschreiben. Ein Vorfall, nie einer pro Segment. Einfache Sprache, {label_anti}. Beispiel: 'die Lehrerin kam um 5 Uhr morgens, fand kein Material und bezahlte es aus eigener Tasche'."
           },
           "segment_refs": {
             "type": "array",
             "items": { "type": "integer" },
-            "description": "1-basierte Indizes der Segmente, aus denen dieser Vorfall stammt."
+            "description": "1-basierte Indizes ALLER Segmente, die diesen Vorfall ausmachen (die Segmente, die denselben Prozess oder dasselbe Verhalten beschreiben)."
           },
           "patterns": {
             "type": "array",
@@ -61,7 +61,7 @@
           },
           "exact_quote": {
             "type": "string",
-            "description": "Wörtliches Zitat aus dem Segment, das diesen Vorfall am besten erfasst. Optional."
+            "description": "Wörtliches Zitat aus einem der zitierten Segmente, das diese Synthese am besten stützt. Optional."
           }
         }
       }

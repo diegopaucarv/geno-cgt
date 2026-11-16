@@ -512,7 +512,8 @@ class ContextWindowManager:
         """Expande un incidente a su contexto completo.
 
         Flujo interno (usa las otras tools, no tiene lógica propia de búsqueda):
-        1. Busca el segmento fuente del incidente (FK directa en BD)
+        1. Busca el incidente y el segmento foco: la cita con menor `posicion`
+           en `incident_segmentos` (la columna `segmento_id` es legacy)
         2. Llama a get_document_window() con ese segmento como foco
         3. Opcionalmente, si el incidente menciona entidades concretas,
            llama a search_precise_entities() para cada una
@@ -556,18 +557,18 @@ class ContextWindowManager:
             from sqlalchemy import select
 
             from app.models.domain.document import Documento
-            from app.models.domain.incident import ExtractedIncident
+            from app.models.domain.incident import ExtractedIncident, IncidentSegmento
             from app.models.domain.segment import Segmento
 
             AsyncSessionLocal = self._get_session_factory()
             async with AsyncSessionLocal() as db:
-                # 1. Buscar el incidente → obtener FK a segmento y documento
+                # 1. Buscar el incidente → documento y proyecto (sin la columna
+                #    legacy `segmento_id`: las citas viven en incident_segmentos)
                 inc_stmt = select(
                     ExtractedIncident.id,
                     ExtractedIncident.jot_text,
                     ExtractedIncident.tipo_dato_glaser,
                     ExtractedIncident.keep_moving,
-                    ExtractedIncident.segmento_id,
                     ExtractedIncident.documento_id,
                     ExtractedIncident.proyecto_id,
                 ).where(ExtractedIncident.id == incident_uuid)
@@ -578,20 +579,25 @@ class ContextWindowManager:
                 if inc_row is None:
                     return {"error": f"Incidente {incident_uuid} no encontrado"}
 
-                segmento_id = inc_row.segmento_id
                 documento_id = inc_row.documento_id
                 proyecto_id = inc_row.proyecto_id
 
-                # 2. Buscar el segmento fuente para obtener posición y texto
-                seg_stmt = select(Segmento.id, Segmento.posicion, Segmento.texto).where(
-                    Segmento.id == segmento_id
+                # 2. Segmento foco = la cita con menor posición (una sola query)
+                focus_stmt = (
+                    select(Segmento.id, Segmento.posicion, Segmento.texto)
+                    .join(IncidentSegmento, IncidentSegmento.segmento_id == Segmento.id)
+                    .where(IncidentSegmento.incident_id == incident_uuid)
+                    .order_by(Segmento.posicion)
+                    .limit(1)
                 )
 
-                seg_result = await db.execute(seg_stmt)
-                seg_row = seg_result.one_or_none()
+                focus_result = await db.execute(focus_stmt)
+                seg_row = focus_result.one_or_none()
 
                 if seg_row is None:
-                    return {"error": f"Segmento fuente {segmento_id} no encontrado"}
+                    return {
+                        "error": f"El incidente {incident_uuid} no cita ningún segmento"
+                    }
 
                 # 3. Obtener metadata del documento
                 doc_stmt = select(Documento.original_filename).where(
@@ -607,7 +613,7 @@ class ContextWindowManager:
                     "tipo_dato_glaser": inc_row.tipo_dato_glaser,
                     "keep_moving": inc_row.keep_moving,
                     "documento_id": str(documento_id),
-                    "segmento_id": str(segmento_id),
+                    "segmento_id": str(seg_row.id),
                     "documento_nombre": doc_nombre,
                 }
 
@@ -1291,7 +1297,8 @@ class ContextWindowManager:
     name="expand_incident",
     description=(
         "Expande un incidente a su contexto narrativo completo en el documento original. "
-        "Dado un incident_id, busca el segmento fuente (FK directa en BD), "
+        "Dado un incident_id, busca el segmento foco entre sus citas "
+        "(incident_segmentos, el de menor posición), "
         "obtiene la ventana de contexto alrededor con get_document_window, "
         "y opcionalmente busca entidades mencionadas en el corpus con search_precise_entities. "
         "Útil cuando la IA necesita verificar si dos incidentes realmente miden el mismo "

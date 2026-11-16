@@ -275,6 +275,9 @@ services:
           path: ./workers/heavy/pattern_extractor.py
           target: /app/pattern_extractor.py
         - action: sync+restart
+          path: ./workers/heavy/pattern_verifier.py
+          target: /app/pattern_verifier.py
+        - action: sync+restart
           path: ./workers/heavy/glaser_classifier.py
           target: /app/glaser_classifier.py
         - action: rebuild

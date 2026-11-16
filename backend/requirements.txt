@@ -26,6 +26,9 @@ slowapi==0.1.9
 
 # --- Tareas Asíncronas ---
 celery==5.4.0
+# kombu>=5.7 exige redis-py>=6.1 para el transporte redis; aquí redis está
+# pinneado a 5.2.1, así que se fija la última kombu que lo soporta.
+kombu==5.4.2
 redis==5.2.1
 
 # --- IA & Grafos ---

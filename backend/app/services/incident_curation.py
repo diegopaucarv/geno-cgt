@@ -5,9 +5,10 @@ curación devuelvan **exactamente la misma forma**. Si cada uno armara su propio
 payload, la UI tendría dos representaciones del mismo dato y una de las dos se
 quedaría atrás.
 
-``incident_segmentos`` es la fuente de verdad de "qué texto sostiene este
-incidente"; ``extracted_incidents.segmento_id`` es una cita primaria
-denormalizada que se recalcula en cada mutación.
+``incident_segmentos`` es la ÚNICA fuente de verdad de "qué texto sostiene este
+incidente" (una fila por par incidente/segmento). ``extracted_incidents.
+segmento_id`` es una columna legacy del modelo viejo "1 incidente = 1
+segmento": se jubiló y queda siempre NULL, así que nadie debe leerla.
 """
 
 from __future__ import annotations
@@ -65,7 +66,6 @@ def validate_tag(value: str | None) -> str | None:
 
 _INCIDENTS_SQL = """
 SELECT ei.id,
-       ei.segmento_id,
        ei.jot_text,
        ei.keep_moving,
        ei.tipo_dato_glaser,
@@ -82,8 +82,7 @@ SELECT ei.id,
                        WHEN x.tipo_dato_glaser IS NULL THEN 'segment'
                        ELSE 'override'
                    END,
-                   'is_manual', x.is_manual,
-                   'primario', (s.id = ei.segmento_id)
+                   'is_manual', x.is_manual
                ) ORDER BY s.posicion
            ) FILTER (WHERE s.id IS NOT NULL),
            '[]'::jsonb
@@ -101,9 +100,11 @@ async def build_incidents_payload(db: AsyncSession, document_id: UUID) -> dict:
     """Incidentes del documento con sus citas, más el prime mover del proceso."""
     rows = await db.execute(text(_INCIDENTS_SQL), {"did": document_id})
 
+    # Orden de columnas de ``_INCIDENTS_SQL``: id, jot_text, keep_moving,
+    # tipo_dato_glaser, origen, preguntas_glaser_json, segments.
     incidents: list[dict] = []
     for row in rows:
-        segments = row[7] if isinstance(row[7], list) else []
+        segments = row[6] if isinstance(row[6], list) else []
         categorias: dict[str, int] = {}
         for seg in segments:
             tag = seg.get("categoria") or "sin_categoria"
@@ -111,12 +112,11 @@ async def build_incidents_payload(db: AsyncSession, document_id: UUID) -> dict:
         incidents.append(
             {
                 "id": str(row[0]),
-                "segmento_id": str(row[1]) if row[1] else None,
-                "jot_text": row[2],
-                "keep_moving": bool(row[3]),
-                "tipo_dato_glaser": row[4],
-                "origen": row[5] or "ia",
-                "preguntas_glaser_json": row[6] if isinstance(row[6], dict) else {},
+                "jot_text": row[1],
+                "keep_moving": bool(row[2]),
+                "tipo_dato_glaser": row[3],
+                "origen": row[4] or "ia",
+                "preguntas_glaser_json": row[5] if isinstance(row[5], dict) else {},
                 "segments": segments,
                 "categorias": categorias,
                 "mixto": len(categorias) > 1,
@@ -243,28 +243,6 @@ async def acquire_document_lock(db: AsyncSession, document_id: UUID) -> None:
             "El pipeline está extrayendo incidentes de este documento. "
             "Esperá a que termine o pausalo.",
         )
-
-
-async def recompute_primary(db: AsyncSession, incident_id: UUID) -> None:
-    """Reapunta la cita primaria a la primera cita en orden de documento."""
-    await db.execute(
-        text(
-            "UPDATE extracted_incidents ei "
-            "SET segmento_id = sub.segmento_id, "
-            "    tipo_dato_glaser = COALESCE(sub.categoria, ei.tipo_dato_glaser) "
-            "FROM ( "
-            "    SELECT s.id AS segmento_id, "
-            "           COALESCE(x.tipo_dato_glaser, s.tipo_dato_glaser) AS categoria "
-            "    FROM incident_segmentos x "
-            "    JOIN segmentos s ON s.id = x.segmento_id "
-            "    WHERE x.incident_id = :iid "
-            "    ORDER BY s.posicion "
-            "    LIMIT 1 "
-            ") sub "
-            "WHERE ei.id = :iid"
-        ),
-        {"iid": incident_id},
-    )
 
 
 async def document_of_incident(

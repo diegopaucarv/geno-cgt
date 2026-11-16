@@ -37,7 +37,7 @@ export default function Setup() {
   const { t, language: i18nLang } = useI18n();
   const navigate = useNavigate();
 
-  const [language, setLanguage] = useState(i18nLang);
+  const [language, setLanguage] = useState<string>(i18nLang);
   const [status, setStatus] = useState<
     "checking" | "downloading" | "ready" | "error"
   >("checking");

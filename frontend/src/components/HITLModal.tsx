@@ -12,6 +12,7 @@ interface HITLModalProps {
 
 const GATE_LABELS: Record<string, string> = {
   pattern_of_interest: "hitl.gatePatternOfInterest",
+  pattern_convergence: "hitl.gatePatternConvergence",
   core_category: "hitl.gateCoreEmergence",
   selective_reduction: "hitl.gateSelectiveReduction",
   core_saturation: "hitl.gateCoreSaturation",
@@ -47,44 +48,150 @@ function renderProposal(gate: string, p: Record<string, unknown>, t: TFunc) {
   };
   const valStyle: React.CSSProperties = { color: "#E6EDF3" };
 
-  if (gate === "pattern_of_interest") {
+  // Los gates de convergencia emiten {convergence_assessment, converging,
+  // diverging, recommendation, suggested_shared_pattern}. Detectamos por forma
+  // para cubrir también filas antiguas guardadas bajo `pattern_of_interest`.
+  const looksLikeConvergence =
+    p.convergence_assessment !== undefined ||
+    p.diverging !== undefined ||
+    p.converging !== undefined;
+
+  if (gate === "pattern_convergence" || looksLikeConvergence) {
+    const converging = (p.converging as Array<Record<string, unknown>>) || [];
+    const diverging = (p.diverging as Array<Record<string, unknown>>) || [];
     return (
       <div style={s}>
         <div>
-          <span style={labelStyle}>{t("hitl.patternOfInterestLabel")}</span>
-          <span style={{ ...valStyle, fontSize: 14, fontWeight: 600 }}>
-            {(p.core_concern as string) || "?"}
+          <span style={labelStyle}>{t("hitl.convergenceLabel")}</span>
+          <span style={{ ...valStyle, fontWeight: 600 }}>
+            {(p.convergence_assessment as string) || "—"}
           </span>
         </div>
-        <div style={{ marginTop: 4 }}>
-          <span style={labelStyle}>{t("hitl.confidenceLabel")}</span>
-          <span style={valStyle}>{p.confidence as string}</span>
-        </div>
-        {(p.recurring_problems as string[])?.length > 0 && (
-          <div style={{ marginTop: 4 }}>
-            <span style={labelStyle}>{t("hitl.recurringProblems")}</span>
+        {converging.length > 0 && (
+          <div style={{ marginTop: 6 }}>
+            <span style={labelStyle}>{t("hitl.convergingLabel")}</span>
             <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
-              {(p.recurring_problems as string[]).map((rp, i) => (
-                <li key={i} style={{ color: "#C9D1D9" }}>
-                  {rp}
+              {converging.map((c, i) => (
+                <li key={i} style={{ color: "#2EA043" }}>
+                  {(c.element as string) || JSON.stringify(c)}
                 </li>
               ))}
             </ul>
           </div>
         )}
-        <div
-          style={{
-            marginTop: 6,
-            padding: "6px 8px",
-            background: "#1C2333",
-            borderRadius: 4,
-            fontSize: 11,
-            color: "#8B949E",
-            fontStyle: "italic",
-          }}
-        >
-          {(p.rationale as string) || ""}
+        {diverging.length > 0 && (
+          <div style={{ marginTop: 6 }}>
+            <span style={labelStyle}>{t("hitl.divergingLabel")}</span>
+            <ul style={{ margin: "2px 0 0 16px", padding: 0 }}>
+              {diverging.map((d, i) => (
+                <li key={i} style={{ color: "#F85149" }}>
+                  {(d.element as string) || JSON.stringify(d)}
+                  {!!(d.explanation as string) && (
+                    <div style={{ color: "#8B949E", fontSize: 11 }}>
+                      {d.explanation as string}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {!!p.recommendation && (
+          <div style={{ marginTop: 6 }}>
+            <span style={labelStyle}>{t("hitl.recommendationLabel")}</span>
+            <span style={valStyle}>{p.recommendation as string}</span>
+          </div>
+        )}
+        {!!p.suggested_shared_pattern && (
+          <div style={{ marginTop: 6 }}>
+            <span style={labelStyle}>{t("hitl.suggestedPatternLabel")}</span>
+            <span style={valStyle}>{p.suggested_shared_pattern as string}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (gate === "pattern_of_interest") {
+    // El proposer emite `candidates[]` (statement/supporting_codes/…), no un
+    // `core_concern` único: leer el campo equivocado dejaba el modal vacío.
+    const candidates = (p.candidates as Array<Record<string, unknown>>) || [];
+    if (candidates.length === 0) {
+      return (
+        <div style={s}>
+          <div style={{ color: "#F85149" }}>{t("hitl.noClearConcern")}</div>
+          {!!p.no_concern_rationale && (
+            <div style={{ fontSize: 11, color: "#8B949E", marginTop: 4 }}>
+              {p.no_concern_rationale as string}
+            </div>
+          )}
         </div>
+      );
+    }
+    return (
+      <div style={s}>
+        {candidates.map((c, i) => {
+          const supporting = (c.supporting_codes as string[]) || [];
+          const orphans = (c.orphan_codes as string[]) || [];
+          return (
+            <div
+              key={i}
+              style={{
+                marginBottom: 8,
+                padding: "6px 8px",
+                background: "#1C2333",
+                borderRadius: 4,
+              }}
+            >
+              <div>
+                <span style={labelStyle}>
+                  {t("hitl.candidateLabel")}
+                  {i + 1}:{" "}
+                </span>
+                <span style={{ ...valStyle, fontWeight: 600 }}>
+                  {(c.statement as string) || "—"}
+                </span>
+                {!!c.is_latent && (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      padding: "1px 6px",
+                      borderRadius: 999,
+                      background: "#A371F722",
+                      color: "#A371F7",
+                      border: "1px solid #A371F744",
+                    }}
+                  >
+                    {t("hitl.latentBadge")}
+                  </span>
+                )}
+              </div>
+              <div style={{ marginTop: 2, fontSize: 11, color: "#8B949E" }}>
+                {t("hitl.supportingCodesLabel")} {supporting.length}
+                {" · "}
+                {t("hitl.orphanCodesLabel")} {orphans.length}
+              </div>
+              {!!c.rationale && (
+                <div style={{ marginTop: 2, fontSize: 11, color: "#C9D1D9" }}>
+                  {c.rationale as string}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {!!p.rationale && (
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 11,
+              color: "#8B949E",
+              fontStyle: "italic",
+            }}
+          >
+            {p.rationale as string}
+          </div>
+        )}
       </div>
     );
   }
@@ -235,14 +342,19 @@ export default function HITLModal({
   if (!open) return null;
 
   const cv = criticVerdict as Record<string, unknown>;
-  const verdict = (cv.verdict as string) || "SAT";
+  // No todos los gates traen un veredicto formal: el de convergencia sólo
+  // aporta `confidence` + `population_concerns`. Caer a "SAT" pintaba un
+  // veredicto falso, así que usamos la confianza como texto y color neutro
+  // cuando el campo `verdict` no existe.
+  const verdict = (cv.verdict as string) || (cv.confidence as string) || "—";
   const rationale = (cv.rationale as string) || "";
   const suggestions = (cv.suggestions as string[]) || [];
+  const populationConcerns = (cv.population_concerns as string[]) || [];
   const grounding = cv.grounding_score as number | undefined;
   const coverage = cv.coverage_score as number | undefined;
   const abstraction = cv.abstraction_score as number | undefined;
   const agreement = cv.agreement_percentage as number | undefined;
-  const verdictColor = VERDICT_COLORS[verdict] || "#30363D";
+  const verdictColor = VERDICT_COLORS[verdict] || "#8B949E";
 
   const handleSubmit = async () => {
     if (!decision) return;
@@ -348,6 +460,25 @@ export default function HITLModal({
                   >
                     {suggestions.map((s, i) => (
                       <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {populationConcerns.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong style={{ fontSize: 12, color: "#D29922" }}>
+                    {t("hitl.populationConcerns")}
+                  </strong>
+                  <ul
+                    style={{
+                      margin: "4px 0 0 0",
+                      paddingLeft: 20,
+                      fontSize: 12,
+                      color: "#8B949E",
+                    }}
+                  >
+                    {populationConcerns.map((c, i) => (
+                      <li key={i}>{c}</li>
                     ))}
                   </ul>
                 </div>

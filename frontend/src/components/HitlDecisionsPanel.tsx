@@ -35,6 +35,7 @@ const STATUS_ORDER: HitlStatus[] = [
 
 const KNOWN_GATES = [
   "pattern_of_interest",
+  "pattern_convergence",
   "core_category",
   "selective_reduction",
   "core_saturation",

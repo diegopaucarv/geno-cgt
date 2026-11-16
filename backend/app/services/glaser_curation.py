@@ -11,9 +11,9 @@ Dos superficies, una por paso de la escalera:
 * **segmentado** — el investigador borra un segmento. Si el siguiente comparte
   categoría se fusiona con él (el texto sobrevive en la fila de al lado); si no,
   desaparece. En ambos casos hay que recompactar ``posicion`` y reubicar todo lo
-  que apunta al segmento borrado: ``incident_segmentos``,
-  ``extracted_incidents.segmento_id`` y ``codigos_segmento.segmento_id`` (las dos
-  últimas son FK ``NO ACTION``: Postgres rechaza el DELETE si quedan filas).
+  que apunta al segmento borrado: ``incident_segmentos`` y
+  ``codigos_segmento.segmento_id`` (la segunda es FK ``NO ACTION``: Postgres
+  rechaza el DELETE si quedan filas).
 
 Las reglas de concurrencia —pipeline detenido + advisory lock del documento—
 viven en :mod:`app.services.incident_curation` y se reutilizan tal cual: el
@@ -312,10 +312,11 @@ async def absorb_segment(db: AsyncSession, gone: dict, survivor: dict) -> None:
     desaparecer la fila clickeada, así que su texto tiene que sobrevivir en la
     de al lado (y ese es justamente el caso que el investigador quiere).
 
-    Mueve TODO lo que apunta a ``gone`` antes del DELETE — ``extracted_incidents``
-    y ``codigos_segmento`` son FK ``NO ACTION`` y bloquean el borrado.
+    Mueve TODO lo que apunta a ``gone`` antes del DELETE — ``codigos_segmento``
+    es FK ``NO ACTION`` y bloquea el borrado.
     """
-    # Citas: un incidente no pierde evidencia al fusionar segmentos.
+    # Citas: un incidente no pierde evidencia al fusionar segmentos. Esta tabla
+    # es la única fuente de verdad de "qué texto sostiene el incidente".
     await db.execute(
         text(
             "INSERT INTO incident_segmentos "
@@ -323,14 +324,6 @@ async def absorb_segment(db: AsyncSession, gone: dict, survivor: dict) -> None:
             "SELECT incident_id, :surv, tipo_dato_glaser, is_manual "
             "FROM incident_segmentos WHERE segmento_id = :gone "
             "ON CONFLICT (incident_id, segmento_id) DO NOTHING"
-        ),
-        {"surv": survivor["id"], "gone": gone["id"]},
-    )
-    # Cita primaria denormalizada.
-    await db.execute(
-        text(
-            "UPDATE extracted_incidents SET segmento_id = :surv "
-            "WHERE segmento_id = :gone"
         ),
         {"surv": survivor["id"], "gone": gone["id"]},
     )
@@ -384,31 +377,22 @@ async def remove_segment(
 
     Un incidente sin ninguna cita deja de ser evidencia —no hay texto que lo
     sostenga—, así que se borra en vez de quedar apuntando a una fila muerta.
+    La cuenta se hace sobre ``incident_segmentos`` (fuente de verdad de las
+    citas): si el incidente sólo citaba el segmento que desaparece, queda
+    huérfano.
     """
     orphans: list[str] = []
     for incident_id in cited_by:
-        alternative = (
+        total = (
             await db.execute(
                 text(
-                    "SELECT x.segmento_id FROM incident_segmentos x "
-                    "JOIN segmentos s ON s.id = x.segmento_id "
-                    "WHERE x.incident_id = :iid AND x.segmento_id <> :gone "
-                    "ORDER BY s.posicion LIMIT 1"
+                    "SELECT count(*) FROM incident_segmentos WHERE incident_id = :iid"
                 ),
-                {"iid": incident_id, "gone": gone["id"]},
+                {"iid": incident_id},
             )
-        ).scalar()
-        if alternative is None:
+        ).scalar() or 0
+        if total <= 1:
             orphans.append(incident_id)
-            continue
-        # Sólo si la cita primaria era justamente la que desaparece.
-        await db.execute(
-            text(
-                "UPDATE extracted_incidents SET segmento_id = :alt "
-                "WHERE id = :iid AND segmento_id = :gone"
-            ),
-            {"alt": alternative, "iid": incident_id, "gone": gone["id"]},
-        )
 
     for incident_id in orphans:
         # `incident_comparisons` es CASCADE desde la 020.

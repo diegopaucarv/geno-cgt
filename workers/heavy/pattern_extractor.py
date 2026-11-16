@@ -301,6 +301,7 @@ def extract_patterns_and_incidents(
 
         persisted_incidents = 0
         failed_inserts = 0
+        skipped_no_segment_refs = 0
         for inc in incidents:
             description = (inc.get("description") or "").strip()
             if not description:
@@ -323,22 +324,17 @@ def extract_patterns_and_incidents(
                         segment_ids.append(seg_map[rint])
                         seg_refs_clean.append(rint)
 
-            # If no valid segment refs, link to first baseline segment as fallback
-            unlinked = False
-            if not segment_ids and seg_rows:
+            # Sin segment_refs resolubles no hay cita. Enlazar el incidente al
+            # primer segmento baseline inventaba un ancla: un dato falso. Se
+            # descarta y se deja constancia, nunca se rellena a ciegas.
+            if not segment_ids:
+                skipped_no_segment_refs += 1
                 logger.warning(
                     "Pattern extraction: incidente sin segment_refs resolubles "
-                    "doc=%s — se enlaza al primer segmento baseline: %.80s",
+                    "doc=%s, se descarta: %.80s",
                     documento_id[:8],
                     description,
                 )
-                segment_ids = [str(seg_rows[0][0])]
-                seg_refs_clean = [1]
-                unlinked = True
-
-            # ONE row per incident, segmento_id = first referenced segment
-            primary_seg = segment_ids[0] if segment_ids else None
-            if not primary_seg:
                 continue
 
             meta = {
@@ -352,23 +348,20 @@ def extract_patterns_and_incidents(
                 "exact_quote": exact_quote,
                 "method": "unified_pattern_extractor",
             }
-            if unlinked:
-                meta["unlinked"] = True
 
             try:
                 inserted = session.execute(
                     text(
                         "INSERT INTO extracted_incidents "
-                        "(id, segmento_id, documento_id, proyecto_id, "
+                        "(id, documento_id, proyecto_id, "
                         "jot_text, keep_moving, tipo_dato_glaser, origen, "
                         "preguntas_glaser_json) "
-                        "VALUES (gen_random_uuid(), :sid, :did, :pid, "
+                        "VALUES (gen_random_uuid(), :did, :pid, "
                         ":desc, true, 'baseline_data', 'ia', "
                         "CAST(:meta AS jsonb)) "
                         "RETURNING id"
                     ),
                     {
-                        "sid": primary_seg,
                         "did": documento_id,
                         "pid": proyecto_id,
                         "desc": description,
@@ -456,12 +449,20 @@ def extract_patterns_and_incidents(
 
         logger.info(
             "Pattern extraction complete: doc=%s, %d patterns, %d incidents, "
-            "core_pattern='%s'",
+            "%d skipped (no segment_refs), core_pattern='%s'",
             documento_id[:8],
             len(patterns),
             persisted_incidents,
+            skipped_no_segment_refs,
             prime_mover[:60] if prime_mover else "(none)",
         )
+        if skipped_no_segment_refs:
+            logger.warning(
+                "Pattern extraction: %d incidente(s) descartado(s) por falta de "
+                "segment_refs resolubles doc=%s",
+                skipped_no_segment_refs,
+                documento_id[:8],
+            )
 
         return {
             "documento_id": documento_id,
@@ -470,6 +471,7 @@ def extract_patterns_and_incidents(
             "document_signals": doc_signals,
             "segments_omitted": segments_omitted,
             "segments_untagged": int(untagged),
+            "incidents_skipped_no_segment_refs": skipped_no_segment_refs,
             "mock": False,
         }
 

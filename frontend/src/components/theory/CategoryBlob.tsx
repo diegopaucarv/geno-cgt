@@ -64,6 +64,13 @@ export default function CategoryBlob({ blob, x, y }: Props) {
     e.dataTransfer.effectAllowed = "link";
   };
 
+  // Los tipos SVG de React no incluyen `draggable`, pero el canvas lo usa para
+  // proponer una relación al arrastrar un blob sobre otro.
+  const dragProps = {
+    draggable: true,
+    onDragStart: handleDragStart,
+  } as React.SVGProps<SVGCircleElement> & { draggable: boolean };
+
   const stateClass = isRenamePending
     ? styles.shimmer
     : isSelected
@@ -101,8 +108,7 @@ export default function CategoryBlob({ blob, x, y }: Props) {
         strokeWidth={isSelected ? 3 : 1.5}
         opacity={blob.relevance >= 4 ? 0.9 : 0.6}
         filter={isSelected ? `url(#glow-${blob.id})` : undefined}
-        draggable
-        onDragStart={handleDragStart}
+        {...dragProps}
       />
 
       {blob.is_core && (
