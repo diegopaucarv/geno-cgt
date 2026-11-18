@@ -10,6 +10,7 @@ frontend render this convergence payload as an empty concern proposal.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 sys.path.insert(0, "/app")
@@ -22,25 +23,29 @@ llm = LLMClient()
 
 
 def verify_core_pattern(proyecto_id: str) -> dict:
-    """Compare last 3 per-document patterns and evaluate convergence."""
+    """Compare the last N per-document patterns and evaluate convergence."""
+    try:
+        batch_size = max(1, int(os.getenv("GT_OPEN_CODING_BATCH_SIZE", "3")))
+    except (TypeError, ValueError):
+        batch_size = 3
     session = SessionLocal()
     try:
-        # 1. Get last 3 document_processes with patterns
+        # 1. Get the last `batch_size` document_processes with patterns
         rows = session.execute(
             text(
                 "SELECT dp.process_description, dp.prime_mover, d.original_filename "
                 "FROM document_processes dp JOIN documentos d ON d.id = dp.documento_id "
                 "WHERE dp.proyecto_id = :pid AND dp.prime_mover IS NOT NULL "
-                "ORDER BY dp.creado_en DESC LIMIT 3"
+                "ORDER BY dp.creado_en DESC LIMIT :lim"
             ),
-            {"pid": proyecto_id},
+            {"pid": proyecto_id, "lim": batch_size},
         ).fetchall()
 
-        if len(rows) < 3:
+        if len(rows) < batch_size:
             return {
                 "error": "insufficient_documents",
                 "count": len(rows),
-                "required": 3,
+                "required": batch_size,
             }
 
         # 2. Build patterns text
@@ -114,6 +119,35 @@ def verify_core_pattern(proyecto_id: str) -> dict:
             },
         )
 
+        # 6b. Progreso del lote, para que el modal pueda decir
+        # "N de M documentos procesados. ¿Continuar?".
+        #
+        # `docs_processed` usa EL MISMO predicado que la frontera del lote en
+        # `tasks.py` (`prime_mover_confidence IS NOT NULL`). Contar por
+        # `documentos.estado` daba N-1: el gate se despacha ANTES de que el
+        # documento en curso pase a `incidentes_extraidos`.
+        #
+        # `rollback()` antes de volver a tocar la DB: la transacción quedó
+        # ociosa durante toda la llamada PRO (decenas de segundos) y una
+        # conexión cortada aquí haría que el gate no se cree nunca.
+        session.rollback()
+        docs_processed = session.execute(
+            text(
+                "SELECT COUNT(*) FROM document_processes "
+                "WHERE proyecto_id = :pid AND prime_mover_confidence IS NOT NULL"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()[0]
+        # El total excluye documentos en `error`: nunca podrían extraerse y
+        # dejarían el contador sin llegar a M.
+        total_docs = session.execute(
+            text(
+                "SELECT COUNT(*) FROM documentos "
+                "WHERE proyecto_id = :pid AND TRIM(estado) <> 'error'"
+            ),
+            {"pid": proyecto_id},
+        ).fetchone()[0]
+
         # 7. Store HITL decision
         from app.agents.transitions import GATE_PATTERN_CONVERGENCE, hitl_gate
 
@@ -123,6 +157,9 @@ def verify_core_pattern(proyecto_id: str) -> dict:
             "diverging": result.get("diverging", []),
             "recommendation": result.get("recommendation", "CONTINUE_COLLECTING"),
             "suggested_shared_pattern": result.get("suggested_shared_pattern", ""),
+            "docs_processed": docs_processed,
+            "total_docs": total_docs,
+            "batch_size": batch_size,
         }
         critic_verdict = {
             "confidence": result.get("confidence", "MEDIUM"),

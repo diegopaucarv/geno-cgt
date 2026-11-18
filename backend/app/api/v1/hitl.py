@@ -136,7 +136,7 @@ async def get_open_coding_hitl_status(
     docs_proc = await db.execute(
         text(
             "SELECT COUNT(*) FROM documentos "
-            "WHERE proyecto_id = :pid AND estado IN "
+            "WHERE proyecto_id = :pid AND TRIM(estado) IN "
             "('listo', 'resumiendo', 'resumido', 'sintetizado', "
             " 'procesado', 'incidentes_extraidos', 'codificando', 'codificado')"
         ),
@@ -814,8 +814,24 @@ async def get_pending_decisions(
                 if isinstance(candidates[0], dict)
                 else str(candidates[0])
             )
+        elif (
+            proposal.get("convergence_assessment")
+            or proposal.get("converging") is not None
+        ):
+            # Gate de convergencia (lote de extracción): no trae `candidates`,
+            # así que sin esta rama el resumen quedaba en "(no candidates)".
+            docs_processed = proposal.get("docs_processed")
+            total_docs = proposal.get("total_docs")
+            parts = [str(proposal.get("convergence_assessment") or "")]
+            if proposal.get("recommendation"):
+                parts.append(str(proposal["recommendation"]))
+            if docs_processed is not None and total_docs is not None:
+                parts.append(f"{docs_processed}/{total_docs} docs")
+            proposal_summary = " · ".join(p for p in parts if p)
         else:
-            proposal_summary = proposal.get("rationale", "")[:200]
+            # `rationale: null` en el JSONB hacía `None[:200]` → 500 en TODO el
+            # listado, que ahora se pollea cada segundo durante el lote.
+            proposal_summary = str(proposal.get("rationale") or "")[:200]
         # Derive verdict from observations: count strong/weak observations
         observations = critic.get("observations", [])
         if not observations:

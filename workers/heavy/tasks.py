@@ -169,6 +169,9 @@ llm = LLMClient()
 import os as _os_config
 
 OPEN_CODING_BATCH_SIZE = int(_os_config.getenv("GT_OPEN_CODING_BATCH_SIZE", "3"))
+# Un valor <= 0 haría `doc_count % OPEN_CODING_BATCH_SIZE` (ZeroDivisionError);
+# un valor no numérico rompería el import del módulo entero (muere el worker).
+OPEN_CODING_BATCH_SIZE = max(1, OPEN_CODING_BATCH_SIZE)
 
 
 def _get_population_assumption(session, proyecto_id: str) -> str:

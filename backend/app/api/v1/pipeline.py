@@ -94,6 +94,21 @@ async def run_pipeline_stage(
             result["status"] = "dispatched"
 
     elif stage_name == "cross_doc":
+        # REGLA: la codificación selectiva no puede arrancar sin patrón de
+        # interés elegido. Antes de este guard el coordinator corría con
+        # `chosen_concern` nulo y la etapa entera quedaba sin objeto de estudio.
+        concern_row = await db.execute(
+            text("SELECT chosen_concern FROM proyectos WHERE id = :pid"),
+            {"pid": str(project_id)},
+        )
+        concern = concern_row.fetchone()
+        if not (concern and (concern[0] or "").strip()):
+            raise HTTPException(
+                409,
+                "Elegí el patrón de interés en el HITL de codificación abierta "
+                "antes de iniciar la codificación.",
+            )
+
         # Limpiar los marcadores Phase-B obsoletos para que un run manual
         # siempre despache (process_synthesis_agents_b se salta si ya están).
         await db.execute(
@@ -234,6 +249,7 @@ async def get_pipeline_log(
                 "docs_inconsistent": 0,
                 "docs_need_classify": 0,
                 "playground_ready": False,
+                "open_coding_batch_size": _open_coding_batch_size(),
             },
         }
 
@@ -551,6 +567,7 @@ async def get_pipeline_log(
             "categories": cat_count,
             "project_state": await _get_project_state(db, project_id),
             "playground_ready": docs_sintetizados == len(docs) and cat_count > 0,
+            "open_coding_batch_size": _open_coding_batch_size(),
             "running_agents": running_agents,
             "succeeded_agents": succeeded_agents,
             "running_phases": running_phases,
@@ -1221,6 +1238,20 @@ async def patch_document_text(
     )
     await db.commit()
     return {"status": "updated", "id": str(document_id)}
+
+
+def _open_coding_batch_size() -> int:
+    """Tamaño de lote de open coding (misma env que workers/heavy/tasks.py).
+
+    El frontend lo usa para saber cuándo debe pedir "N de M documentos
+    procesados. ¿Continuar?" sin duplicar el número mágico.
+    """
+    import os
+
+    try:
+        return max(1, int(os.getenv("GT_OPEN_CODING_BATCH_SIZE", "3")))
+    except (TypeError, ValueError):
+        return 3
 
 
 async def _get_project_state(db: AsyncSession, project_id: UUID) -> str:

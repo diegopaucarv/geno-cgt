@@ -419,8 +419,11 @@ def _maybe_trigger_phase_b(session, proyecto_id: str) -> dict | None:
 
     try:
         batch_size = int(_os.getenv("GT_OPEN_CODING_BATCH_SIZE", "3"))
-    except ValueError:
+    except (TypeError, ValueError):
         batch_size = 3
+    # Un lote de 0 haría `listos < batch_size` siempre falso y dividiría por
+    # cero más abajo; se acota a 1.
+    batch_size = max(1, batch_size)
 
     if listos == 0:
         return None

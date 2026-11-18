@@ -78,6 +78,44 @@ const btnSmall: React.CSSProperties = {
 
 type StageStatus = "pending" | "running" | "done" | "error";
 
+/** Punto rojo con contador para gates HITL pendientes.
+ *
+ *  Sustituye a los banners morados de aviso: el aviso vive sobre el botón
+ *  HITL que ya existe, así que no ocupa espacio ni tapa el contenido. */
+function HitlBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: -6,
+        right: -6,
+        minWidth: 15,
+        height: 15,
+        padding: "0 4px",
+        borderRadius: 999,
+        background: "#F85149",
+        color: "#0D1117",
+        fontSize: 9,
+        fontWeight: 800,
+        lineHeight: "15px",
+        textAlign: "center",
+        boxSizing: "border-box",
+        boxShadow: "0 0 0 2px #161B22",
+        pointerEvents: "none",
+      }}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+/** Envoltorio para posicionar `HitlBadge` sobre un botón. */
+const badgeWrap: React.CSSProperties = {
+  position: "relative",
+  display: "inline-flex",
+};
+
 /** Per-interview pipeline steps, in classify-first order.
  *
  *  `original → preprocessed → classified → segmented → incidents`: the Glaser
@@ -207,6 +245,16 @@ function UnclassifiedSegmentRow({ segment }: { segment: Segment }) {
 // no bloquea el pipeline, así que interrumpir con un modal era ruido.
 const ADVISORY_HITL_GATES = new Set(["pattern_convergence"]);
 
+/** Clave de identidad de un gate pendiente.
+ *
+ *  Ojo: `hitl_gate` hace UPSERT, así que un gate reabierto CONSERVA su `id`
+ *  (sólo se refresca `creado_en`). Usar sólo el `id` como marca de "ya visto"
+ *  hacía que, tras el primer lote, el loop dejara de pausarse y el modal
+ *  dejara de auto-abrirse. La clave compuesta detecta cada reapertura. */
+function hitlKey(g: { id: string; created_at?: string | null }): string {
+  return `${g.id}:${g.created_at ?? ""}`;
+}
+
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -325,6 +373,13 @@ export default function ProjectDetail() {
       "codificando",
       "codificado",
       "listo",
+      // Estados posteriores del pipeline: si un doc ya pasó por ahí, el
+      // extractor de incidentes también quedó atrás. Sin ellos, un proyecto
+      // re-procesado contaba de menos y `doneCount` nunca cuadraba con el
+      // worker (que sí los incluye), desplazando la frontera del lote.
+      "resumiendo",
+      "resumido",
+      "sintetizado",
     ],
     codificado: ["codificado", "listo"],
   };
@@ -440,6 +495,46 @@ export default function ProjectDetail() {
     return signal.current ? "aborted" : "timeout";
   }
 
+  /** Espera a que el backend abra el gate de lote (convergencia de patrones).
+   *
+   *  El worker despacha `verify_core_pattern` de forma asíncrona al cruzar el
+   *  lote, así que el gate puede tardar varios segundos: se reintenta hasta
+   *  `timeoutMs`. Devuelve true si hubo que pausar (el modal ya está abierto).
+   *
+   *  `ignore` son las claves de gates que YA existan al arrancar la corrida
+   *  (una pausa anterior sin decidir). NO se usa `hitlSeenIdsRef` para esto:
+   *  ese set es el de "ya lo vio el usuario" y el poll global lo marca antes
+   *  de que este loop llegue, lo que hacía que el lote no se pausara nunca.
+   */
+  async function waitForBatchGate(
+    timeoutMs = 20_000,
+    ignore?: Set<string>,
+  ): Promise<boolean> {
+    if (!id) return false;
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (abortRef.current) return false;
+      const items = await getPendingHitl(id).catch(
+        () => [] as HitlPendingItem[],
+      );
+      const gate = items.find(
+        (g) =>
+          g.gate_name === "pattern_convergence" &&
+          !(ignore?.has(hitlKey(g)) ?? false),
+      );
+      if (gate) {
+        const key = hitlKey(gate);
+        ignore?.add(key);
+        hitlSeenIdsRef.current = new Set([...hitlSeenIdsRef.current, key]);
+        setHitlPending(items);
+        if (!hitlModalOpenRef.current) openHitlGate(gate.gate_name);
+        return true;
+      }
+      if (Date.now() >= deadline) return false;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState("");
   const [userName, setUserName] = useState("");
@@ -492,9 +587,29 @@ export default function ProjectDetail() {
   // ── HITL state ──
   const [hitlPending, setHitlPending] = useState<HitlPendingItem[]>([]);
   const [showHITLModal, setShowHITLModal] = useState(false);
-  // Ids de gates pendientes ya vistos: el modal solo se abre cuando aparece
-  // uno NUEVO. Sin esto, cerrar el modal lo reabría en cada poll (10 s).
+  // Gate que el modal debe mostrar. No se usa `hitlPending[0]`: el gate que
+  // abre el modal puede ser el de lote (convergencia) y no el primero de la
+  // lista, y el usuario puede abrirlo desde el badge mucho después.
+  const [hitlModalGate, setHitlModalGate] = useState<string | null>(null);
+  // Ids de gates pendientes ya vistos: el modal solo se abre solo cuando
+  // aparece uno NUEVO. Sin esto, cerrar el modal lo reabría en cada poll (10 s).
   const hitlSeenIdsRef = useRef<Set<string>>(new Set());
+  // ¿Hay un lote de extracción en pausa esperando "¿Continuar?"? Se guarda en
+  // estado (no sólo en el ref) para que el navbar y el badge reaccionen.
+  const [batchPaused, setBatchPaused] = useState(false);
+  // Reanudación pendiente del loop per-doc cuando una pausa HITL lo detiene.
+  // Se guarda el gate que la originó: aceptar OTRO gate no debe re-lanzar un
+  // lote viejo. Cerrar con "Decidir después" NO la borra (el lote sigue en
+  // pausa y debe poder retomarse desde el botón HITL).
+  const agentResumeRef = useRef<null | {
+    gate: string;
+    agentId: string;
+    fn: () => void;
+  }>(null);
+  // ¿Hay un modal abierto ahora mismo? El poll lo consulta para no cambiarle
+  // el gate debajo al usuario y perder la nota que esté escribiendo.
+  const hitlModalOpenRef = useRef(false);
+  hitlModalOpenRef.current = showHITLModal;
   // Gate de codificación abierta (concern / población / categorías centrales)
   const [ocHitl, setOcHitl] = useState<OpenCodingHitlStatus | null>(null);
   const [ocHitlOpen, setOcHitlOpen] = useState(false);
@@ -957,6 +1072,12 @@ export default function ProjectDetail() {
 
   // Gates informativos: prefieren no bloquear (`ADVISORY_HITL_GATES`).
 
+  /** Abre el modal de un gate concreto. */
+  function openHitlGate(gateName: string) {
+    setHitlModalGate(gateName);
+    setShowHITLModal(true);
+  }
+
   // ── HITL polling ──
   useEffect(() => {
     if (!id) return;
@@ -965,13 +1086,21 @@ export default function ProjectDetail() {
         .then((items) => {
           setHitlPending(items);
           const seen = hitlSeenIdsRef.current;
-          const ids = new Set(items.map((i) => i.id));
-          // Solo auto-abrimos si hay un gate BLOQUEANTE que no habíamos visto.
-          const hasNew = items.some(
-            (i) => !seen.has(i.id) && !ADVISORY_HITL_GATES.has(i.gate_name),
-          );
-          hitlSeenIdsRef.current = ids;
-          if (hasNew) setShowHITLModal(true);
+          const ids = new Set(items.map((i) => hitlKey(i)));
+          // Purgar claves de gates ya decididos: si no, el set sólo crece.
+          for (const k of [...seen]) if (!ids.has(k)) seen.delete(k);
+          // El modal se abre solo con CUALQUIER gate nuevo (incluidos los
+          // informativos: el lote de extracción pide "¿Continuar?"). Es
+          // cerrable, así que auto-abrir no bloquea el trabajo.
+          const fresh = items.find((i) => !seen.has(hitlKey(i)));
+          // Sólo se marca como visto el gate que REALMENTE se abre: marcarlos
+          // todos hacía que un gate que llegó con el modal ocupado no se
+          // auto-abriera nunca.
+          if (fresh && !hitlModalOpenRef.current) {
+            seen.add(hitlKey(fresh));
+            setHitlModalGate(fresh.gate_name);
+            setShowHITLModal(true);
+          }
         })
         .catch(() => {});
     }, 10000); // poll every 10s
@@ -3264,15 +3393,19 @@ export default function ProjectDetail() {
       (ocHitl.unified_categories?.length ?? 0) > 0);
 
   // Reparto de gates pendientes: los bloqueantes mandan (banner + modal),
-  // los informativos sólo dejan aviso.
-  const advisoryHitl = hitlPending.filter((g) =>
-    ADVISORY_HITL_GATES.has(g.gate_name),
-  );
+  // los informativos (convergencia de lote) sólo dejan el punto rojo.
   const blockingHitl = hitlPending.filter(
     (g) => !ADVISORY_HITL_GATES.has(g.gate_name),
   );
-  const primaryHitl = blockingHitl[0] ?? advisoryHitl[0] ?? null;
-  const hitlAdvisoryOnly = blockingHitl.length === 0 && advisoryHitl.length > 0;
+  const primaryHitl = blockingHitl[0] ?? null;
+  // Punto rojo: cuenta gates pendientes del pipeline + la decisión de open
+  // coding (concern/población/categorías), que vive en su propio modal.
+  const hitlBadgeCount =
+    hitlPending.length + (ocHitlReady ? 1 : 0) + (batchPaused ? 1 : 0);
+  // Iniciar la codificación sin patrón de interés elegido no tiene sentido: el
+  // coordinator no sabría qué patrón perseguir. El backend también lo rechaza
+  // con 409, esto solo lo hace visible antes de intentarlo.
+  const codingBlocked = !!ocHitl && !ocHitl.chosen_concern;
 
   return (
     <div
@@ -3310,18 +3443,51 @@ export default function ProjectDetail() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={() => setOcHitlOpen(true)}
-              title="Decisión HITL de codificación abierta: concern principal, población y categorías centrales"
-              style={{
-                ...btnSmall,
-                fontSize: 11,
-                border: `1px solid ${ocHitlReady ? "#D29922" : "#21262D"}`,
-                color: ocHitlReady ? "#D29922" : "#8B949E",
-              }}
-            >
-              {ocHitlReady ? "◆ HITL" : "◇ HITL"}
-            </button>
+            <span style={badgeWrap}>
+              <button
+                onClick={() => {
+                  if (ocHitlReady) setOcHitlOpen(true);
+                  else {
+                    // Prioridad: si hay un lote en pausa, su gate es lo único
+                    // que puede reanudarlo, así que va primero. Si no, un gate
+                    // bloqueante, y por último cualquier pendiente (incluidos
+                    // los informativos de lote).
+                    const resumeGate = agentResumeRef.current?.gate ?? null;
+                    const pendingNames = new Set(
+                      hitlPending.map((i) => i.gate_name),
+                    );
+                    const target =
+                      (resumeGate && pendingNames.has(resumeGate)
+                        ? resumeGate
+                        : null) ??
+                      primaryHitl?.gate_name ??
+                      hitlPending[0]?.gate_name ??
+                      null;
+                    if (target) openHitlGate(target);
+                    else setOcHitlOpen(true);
+                  }
+                }}
+                title="Decisiones HITL pendientes (codificación abierta y pipeline)"
+                style={{
+                  ...btnSmall,
+                  fontSize: 11,
+                  border: `1px solid ${
+                    ocHitlReady || primaryHitl || batchPaused
+                      ? "#D29922"
+                      : "#21262D"
+                  }`,
+                  color:
+                    ocHitlReady || primaryHitl || batchPaused
+                      ? "#D29922"
+                      : "#8B949E",
+                }}
+              >
+                {ocHitlReady || primaryHitl || batchPaused
+                  ? "◆ HITL"
+                  : "◇ HITL"}
+              </button>
+              <HitlBadge count={hitlBadgeCount} />
+            </span>
             <span
               style={{
                 fontSize: 11,
@@ -3351,22 +3517,15 @@ export default function ProjectDetail() {
               padding: "10px 16px",
               marginBottom: 12,
               borderRadius: 8,
-              background: hitlAdvisoryOnly ? "#A371F718" : "#D2992218",
-              border: `1px solid ${hitlAdvisoryOnly ? "#A371F744" : "#D2992244"}`,
+              background: "#D2992218",
+              border: "1px solid #D2992244",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
             }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                color: hitlAdvisoryOnly ? "#A371F7" : "#D29922",
-              }}
-            >
-              {hitlAdvisoryOnly
-                ? `\u25C6 ${t("project.convergenceNotice")}`
-                : t("project.decisionRequired")}
+            <span style={{ fontSize: 13, color: "#D29922" }}>
+              {t("project.decisionRequired")}
               <strong>
                 {primaryHitl.gate_name === "pattern_of_interest"
                   ? t("project.mainConcern")
@@ -3387,21 +3546,19 @@ export default function ProjectDetail() {
             </span>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button
-                onClick={() => setShowHITLModal(true)}
+                onClick={() => openHitlGate(primaryHitl.gate_name)}
                 style={{
                   padding: "6px 16px",
                   borderRadius: 6,
                   border: "none",
-                  background: hitlAdvisoryOnly ? "#A371F7" : "#D29922",
+                  background: "#D29922",
                   color: "#0D1117",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
-                {hitlAdvisoryOnly
-                  ? t("project.reviewButton")
-                  : t("project.resolveButton")}
+                {t("project.resolveButton")}
               </button>
               <button
                 onClick={() => setSidebarViewMode("hitl")}
@@ -3416,60 +3573,6 @@ export default function ProjectDetail() {
                   fontWeight: 600,
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                }}
-              >
-                ⚖
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Open Coding HITL Banner ── */}
-        {ocHitlReady && blockingHitl.length === 0 && (
-          <div
-            style={{
-              padding: "10px 16px",
-              marginBottom: 12,
-              borderRadius: 8,
-              background: "#A371F718",
-              border: "1px solid #A371F744",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span style={{ fontSize: 13, color: "#A371F7" }}>
-              ◆ Decisión HITL pendiente: concern principal, población y
-              categorías centrales.
-            </span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button
-                onClick={() => setOcHitlOpen(true)}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: "#A371F7",
-                  color: "#0D1117",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Revisar
-              </button>
-              <button
-                onClick={() => setSidebarViewMode("hitl")}
-                title={t("hitlCrud.title")}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #A371F744",
-                  background: "transparent",
-                  color: "#A371F7",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
                 }}
               >
                 ⚖
@@ -5515,17 +5618,45 @@ export default function ProjectDetail() {
           <hr style={{ borderColor: "#21262D", margin: "24px 0" }} />
 
           {/* ── HITL Modal ── */}
-          {primaryHitl && id && (
+          {id && hitlModalGate && (
             <HITLModal
               open={showHITLModal}
               projectId={id}
-              gateName={primaryHitl.gate_name}
-              onClose={() => setShowHITLModal(false)}
-              onDecided={() => {
+              gateName={hitlModalGate}
+              onClose={() => {
+                // "Decidir después": se cierra sin decidir, pero la reanudación
+                // del lote SE CONSERVA. El gate sigue pendiente en el backend y
+                // el badge rojo permite retomarlo; al aceptarlo allí, el loop
+                // continúa con los documentos que quedaron en cola.
                 setShowHITLModal(false);
+              }}
+              onDecided={(decision) => {
+                const resume = agentResumeRef.current;
+                const decidedGate = hitlModalGate;
+                setShowHITLModal(false);
+                setHitlModalGate(null);
                 getPendingHitl(id)
                   .then(setHitlPending)
                   .catch(() => {});
+                // Sólo "Continuar" reanuda, y sólo si es el mismo gate que
+                // causó la pausa.
+                if (resume && resume.gate === decidedGate) {
+                  agentResumeRef.current = null;
+                  if (decision === "accept") {
+                    resume.fn();
+                  } else {
+                    // "Detener aquí" (o modify): la pausa ya no aplica y hay que
+                    // soltar el agente, que quedó marcado como ocupado.
+                    setBatchPaused(false);
+                    const pausedAgent = resume.agentId;
+                    setRunningAgentIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(pausedAgent);
+                      return next;
+                    });
+                    refreshAll();
+                  }
+                }
               }}
             />
           )}
@@ -6127,17 +6258,91 @@ export default function ProjectDetail() {
 
                   async function dispatchAgentLoop(
                     docsToProcess: typeof eligible,
+                    startDone?: number,
                   ) {
                     abortRef.current = false;
+                    // Un nuevo dispatch invalida cualquier reanudación previa:
+                    // si no, un gate aceptado después re-lanzaba un lote viejo.
+                    // `clearAndRestart` además borra los gates pendientes
+                    // (`/hitl/reset`), así que la pausa deja de existir.
+                    agentResumeRef.current = null;
+                    setBatchPaused(false);
                     setRunningAgentIds((prev) => new Set([...prev, agentId]));
+
+                    // Pausa por lote: sólo el extractor de incidentes tiene
+                    // checkpoint HITL. El worker despacha F2.5
+                    // (`verify_core_pattern`) al cruzar cada `batchSize` docs;
+                    // cuando el gate aparece, el loop se detiene y el modal
+                    // pide "N de M documentos procesados. ¿Continuar?".
+                    const pausesForBatch =
+                      agentId === "fa_document_pattern_extractor";
+                    const batchSize =
+                      Number(
+                        pipelineLog?.summary?.open_coding_batch_size ?? 3,
+                      ) || 3;
+                    // Gates de convergencia que ya estaban pendientes antes de
+                    // esta corrida (una pausa anterior sin decidir). No cuentan
+                    // como pausa nueva, o el lote se detendría al primer doc.
+                    const staleGates = new Set(
+                      (
+                        await getPendingHitl(id).catch(
+                          () => [] as HitlPendingItem[],
+                        )
+                      )
+                        .filter((g) => g.gate_name === "pattern_convergence")
+                        .map((g) => hitlKey(g)),
+                    );
+                    const extractorDone = (list: typeof eligible) =>
+                      list.filter((d) =>
+                        (BEYOND["incidentes_extraidos"] || []).includes(
+                          String(d.estado ?? "").trim(),
+                        ),
+                      ).length;
+                    let doneCount = startDone ?? extractorDone(docs);
+                    // Si se pausa por lote, el `finally` NO debe soltar el
+                    // agente: si lo soltara, "▶ Ejecutar" volvería a estar
+                    // habilitado y relanzar la corrida borraría los gates
+                    // pendientes (`/hitl/reset`) y perdería la reanudación.
+                    let pausedByBatch = false;
+
                     try {
-                      for (const doc of docsToProcess) {
+                      for (let idx = 0; idx < docsToProcess.length; idx++) {
                         if (abortRef.current) break;
-                        await runDocTask(
+                        const doc = docsToProcess[idx];
+                        const outcome = await runDocTask(
                           doc.id,
                           `/api/v1/projects/${id}/pipeline/run-agent/${agentId}`,
                           abortRef,
                         );
+                        if (!pausesForBatch || outcome !== "success") continue;
+
+                        doneCount += 1;
+                        const atBoundary = doneCount % batchSize === 0;
+                        // Siempre un chequeo barato; en la frontera esperamos
+                        // al worker asíncrono para no adelantarnos al gate.
+                        // 20 s: el conteo cliente por `estado` puede ir por
+                        // detrás del worker, pero 90 s congelaba el loop.
+                        const paused = await waitForBatchGate(
+                          atBoundary ? 20_000 : 0,
+                          staleGates,
+                        );
+                        if (!paused) continue;
+
+                        const remaining = docsToProcess.slice(idx + 1);
+                        if (remaining.length > 0) {
+                          pausedByBatch = true;
+                          setBatchPaused(true);
+                          agentResumeRef.current = {
+                            gate: "pattern_convergence",
+                            agentId,
+                            fn: () => {
+                              agentResumeRef.current = null;
+                              setBatchPaused(false);
+                              dispatchAgentLoop(remaining, doneCount);
+                            },
+                          };
+                        }
+                        return;
                       }
                     } catch (e: any) {
                       showErrorToast(e?.message || String(e));
@@ -6145,12 +6350,16 @@ export default function ProjectDetail() {
                       // El badge siempre vuelve a su estado real: sin `finally`,
                       // un fetch fallido dejaba el spinner colgado para siempre.
                       // PipelineAgents recomputa canRun/done desde docs[].estado.
-                      runningTaskRef.current = null;
-                      setRunningAgentIds((prev) => {
-                        const next = new Set(prev);
-                        next.delete(agentId);
-                        return next;
-                      });
+                      // Excepción: en pausa por lote el agente queda "ocupado"
+                      // a propósito hasta que el usuario decida.
+                      if (!pausedByBatch) {
+                        runningTaskRef.current = null;
+                        setRunningAgentIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(agentId);
+                          return next;
+                        });
+                      }
                       refreshAll();
                     }
                   }
@@ -6248,6 +6457,11 @@ export default function ProjectDetail() {
                 console.log("[PipelineAgents] stop", agentId);
                 abortRef.current = true;
                 runningTaskRef.current = null;
+                // Detener invalida cualquier pausa de lote armada: si no quedara
+                // limpia, el botón HITL seguiría invitando a "continuar" algo
+                // que el usuario acaba de cancelar.
+                agentResumeRef.current = null;
+                setBatchPaused(false);
                 // Single robust stop: kills all tasks + rolls back estados
                 fetch(`/api/v1/admin/projects/${id}/stop`, {
                   method: "POST",
@@ -6596,7 +6810,12 @@ export default function ProjectDetail() {
                             ) &&
                               !docs.some((d) => d.estado === "codificando") && (
                                 <button
-                                  disabled={openCodingRunning}
+                                  disabled={openCodingRunning || codingBlocked}
+                                  title={
+                                    codingBlocked
+                                      ? "Elegí el patrón de interés en el HITL de codificación abierta antes de codificar"
+                                      : "Iniciar la codificación selectiva"
+                                  }
                                   onClick={async (e) => {
                                     e.stopPropagation();
                                     setOpenCodingRunning(true);
@@ -6647,34 +6866,41 @@ export default function ProjectDetail() {
                                     background: "#58A6FF18",
                                     color: "#58A6FF",
                                     border: "1px solid #58A6FF33",
-                                    cursor: openCodingRunning
-                                      ? "not-allowed"
-                                      : "pointer",
-                                    opacity: openCodingRunning ? 0.5 : 1,
+                                    cursor:
+                                      openCodingRunning || codingBlocked
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity:
+                                      openCodingRunning || codingBlocked
+                                        ? 0.5
+                                        : 1,
                                   }}
                                 >
                                   ▶ Codificar
                                 </button>
                               )}
-                            <button
-                              onClick={() => setOcHitlOpen(true)}
-                              title="Decisión HITL: concern principal, población y categorías centrales"
-                              style={{
-                                fontSize: 9,
-                                padding: "1px 6px",
-                                borderRadius: 999,
-                                background: ocHitlReady
-                                  ? "#D2992218"
-                                  : "#8B949E18",
-                                color: ocHitlReady ? "#D29922" : "#8B949E",
-                                border: ocHitlReady
-                                  ? "1px solid #D2992244"
-                                  : "1px solid #8B949E33",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ◆ HITL
-                            </button>
+                            <span style={badgeWrap}>
+                              <button
+                                onClick={() => setOcHitlOpen(true)}
+                                title="Decisión HITL: concern principal, población y categorías centrales"
+                                style={{
+                                  fontSize: 9,
+                                  padding: "1px 6px",
+                                  borderRadius: 999,
+                                  background: ocHitlReady
+                                    ? "#D2992218"
+                                    : "#8B949E18",
+                                  color: ocHitlReady ? "#D29922" : "#8B949E",
+                                  border: ocHitlReady
+                                    ? "1px solid #D2992244"
+                                    : "1px solid #8B949E33",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ◆ HITL
+                              </button>
+                              <HitlBadge count={ocHitlReady ? 1 : 0} />
+                            </span>
                             {dupRedundant > 0 && (
                               <button
                                 onClick={(e) => {

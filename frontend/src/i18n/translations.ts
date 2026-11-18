@@ -756,6 +756,20 @@ const en: Translations = {
     cancelButton: "Cancel",
     submitting: "Submitting...",
     submitButton: "Submit Decision",
+    // ── Batch (pattern convergence) gate ──
+    batchTitle: "📦 Batch processed",
+    batchPrompt: "{n} of {m} documents processed. Continue?",
+    batchPromptUnknown: "{n} documents processed. Continue?",
+    batchPromptGeneric: "Batch processed. Continue?",
+
+    batchHint:
+      "Closing this window does not cancel anything: the batch stays paused and you can resume from the HITL button.",
+    continueButton: "Continue processing",
+    stopButton: "Stop here",
+    laterButton: "Decide later",
+    closeButton: "Close",
+    noConvergenceData: "No convergence assessment yet.",
+    submitFailed: "Decision could not be saved",
   },
   setup: {
     title: "Setting up your environment",
@@ -1793,7 +1807,21 @@ const es: Translations = {
     feedbackPlaceholder: "Be specific: what should change in the proposal?",
     cancelButton: "Cancel",
     submitting: "Submitting...",
-    submitButton: "Submit Decision",
+    submitButton: "Enviar decisión",
+    // ── Gate de lote (convergencia de patrones) ──
+    batchTitle: "📦 Lote procesado",
+    batchPrompt: "{n} de {m} documentos procesados. ¿Continuar?",
+    batchPromptUnknown: "{n} documentos procesados. ¿Continuar?",
+    batchPromptGeneric: "Lote procesado. ¿Continuar?",
+
+    batchHint:
+      "Cerrar esta ventana no cancela nada: el lote queda en pausa y podés retomarlo desde el botón HITL.",
+    continueButton: "Continuar procesando",
+    stopButton: "Detener aquí",
+    laterButton: "Decidir después",
+    closeButton: "Cerrar",
+    noConvergenceData: "Todavía no hay evaluación de convergencia.",
+    submitFailed: "No se pudo guardar la decisión",
   },
   setup: {
     title: "Configurando tu entorno",
@@ -2844,6 +2872,20 @@ const de: Translations = {
     cancelButton: "Abbrechen",
     submitting: "Senden...",
     submitButton: "Entscheidung senden",
+    // ── Batch-Gate (Musterkonvergenz) ──
+    batchTitle: "📦 Stapel verarbeitet",
+    batchPrompt: "{n} von {m} Dokumenten verarbeitet. Weiter?",
+    batchPromptUnknown: "{n} Dokumente verarbeitet. Weiter?",
+    batchPromptGeneric: "Stapel verarbeitet. Weiter?",
+
+    batchHint:
+      "Das Schließen dieses Fensters bricht nichts ab: der Stapel bleibt pausiert und kann über die HITL-Schaltfläche fortgesetzt werden.",
+    continueButton: "Weiter verarbeiten",
+    stopButton: "Hier stoppen",
+    laterButton: "Später entscheiden",
+    closeButton: "Schließen",
+    noConvergenceData: "Noch keine Konvergenzbewertung.",
+    submitFailed: "Entscheidung konnte nicht gespeichert werden",
   },
   setup: {
     title: "Umgebung wird eingerichtet",
@@ -3884,6 +3926,20 @@ const pt: Translations = {
     cancelButton: "Cancelar",
     submitting: "Enviando...",
     submitButton: "Enviar Decisão",
+    // ── Gate de lote (convergência de padrões) ──
+    batchTitle: "📦 Lote processado",
+    batchPrompt: "{n} de {m} documentos processados. Continuar?",
+    batchPromptUnknown: "{n} documentos processados. Continuar?",
+    batchPromptGeneric: "Lote processado. Continuar?",
+
+    batchHint:
+      "Fechar esta janela não cancela nada: o lote fica em pausa e pode ser retomado pelo botão HITL.",
+    continueButton: "Continuar processando",
+    stopButton: "Parar aqui",
+    laterButton: "Decidir depois",
+    closeButton: "Fechar",
+    noConvergenceData: "Ainda não há avaliação de convergência.",
+    submitFailed: "Não foi possível salvar a decisão",
   },
   setup: {
     title: "Configurando seu ambiente",

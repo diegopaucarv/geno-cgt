@@ -268,6 +268,9 @@ export interface PipelineLog {
     docs_inconsistent?: number;
     /** Documents whose next step is Glaser classification. */
     docs_need_classify?: number;
+    /** Open-coding batch size (GT_OPEN_CODING_BATCH_SIZE). The UI uses it to
+     *  know when the incident extractor pauses for the HITL batch gate. */
+    open_coding_batch_size?: number;
   };
 }
 
